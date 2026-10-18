@@ -67,9 +67,14 @@ class TestConfigurableCeilingDrivenByMaxEducation:
         assert result.passes
 
     def test_max_bac3_range_bac4_to_bac5_rejected(self):
-        """A range whose lowest level (Bac+4) exceeds max Bac+3 still rejects."""
-        result = _check("Formation Bac+4 à Bac+5 souhaitée.", max_education="bac+3")
+        """A required range whose lowest level (Bac+4) exceeds max Bac+3 rejects."""
+        result = _check("Formation Bac+4 à Bac+5 requise.", max_education="bac+3")
         assert not result.passes
+
+    def test_max_bac3_desirable_range_bac4_to_bac5_passes(self):
+        """The same range only wished for ("souhaitée") is not a ceiling (ADR 0004)."""
+        result = _check("Formation Bac+4 à Bac+5 souhaitée.", max_education="bac+3")
+        assert result.passes
 
     def test_max_no_limit_bac4_not_rejected_by_education(self):
         """max_education=None ('No limit' in the frontend) -> education never
@@ -83,7 +88,7 @@ class TestConfigurableCeilingDrivenByMaxEducation:
         assert result.passes
 
     def test_max_bac1_range_bac2_to_bac3_rejected(self):
-        result = _check("Formation Bac+2 à Bac+3 souhaitée.", max_education="bac+1")
+        result = _check("Formation Bac+2 à Bac+3 requise.", max_education="bac+1")
         assert not result.passes
 
     def test_max_bac3_range_bac2_to_bac3_accepted(self):

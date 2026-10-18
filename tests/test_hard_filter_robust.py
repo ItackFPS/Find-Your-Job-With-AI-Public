@@ -98,30 +98,31 @@ class TestEducationContrastPairs:
         result = _check("Dev", "Diplôme d'ingénieur obligatoire.")
         assert not result.passes
 
-    # ── REJECT cases (explicit PREFERRED level above max — behavior change,
-    #    2026-09: PREFERRED is no longer exempt from the hard ceiling, only
-    #    genuinely ambiguous UNKNOWN mentions and explicit experience-
-    #    substitution alternatives remain exempt — see below) ─────────────
+    # ── PASS cases (desirable level above max — ADR 0004, amended 2026-10:
+    #    a wish is not a ceiling; soft penalty only) ───────────────────────
 
-    def test_bac5_apprécie_rejects(self):
+    def test_bac5_apprécie_passes(self):
         result = _check("Dev", "Bac+5 apprécié.")
-        assert not result.passes, "PREFERRED Bac+5 above max is now a hard reject"
+        assert result.passes, "a desirable Bac+5 above max is a wish, not a ceiling"
 
-    def test_bac5_souhaite_rejects(self):
+    def test_bac5_souhaite_passes(self):
         result = _check("Dev", "Bac+5 souhaité.")
-        assert not result.passes
+        assert result.passes
 
-    def test_bac5_idealement_rejects(self):
+    def test_bac5_idealement_passes(self):
         result = _check("Dev", "Idéalement Bac+5.")
-        assert not result.passes
+        assert result.passes
 
-    def test_bac5_serait_un_plus_rejects(self):
+    def test_bac5_serait_un_plus_passes(self):
         result = _check("Dev", "Bac+5 serait un plus.")
-        assert not result.passes
+        assert result.passes
 
-    def test_bac5_preferred_english_rejects(self):
+    def test_bac5_preferred_english_passes(self):
         result = _check("Dev", "Bac+5 preferred.")
-        assert not result.passes
+        assert result.passes
+
+    # ── REJECT cases (a level stated as the bar: mandatory wording, or an
+    #    equivalence clause only — see below) ─────────────────────────────
 
     def test_bac5_ou_equivalence_rejects(self):
         # Generic "ou équivalence" (not "expérience équivalente") still
