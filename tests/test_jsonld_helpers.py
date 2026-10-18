@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from src.collectors._jsonld import (
     detect_work_mode,
     extract_itemlist_urls,
@@ -168,3 +170,23 @@ class TestMapJobPostingLdToRaw:
         assert out["title"] == ""
         assert out["description"] == ""
         assert out["company"] is None
+
+
+class TestEntityEncodedScriptType:
+    """HelloWork (2026-10) serves ``type="application/ld&#x2B;json"``: the ``+`` HTML-entity encoded.
+
+    Browsers decode attribute entities, so it is a valid JSON-LD block; reading it as "no block" made
+    the collector find 0 jobs on every page without any error.
+    """
+
+    @pytest.mark.parametrize("plus", ["+", "&#x2B;", "&#x2b;", "&#43;", "&plus;"])
+    def test_every_encoding_of_the_plus_is_a_jsonld_block(self, plus: str) -> None:
+        itemlist = {"@type": "ItemList", "itemListElement": [{"@type": "ListItem", "url": "https://e.com/1"}]}
+        html = (f'<script type="application/ld{plus}json">{json.dumps(itemlist)}</script>'
+                f'<script type="application/ld{plus}json">{json.dumps(JOBPOSTING_LD)}</script>')
+        assert extract_itemlist_urls(html) == ["https://e.com/1"]
+        assert extract_jobposting_ld(html)["title"] == "Développeur Python"
+
+    def test_other_script_types_are_still_ignored(self) -> None:
+        html = f'<script type="application/json">{json.dumps(JOBPOSTING_LD)}</script>'
+        assert extract_jobposting_ld(html) is None

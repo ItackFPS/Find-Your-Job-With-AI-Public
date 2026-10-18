@@ -17,8 +17,10 @@ import json
 import re
 from typing import Any
 
+# The "+" may be HTML-entity encoded in the attribute (HelloWork serves "application/ld&#x2B;json"):
+# browsers decode it, so it is the same block type.
 _JSON_LD_RE = re.compile(
-    r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+    r'<script[^>]+type=["\']application/ld(?:\+|&#x2b;|&#43;|&plus;)json["\'][^>]*>(.*?)</script>',
     re.DOTALL | re.IGNORECASE,
 )
 
@@ -56,6 +58,15 @@ def extract_jobposting_ld(html: str) -> dict[str, Any] | None:
                 if isinstance(item, dict) and item.get("@type") == "JobPosting":
                     return item
     return None
+
+
+def has_itemlist(html: str) -> bool:
+    """True when the page carries a schema.org/ItemList block (possibly empty: no jobs listed)."""
+    for data in iter_jsonld_blocks(html):
+        for item in [data] if isinstance(data, dict) else (data if isinstance(data, list) else []):
+            if isinstance(item, dict) and item.get("@type") == "ItemList":
+                return True
+    return False
 
 
 def extract_itemlist_urls(html: str) -> list[str]:
