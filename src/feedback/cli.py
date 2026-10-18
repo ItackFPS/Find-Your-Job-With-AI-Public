@@ -1,4 +1,6 @@
-"""``python -m src.feedback.cli`` — read-only status inspection and one-time backfill."""
+"""``python -m src.feedback.cli`` — read-only status inspection, one-time backfill, and the
+personalization bridge (``bridge-sync`` rebuilds the mirrored rows from the journal, ``bridge-clear``
+removes them: the journal itself is never changed)."""
 
 from __future__ import annotations
 
@@ -33,7 +35,7 @@ def inspect_statuses(db_path: str) -> str:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m src.feedback.cli")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("inspect-statuses", "backfill"):
+    for name in ("inspect-statuses", "backfill", "bridge-sync", "bridge-clear"):
         p = sub.add_parser(name)
         p.add_argument("--db", default="data/jobs.db")
         p.add_argument("--config-dir", default="config")
@@ -41,6 +43,15 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if ns.cmd == "inspect-statuses":
             print(inspect_statuses(ns.db))
+        elif ns.cmd == "bridge-sync":
+            from src.feedback.service import FeedbackService
+
+            written, removed = FeedbackService(ns.db, ns.config_dir).sync_bridge()
+            print(f"bridge rebuilt from the journal: {written} row(s) written, {removed} replaced")
+        elif ns.cmd == "bridge-clear":
+            from src.feedback.service import FeedbackService
+
+            print(f"bridge cleared: {FeedbackService(ns.db, ns.config_dir).clear_bridge()} row(s) removed")
         else:
             from src.feedback.service import FeedbackService
 

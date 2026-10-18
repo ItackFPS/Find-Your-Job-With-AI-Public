@@ -155,6 +155,21 @@ class FeedbackStorage:
                 out[r["job_id"]] = {"stance": stance, "basis": basis, "at": r["occurred_at"], "event_id": r["event_id"]}
         return out
 
+    def latest_explicit(self, types: tuple[str, ...], job_ids: list[str] | None = None) -> dict[str, FeedbackEvent]:
+        """Per job, its latest explicit event of one of ``types`` (all jobs when ``job_ids`` is None)."""
+        conn = self._get_conn()
+        where = f"signal_class = 'explicit' AND type IN ({','.join('?' * len(types))})"
+        params: list[Any] = list(types)
+        if job_ids is not None:
+            if not job_ids:
+                return {}
+            where += f" AND job_id IN ({','.join('?' * len(job_ids))})"
+            params += job_ids
+        out: dict[str, FeedbackEvent] = {}
+        for r in conn.execute(f"SELECT * FROM feedback_events WHERE {where} ORDER BY occurred_at, rowid", params):
+            out[r["job_id"]] = self._row(r)
+        return out
+
     def has_outcome_ref(self, outcome_event_id: str) -> bool:
         """True when this ``outcome_events`` row already has a journal event (live mirror or backfill)."""
         row = self._get_conn().execute(

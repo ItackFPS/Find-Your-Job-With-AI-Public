@@ -86,14 +86,24 @@ class PersonalizationStorage:
         job: Job,
         feedback_type: FeedbackType,
         note: str | None = None,
+        feedback_id: str | None = None,
+        created_at: datetime | None = None,
     ) -> Feedback:
         """Record feedback for a job, snapshotting its key attributes.
 
         Snapshotting (company/title/skills/remote) means the preference
         profile can still be built from this feedback later even if the
         job itself is updated or pruned from the ``jobs`` table.
+        ``feedback_id`` / ``created_at`` let a mirror of another journal keep
+        that journal's id and timestamp (see FeedbackService.sync_bridge).
         """
+        given: dict[str, Any] = {}
+        if feedback_id:
+            given["id"] = feedback_id
+        if created_at:
+            given["created_at"] = created_at
         feedback = Feedback(
+            **given,
             job_id=job.id,
             feedback_type=feedback_type,
             note=note,
@@ -121,6 +131,18 @@ class PersonalizationStorage:
         )
         conn.commit()
         return feedback
+
+    def delete_feedback_with_id_prefix(self, prefix: str, job_id: str | None = None) -> int:
+        """Delete the rows whose id starts with ``prefix`` (optionally for one job); returns the count."""
+        conn = self._get_conn()
+        sql = "DELETE FROM job_feedback WHERE substr(id, 1, ?) = ?"
+        params: tuple[Any, ...] = (len(prefix), prefix)
+        if job_id is not None:
+            sql += " AND job_id = ?"
+            params = (*params, job_id)
+        n = conn.execute(sql, params).rowcount
+        conn.commit()
+        return n
 
     def get_feedback_for_job(self, job_id: str) -> list[Feedback]:
         """Return all feedback recorded for a specific job, newest first."""
