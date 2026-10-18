@@ -135,13 +135,17 @@ class FeedbackStorage:
                         FROM feedback_events
                         WHERE job_id IN ({",".join("?" * len(chunk))})
                           AND (signal_class = 'outcome'
-                               OR (signal_class = 'explicit' AND type IN ('interested', 'not_interested')))
+                               OR (signal_class = 'explicit'
+                                   AND type IN ('interested', 'not_interested', 'unsure')))
                         ORDER BY occurred_at, rowid""", chunk).fetchall()
             except sqlite3.OperationalError as exc:
                 if "no such table" in str(exc):
                     return {}
                 raise
             for r in rows:
+                if r["signal_class"] == "explicit" and r["type"] == "unsure":
+                    out.pop(r["job_id"], None)      # the latest answer is "I can't tell": no stance
+                    continue
                 if r["signal_class"] == "explicit":
                     stance, basis = ("wants" if r["type"] == "interested" else "declines"), f"explicit:{r['type']}"
                 else:

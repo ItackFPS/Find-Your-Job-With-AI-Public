@@ -252,7 +252,7 @@ plain CSS custom properties for theming (no CSS framework).
 | `/jobs` | Jobs | Filterable, paginated job list with tier badges |
 | `/jobs/:id` | JobDetail | Full job detail, score explanation, application-status update |
 | `/stats` | Stats | Score-tier distribution, top skills, rejection reasons |
-| `/review` | Review | Review queue: decisions flagged for a human (disagreement/abstention, ADR 0010) and feedback |
+| `/review` | Review | Review queue: decisions flagged for a human (disagreement/abstention, ADR 0010), a few audit-sampled rule-backed rejections, and feedback (want / not for me / not sure) |
 | `/skills` | Skills | Skill graph built from collected jobs |
 | `/lab` | Lab | Read-only view of lab runs, experiments, memory and the active strategy (ADR 0011) |
 | `/profile` | Profile | Profile editor with ESCO-backed skill/occupation autocomplete; saves to `config/profile.local.yaml` |
