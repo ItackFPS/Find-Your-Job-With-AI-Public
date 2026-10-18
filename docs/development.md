@@ -308,10 +308,15 @@ Workflows run on every pull request and on pushes to `main`:
 
 | Workflow | What it runs | Gate |
 |---|---|---|
-| [`tests.yml`](../.github/workflows/tests.yml) | `pytest -m "not network"` (8–15 min), then `mypy src` in the same job | tests blocking, mypy advisory |
-| [`frontend.yml`](../.github/workflows/frontend.yml) | `npm ci`, oxlint, `tsc -b`, `vite build`, Vitest, `npm audit` (runtime deps) — only when `frontend/` changes | blocking |
-| [`lint.yml`](../.github/workflows/lint.yml) | `ruff check src tests` — only when Python sources change | advisory |
-| [`secret-scan.yml`](../.github/workflows/secret-scan.yml) | Gitleaks CLI over the commits the PR/push adds, output redacted | blocking |
+| [`tests.yml`](../.github/workflows/tests.yml) | `pytest -m "not network"` (8–15 min), then `mypy src` in the same job | tests blocking (required check `test`), mypy advisory |
+| [`frontend.yml`](../.github/workflows/frontend.yml) | `npm ci`, oxlint, `tsc -b`, `vite build`, Vitest, `npm audit` (runtime deps) — every time, with no path filter (about a minute) | blocking (required check `frontend`) |
+| [`lint.yml`](../.github/workflows/lint.yml) | `ruff check src tests` — only when Python sources change | advisory, not required |
+| [`secret-scan.yml`](../.github/workflows/secret-scan.yml) | Gitleaks CLI over the commits the PR/push adds, output redacted | blocking (required check `gitleaks`) |
+
+A required check must report on every pull request: GitHub leaves the check of a
+path-filtered workflow that did not run *pending*, which blocks the merge. So the
+three required workflows have no path filter; only the advisory Lint keeps one. If a
+workflow is ever made required, remove its path filter first.
 
 Cost and safety rules the workflows follow: a newer push to a pull request cancels
 its running checks (`concurrency`); jobs have timeouts; third-party actions are
