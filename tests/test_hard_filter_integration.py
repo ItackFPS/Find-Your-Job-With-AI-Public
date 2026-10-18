@@ -701,7 +701,7 @@ class TestRejectionProvenance:
         assert exp.span is not None, "Experience extractor must populate span"
         assert exp.span.start >= 0
         assert exp.span.end > exp.span.start
-        assert exp.span.extractor_id == "experience.min_years.v1"
+        assert exp.span.extractor_id == "experience.min_years.v2"
         assert exp.span.field == "description"
 
 
