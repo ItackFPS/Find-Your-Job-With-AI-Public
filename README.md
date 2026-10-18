@@ -47,7 +47,8 @@ feedback, evaluation, lab) · [ADRs](docs/adr/README.md) · [Windows app](docs/w
 | Area | Status |
 |---|---|
 | Deterministic pipeline: collect → normalize → validate → deduplicate → filter → requirements gate → score → store | ✅ default-on |
-| Semantic matching (local sentence embeddings) and feedback-driven personalization | ✅ default-on |
+| Semantic matching (local sentence embeddings) | ✅ default-on |
+| Feedback-driven personalization: dashboard feedback re-ranks later runs (never changes accept/reject) | ✅ implemented, **off by default** — opt in with `personalization_bridge: true` in `config/feedback.yaml` ([ADR 0009](docs/adr/0009-feedback-journal.md)) |
 | Decision journal: an auditable record per job and run, accepted and rejected ([ADR 0008](docs/adr/0008-decision-journal.md)) | ✅ default-on |
 | Web dashboard (FastAPI + React): runs, jobs, explanations, review queue, stats, profile editor | ✅ |
 | Windows launcher: one entry point that starts, monitors and stops the app ([docs](docs/windows-app.md)) | ✅ new — Windows only |
