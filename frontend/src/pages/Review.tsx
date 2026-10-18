@@ -5,9 +5,18 @@ import {
   getDecisionSnapshot, getReviewQueue, postJobFeedback, type ReviewItem,
 } from '../api/client'
 import { Card, Chip, EmptyState, LoadingState } from '../components'
+import { findPipelineStage } from '../config/pipelineStages'
 import { DecisionPanel } from './JobDetail'
 
 type Filter = 'all' | 'rejected' | 'accepted'
+
+// Display names, not internal keys: "requirements_gate" -> "Requirements Gate".
+const stageName = (key: string) => findPipelineStage(key)?.label ?? key.replaceAll('_', ' ')
+// An audit stratum is "<stage>:<rule>", e.g. "requirements_gate:education" -> "Requirements Gate · education".
+const stratumName = (stratum: string) => {
+  const [stage, rule] = stratum.split(':', 2)
+  return rule ? `${stageName(stage)} · ${rule.replaceAll('_', ' ')}` : stageName(stage)
+}
 
 const pill = (active: boolean): CSSProperties => ({
   border: `1px solid ${active ? 'var(--color-accent)' : 'var(--color-border)'}`,
@@ -58,7 +67,7 @@ export function ReviewCard({
           </div>
         </div>
         <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-          <Chip tone={rejected ? 'error' : 'info'}>{rejected ? `Rejected at ${d.deciding_stage}` : 'Accepted'}</Chip>
+          <Chip tone={rejected ? 'error' : 'info'}>{rejected ? `Rejected at ${stageName(d.deciding_stage)}` : 'Accepted'}</Chip>
           {audit && (
             <Chip title="Picked among rule-backed rejections so a wrong rule cannot hide good jobs silently">
               Audit sample
@@ -72,7 +81,7 @@ export function ReviewCard({
       {audit && (
         <div style={{ margin: '0.6rem 0 0', fontSize: '0.85rem' }}>
           <div style={{ color: 'var(--color-muted)' }}>
-            Rejected by rule <code>{audit.stratum}</code> ({audit.stratum_size} job(s) rejected by it in that run).
+            Rejected by rule <strong>{stratumName(audit.stratum)}</strong> ({audit.stratum_size} job(s) rejected by it in that run).
             Does this job look suitable to you anyway? Your answer is recorded as evidence; it changes nothing by itself.
           </div>
           {deciding.length > 0 && (
