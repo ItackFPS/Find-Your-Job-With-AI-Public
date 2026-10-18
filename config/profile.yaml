@@ -1,0 +1,83 @@
+# Example candidate profile: the tracked default, not anyone's real profile.
+#
+# Your own profile belongs in config/profile.local.yaml (git-ignored). When that
+# file exists it replaces this one entirely. Saving the profile in the dashboard
+# (Profile page) creates it for you, starting from the values in effect; or copy
+# this file to profile.local.yaml and edit it. Never put personal data here.
+target_domains:
+- software_development
+- web_development
+- data
+focus_domain: false
+target_skills:
+- python
+- javascript
+- SQL
+- Git
+- Linux
+- Docker
+target_skills_esco:
+- concept_uri: local:skill/git
+  label: Git (version control system)
+  keyword: Git
+  custom: false
+- concept_uri: local:skill/linux
+  label: Linux (operating system)
+  keyword: Linux
+  custom: false
+- concept_uri: null
+  label: Docker
+  keyword: Docker
+  custom: true
+geography:
+  preferred_countries:
+  - France
+  allowed_regions:
+  - Europe
+  location_preferences:
+  - type: remote
+    value: remote_france
+    status: preferred
+    label: Remote France
+  - type: department
+    value: '75'
+    status: acceptable
+    label: null
+work_modes:
+- remote
+- hybrid
+- on-site
+contract_types:
+- cdi
+- cdd
+- full-time
+experience:
+  preferred_levels:
+  - junior
+  - entry_level
+  - graduate
+  max_years: 3
+  excluded_seniority:
+  - senior
+  - director
+  - vp
+  - lead
+  - manager
+  - executive
+  - principal
+  - staff
+  - c_suite
+languages:
+- French
+- English
+freshness_days: 30
+max_education: bac+3
+matching:
+  education_hard_constraint: true
+  education_preferred_penalty: 0.2
+  principal_skill_gate: true
+  mandatory_central_skill_gate: false
+  llm_extraction_enabled: false
+  llm_eligibility_enabled: false
+  llm_eligibility_reject_confidence: 0.75
+looking_for: ''

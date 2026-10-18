@@ -1,0 +1,17 @@
+# Git hooks run under sh; CRLF line endings (core.autocrlf on Windows) break them.
+.githooks/* text eol=lf
+
+# cmd.exe misparses batch files with LF line endings (labels, multi-line blocks).
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Evaluation datasets are hash-pinned byte-for-byte: never normalise line endings.
+tests/fixtures/evaluation/** -text
+
+# Strategy fingerprints hash the raw bytes of these files, and the committed golden fingerprint was
+# generated from LF: keep them LF in every working tree (core.autocrlf on Windows would make them CRLF).
+config/filters.yaml text eol=lf
+config/scoring.yaml text eol=lf
+config/semantic_config.yaml text eol=lf
+config/personalization.yaml text eol=lf
+tests/fixtures/ai_filter_benchmark/** text eol=lf

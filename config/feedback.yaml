@@ -1,0 +1,17 @@
+# Feedback journal (src/feedback/): append-only user feedback, behaviour and outcomes, each
+# linked to the decision/strategy the user reacted to. All keys are optional.
+
+# Mirror explicit interested / not_interested feedback into the legacy `job_feedback` table that
+# the personalization stage reads. OFF: recording feedback does not change any ranking until you
+# decide it should.
+personalization_bridge: false
+
+# Meaning of the legacy application statuses that nothing in the code defines. Until you resolve
+# them here, their canonical value stays null (the legacy value is always preserved).
+# Run `python -m src.feedback.cli inspect-statuses` to see what your database actually contains.
+# Canonical values: to_apply, applied, interview, offer, accepted_offer, employer_rejected, withdrawn
+# legacy_status_mapping:
+#   accepted: accepted_offer
+#   rejected: withdrawn
+#   denied: employer_rejected
+legacy_status_mapping: {}

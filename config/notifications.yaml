@@ -1,0 +1,57 @@
+# Notification settings: the tracked default, with no Discord server of anyone's.
+#
+# Your own settings belong in config/notifications.local.yaml (git-ignored); when
+# it exists it replaces this file entirely. With DISCORD_BOT_TOKEN and
+# DISCORD_GUILD_ID in .env, the backend creates the channels and webhooks for the
+# locations in your profile and records their IDs in that local file. Webhook
+# URLs (secrets) only ever live in .env, never in a YAML file.
+notifications:
+  enabled: true
+  discord:
+    enabled: true
+    webhook_url: ''
+    location_category_id: ''
+    top10_category_id: ''
+    inactive_category_id: ''
+    channels:
+      pipeline:
+        enabled: true
+        webhook_url_env: DISCORD_PIPELINE_WEBHOOK_URL
+        channel_id: ''
+        webhook_id: ''
+        message_id: ''
+      errors:
+        enabled: true
+        webhook_url_env: DISCORD_ERRORS_WEBHOOK_URL
+        channel_id: ''
+        webhook_id: ''
+        message_id: ''
+      statistics:
+        enabled: true
+        webhook_url_env: DISCORD_STATISTICS_WEBHOOK_URL
+        channel_id: ''
+        webhook_id: ''
+        message_id: ''
+      system-status:
+        enabled: true
+        webhook_url_env: DISCORD_SYSTEM_STATUS_WEBHOOK_URL
+        channel_id: ''
+        webhook_id: ''
+        message_id: ''
+    location_channels: {}
+    reconciliation_issues: []
+    top10_channels: {}
+  n8n:
+    enabled: false
+    webhook_url: http://localhost:5678/webhook/job-pipeline
+  rules:
+    notify_pipeline_completed: true
+    notify_new_jobs: false
+    min_score_for_notification: 0.8
+    max_jobs_in_notification: 20
+    max_notifications_per_location_per_run: 3
+    notification_score_floor_tier: relevant
+    notify_unmatched_jobs: false
+    max_total_notifications_per_run: 30
+    initial_backfill_max_per_department: 5
+    regular_backfill_max_per_department: 3

@@ -1,0 +1,43 @@
+name: Refactor / debt / chore
+description: Refactoring, technical debt, tooling, CI, docs or maintenance with no intended behavior change.
+labels: ["type:debt"]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        - refactor
+        - technical debt
+        - ci
+        - docs
+        - chore / tooling
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is costly, risky or missing today.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Files/modules involved, callers and consumers, related issues.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      value: |
+        - [ ] No behavior change (existing tests pass unchanged), unless stated otherwise
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: non-goals
+    attributes:
+      label: Scope / non-goals
+    validations:
+      required: true

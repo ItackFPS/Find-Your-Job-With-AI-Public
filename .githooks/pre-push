@@ -1,0 +1,34 @@
+#!/bin/sh
+# Refuses pushes that would update or delete the remote `main` branch.
+#
+# GitHub branch protection is unavailable for this private repository on the
+# Free plan, so this local hook is the guard. All work reaches main through a
+# pull request (see docs/development.md).
+#
+# Install once per clone:   git config core.hooksPath .githooks
+# Uninstall:                git config --unset core.hooksPath
+# Deliberate bypass (docs-only typo exception, documented in CLAUDE.md):
+#   ALLOW_PUSH_TO_MAIN=1 git push origin main
+
+protected_ref="refs/heads/main"
+
+if [ "${ALLOW_PUSH_TO_MAIN:-}" = "1" ]; then
+    exit 0
+fi
+
+status=0
+# stdin lines: <local ref> <local sha> <remote ref> <remote sha>
+while read -r local_ref local_sha remote_ref remote_sha; do
+    if [ "$remote_ref" = "$protected_ref" ]; then
+        status=1
+    fi
+done
+
+if [ "$status" -ne 0 ]; then
+    echo "pre-push: direct pushes to 'main' are blocked." >&2
+    echo "pre-push: push a branch and open a pull request instead:" >&2
+    echo "pre-push:   git switch -c <type>/<issue>-<slug> && git push -u origin HEAD" >&2
+    echo "pre-push: (bypass for a docs-only typo fix: ALLOW_PUSH_TO_MAIN=1 git push)" >&2
+fi
+
+exit "$status"

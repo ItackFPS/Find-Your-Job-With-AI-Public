@@ -1,0 +1,14 @@
+# Gitleaks configuration: the built-in rules plus project-specific ones.
+# Used by .github/workflows/secret-scan.yml.
+
+[extend]
+useDefault = true
+
+# Gitleaks' default ruleset has no rule for Discord webhook URLs, which embed
+# their secret token in the URL path. This project configures many of them
+# (see .env.example), and one was committed in the past.
+[[rules]]
+id = "discord-webhook-url"
+description = "Discord webhook URL (the path contains the webhook token)"
+regex = '''https://(?:(?:ptb|canary)\.)?discord(?:app)?\.com/api/webhooks/[0-9]{17,20}/[A-Za-z0-9_-]{50,}'''
+keywords = ["api/webhooks"]

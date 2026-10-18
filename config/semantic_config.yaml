@@ -1,0 +1,40 @@
+# Semantic matching configuration (Phase 3)
+
+embedding:
+  model_name: "paraphrase-multilingual-MiniLM-L12-v2"   # 384-dim, multilingual, runs fully locally
+  cache_max_entries: 10_000        # Cache size for embedding vectors
+  device: "auto"                   # Let sentence-transformers choose (CPU/GPU)
+
+similarity:
+  # Semantic is a secondary/tie-breaking signal, not a primary match-quality
+  # component. Audit (2026-09-10, 7,272 real scored jobs): raw semantic score
+  # correlates ~0 with domain_relevance (-0.013) and only weakly with
+  # skills_match (0.162) — it isn't a reliable standalone fit signal, and at
+  # the old weight (0.2) it dragged the best deterministic matches down by
+  # 7-11 points (top det=0.905 -> final=0.833) while adding little real
+  # separation elsewhere. Reduced from 0.2 to 0.06 so it can still nudge
+  # ordering among close matches without dominating the score.
+  weight: 0.06
+  min_threshold: 0.3               # Minimum similarity to count as a meaningful match
+  require_hard_filters_first: true # Hard filters always take precedence
+
+  # Fixed reference anchors for normalizing the raw cosine-similarity score
+  # before blending (see _normalize_semantic_score in semantic_matching.py).
+  # Deliberately NOT recomputed per run/per-batch: a per-run min-max or
+  # percentile normalization would let a weak collection day (few/mediocre
+  # jobs) turn its single best job into an artificially "excellent" (~1.0)
+  # semantic score just by being the best of a bad batch, breaking
+  # cross-run comparability. These anchors are fixed constants, calibrated
+  # once from a stable historical sample and only meant to be revisited
+  # periodically (not automatically), not on every pipeline run.
+  #
+  # Calibration data (2026-09-10 audit): raw semantic_score distribution was
+  # checked across 5 separate real pipeline runs (7,040-8,051 jobs each,
+  # spanning 2026-09-08 to 2026-09-10) and found stable: p10 ~0.27,
+  # median ~0.39, p90 ~0.50, max ~0.68 in every run. reference_floor is set
+  # just below the observed p10 (a job at or below this has negligible
+  # semantic overlap); reference_ceiling is set at the observed max across
+  # all 5 runs (a job at or above this is as strong a semantic match as any
+  # real job has produced) — values in between scale linearly.
+  reference_floor: 0.20
+  reference_ceiling: 0.65

@@ -1,0 +1,150 @@
+# Pinned profile for the 50-job AI-filter benchmark (tests/test_ai_filter_benchmark_50.py).
+#
+# Snapshot of config/profile.yaml on main (2026-09-17) with ONE deliberate
+# difference: matching.mandatory_central_skill_gate is true, as it was when the
+# ground-truth labels were committed (40d026e) and as the JobSearchProfile
+# model defaults it. A personal-preferences commit 15 seconds later (07d6e6b)
+# turned the gate off, so bm50 (Rust-centred role behind a generic title)
+# passed and the hard-constraint floor failed even though extraction and the
+# gate were correct (issue #18). With this file, the deterministic path
+# reproduces every hard-constraint-trap label, independent of anyone's
+# personal configuration.
+#
+# Do not edit to make a benchmark result change; update the labels instead.
+target_domains:
+- software_development
+- web_development
+- cybersecurity
+- data
+- devops
+- cloud
+- it_support
+- systems
+- networking
+- qa_testing
+- automation
+focus_domain: false
+target_skills:
+- python
+- javascript
+- php
+- MySQL
+- Node.js
+- Git
+- Linux
+- HTML
+- CSS
+- Bash
+- Docker
+- n8n
+target_skills_esco:
+- concept_uri: local:skill/mysql
+  label: MySQL (database management system)
+  keyword: MySQL
+  custom: false
+- concept_uri: local:skill/nodejs
+  label: Node.js (JavaScript runtime)
+  keyword: Node.js
+  custom: false
+- concept_uri: local:skill/git
+  label: Git (version control system)
+  keyword: Git
+  custom: false
+- concept_uri: local:skill/linux
+  label: Linux (operating system)
+  keyword: Linux
+  custom: false
+- concept_uri: null
+  label: HTML
+  keyword: HTML
+  custom: true
+- concept_uri: null
+  label: CSS
+  keyword: CSS
+  custom: true
+- concept_uri: null
+  label: Bash
+  keyword: Bash
+  custom: true
+- concept_uri: null
+  label: Docker
+  keyword: Docker
+  custom: true
+- concept_uri: null
+  label: n8n
+  keyword: n8n
+  custom: true
+geography:
+  preferred_countries:
+  - France
+  allowed_regions:
+  - Europe
+  location_preferences:
+  - type: department
+    value: '83'
+    status: preferred
+    label: null
+  - type: department
+    value: '01'
+    status: acceptable
+    label: null
+  - type: department
+    value: '69'
+    status: acceptable
+    label: null
+  - type: department
+    value: '37'
+    status: acceptable
+    label: null
+  - type: department
+    value: '04'
+    status: preferred
+    label: null
+  - type: remote
+    value: remote_france
+    status: preferred
+    label: Remote France
+work_modes:
+- remote
+- on-site
+- hybrid
+contract_types:
+- internship
+- alternance
+- cdi
+- cdd
+- full-time
+- part-time
+experience:
+  preferred_levels:
+  - internship
+  - alternance
+  - junior
+  - entry_level
+  - graduate
+  max_years: 2
+  excluded_seniority:
+  - senior
+  - director
+  - vp
+  - lead
+  - manager
+  - executive
+  - mid
+  - principal
+  - staff
+  - c_suite
+languages:
+- French
+- English
+freshness_days: 30
+max_education: bac+2
+matching:
+  education_hard_constraint: true
+  education_preferred_penalty: 0.2
+  principal_skill_gate: true
+  mandatory_central_skill_gate: true
+  llm_extraction_enabled: false
+  llm_eligibility_enabled: false
+  llm_eligibility_reject_confidence: 0.75
+looking_for: I like an on site job in cybersecurity

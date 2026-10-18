@@ -1,0 +1,237 @@
+"""Job search profile — the user's preferences that drive the pipeline."""
+
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+# Phase NEXT / I7: reject unknown keys instead of silently dropping them.
+# profile.yaml is hand-edited by users (and round-tripped by the Profile API
+# — see src/api/routes/profile.py::update_profile), so a typo'd key
+# (e.g. "target_skil" instead of "target_skills") previously vanished with
+# no warning at all under pydantic's default extra="ignore". Verified safe
+# against the real config/profile.yaml (every top-level and nested key
+# already matches a declared field exactly) before enabling this.
+_STRICT_PROFILE_CONFIG = ConfigDict(extra="forbid")
+
+
+class LocationPreference(BaseModel):
+    """One entry in the candidate's ordered geographic priority list.
+
+    ``type="department"`` matches a job's French INSEE department code
+    (``value`` e.g. "83", "06", "69"). ``type="remote"`` matches any fully
+    remote job resolvable to France (``value`` is just a display id, e.g.
+    "remote_france" — there is currently only one remote preference kind).
+
+    List position (its index within
+    ``GeographyPreferences.location_preferences``) IS the priority — priority
+    0 is the candidate's strongest preference. There is deliberately no
+    separate numeric priority field: reordering the list in the UI *is*
+    reprioritizing, and a redundant integer could desync from the array
+    order. See src/pipeline/location_match.py::resolve_job_location, the
+    single place that interprets this list against a job.
+
+    ``status="excluded"`` is an explicit, opt-in rejection of that one
+    location — it never makes location a hard filter elsewhere (a job with
+    no location preference at all is still fully scored/rankable), and it
+    vetoes only that specific entry: if the job also matches a different
+    non-excluded preference (at any priority), that match still wins.
+    """
+
+    model_config = _STRICT_PROFILE_CONFIG
+
+    type: Literal["department", "remote"]
+    value: str
+    status: Literal["preferred", "acceptable", "excluded"] = "preferred"
+    label: str | None = None
+
+
+class GeographyPreferences(BaseModel):
+    model_config = _STRICT_PROFILE_CONFIG
+
+    preferred_countries: list[str] = []
+    allowed_regions: list[str] = []
+    # Ordered list of department/remote preferences — the SOLE source of
+    # truth for location_fit scoring's priority tiers (see
+    # src/pipeline/scoring.py::_score_location_fit, fed via
+    # src/pipeline/location_match.py) and for Discord/notification location
+    # routing (src/notifications/engine.py). A ranking preference only: a
+    # job outside this list is never rejected for it, and remains fully
+    # eligible/rankable on every other factor. Empty by default — no
+    # location is preferred until the user configures one on the Profile
+    # page.
+    location_preferences: list[LocationPreference] = []
+
+
+class ExperiencePreferences(BaseModel):
+    model_config = _STRICT_PROFILE_CONFIG
+
+    preferred_levels: list[str] = []
+    max_years: int | None = None
+    excluded_seniority: list[str] = []
+
+
+class EscoEntry(BaseModel):
+    """An ESCO concept selected by the user for their profile.
+
+    Stores provenance metadata alongside the plain keyword so the pipeline
+    can continue using simple strings while the UI tracks canonical ESCO IDs.
+
+    Fields:
+        concept_uri:  ESCO concept URI, or a ``local:`` URI for bundled seed
+                      concepts that are not yet confirmed against the live taxonomy.
+                      ``None`` for fully custom (user-typed) entries.
+        label:        Full canonical English label (e.g. ``"Python (programming language)"``).
+        keyword:      Simplified keyword used for pipeline matching.
+                      Typically the label stripped of parenthetical annotations
+                      (e.g. ``"Python"``).
+        custom:       ``True`` when the user typed a value not found in ESCO.
+    """
+
+    model_config = _STRICT_PROFILE_CONFIG
+
+    concept_uri: str | None = None
+    label: str
+    keyword: str = ""
+    custom: bool = False
+
+    def __init__(self, **data: object) -> None:
+        super().__init__(**data)
+        # Auto-derive keyword from label when not explicitly provided.
+        if not self.keyword:
+            label = self.label
+            if "(" in label:
+                label = label[: label.index("(")].strip()
+            object.__setattr__(self, "keyword", label)
+
+
+class MatchingPreferences(BaseModel):
+    """Configurable parameters for the requirement matching engine.
+
+    These control which checks cause hard rejection vs. score penalties.
+    All settings have safe defaults — the system is usable without this
+    section in profile.yaml.
+    """
+
+    model_config = _STRICT_PROFILE_CONFIG
+
+    # Reject when a mandatory education level exceeds the candidate's max
+    education_hard_constraint: bool = True
+    # Score penalty (0.0–1.0) applied when a PREFERRED education exceeds max
+    education_preferred_penalty: float = 0.20
+    # Reject when the job title centers on a technology not in the profile
+    principal_skill_gate: bool = True
+    # Reject when a skill is mandatory+principal, detected heuristically from
+    # description phrasing (centrality signals) — does not require the LLM.
+    mandatory_central_skill_gate: bool = True
+    # Enable LLM-based requirement extraction (requires LM Studio/Ollama)
+    # Configure the LLM endpoint via REQGATE_LLM_ENDPOINT env var.
+    llm_extraction_enabled: bool = False
+    # Enable the lightweight LLM semantic eligibility gate (src/ai/eligibility.py).
+    # Requires --ai in addition to this flag. See that module's docstring.
+    llm_eligibility_enabled: bool = False
+    # Minimum confidence (0.0-1.0) an LLM REJECT decision must reach to actually
+    # remove a job from the eligibility gate; UNCERTAIN and low-confidence
+    # REJECT both pass through unchanged.
+    llm_eligibility_reject_confidence: float = 0.75
+
+
+class JobSearchProfile(BaseModel):
+    """User-facing job search preferences.
+
+    Edit ``config/profile.yaml`` to change these.  A future website will
+    write that file automatically so the pipeline can be reconfigured
+    without touching Python code.
+
+    Serialised as plain YAML/JSON, making it trivially consumable by a
+    web frontend or REST API.
+    """
+
+    model_config = _STRICT_PROFILE_CONFIG
+
+    target_domains: list[str] = []
+    # When True (default), a non-empty target_domains is the sole gate for
+    # the hard filter — a job must match one of these domains regardless of
+    # target_skills. When False, target_skills also gate acceptance (a job
+    # matching a skill passes even if it's outside the chosen domains) —
+    # useful for casting a wider net around a skill that spans domains.
+    # See build_filter_config() in src/pipeline/filter.py.
+    focus_domain: bool = True
+    target_skills: list[str] = []
+    # ESCO metadata for target_skills — optional, not used by the pipeline.
+    # When present, each entry corresponds (by position) to a value in
+    # target_skills and carries the canonical ESCO concept URI and label.
+    # Absent on profiles saved before ESCO integration; treated as empty list.
+    target_skills_esco: list[EscoEntry] = []
+    geography: GeographyPreferences = GeographyPreferences()
+    work_modes: list[str] = []
+    contract_types: list[str] = []
+    experience: ExperiencePreferences = ExperiencePreferences()
+    languages: list[str] = []
+    freshness_days: int = Field(default=30, ge=1)
+    # Candidate's maximum education level in Bac+N notation (e.g. "bac+2").
+    # Used by the hard constraint gate to reject jobs requiring a higher level.
+    # None = no education constraint.
+    max_education: str | None = None
+    # Matching engine configuration — controls which checks are hard gates
+    # vs. soft penalties.
+    matching: MatchingPreferences = MatchingPreferences()
+    # Free-text description of the kind of role the candidate wants, in their
+    # own words. Folded into `responsibilities` by to_semantic_info() below,
+    # so it IS read today — by the Phase 3 semantic-matching embedding
+    # (src/pipeline/semantic_matching.py). Not read by Phase 2 (LLM
+    # enrichment) or the deterministic hard filter/requirements gate.
+    looking_for: str | None = None
+
+    def to_semantic_info(self) -> dict:
+        """Build the ``profile_info`` dict expected by ``build_profile_embedding``.
+
+        The Phase 3 semantic matching embeds this into a vector that is then
+        compared against job embeddings.  Values are derived from the profile
+        so the semantic index always reflects the user's current preferences.
+
+        This runs on every pipeline run whenever a profile is loaded — it is
+        NOT gated behind the "Enable AI" (Phase 2 LLM) flag, which controls a
+        separate, optional enrichment stage.
+        """
+        responsibilities = (
+            ", ".join(self.target_domains)
+            if self.target_domains
+            else "software development"
+        )
+        if self.looking_for:
+            # Free-text description of the desired role — folded into the
+            # same field the profile embedding already builds from, so it
+            # participates in Phase 3's semantic similarity comparison
+            # against each job's own embedding.
+            responsibilities = f"{responsibilities}. {self.looking_for}"
+
+        return {
+            "seniority": (
+                ", ".join(self.experience.preferred_levels)
+                if self.experience.preferred_levels
+                else "entry-level"
+            ),
+            "employment_type": (
+                ", ".join(self.contract_types) if self.contract_types else "any"
+            ),
+            "location": (
+                ", ".join(self.geography.preferred_countries)
+                if self.geography.preferred_countries
+                else "Europe"
+            ),
+            "languages": ", ".join(self.languages) if self.languages else "English",
+            # Joined into a string like every other field here — left as a
+            # raw list, str.format() renders it as Python-list syntax
+            # ("['python', 'sql']") in the embedding text, which the
+            # sentence-transformer model was never trained on. Mirrors the
+            # same fix already applied to `languages` (see
+            # TestProfileLanguagesString in tests/test_ranking_correctness.py).
+            "skills": (
+                ", ".join(self.target_skills + self.target_domains)
+                if (self.target_skills or self.target_domains)
+                else "general"
+            ),
+            "responsibilities": responsibilities,
+        }

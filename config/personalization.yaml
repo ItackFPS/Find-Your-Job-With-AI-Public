@@ -1,0 +1,52 @@
+# Phase 4: Personalized Ranking and Feedback configuration.
+#
+# Personalization is a bounded, deterministic adjustment layered on top of
+# the Phase 1-3 deterministic + semantic score. It never overrides hard
+# filters: it only re-weights and (optionally) hides jobs that already
+# passed every earlier pipeline stage.
+
+# How much each feedback type should nudge future ranking. Positive values
+# push similar jobs up, negative values push similar jobs down. Keep these
+# small relative to 1.0 -- the final contribution is also bounded by
+# personalization.max_abs_adjustment below.
+feedback_weights:
+  interested: 1.0
+  applied: 1.5
+  not_interested: -1.0
+  rejected: -0.3
+  ignored: -0.2
+
+# How much each matched signal type contributes when a job shares it with
+# feedback history (company name, skill, a title keyword, or remote status).
+feature_weights:
+  company: 1.0
+  skills: 1.0
+  title_keywords: 0.6
+  remote: 0.4
+
+personalization:
+  # Hard ceiling/floor on the total adjustment applied to any single job's
+  # score. Guarantees personalization can only nudge, never dominate, the
+  # deterministic + semantic base score.
+  max_abs_adjustment: 0.3
+  # Require at least this many stored feedback events before applying any
+  # adjustment at all (avoids over-reacting to a single click).
+  min_feedback_count: 1
+  # Drop jobs the user already gave terminal feedback on (applied /
+  # rejected / not_interested) from the final ranked output.
+  exclude_actioned_jobs: true
+  # Phase NEXT / I9: recency decay. Each feedback event's weight is halved
+  # every `recency_half_life_days` days of age (a standard exponential
+  # half-life, chosen for the same reason it's used elsewhere for decay —
+  # smooth, deterministic, and easy to reason about: "feedback from 3
+  # months ago counts half as much as feedback from today"). 90 days was
+  # picked as a starting point matching this project's own `freshness_days`
+  # default order of magnitude (profile.yaml) rather than any measured
+  # tuning — adjust if stale signals turn out to linger too long or decay
+  # too fast in practice.
+  recency_half_life_days: 90
+  # Floor so very old feedback never decays all the way to exactly zero
+  # influence (a user's long-standing preference for a company/skill still
+  # counts a little) — 0.05 means feedback older than ~6 half-lives (~540
+  # days) contributes at roughly this fraction of its original weight.
+  recency_min_factor: 0.05

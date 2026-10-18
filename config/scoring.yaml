@@ -1,0 +1,214 @@
+# Deterministic scoring configuration.
+#
+# The final score answers "how good is this job for THIS user's actual
+# preferences?", weighted by explicit priority order: location > domain
+# relevance > skills > seniority > experience. It is a hybrid model:
+# additive weighting for the three "matter of degree" factors (location,
+# skills, experience) plus two explicit multiplicative gates (under `gates:`
+# below) for the two "confirmed dealbreaker" factors (domain, seniority) — a
+# *confirmed* mismatch on either must not be compensable by the others.
+#
+# Weights sum to 1.0 and match the user's stated priority order:
+#   location_fit=0.30, domain_relevance=0.25, skills_match=0.20,
+#   seniority_match=0.15, experience_fit=0.10
+
+scoring:
+  location_fit:
+    weight: 0.30
+    # location_preferences (Location Priority feature, 2026-09-10) is
+    # injected at runtime by the orchestrator from
+    # profile.geography.location_preferences — an ORDERED list of
+    # department/remote entries (e.g. [{"type": "department", "value": "83",
+    # "status": "preferred"}, ...]) the candidate configures on the Profile
+    # page. List position is priority. No hardcoded location default here:
+    # an empty profile list means no location gets a priority tier. Resolved
+    # via src/pipeline/location_match.py::resolve_job_location, the same
+    # function Discord notification routing uses. PACA-neighbor departments
+    # (13/04/05/06/84) remain a separate, fixed constant in
+    # src/pipeline/departments.py, independent of this preference.
+    #
+    # preferred_countries is injected at runtime by the orchestrator from
+    # profile.geography.preferred_countries.
+
+  domain_relevance:
+    weight: 0.25
+    # Tiered score: 1.0=domain keyword in title, 0.7=domain keyword in
+    # description, 0.35=broad tech indicator in title, 0.45=undetermined (no
+    # domain or off-domain evidence — NOT penalized further), 0.05=confirmed
+    # off-domain (title matches a known non-IT role keyword — triggers the
+    # domain gate below).
+    # domain_title_keywords/domain_description_keywords are injected at
+    # runtime from profile.target_domains × filters.yaml vocabulary;
+    # off_domain_keywords is injected from filters.yaml's
+    # excluded_title_keywords + non_it_title_functions.
+    confirmed_wrong_score: 0.05
+
+  skills_match:
+    weight: 0.20
+    # Real postings mention ~3-7 relevant skills, never most of a 10+ item
+    # profile list — capping the match-fraction denominator at 5 means
+    # matching 5 of the profile's skills is already full credit, instead of
+    # requiring most of the list to approach 1.0 (verified against real
+    # production data: before this cap, 0 of 7,548 real jobs scored above
+    # 0.85 on skills-match even for excellent matches).
+    denominator_cap: 5
+    # target_skills is injected at runtime from profile.target_skills.
+
+    # Role-context fallback (Phase 2, 2026-09-10): when zero target skills
+    # match anywhere in the job (title/description/skills), the plain "no
+    # overlap" floor is 0.05 — but audit data showed 58% of ALL real jobs hit
+    # this exact floor, 86% of which were already-confirmed in-domain IT
+    # roles (domain_relevance >= 0.7) that simply don't itemize a tech stack
+    # in the posting (e.g. "Technicien Réseau Système", "Administrateur
+    # Systèmes") — role-based, not tool-based, postings. Below this
+    # threshold (undetermined/broad-tech-title-only domain), the 0.05 floor
+    # is unchanged. fallback_domain_threshold intentionally matches
+    # domain_relevance's own "title match" (1.0) / "description match" (0.7)
+    # tiers, excluding its 0.35/0.45 unconfirmed tiers.
+    fallback_domain_threshold: 0.7
+    # fallback = fallback_base + fallback_domain_scale * domain_relevance
+    # -> 0.34 (domain=0.7) to 0.40 (domain=1.0): continuous, not a flat
+    # jump, and deliberately kept below the weakest possible EXPLICIT match
+    # score (0.52, for 1 of 5 skills matched) — real skill/tool evidence
+    # must always outrank this fallback.
+    fallback_base: 0.20
+    fallback_domain_scale: 0.20
+
+    # Domain-vocabulary bonus within the fallback (2026-09-11): the fallback
+    # above still under-credits confirmed cybersecurity/networking/systems/
+    # devops/automation jobs, since their real vocabulary (SIEM, VLAN,
+    # Active Directory, CI/CD, ...) structurally never overlaps with a
+    # general software/web-dev target_skills list. When the fallback above
+    # applies AND the job mentions a term from domain_vocabulary (injected
+    # at runtime from config/filters.yaml's domain_skill_vocabulary,
+    # restricted to the candidate's selected target_domains), add this bonus
+    # — capped at 0.50, still below the weakest explicit target_skill match
+    # (0.52), so it can never outrank the candidate's own listed skills. Set
+    # to 0.0 to disable. domain_vocabulary itself is injected, not set here.
+    domain_vocab_bonus: 0.12
+
+  seniority_match:
+    weight: 0.15
+    junior_bonus: 1.2
+    entry_level_bonus: 1.2
+    # preferred_level_keywords is injected at runtime from
+    # profile.experience.preferred_levels + French synonyms (and "intern"/
+    # "trainee" aliased onto "internship" — see orchestrator.py).
+
+  experience_fit:
+    # Phase 3 (2026-09-10): weight deliberately LEFT AT 0.10, not reduced to
+    # 0.05. The original audit's case for cutting the weight measured this
+    # factor's contribution to real score spread at only ~0.1pt — but that
+    # measurement was taken while unknown_score=0.80 sat so close to the
+    # ceiling (1.0) that 98.3% of jobs (everyone with no stated years) were
+    # nearly indistinguishable from a perfect 0-1yr match. Fixing
+    # unknown_score to a genuine neutral (below) alone raised this factor's
+    # real stdev 3.5x (0.0144 -> 0.0505) and its weighted contribution from
+    # ~0.14pt to ~0.51pt at the SAME weight — most of the "near-constant"
+    # problem was a semantics bug, not a weight problem. The residual low
+    # variance that remains (98.3% of real jobs still land on the identical
+    # neutral value) is a genuine missing-data fact — postings just rarely
+    # state a years requirement — and no weight change can manufacture
+    # discriminating power the data doesn't contain. Cutting the weight
+    # further would only suppress the signal for the 1.7% of jobs that DO
+    # state a real requirement, without fixing anything.
+    weight: 0.10
+    # years<=1 -> 1.0; years>=2 -> max(floor, 1.0 - decay_per_year*(years-1))
+    # (2yr=0.85, 3yr=0.70, 4yr=0.55, 5yr=0.40, 6yr=0.25, 7+yr floor=0.15).
+    # This stated-years curve is UNCHANGED by Phase 3 — only unknown_score
+    # (below) was revisited.
+    decay_per_year: 0.15
+    floor: 0.15
+    # unknown_score: "unknown" means the requirements-extraction stage found
+    # NO years-of-experience statement in the posting at all (absence of
+    # evidence) — 96.5%+ of real jobs. The previous value (0.80) was an
+    # empirical PROXY: real unknown-experience jobs' junior-signal rate
+    # statistically resembled stated-2yr jobs more than stated-3yr jobs, so
+    # unknown was placed near the top of the curve as if that correlation
+    # were itself positive evidence for the individual job. That conflates
+    # "correlates with junior-friendly on average" with "IS junior-friendly"
+    # for any single posting, and it made "we don't know" score higher than
+    # confirmed real evidence (a stated, SATISFIED 2-3yr requirement) for
+    # the vast majority of the entire job pool — unearned inflation of
+    # exactly the kind the rest of this redesign corrected elsewhere.
+    # unknown_score is now a genuine neutral midpoint (0.5), matching the
+    # SAME "no evidence -> neutral" convention already used by
+    # skills_match's 0.5 (no target_skills configured) and
+    # seniority_match's 0.5 (no seniority signal in the title) — not a new,
+    # separately-justified constant. This deliberately means an unknown-
+    # experience job now scores BELOW a job that explicitly, confirmedly
+    # states a satisfied 2-3yr requirement (0.85/0.70) — a considered
+    # consequence, not an oversight: confirmed real evidence should outrank
+    # a guess, in either direction.
+    unknown_score: 0.50
+
+  language:
+    # F3: penalty applied when a non-profile language is explicitly required.
+    # 0.15 = 15% score reduction. Set to 0.0 to disable.
+    penalty_required: 0.15
+    # Profile languages (also injected at runtime from profile.languages).
+    # Jobs clearly in French or English receive no penalty.
+    profile_languages:
+      - French
+      - English
+
+  gates:
+    # Fires only when domain_relevance == confirmed_wrong_score (0.05) —
+    # i.e. confirmed off-domain evidence, never on merely-undetected domain.
+    # Guarantees the det+semantic composite (src/pipeline/semantic_matching.py,
+    # currently 0.94 deterministic / 0.06 semantic — see semantic_config.yaml)
+    # <= 0.94*0.40 + 0.06*1.0 = 0.436 even at a hypothetical maximum semantic
+    # score. This is NOT yet the final end-to-end ceiling — see the
+    # Pass 5 note below.
+    domain_cap: 0.40
+    # Fires only when seniority_match == 0.0 (a wrong-seniority keyword with
+    # no preferred-level match). Guarantees the det+semantic composite
+    # <= 0.94*0.55 + 0.06*1.0 = 0.577 even at a hypothetical maximum
+    # semantic score. Same Pass 5 caveat as domain_cap above.
+    seniority_multiplier: 0.55
+    # Pass 5 audit fix (2026-09-12): personalization (Phase 4) runs AFTER
+    # this det+semantic composite and used to be able to add up to
+    # personalization.max_abs_adjustment (0.3 by default) on top of it,
+    # completely bypassing both ceilings above — a confirmed off-domain job
+    # capped here to ~0.44 could reach ~0.70 from a single unrelated
+    # positive feedback event. src.pipeline.scoring.cap_personalization_at_gates
+    # (called from orchestrator.py right after apply_personalization) now
+    # re-enforces these same gates post-personalization: a gated job's final
+    # score can still be pushed DOWN by personalization, but never back UP
+    # past its own pre-personalization value. The ceilings above are
+    # therefore accurate end-to-end again, not just at the det+semantic
+    # layer.
+    #
+    # Location Priority Calibration audit (2026-09-12): the configured
+    # priority is location > domain > skills > seniority > experience, but
+    # with the weights/ranges above a maximal skills_match swing (0.20 x
+    # ~0.60 range = 0.12) could equal or exceed location_fit's weighted gap
+    # between most adjacent tiers — live-code proof: a Var job with zero
+    # explicit skill matches (0.83) lost to an otherwise-identical
+    # Remote-France job with a perfect skill match (0.905). Reweighting
+    # location high enough to fix this (~0.80 of the whole budget) or
+    # narrowing skills_match's range enough (down to ~0.075-0.225) were both
+    # evaluated and rejected: either destroys far more real differentiation
+    # than it protects. top_location_bonus is added to the weighted base in
+    # _apply_weights, BEFORE domain_cap/seniority_multiplier above, so both
+    # gates stay fully authoritative (a domain-gated job's bonus is entirely
+    # absorbed by the min() cap; a seniority-gated job keeps only
+    # bonus*seniority_multiplier of it — a few hundredths of a point).
+    # Applies ONLY to the single job whose location matches the profile's
+    # highest-priority status="preferred" location_preferences entry (see
+    # src.pipeline.scoring._is_top_preferred_location) — deliberately NOT
+    # every "preferred"-status entry (this profile's "remote_france" entry
+    # is also status="preferred" but at a lower list priority, and does not
+    # receive this bonus) and deliberately NOT a hard rejection or a
+    # guarantee for every location-tier boundary: Remote-France vs
+    # Acceptable/Paris/Outside-France remain ordinary "matter of degree"
+    # comparisons, unchanged, where a large enough skill difference may
+    # still tip the balance — only the user's single explicit top choice is
+    # protected. Sized so a top-preferred-location job's worst realistic
+    # case (skills_match at its zero-match fallback floor) still beats the
+    # best realistic case (skills_match at 1.0) of the next-highest location
+    # tier (Remote-France), with a small safety margin: 0.905 - 0.830 =
+    # 0.075, rounded up to 0.08.
+    top_location_bonus: 0.08
+
+# Maximum possible score is 1.0 (normalized)

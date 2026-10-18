@@ -1,0 +1,116 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "find-your-job-with-ai"
+version = "0.1.0"
+description = "Automated remote job discovery system"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.12"
+authors = [
+    {name = "Find Your Job With AI Contributors"},
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    "httpx>=0.25.0,<1.0.0",
+    "feedparser>=6.0.0,<7.0.0",
+    "requests>=2.31.0,<3.0.0",
+    "pydantic>=2.0.0,<3.0.0",
+    "pydantic-settings>=2.0.0,<3.0.0",
+    "pyyaml>=6.0",
+    "sentence-transformers>=3.0.0,<7.0.0",
+    "fastapi>=0.110.0,<1.0.0",
+    "uvicorn>=0.27.0,<1.0.0",
+    "python-multipart>=0.0.9",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+    "types-requests>=2.31.0",
+    "types-PyYAML>=6.0.0",
+]
+browser = [
+    "crawl4ai>=0.6.0",
+]
+linkedin = [
+    "python-jobspy>=1.1.0",
+]
+# Only needed to run src/discord_admin/mcp_server.py (Claude's on-demand
+# Discord administration tool) — the main backend app never imports mcp.
+mcp_admin = [
+    # <2: mcp 2.x renamed FastMCP (src/discord_admin/mcp_server.py's import)
+    # to MCPServer and changed other APIs; pin to the v1 line this code uses.
+    "mcp>=1.0.0,<2",
+]
+
+[tool.setuptools.packages.find]
+include = ["src*"]
+
+[tool.ruff]
+# Pinned explicitly so the rules don't drift with the installed Ruff version
+# (recent Ruff releases enable far more rules by default). 88 matches the
+# existing code: ~96% of lines already fit. Baseline: docs/baselines/ruff.md.
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+# Pyflakes plus the pycodestyle checks that don't conflict with a formatter.
+# Widen only after the baseline reaches zero (issue #14).
+select = ["E4", "E7", "E9", "F"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+# sentence-transformers ships no py.typed marker / stubs, so mypy can't
+# analyze it. This only relaxes checking for that one third-party import;
+# our own code that touches it (src/embeddings/embedding.py) still gets
+# full type checking otherwise.
+[[tool.mypy.overrides]]
+module = "sentence_transformers.*"
+ignore_missing_imports = true
+
+# feedparser ships no py.typed marker / stubs either. Used only in
+# src/collectors/remote.py to parse RSS feeds (e.g. We Work Remotely).
+[[tool.mypy.overrides]]
+module = "feedparser.*"
+ignore_missing_imports = true
+
+# python-jobspy and its transitive dependency pandas ship no py.typed markers.
+# The scanner imports jobspy lazily (inside a try/except) so mypy never sees
+# a hard import of it in any checked module.
+[[tool.mypy.overrides]]
+module = "jobspy.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "pandas.*"
+ignore_missing_imports = true
+
+# crawl4ai (optional `browser` extra) ships no py.typed marker; it is imported
+# lazily by src/collectors/base_browser.py and src/collectors/wttj.py.
+[[tool.mypy.overrides]]
+module = "crawl4ai.*"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+markers = [
+    "network: test requires live external network access (skip by default with -m 'not network')",
+]

@@ -1,0 +1,134 @@
+{
+ "scoring": {
+  "domain_relevance": {
+   "confirmed_wrong_score": 0.05,
+   "domain_description_keywords": [
+    "backend",
+    "api",
+    "pentest",
+    "sql"
+   ],
+   "domain_title_keywords": [
+    "developer",
+    "développeur",
+    "python",
+    "security",
+    "sécurité",
+    "data analyst"
+   ],
+   "off_domain_keywords": [
+    "commercial",
+    "vendeur",
+    "comptable",
+    "recruteur"
+   ]
+  },
+  "language": {
+   "penalty_required": 0.15,
+   "profile_languages": [
+    "French",
+    "English"
+   ]
+  },
+  "location_fit": {
+   "default_score": 0.4,
+   "location_preferences": [
+    {
+     "label": null,
+     "status": "preferred",
+     "type": "department",
+     "value": "83"
+    },
+    {
+     "label": null,
+     "status": "acceptable",
+     "type": "department",
+     "value": "01"
+    },
+    {
+     "label": null,
+     "status": "acceptable",
+     "type": "department",
+     "value": "69"
+    },
+    {
+     "label": null,
+     "status": "acceptable",
+     "type": "department",
+     "value": "37"
+    },
+    {
+     "label": null,
+     "status": "preferred",
+     "type": "department",
+     "value": "04"
+    },
+    {
+     "label": "Remote France",
+     "status": "preferred",
+     "type": "remote",
+     "value": "remote_france"
+    }
+   ],
+   "preferred_countries": [
+    "France"
+   ]
+  },
+  "seniority_match": {
+   "neutral_score": 0.5,
+   "preferred_level_keywords": [
+    "internship",
+    "stagiaire",
+    "stage",
+    "intern",
+    "trainee",
+    "alternance",
+    "apprenti",
+    "apprentissage",
+    "junior",
+    "debutant",
+    "entry level",
+    "graduate"
+   ]
+  },
+  "skills_match": {
+   "denominator_cap": 5,
+   "domain_vocabulary": [
+    "django",
+    "flask",
+    "pytest",
+    "pandas",
+    "sql"
+   ],
+   "esco_synonyms": {
+    "git": [
+     "version control"
+    ],
+    "python": [
+     "python programming"
+    ]
+   },
+   "target_skills": [
+    "python",
+    "javascript",
+    "php",
+    "MySQL",
+    "Node.js",
+    "Git",
+    "Linux",
+    "HTML",
+    "CSS",
+    "Bash",
+    "Docker",
+    "n8n"
+   ]
+  },
+  "weights": {
+   "domain_relevance": 0.25,
+   "experience_fit": 0.1,
+   "location_fit": 0.3,
+   "seniority_match": 0.15,
+   "skills_match": 0.2
+  }
+ }
+}

@@ -1,0 +1,14 @@
+{
+  "as_of": "2026-09-17T00:00:00+00:00",
+  "created_at": "2026-09-17T00:00:00+00:00",
+  "dataset_id": "synthetic-ai-filter-50",
+  "job_count": 50,
+  "jobs_sha256": "c1fc2a2e79d8e382a27ae2f79b8682f48e6c0b05c7ede01d3f9b72c8bb3c8ce4",
+  "kind": "synthetic",
+  "label_scheme_version": 1,
+  "labels_sha256": "b0380d57f124ef25cbef64b08790f6d0731eaf6516aa4044954e09a7b200e2b3",
+  "notes": "50 synthetic French postings, hand-labelled; pinned profile snapshot 2026-09-17.",
+  "profile_sha256": "db4ca9639efa5cbe2d8455864dda0a0ddaed04858d649edfa9982643bba401d2",
+  "schema_version": 1,
+  "version": "1"
+}

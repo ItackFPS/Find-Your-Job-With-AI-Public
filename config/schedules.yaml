@@ -1,0 +1,53 @@
+# Scheduler configuration for Find Your Job With AI.
+#
+# Each entry defines one scheduled background job.
+# The scheduler reads this file on startup and upserts definitions into SQLite.
+#
+# startup_policy options:
+#   run_once_per_day  — trigger a run on backend startup if no successful run
+#                       has occurred today (UTC midnight boundary).
+#                       Also re-triggers automatically when a UTC day rolls over
+#                       while the backend is running.
+#   disabled          — never run automatically (manual trigger only).
+#
+# Retries (per UTC day, see src/scheduler/service.py):
+#   retry_max            — automatic retries allowed after a FAILED attempt
+#                          (0 = none until the next UTC day).
+#   retry_delay_seconds  — wait before the first retry; doubles for each
+#                          further failure (capped at 6 h).
+#   A scan stopped by a backend shutdown/restart is "interrupted", not failed:
+#   it resumes from its checkpoint on the next start and uses no retry.
+#   A manual "run now" always runs.
+#
+# Timezones: all scheduling uses UTC.  The "day" boundary is UTC midnight.
+
+schedules:
+  - id: linkedin_daily
+    source_id: linkedin
+    label: "LinkedIn daily scan"
+    enabled: true
+    startup_policy: run_once_per_day   # run once per UTC day, triggered by startup or day rollover
+    retry_max: 0                       # no automatic retry on failure
+    retry_delay_seconds: 300
+
+  - id: hellowork_daily
+    source_id: hellowork
+    label: "HelloWork daily scan"
+    enabled: true
+    # Runs decoupled from the main pipeline run, same as LinkedIn above --
+    # ~30 minutes for the full metier taxonomy (see src/hellowork/scanner.py
+    # and src/collectors/hellowork.py). The scheduler auto-triggers a
+    # pipeline run after this completes, which snapshots the staged jobs
+    # in ~0s (src/api/runner.py) rather than waiting on a live collection.
+    startup_policy: run_once_per_day
+    retry_max: 0
+    retry_delay_seconds: 300
+
+  # Future entries (uncomment and implement the corresponding handler):
+  # - id: indeed_daily
+  #   source_id: indeed
+  #   label: "Indeed daily scan"
+  #   enabled: false
+  #   startup_policy: run_once_per_day
+  #   retry_max: 0
+  #   retry_delay_seconds: 300

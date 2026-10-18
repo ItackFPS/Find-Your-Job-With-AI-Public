@@ -1,0 +1,151 @@
+# LinkedIn background scanner configuration.
+#
+# IMPORTANT: LinkedIn scraping may conflict with LinkedIn's Terms of Service.
+# This implementation does not bypass authentication, CAPTCHAs, or access
+# controls, and imposes conservative request delays — but you operate it at
+# your own risk and responsibility.
+#
+# Set enabled: false to completely disable the LinkedIn scanner (false is also
+# the default when the key is missing; this shipped file turns it on).
+# When disabled, the normal pipeline is entirely unaffected.
+
+enabled: true
+
+# Daily scan schedule (UTC wall-clock time).
+# The scanner starts at approximately this time each day.
+# On first startup, the scanner runs once shortly after the app starts (no prior history).
+# If the app was down at the scheduled time, it catches up on the next startup.
+schedule:
+  hour: 8 # 08:00 UTC
+  minute: 0
+
+# Search queries. Each entry is a separate LinkedIn search.
+# Strategy: 7 queries covering the main target domains from profile.yaml.
+#
+#   Core software development (profile: développement logiciel, informatique):
+#   - "cloud engineer"          → replaces "python developer" (0 new staged jobs in last
+#                                  scan — 100% overlap with other queries).  Cloud roles
+#                                  now pass the title filter after "cloud engineer" was
+#                                  added to the automatisation domain keywords.
+#   - "backend developer"       → backend web roles that may not say "python"
+#   - "software engineer"       → broader catch-all for roles using the EN title convention
+#
+#   Infrastructure / DevOps (profile: automatisation, systèmes):
+#   - "devops engineer"         → replaces "data engineer" (data has poor ROI: 90% rejection
+#                                  rate, only 3 staged/291 raw).  DevOps jobs now pass the
+#                                  title filter after "devops" was added to automatisation.
+#
+#   Target domains with zero prior LinkedIn coverage:
+#   - "cybersecurity engineer"  → cybersecurity / cybersécurité domain
+#   - "network engineer"        → réseaux domain
+#   - "systems administrator"   → systèmes domain
+#
+# Cross-query deduplication (scan_seen_ids) handles any overlap — a job found
+# by multiple queries is staged once and attributed to the first query that
+# discovered it; subsequent queries record it via seen_by_queries only.
+# Remote-only roles appear across all queries because LinkedIn search is
+# location-filtered server-side — France narrows on-site results but remote
+# roles from the wider EU / worldwide still appear.
+queries:
+  - search_term: "cloud engineer"
+    location: "France"
+    results_wanted: 50
+
+  - search_term: "devops engineer"
+    location: "France"
+    results_wanted: 50
+
+  - search_term: "backend developer"
+    location: "France"
+    results_wanted: 50
+
+  - search_term: "software engineer"
+    location: "France"
+    results_wanted: 50
+
+  - search_term: "cybersecurity engineer"
+    location: "France"
+    results_wanted: 50
+
+  - search_term: "network engineer"
+    location: "France"
+    results_wanted: 50
+
+  - search_term: "systems administrator"
+    location: "France"
+    results_wanted: 50
+
+  # Profile target domains with no prior LinkedIn coverage:
+  - search_term: "support informatique"
+    location: "France"
+    results_wanted: 50
+
+  - search_term: "automation engineer"
+    location: "France"
+    results_wanted: 50
+
+  # French-language queries for domains with significant French-language postings.
+  # Cross-query dedup (scan_seen_ids) handles any overlap — English queries may
+  # already cover many of these, but French queries surface postings from French
+  # companies that use French-only titles (e.g. "développeur" instead of "developer").
+  #
+  # ROI analysis: English "network engineer" has 71% pass rate (most efficient query).
+  # French equivalents likely capture different postings from francophone companies.
+  - search_term: "développeur backend"
+    location: "France"
+    results_wanted: 50
+
+  - search_term: "ingénieur devops"
+    location: "France"
+    results_wanted: 50
+
+  - search_term: "ingénieur cybersécurité"
+    location: "France"
+    results_wanted: 50
+
+# Seconds to wait between each query AND between pages within a query.
+# Conservative values reduce the risk of rate limiting.
+# LinkedIn can rate-limit aggressively — minimum recommended: 15.
+rate_limit_seconds: 15.0
+
+# Fetch full job descriptions for each result (JobSpy bulk mode).
+# When true, JobSpy makes an additional HTTP request per result — much slower
+# but produces complete descriptions for all scraped jobs.
+# When false (recommended), descriptions are fetched selectively for survivors
+# only (see description_fetch_delay below), which is far cheaper.
+fetch_description: true
+
+# Whether to perform post-filter description enrichment.
+# The infrastructure is fully implemented:
+#   - Only filter survivors receive description requests (not all jobs)
+#   - 429 responses are handled gracefully (job is staged without description)
+#   - Respects description_fetch_delay between each request
+#   - Login-gated responses (HTTP 200 with sign-in form) are detected and discarded
+#
+# Current status: LinkedIn now gates the guest API behind authentication.
+# The endpoint returns HTTP 200 with a login form instead of the description body.
+# This means enrich_descriptions currently produces no useful content.
+# Keep disabled until LinkedIn's guest API behaviour changes or a safe
+# authenticated alternative is added.
+enrich_descriptions: false
+
+# Seconds to wait between post-filter description fetches (rate-limiting only).
+# Controls request pacing, NOT whether enrichment runs.
+# Only used when enrich_descriptions: true.
+# Recommended minimum: 5.0. Increase to 10-30 to reduce 429 risk.
+description_fetch_delay: 20
+
+# Only collect jobs posted within this many hours. 0 = no age filter.
+hours_old: 168
+
+# Maximum results per query page. Actual results may be fewer depending on
+# LinkedIn availability.
+max_results_per_query: 50
+
+# Maximum number of pages fetched per query (safety limit).
+# Scanning stops earlier when JobSpy returns an empty page (natural exhaustion).
+# A page returning only duplicates or only filtered-out jobs does NOT stop
+# pagination — only a truly empty result set or this limit does.
+# At 50 pages × 50 results = 2,500 max per query; LinkedIn rarely returns more
+# than 200-300 unique results per search term in practice.
+max_pages_per_query: 50

@@ -1,0 +1,51 @@
+name: Bug
+description: Something behaves incorrectly (wrong result, crash, regression).
+title: "fix: "
+labels: ["type:bug"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is wrong, in one or two sentences.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Exact commands, input data, profile/config state. Controlled data preferred over live sites.
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: Expected vs actual
+      placeholder: |
+        Expected: ...
+        Actual: ...
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Affected area (src/ package, stage, collector), relevant files, logs, commits.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Must include a regression test that fails before the fix and passes after.
+      value: |
+        - [ ] Regression test reproduces the bug and passes after the fix
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: non-goals
+    attributes:
+      label: Scope / non-goals
+      description: What this fix must NOT change.

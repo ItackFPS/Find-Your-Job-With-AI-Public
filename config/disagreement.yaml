@@ -1,0 +1,21 @@
+# Disagreement / confidence / abstention engine (src/decisions/disagreement.py).
+# It compares heterogeneous signals (deterministic fit, semantic similarity, Phase 2 profile match,
+# LLM eligibility verdict, UNKNOWN density, evidence completeness, contradictions) and answers
+# accept / review / reject with an agreement-based, UNCALIBRATED confidence. Uncertainty is never turned
+# into a rejection, and `review` never removes a job from ranking or notifications.
+#
+#   off     — nothing computed
+#   shadow  — recorded next to the production decision (default); changes nothing
+#   active  — additionally labels the journaled outcome `review` (the pipeline itself is unchanged)
+# Switch to `active` only after reading the shadow metrics (python -m src.evaluation, review metrics).
+mode: shadow
+
+spread_review: 0.30            # max-min over fit signals (0-1) above which they "disagree"
+unknown_density_review: 0.50
+completeness_min: 0.40
+review_on_conflict: true
+review_on_llm_reject_override: true
+review_llm_only_rejection: true
+# The user's own feedback contradicts the decision: a job they marked `interested` (or applied to) that
+# the pipeline rejects, or a job they marked `not_interested` that it accepts. Views/clicks never count.
+review_on_user_feedback: true

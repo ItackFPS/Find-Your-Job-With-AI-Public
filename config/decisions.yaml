@@ -1,0 +1,18 @@
+# Decision journal (src/decisions/): one auditable record per job per run, accepted AND
+# rejected. Observability only — it never changes a decision, score or ranking, and any
+# error in it is logged and ignored. All keys are optional.
+enabled: true
+
+# Also journal jobs dropped by validation / deduplication (metadata only, never job text).
+record_upstream_rejections: true
+
+# Keep the text of REJECTED jobs so false negatives can be audited later. Text is stored
+# once per distinct content (content-addressed), compressed with zlib.
+store_rejected_text: true
+store_accepted_text: false
+compress_text: true
+
+# Retention (0 = keep forever). Text is purged after N days while the decision row and the
+# snapshot metadata stay, so the audit trail survives without the personal text.
+text_retention_days: 60
+record_retention_days: 365

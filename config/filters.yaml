@@ -1,0 +1,1016 @@
+# Filtering engine vocabulary
+#
+# This file maps domain names, contract types, and seniority labels to
+# concrete matching keywords used by the filter engine.
+#
+# WHO EDITS THIS FILE:
+#   This file is engine configuration.  Users change their preferences in
+#   config/profile.yaml.  Edit this file only when you need to add new
+#   keyword synonyms or expand the vocabulary for a domain.
+#
+# STRUCTURE:
+#   domain_keywords   — per-domain keyword lists (title and description tiers)
+#   contract_keywords — per-contract-type keyword lists
+#   seniority_exclusions — per-label keyword lists for hard seniority exclusions
+#   excluded_title_keywords — clearly non-IT role terms (always rejected)
+#   remote_scope      — geographic constants for the location filter
+
+# ---------------------------------------------------------------------------
+# Domain keyword vocabulary
+#
+# Each domain has two sub-lists:
+#   title       — used to match against job titles (broader, allows common
+#                 substrings because title context limits false positives)
+#   description — used as a fallback when the title does not match; must
+#                 contain ONLY unambiguous IT terms to avoid false positives
+#                 from substring matching in free-form text
+#                 (e.g. "intern" matches "interne" in French descriptions)
+# ---------------------------------------------------------------------------
+
+domain_keywords:
+
+  software_development:
+    title:
+      - software engineer
+      - software developer
+      - software development
+      - backend engineer
+      - frontend engineer
+      - full stack
+      - full-stack
+      - developer
+      - programmer
+      - développeur
+      - developpeur
+      - développeuse
+      - developpeuse
+      - ingénieur logiciel
+      - ingenieur logiciel
+      - ingénieur informatique
+      - ingenieur informatique
+      - ingénieur développement
+      - ingenieur developpement
+      - développement logiciel
+      - developpement logiciel
+      - informatique
+      - informaticien
+      - informaticienne
+      - entwickler
+      - softwareentwickler
+      - golang
+      - rust
+      - swift
+      - kotlin
+      - "c#"
+      - ".net"
+      - "c++"
+      - cpp
+    description:
+      - software engineer
+      - software developer
+      - software development
+      - développeur
+      - developpeur
+      - développeuse
+      - developpeuse
+      - ingénieur logiciel
+      - ingenieur logiciel
+      - ingénieur informatique
+      - ingenieur informatique
+      - développement logiciel
+      - developpement logiciel
+      - programmation
+      - entwickler
+      - softwareentwickler
+      - golang
+      - kotlin
+      - "c#"
+      - ".net"
+      - "c++"
+      - cpp
+
+  web_development:
+    title:
+      - web developer
+      - web designer
+      - react
+      - angular
+      - "vue.js"
+      - vuejs
+      - "node.js"
+      - nodejs
+      - typescript
+      - frontend developer
+      - frontend engineer
+    description:
+      - angular
+      - "vue.js"
+      - vuejs
+      - "node.js"
+      - nodejs
+      - typescript
+
+  qa_testing:
+    title:
+      - qa engineer
+      - qa tester
+      - quality assurance
+      - test engineer
+      - tester
+      - testeur logiciel
+      - testeur informatique
+      - ingénieur test
+      - ingenieur test
+      - ivvq
+      - ingénieur ivvq
+      - ingenieur ivvq
+    description:
+      - quality assurance
+
+  # Canonical "automation" bucket (matches profile.yaml's target_domains
+  # spelling). Previously this domain only had 2 title keywords while the
+  # much richer DevOps/Cloud/SRE/Platform vocabulary lived under a
+  # separate "automatisation" (French) key that profile.yaml never
+  # referenced — silently degrading both hard-filter acceptance and
+  # deterministic domain-relevance scoring for legitimate titles like
+  # "Cloud Architect"/"CloudOps Engineer" (found by forensic audit,
+  # 2026-09-12). Merged here as the single source; the "automatisation"
+  # key has been removed rather than kept as a duplicate/alias since
+  # nothing else in the codebase reads it (config/profile.yaml only ever
+  # lists "automation").
+  automation:
+    title:
+      - automation engineer
+      - automatisation
+      - devops
+      - devsecops
+      - site reliability
+      - sre
+      - cloud engineer
+      - cloud platform
+      - platform engineer
+      - infrastructure engineer
+      - cloud architect
+      - cloud native
+      - cloud-native
+      - cloudops
+      - cloud ops
+      - cloud infrastructure
+      - finops
+      - ingénieur devops
+      - ingenieur devops
+      - ingénieur cloud
+      - ingenieur cloud
+      - ingénieur plateforme
+      - ingenieur plateforme
+      - infrastructure informatique
+      - architecte cloud
+    description: []
+
+  data:
+    title:
+      - data analyst
+      - data engineer
+      - data scientist
+      - data science
+      - machine learning
+      - mlops
+      - dba
+      - database administrator
+      - analyste données
+      - analyste donnees
+      - ingénieur données
+      - ingenieur donnees
+      - ingénieur data
+      - ingenieur data
+      - analyste data
+      - science des données
+      - spark
+      - hadoop
+    description:
+      - machine learning
+      - mlops
+      - pytorch
+      - tensorflow
+      - sql
+      - postgresql
+      - mysql
+      - mongodb
+      - redis
+      - elasticsearch
+      - hadoop
+      - airflow
+      - spark
+      - dbt
+
+  it_support:
+    title:
+      - it support
+      - helpdesk
+      - help desk
+      - support informatique
+      - support technique
+      - support de proximité
+      - technicien de proximité
+    description: []
+
+  systems:
+    title:
+      - sysadmin
+      - system administrator
+      - systems administrator
+      - systems engineer
+      - technicien informatique
+      - technicien systèmes
+      - technicien systemes
+      - administrateur systèmes
+      - administrateur systemes
+      - ingénieur systèmes
+      - ingenieur systemes
+      - système d'information
+      - systèmes d'information
+      - responsable si
+      - dsi
+    description: []
+
+  networking:
+    title:
+      - network engineer
+      - network administrator
+      - network technician
+      - technicien réseau
+      - technicien reseau
+      - administrateur réseau
+      - administrateur reseau
+      - ingénieur réseau
+      - ingenieur reseau
+      - réseaux
+      - reseaux
+      - netzwerk
+    description: []
+
+  cybersecurity:
+    title:
+      - security engineer
+      - cybersecurity
+      - ingénieur sécurité
+      - ingenieur securite
+      - cybersécurité
+      - cybersecurite
+    description:
+      - cybersecurity
+      - cybersécurité
+      - cybersecurite
+
+  # devops/cloud description lists (Pass 5 audit fix, 2026-09-12): previously
+  # contained bare generic tool/vendor names (docker, kubernetes, terraform,
+  # ansible, linux, aws, azure, gcp, microservices). Those are not
+  # unambiguous domain evidence — the description-keyword tier is meant for
+  # a job whose BODY confirms the domain, but a single incidental mention of
+  # a common tool name (a boilerplate "tech stack: AWS" line, one throwaway
+  # sentence about internal tooling) is not that. Confirmed live-code proof:
+  # a plain "Ingénieur BTP" (civil engineering) posting scored an unchanged
+  # 0.35, but the same posting plus one sentence mentioning "Docker" jumped
+  # to 0.70 (confirmed domain) purely from that single word; a restaurant
+  # server posting with a corporate "Stack technique: AWS, Azure" boilerplate
+  # line did the same. These terms already have a dedicated, purpose-built
+  # home in domain_skill_vocabulary (below) — used by skills_match's
+  # fallback bonus for a job whose domain is ALREADY confirmed by title —
+  # so removing them here does not lose that signal, it just stops them
+  # from being able to confirm domain relevance on their own. A genuine
+  # devops/cloud job is still fully covered via its title (this domain's own
+  # `title` list below), matching the file's own stated description-tier
+  # rule: "must contain ONLY unambiguous IT terms" (see the module comment
+  # at the top of this section).
+  devops:
+    title:
+      - devops
+      - site reliability
+      - sre
+    description:
+      - devops
+
+  cloud:
+    title:
+      - cloud engineer
+      - infrastructure engineer
+      - platform engineer
+      - ingénieur cloud
+      - ingenieur cloud
+      - infrastructure informatique
+    description: []
+
+  # French-language domain aliases.
+  # Users may enter French domain names ("informatique", "réseaux") in their
+  # profile. These aliases map them to the appropriate keyword sets so the
+  # filter engine produces the same result as the English equivalents.
+
+  informatique:
+    title:
+      - développeur
+      - developpeur
+      - développeuse
+      - developpeuse
+      - ingénieur informatique
+      - ingenieur informatique
+      - technicien informatique
+      - informaticien
+      - informaticienne
+      - informatique
+      - programmeur
+      - programmeuse
+      - analyste programmeur
+      - analyste programmeure
+      - concepteur développeur
+      - concepteur developpeur
+      # AI/ML role recognition — these overlap with the data domain but are
+      # legitimately part of software/IT engineering ("informatique").
+      - ai engineer
+      - ml engineer
+      - machine learning engineer
+      - intelligence artificielle
+      - generative ai
+      - llm engineer
+    description: []
+
+  # French alias for "développement logiciel" (software development).
+  # Profile entries using the French name get the same keyword set as
+  # the English "software_development" domain.
+  développement logiciel:
+    title:
+      - software engineer
+      - software developer
+      - software development
+      - backend engineer
+      - frontend engineer
+      - full stack
+      - full-stack
+      - developer
+      - programmer
+      - développeur
+      - developpeur
+      - développeuse
+      - developpeuse
+      - ingénieur logiciel
+      - ingenieur logiciel
+      - ingénieur informatique
+      - ingenieur informatique
+      - ingénieur développement
+      - ingenieur developpement
+      - développement logiciel
+      - developpement logiciel
+      - informatique
+      - informaticien
+      - informaticienne
+      - "c++"
+      - cpp
+    description:
+      - software engineer
+      - software developer
+      - software development
+      - développeur
+      - developpeur
+      - développeuse
+      - developpeuse
+      - ingénieur logiciel
+      - ingenieur logiciel
+      - développement logiciel
+      - developpement logiciel
+      - programmation
+      - "c++"
+      - cpp
+
+  # French alias for "cybersécurité" (cybersecurity).
+  cybersécurité:
+    title:
+      - security engineer
+      - cybersecurity
+      - ingénieur sécurité
+      - ingenieur securite
+      - cybersécurité
+      - cybersecurite
+    description:
+      - cybersecurity
+      - cybersécurité
+      - cybersecurite
+
+  # French alias for "systèmes" (systems).
+  systèmes:
+    title:
+      - sysadmin
+      - system administrator
+      - systems administrator
+      - systems engineer
+      - technicien informatique
+      - technicien systèmes
+      - technicien systemes
+      - administrateur systèmes
+      - administrateur systemes
+      - ingénieur systèmes
+      - ingenieur systemes
+      - système d'information
+      - systèmes d'information
+      - responsable si
+      - dsi
+    description: []
+
+  réseaux:
+    title:
+      - réseaux
+      - reseaux
+      - réseau
+      - reseau
+      - ingénieur réseau
+      - ingenieur reseau
+      - technicien réseau
+      - technicien reseau
+      - administrateur réseau
+      - administrateur reseau
+      - technicien réseaux
+      - technicien reseaux
+      - network engineer
+      - network administrator
+      - network technician
+      - networking
+    description: []
+
+  # ---------------------------------------------------------------------------
+  # Non-IT domains.
+  #
+  # Each of these mirrors a category that used to be hard-excluded below
+  # (see excluded_title_keywords / non_it_title_functions) regardless of the
+  # user's domain selection. Selecting one of these domains opts back into
+  # that category: build_filter_config() only applies a category's exclusion
+  # keywords when the matching domain key is NOT in profile.target_domains,
+  # so existing IT-only profiles are unaffected.
+  # ---------------------------------------------------------------------------
+
+  sales:
+    title:
+      - vendeur
+      - vendeuse
+      - commercial
+      - conseiller de vente
+      - chargé de clientèle
+      - charge de clientele
+      - sales representative
+      - salesperson
+      - seller
+      - sales associate
+      - account executive
+      - business developer
+    description:
+      - vente
+      - sales
+
+  cleaning:
+    title:
+      - agent d'entretien
+      - agent d entretien
+      - agent de propreté
+      - agent de proprete
+      - agent de nettoyage
+      - technicien de surface
+      - femme de ménage
+      - femme de menage
+      - homme de ménage
+      - homme de menage
+      - cleaner
+      - housekeeping
+      - janitor
+      - custodian
+    description:
+      - nettoyage
+      - cleaning
+
+  healthcare:
+    title:
+      - infirmier
+      - infirmière
+      - infirmiere
+      - aide-soignant
+      - aide-soignante
+      - aide soignante
+      - médecin
+      - medecin
+      - pédiatre
+      - pediatre
+      - pharmacien
+      - kiné
+      - kine
+      - nurse
+      - healthcare assistant
+      - caregiver
+    description: []
+
+  accounting:
+    title:
+      - comptable
+      - accountant
+      - bookkeeper
+      - contrôleur de gestion
+      - controleur de gestion
+      - auditeur
+    description:
+      - comptabilité
+      - comptabilite
+      - accounting
+
+  legal:
+    title:
+      - juriste
+      - avocat
+      - lawyer
+      - legal counsel
+      - paralegal
+    description: []
+
+  trades:
+    title:
+      - plombier
+      - carrossier
+      - électricien
+      - electricien
+      - chaudronnier
+      - soudeur
+      - maçon
+      - macon
+      - plumber
+      - electrician
+      - welder
+      - mason
+    description: []
+
+  manual_labor:
+    title:
+      - ouvrier
+      - ouvrière
+      - ouvriere
+      - manutentionnaire
+      - agent de production
+      - warehouse worker
+      - factory worker
+      - laborer
+      - labourer
+    description: []
+
+  recruitment:
+    title:
+      - recruteur
+      - recrutrice
+      - recrutement
+      - recruiter
+      - talent acquisition
+    description: []
+
+  procurement:
+    title:
+      - acheteur
+      - buyer
+      - procurement
+      - purchasing agent
+    description: []
+
+  marketing:
+    title:
+      - marketeur
+      - marketing manager
+      - growth marketer
+      - digital marketer
+      - chargé de marketing
+      - charge de marketing
+    description: []
+
+# ---------------------------------------------------------------------------
+# Domain-specific SKILL/TOOL vocabulary (2026-09-11)
+#
+# Distinct from `domain_keywords` above: those are ROLE-title synonyms used
+# to detect whether a job IS in a given domain. This section is a small,
+# curated list of actual TOOL/TECHNOLOGY terms per domain, used ONLY by the
+# deterministic scorer's skills_match fallback (src/pipeline/scoring.py,
+# _score_skills_match) to give a confirmed in-domain job partial credit when
+# it mentions real domain-specific technology but none of the candidate's
+# own `profile.target_skills` — e.g. a cybersecurity job mentioning "SIEM"
+# or "pentest" when the candidate's skill list is python/js/docker/etc.
+#
+# IMPORTANT — this is NOT added to target_skills and never appears as a
+# "matched skill" in the UI (frontend/src/pages/Jobs.tsx, src/pipeline/
+# explain.py's `_matched_skills`): it would misrepresent the candidate as
+# knowing a tool they never listed. It only nudges the deterministic score's
+# skills_match fallback tier, and only when the job's domain is already
+# CONFIRMED (domain_relevance >= fallback_domain_threshold) — see
+# scoring.yaml's `domain_vocab_bonus` comment for the exact, bounded effect.
+#
+# Only cover domains whose real vocabulary structurally can't overlap with
+# a general software/web-dev target_skills list: cybersecurity, networking,
+# systems, devops, automation. Same false-positive discipline as
+# domain_keywords' description lists — unambiguous multi-word terms
+# preferred over short/ambiguous acronyms.
+# ---------------------------------------------------------------------------
+
+domain_skill_vocabulary:
+
+  cybersecurity:
+    - siem
+    - soc
+    - pentest
+    - penetration testing
+    - firewall
+    - pare-feu
+    - active directory
+    - iam
+    - pki
+    - waf
+    - ids/ips
+    - edr
+    - vulnerability assessment
+    - threat intelligence
+    - soar
+
+  networking:
+    - tcp/ip
+    - vlan
+    - routing
+    - switching
+    - firewall
+    - vpn
+    - dns
+    - dhcp
+    - wan
+    - lan
+    - cisco
+    - fortinet
+    - load balancer
+
+  systems:
+    - active directory
+    - windows server
+    - vmware
+    - virtualisation
+    - virtualization
+    - sccm
+    - powershell
+    - itil
+    - hyperviseur
+    - hypervisor
+
+  devops:
+    - ci/cd
+    - ci-cd
+    - jenkins
+    - gitlab ci
+    - github actions
+    - infrastructure as code
+    - prometheus
+    - grafana
+    - helm
+
+  automation:
+    - ci/cd
+    - jenkins
+    - ansible
+    - terraform
+    - powershell
+    - scripting
+
+# ---------------------------------------------------------------------------
+# Contract type keyword vocabulary
+#
+# When a contract type is selected in the profile, its title keywords are
+# added to the title matching list.
+# Description lists are intentionally empty — contract keywords are too
+# ambiguous for free-form text matching (e.g. "stage" matches "staged",
+# "intern" matches the French word "interne" meaning "internal").
+# ---------------------------------------------------------------------------
+
+contract_keywords:
+
+  internship:
+    title:
+      - internship
+      - "intern "
+      - stagiaire
+      - stage
+      - apprenticeship
+      - apprentice
+      - placement
+    description: []
+
+  alternance:
+    title:
+      - alternance
+      - alternant
+      - apprentissage
+      - apprenti
+    description: []
+
+  cdi:
+    title: []
+    description: []
+
+  cdd:
+    title: []
+    description: []
+
+  # Unlike the other groups above (added to matching when the contract type
+  # IS selected), freelance's title keywords are used in the opposite
+  # direction: as a REJECTION list when "freelance" is NOT in the profile's
+  # contract_types — see build_filter_config()'s contract_type section and
+  # matches_contract_type() in src/pipeline/filter.py.
+  freelance:
+    title:
+      - freelance
+      - indépendant
+      - independant
+      - auto-entrepreneur
+      - portage salarial
+    description: []
+
+# ---------------------------------------------------------------------------
+# Seniority exclusion keyword sets
+#
+# Profile.experience.excluded_seniority lists which sets to activate.
+# A job whose title contains any keyword from an active set is rejected.
+# ---------------------------------------------------------------------------
+
+seniority_exclusions:
+  senior:
+    - senior
+    # "Sr." / "Sr " — English abbreviation for Senior (e.g. "Sr. DevOps Engineer").
+    # The filter applies word-boundary guards ((?<![a-z0-9])kw(?![a-z0-9])), so bare
+    # "sr" will NOT match inside words like "master" or "observer" but WILL match
+    # "sr. devops engineer" (period after) and "sr software" (space after).
+    - sr
+    # French seniority equivalents (accent-stripped; matched after _normalize()).
+    # "sénior" normalises to "senior" and is already caught by the entry above.
+    - confirme
+    - confirmee
+    - experimente
+    - experimentee
+  director:
+    - director
+    - "head of"
+    - head
+    - directeur
+    - directrice
+  vp:
+    - "vice president"
+    - "vp"
+    - "vice-président"
+    - "vice-president"
+    - "vice président"
+  c_suite:
+    - "chief"
+    - cto
+    - ciso
+    - coo
+    - cpo
+  lead:
+    - lead
+    - leader
+    - "tech lead"
+    - "team lead"
+    - "lead developer"
+    - "lead engineer"
+    - "lead software"
+    - "lead data"
+    - "engineering lead"
+    - "development lead"
+    - "lead développeur"
+    - "lead developpeur"
+    - "lead ingénieur"
+    - "lead ingenieur"
+    - "développeur lead"
+    - "developpeur lead"
+    - "ingénieur lead"
+    - "ingenieur lead"
+  manager:
+    - manager
+    - manageur
+    - responsable
+    - "chef de projet"
+    - "chef de produit"
+  principal:
+    - principal
+    - "principal engineer"
+    - "principal developer"
+    - "principal software"
+    - "principal architect"
+    - "principal data"
+    - "ingénieur principal"
+    - "développeur principal"
+  staff:
+    - "staff engineer"
+    - "staff developer"
+    - "staff software"
+    - "staff data"
+    # DevOps/Cloud/Platform role-type variants (same "staff" IC-level
+    # signal as the entries above, extended to match the automation
+    # domain's cloud/devops/platform vocabulary — see build_filter_config).
+    # Deliberately no bare "staff" keyword here, unlike "principal" below:
+    # "staff" alone is a much more common/ambiguous English word (e.g.
+    # generic "IT Staff" usage) that would risk rejecting legitimate
+    # non-senior titles; kept to explicit compound phrases only.
+    - "staff devops"
+    - "staff cloud"
+    - "staff platform"
+    - "staff architect"
+    - "staff sre"
+    - "staff infrastructure"
+  executive:
+    - "executive director"
+    - "executive vice"
+    - "chief executive"
+
+# ---------------------------------------------------------------------------
+# Title keywords that always indicate a clearly non-IT role — grouped by the
+# domain that opts back into that category (see the non-IT domains added to
+# domain_keywords above). build_filter_config() applies a group's keywords
+# only when the user has NOT selected the matching domain, so an IT-only
+# profile (no group key present in target_domains) sees exactly the same
+# rejections as before this was split into groups.
+#
+# Keep each group small and conservative: false negatives are worse than
+# false positives at the hard-filter stage.
+# ---------------------------------------------------------------------------
+
+excluded_title_keywords:
+  accounting:
+    - comptable
+  legal:
+    - juriste
+  healthcare:
+    - infirmier
+    - infirmière
+    - infirmiere
+    - pédiatre
+    - pediatre
+    - médecin
+    - medecin
+    - pharmacien
+    - kiné
+    - kine
+    # Added 2026-09-12 (Pass 5.1 vocabulary audit): "aide-soignant" was
+    # already in domain_keywords.healthcare's title list (used if a user
+    # opts INTO the healthcare domain) but missing here, so it fell through
+    # to the neutral "undetermined" domain score (0.45) instead of
+    # "confirmed wrong" (0.05) for an IT-only profile — unambiguous medical
+    # role, zero overlap with any IT title.
+    - aide-soignant
+    - aide-soignante
+    - aide soignante
+  trades:
+    - plombier
+    - carrossier
+    - électricien
+    - electricien
+    - chaudronnier
+    - soudeur
+    - maçon
+    - macon
+  # Manual-labor roles — never IT regardless of description wrapper content.
+  manual_labor:
+    - ouvrier
+    - ouvrière
+    - ouvriere
+    - manutentionnaire
+    - agent de production
+  # Added 2026-09-12 (Pass 5.1 vocabulary audit): construction/civil-
+  # engineering roles beyond the single-trade words already covered above
+  # (plombier, électricien, maçon, ...) — e.g. "Ingénieur BTP" and
+  # "Conducteur de Travaux" postings were landing at the neutral
+  # "undetermined" domain score (0.45) rather than "confirmed wrong" (0.05)
+  # purely because their titles contain no SPECIFIC trade word. Deliberately
+  # NOT "chef de chantier" alone reduced to bare "chef" or "chantier" —
+  # both are common, ambiguous words that would risk false-positiving on
+  # legitimate IT titles ("Chef de Projet", "Chantier informatique" is not
+  # real but "chef" alone is far too broad). "btp" is the standard,
+  # unambiguous French construction-sector acronym with no known IT title
+  # overlap.
+  construction:
+    - conducteur de travaux
+    - chef de chantier
+    - génie civil
+    - genie civil
+    - btp
+  # Added 2026-09-12 (Pass 5.1 vocabulary audit): hospitality/restaurant
+  # service roles. Deliberately does NOT include bare "serveur" — a real,
+  # common French IT title pattern is "Administrateur Serveurs",
+  # "Technicien Serveurs et Réseaux", "Ingénieur Serveurs" (server
+  # infrastructure) and a blanket "serveur" exclusion would hard-reject
+  # those legitimate IT jobs. Only qualified phrases that unambiguously mean
+  # the hospitality role are included; a bare "Serveur"/"Serveur Junior"
+  # title with no restaurant/salle qualifier remains uncovered by design —
+  # see the Pass 5.1 report for this documented, intentional gap.
+  hospitality:
+    - commis de cuisine
+    - chef de rang
+    - employé de restaurant
+    - employe de restaurant
+    - serveur de restaurant
+    - serveur en salle
+    - commis de salle
+    - plongeur
+  # Added 2026-09-12 (Pass 5.1 vocabulary audit): agriculture, no prior
+  # coverage at all (neither an opt-in domain nor an exclusion group
+  # existed). "ouvrier agricole" was already implicitly covered by the
+  # bare "ouvrier" entry in manual_labor above.
+  agriculture:
+    - agriculteur
+    - exploitant agricole
+
+# ---------------------------------------------------------------------------
+# Non-IT title function words — same grouping/opt-out mechanism as above.
+#
+# When a job title fails the IT keyword inclusion check AND contains one of
+# these words, the description fallback is skipped.  IT keywords in the
+# description of a recruiter, sales, or HR role are incidental ("we hire
+# developers") and must not be used to classify the posting as IT-relevant
+# for a profile that hasn't opted into that domain.
+#
+# Keep each group conservative: only add words that NEVER identify a
+# legitimate IT job function, regardless of surrounding context.
+# ---------------------------------------------------------------------------
+
+non_it_title_functions:
+  recruitment:
+    - recruiter
+    - recruteur
+    - recrutrice
+    - recrutement
+  # Sales — word-boundary matching prevents "commercial" from false-positiving
+  # on "commerciales" or "commercialisation" in longer French titles.
+  sales:
+    - vendeur
+    - vendeuse
+    - commercial         # "Commercial informatique" = sales, not IT
+    - conseiller de vente  # "Conseiller de vente informatique" = retail advisor
+    # Added 2026-09-12 (Pass 5.1 vocabulary audit): English equivalents —
+    # the French sales-function terms above were already covered, but
+    # "Account Executive"/"Sales Representative"/"Business Developer"
+    # (a real, common title on English-language job boards) were not,
+    # despite "business developer" already appearing in domain_keywords.
+    # sales's title list (used only if a user opts INTO the sales domain).
+    # Each is an unambiguous 2+ word sales/BD phrase with no legitimate IT
+    # title overlap.
+    - account executive
+    - sales representative
+    - business developer
+  procurement:
+    - acheteur
+  marketing:
+    - marketeur
+
+# ---------------------------------------------------------------------------
+# Geographic scope for remote jobs.
+# Engine constants — not user-facing.  Only change when expanding to new
+# geographic regions.
+# ---------------------------------------------------------------------------
+
+remote_scope:
+  european_countries:
+    - France
+    - Germany
+    - Netherlands
+    - Belgium
+    - Spain
+    - Italy
+    - Portugal
+    - Austria
+    - Switzerland
+    - Sweden
+    - Denmark
+    - Norway
+    - Finland
+    - Poland
+    - Czech Republic
+    - Ireland
+    - United Kingdom
+    - UK
+    - Romania
+    - Hungary
+    - Greece
+    - Croatia
+    - Slovakia
+    - Slovenia
+    - Bulgaria
+    - Estonia
+    - Latvia
+    - Lithuania
+    - Luxembourg
+    - Malta
+    - Cyprus
+  european_keywords:
+    - Europe
+    - EU
+    - EMEA
+    - European
+  # Indicators that a remote job is accessible from anywhere in the world,
+  # implicitly including France.
+  worldwide_keywords:
+    - worldwide
+    - global
+    - anywhere
+    - international
+    - work from anywhere
+    - wfa

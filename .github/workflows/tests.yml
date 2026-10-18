@@ -1,0 +1,80 @@
+name: Tests
+
+# Deterministic test suite (pytest -m "not network") on every pull request and
+# push to main, then mypy (advisory) in the same job so the heavy dependency
+# install happens once. Tests marked `network` need live external access and
+# never run in CI (see pyproject.toml's marker registration).
+#
+# Reproduce locally (docs/development.md, "Run the CI checks locally"):
+#   pip install -e ".[dev,mcp_admin]"
+#   pytest -m "not network"
+#   mypy src
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# A newer push to the same pull request supersedes the running check; pushes to
+# main always finish so every main commit keeps a result.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # CPU-only torch first (sentence-transformers' dependency): the default
+      # Linux wheel pulls several GB of CUDA libraries the tests never use.
+      - name: Install CPU-only torch
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install dependencies
+        run: pip install -e ".[dev,mcp_admin]" "mypy==2.3.0"
+        # Deliberately excludes the optional "linkedin" extra (python-jobspy):
+        # its unbounded transitive version range makes pip's resolver
+        # backtrack into ancient sdist-only numpy releases with no cp312
+        # wheel. Tests that need it (pandas-backed LinkedIn record-building)
+        # skip themselves via pytest.mark.skipif when pandas isn't installed
+        # — see tests/test_quality_fixes.py and
+        # tests/test_linkedin_description_workmode.py.
+
+      - name: Run deterministic test suite
+        run: pytest -m "not network"
+
+      # ADVISORY: reports but never fails while the documented baseline
+      # (docs/baselines/mypy.md) is worked down — issues #16 and #17. mypy is
+      # pinned so the count only changes when the code does. Runs even when a
+      # test failed, so one red check still shows both results.
+      - name: mypy (advisory)
+        if: ${{ !cancelled() }}
+        run: |
+          set +e
+          mypy src > mypy-report.txt 2>&1
+          status=$?
+          set -e
+          cat mypy-report.txt
+          {
+            echo "### mypy (advisory, baseline: docs/baselines/mypy.md)"
+            echo '```'
+            tail -n 1 mypy-report.txt
+            grep -oE '\[[a-z-]+\]$' mypy-report.txt | sort | uniq -c | sort -rn
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ]; then
+            echo "::warning::mypy reported errors (advisory; see job summary)"
+          fi

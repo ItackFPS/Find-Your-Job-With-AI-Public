@@ -1,0 +1,714 @@
+{
+ "dataset": {
+  "as_of": "2026-09-17T00:00:00+00:00",
+  "id": "synthetic-ai-filter-50",
+  "jobs_sha256": "c1fc2a2e79d8e382a27ae2f79b8682f48e6c0b05c7ede01d3f9b72c8bb3c8ce4",
+  "labels_sha256": "b0380d57f124ef25cbef64b08790f6d0731eaf6516aa4044954e09a7b200e2b3",
+  "version": "1"
+ },
+ "decisions": [
+  {
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.6,
+    "seniority_match": 1.0,
+    "skills_match": 1.0
+   },
+   "flags": [],
+   "job_id": "bm01",
+   "reasons": [],
+   "score": 0.83,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.79,
+    "seniority_match": 1.0,
+    "skills_match": 1.0
+   },
+   "flags": [],
+   "job_id": "bm02",
+   "reasons": [],
+   "score": 0.887,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.6,
+    "seniority_match": 1.0,
+    "skills_match": 0.64
+   },
+   "flags": [],
+   "job_id": "bm03",
+   "reasons": [],
+   "score": 0.758,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.6,
+    "seniority_match": 1.0,
+    "skills_match": 1.0
+   },
+   "flags": [],
+   "job_id": "bm04",
+   "reasons": [],
+   "score": 0.83,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.6,
+    "seniority_match": 1.0,
+    "skills_match": 0.76
+   },
+   "flags": [],
+   "job_id": "bm05",
+   "reasons": [],
+   "score": 0.782,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.85,
+    "seniority_match": 1.0,
+    "skills_match": 0.64
+   },
+   "flags": [],
+   "job_id": "bm06",
+   "reasons": [],
+   "score": 0.833,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.85,
+    "seniority_match": 1.0,
+    "skills_match": 1.0
+   },
+   "flags": [],
+   "job_id": "bm07",
+   "reasons": [],
+   "score": 0.905,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.6,
+    "seniority_match": 1.0,
+    "skills_match": 0.52
+   },
+   "flags": [],
+   "job_id": "bm08",
+   "reasons": [],
+   "score": 0.734,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.6,
+    "seniority_match": 1.0,
+    "skills_match": 0.64
+   },
+   "flags": [],
+   "job_id": "bm09",
+   "reasons": [],
+   "score": 0.758,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.6,
+    "seniority_match": 1.0,
+    "skills_match": 1.0
+   },
+   "flags": [],
+   "job_id": "bm10",
+   "reasons": [],
+   "score": 0.83,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.85,
+    "seniority_match": 0.5,
+    "skills_match": 0.64
+   },
+   "flags": [],
+   "job_id": "bm11",
+   "reasons": [],
+   "score": 0.758,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 0.7,
+    "experience_fit": 0.5,
+    "location_fit": 0.6,
+    "seniority_match": 0.5,
+    "skills_match": 0.64
+   },
+   "flags": [],
+   "job_id": "bm12",
+   "reasons": [],
+   "score": 0.608,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.79,
+    "seniority_match": 0.5,
+    "skills_match": 0.52
+   },
+   "flags": [],
+   "job_id": "bm13",
+   "reasons": [],
+   "score": 0.716,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.6,
+    "seniority_match": 0.5,
+    "skills_match": 0.88
+   },
+   "flags": [],
+   "job_id": "bm14",
+   "reasons": [],
+   "score": 0.731,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": null,
+   "flags": [],
+   "job_id": "bm15",
+   "reasons": [
+    "Job title centers on 'ruby' which is not in the candidate's profile.",
+    "Job centers on 'ruby' (mandatory, principal) — not in candidate profile."
+   ],
+   "score": null,
+   "stage": "requirements_gate",
+   "verdict": "reject"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.6,
+    "seniority_match": 1.0,
+    "skills_match": 0.64
+   },
+   "flags": [],
+   "job_id": "bm16",
+   "reasons": [],
+   "score": 0.758,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.6,
+    "seniority_match": 1.0,
+    "skills_match": 0.52
+   },
+   "flags": [],
+   "job_id": "bm17",
+   "reasons": [],
+   "score": 0.734,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.6,
+    "seniority_match": 1.0,
+    "skills_match": 1.0
+   },
+   "flags": [],
+   "job_id": "bm18",
+   "reasons": [],
+   "score": 0.83,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.6,
+    "seniority_match": 0.5,
+    "skills_match": 0.52
+   },
+   "flags": [],
+   "job_id": "bm19",
+   "reasons": [],
+   "score": 0.659,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.6,
+    "seniority_match": 1.0,
+    "skills_match": 1.0
+   },
+   "flags": [],
+   "job_id": "bm20",
+   "reasons": [],
+   "score": 0.83,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "bm21",
+   "reasons": [
+    "filter:seniority"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "bm22",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "bm23",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "bm24",
+   "reasons": [
+    "filter:seniority"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "bm25",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "bm26",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "bm27",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "bm28",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "bm29",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "bm30",
+   "reasons": [
+    "filter:seniority"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.6,
+    "seniority_match": 0.5,
+    "skills_match": 0.64
+   },
+   "flags": [],
+   "job_id": "bm31",
+   "reasons": [],
+   "score": 0.683,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "bm32",
+   "reasons": [
+    "filter:seniority"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "bm33",
+   "reasons": [
+    "filter:seniority"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "bm34",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "bm35",
+   "reasons": [
+    "filter:seniority"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 0.7,
+    "experience_fit": 0.5,
+    "location_fit": 0.6,
+    "seniority_match": 0.5,
+    "skills_match": 0.52
+   },
+   "flags": [],
+   "job_id": "bm36",
+   "reasons": [],
+   "score": 0.584,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "bm37",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "bm38",
+   "reasons": [
+    "filter:seniority"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.6,
+    "seniority_match": 0.5,
+    "skills_match": 0.4
+   },
+   "flags": [],
+   "job_id": "bm39",
+   "reasons": [],
+   "score": 0.635,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "bm40",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": null,
+   "flags": [],
+   "job_id": "bm41",
+   "reasons": [
+    "Job requires Bac+5 (mandatory); candidate maximum is bac+2."
+   ],
+   "score": null,
+   "stage": "requirements_gate",
+   "verdict": "reject"
+  },
+  {
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "bm42",
+   "reasons": [
+    "filter:seniority"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": null,
+   "flags": [],
+   "job_id": "bm43",
+   "reasons": [
+    "Job requires at least 5 years experience (mandatory); candidate maximum is 2 years."
+   ],
+   "score": null,
+   "stage": "requirements_gate",
+   "verdict": "reject"
+  },
+  {
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "bm44",
+   "reasons": [
+    "filter:location"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "bm45",
+   "reasons": [
+    "filter:location"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": null,
+   "flags": [],
+   "job_id": "bm46",
+   "reasons": [
+    "Job requires Bac+5 (preferred); candidate maximum is bac+2."
+   ],
+   "score": null,
+   "stage": "requirements_gate",
+   "verdict": "reject"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.79,
+    "seniority_match": 1.0,
+    "skills_match": 1.0
+   },
+   "flags": [],
+   "job_id": "bm47",
+   "reasons": [],
+   "score": 0.887,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.6,
+    "seniority_match": 1.0,
+    "skills_match": 0.88
+   },
+   "flags": [],
+   "job_id": "bm48",
+   "reasons": [],
+   "score": 0.806,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.6,
+    "seniority_match": 1.0,
+    "skills_match": 1.0
+   },
+   "flags": [],
+   "job_id": "bm49",
+   "reasons": [],
+   "score": 0.83,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "extraction_method": "heuristic",
+   "factors": null,
+   "flags": [],
+   "job_id": "bm50",
+   "reasons": [
+    "Job centers on 'rust' (mandatory, principal) — not in candidate profile."
+   ],
+   "score": null,
+   "stage": "requirements_gate",
+   "verdict": "reject"
+  }
+ ],
+ "schema_version": 1,
+ "strategy_fingerprint": "78ae8aeea398605bc9947c89814925ea5964d3ff58f858239905ca459ccbc336"
+}
