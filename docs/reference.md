@@ -279,7 +279,8 @@ grouped by route module in `src/api/routes/`:
 - **decisions** — `GET /api/jobs/{id}/decision`, `GET /api/decisions/review-queue`, `GET /api/decisions/{id}`,
   `GET /api/decisions/{id}/snapshot`, `GET /api/pipeline/runs/{id}/decisions`
 - **skills** — `GET /api/skills/graph`
-- **lab** (read-only) — `GET /api/lab/runs`, `/experiments`, `/memory`, `/active-strategy`
+- **lab** (read-only) — `GET /api/lab/runs`, `/experiments` (each with a recommended `next_action`), `/memory`,
+  `/active-strategy`, `/self-check` (latest self-check report and earlier statuses)
 - **health** — `GET /api/health` (no database access; used by the launcher)
 - **n8n-facing** (optional shared-secret auth) — `GET /api/jobs/digest/weekly`,
   `GET /api/jobs/digest/weekly-combined`, `GET /api/pipeline/runs/{id}/jobs/n8n`

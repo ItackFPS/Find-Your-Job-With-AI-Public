@@ -17,12 +17,14 @@ from src.lab.store import LabStore
 def client(tmp_path: Path):
     from src.api.app import app
 
-    saved = (app.state.db_path, getattr(app.state, "lab_db_path", None), getattr(app.state, "benchmark_runs_dir", None))
+    saved = (app.state.db_path, getattr(app.state, "lab_db_path", None), getattr(app.state, "benchmark_runs_dir", None),
+             getattr(app.state, "self_check_dir", None))
     app.state.db_path = str(tmp_path / "jobs.db")
     app.state.lab_db_path = str(tmp_path / "lab.db")
     app.state.benchmark_runs_dir = str(tmp_path / "runs")
+    app.state.self_check_dir = str(tmp_path / "self-check")
     yield TestClient(app), tmp_path
-    app.state.db_path, app.state.lab_db_path, app.state.benchmark_runs_dir = saved
+    (app.state.db_path, app.state.lab_db_path, app.state.benchmark_runs_dir, app.state.self_check_dir) = saved
 
 
 def _sha(p: Path) -> str:
@@ -34,6 +36,7 @@ def test_everything_is_empty_but_well_formed_without_any_file(client):
     assert c.get("/api/lab/runs").json() == {"total": 0, "unreadable": 0, "runs": []}
     assert c.get("/api/lab/experiments").json() == {"experiments": []}
     assert c.get("/api/lab/memory").json() == {"items": []}
+    assert c.get("/api/lab/self-check").json() == {"latest": None, "history": [], "unreadable": 0}
     body = c.get("/api/lab/active-strategy").json()
     assert body["current"] is None and body["honoured_by_pipeline"] is True
     assert body["pipeline"]["status"] == "default"
@@ -78,6 +81,7 @@ def test_experiments_and_memory_are_read_without_writing_lab_db(client):
     [e] = c.get("/api/lab/experiments").json()["experiments"]
     assert e["hypothesis"].startswith("drop 'junior'") and e["verdict"] == "improvement" and e["eligible_for_approval"]
     assert e["guardrails"] == {"no_new_unsafe_rejection": True, "latency": True} and e["delta"] == {"fn": -13}
+    assert e["next_action"] == "submit_for_human_approval"
     # recorded before the evidence tier existed: eligible, but never presented as independently validated
     assert e["promotion_evidence"] == "exploratory_only" and e["independently_validated"] is False
     [m] = c.get("/api/lab/memory", params={"kind": "hypothesis"}).json()["items"]
@@ -110,3 +114,29 @@ def test_active_strategy_history_is_read_from_jobs_db(client):
     # recorded before the pipeline honoured pointers (no pipeline_effective column): never silently effective
     assert body["pipeline"]["status"] == "inert" and "config/" in body["note"]
 
+
+
+def test_next_action_is_a_recommendation_per_verdict():
+    from src.api.routes.lab import _next_action
+
+    assert _next_action("regression", False, "proposed") == "reject"
+    assert _next_action("inconclusive", False, None) == "investigate"
+    assert _next_action("insufficient_evidence", False, None) == "investigate"
+    assert _next_action("improvement", False, None) == "investigate"     # a guardrail failed: not eligible
+    assert _next_action("improvement", True, "approved") == "approved"
+
+
+def test_self_check_serves_the_latest_report_and_the_history(client):
+    c, tmp = client
+    d = tmp / "self-check"
+    d.mkdir()
+    for name, at, status in (("a.json", "2026-10-01T00:00:00+00:00", "pass"),
+                             ("b.json", "2026-10-02T00:00:00+00:00", "regression")):
+        (d / name).write_text(json.dumps({"created_at": at, "status": status,
+                                          "datasets": [{"dataset": {"id": "synthetic"}, "status": status}]}),
+                              encoding="utf-8")
+    (d / "broken.json").write_text("{", encoding="utf-8")
+    body = c.get("/api/lab/self-check").json()
+    assert body["latest"]["status"] == "regression" and body["unreadable"] == 1
+    assert [h["status"] for h in body["history"]] == ["regression", "pass"]
+    assert body["history"][0]["datasets"] == {"synthetic": "regression"}
