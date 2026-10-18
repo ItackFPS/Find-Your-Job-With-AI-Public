@@ -469,3 +469,54 @@ class TestGateJobsIntegration:
         passing, results = gate_jobs([job], requirements_map, gate)
         assert len(passing) == 0
         assert not results["j1"].passes
+
+
+# ===========================================================================
+# Education wording: the message matches the decision, unqualified = uncertain
+# ===========================================================================
+
+class TestEducationWordingSemantics:
+    """ADR 0004: a level with no qualifier above the profile ceiling is not
+    known to be required — PASS_WITH_UNCERTAINTY, never a reject or penalty.
+    A rejection message says why the level counts as required."""
+
+    def test_unqualified_master_under_profil_recherche_is_uncertain_pass(self):
+        # Real offer wording (Reply, 2026-10 end-to-end run).
+        text = (
+            "**Profil recherché** \n\n"
+            "* Un Master avec une spécialisation en cloud computing avec mention\n"
+            "* La capacité de participer à un entretien d'embauche en français et en anglais\n"
+        )
+        edu = extract_education(text)
+        assert edu is not None and edu.level_bac_plus == 5
+        assert edu.importance == Importance.UNKNOWN
+        result = _gate(user_max_edu=2).check(JobRequirements(education=edu))
+        assert result.passes
+        assert result.uncertainty
+        assert result.states["education"] == ConstraintState.UNKNOWN
+
+    def test_unqualified_level_within_ceiling_is_satisfied(self):
+        edu = EducationRequirement(level_bac_plus=2, level_label="BTS", importance=Importance.UNKNOWN)
+        result = _gate(user_max_edu=2).check(JobRequirements(education=edu))
+        assert result.passes and not result.uncertainty
+
+    def test_explicit_wordings_are_not_uncertain(self):
+        gate = _gate(user_max_edu=2)
+        for text in ("Bac+5 souhaité.", "Bac+5 apprécié, non éliminatoire."):
+            result = gate.check(JobRequirements(education=extract_education(text)))
+            assert result.passes and not result.uncertainty, text
+
+    def test_stated_bar_rejection_message_does_not_say_preferred(self):
+        edu = extract_education("Diplôme : Bac+5 ou équivalent.")
+        assert edu is not None and edu.importance == Importance.PREFERRED
+        result = _gate(user_max_edu=2).check(JobRequirements(education=edu))
+        assert not result.passes
+        message = result.reasons[0].message
+        assert "preferred" not in message
+        assert "stated level, equivalence accepted" in message
+
+    def test_mandatory_rejection_message_says_mandatory(self):
+        edu = extract_education("Master en informatique exigé.")
+        result = _gate(user_max_edu=2).check(JobRequirements(education=edu))
+        assert not result.passes
+        assert "(mandatory)" in result.reasons[0].message
