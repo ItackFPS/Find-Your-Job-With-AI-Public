@@ -664,6 +664,9 @@ class TestLinkedInScannerPagination:
         assert call_args[0]["offset"] == 0
         assert call_args[1]["offset"] == 2
         assert call_args[2]["offset"] == 4
+        # python-jobspy >= 1.3 name; the deprecated linkedin_fetch_description would land in **kwargs
+        # unread once removed, leaving every description empty without an error.
+        assert all("fetch_description" in c and "linkedin_fetch_description" not in c for c in call_args)
 
         count = staging._get_conn().execute(
             "SELECT COUNT(*) FROM linkedin_staging"

@@ -1411,7 +1411,7 @@ class LinkedInScanner:
                 "search_term": query.search_term,
                 "results_wanted": page_size,
                 "offset": page * page_size,
-                "linkedin_fetch_description": self.config.fetch_description,
+                "fetch_description": self.config.fetch_description,
             }
             if query.location:
                 kwargs["location"] = query.location
