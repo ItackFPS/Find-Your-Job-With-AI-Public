@@ -13,6 +13,7 @@ opt-in: ``FYJ_ALLOW_REMOTE_LLM=1`` in the environment.
 
 from __future__ import annotations
 
+import ipaddress
 import os
 from urllib.parse import urlsplit
 
@@ -28,7 +29,13 @@ def is_loopback_endpoint(url: str) -> bool:
         host = (urlsplit(url).hostname or "").lower()
     except ValueError:
         return False
-    return host in ("localhost", "::1") or host == "127.0.0.1" or host.startswith("127.")
+    if host == "localhost":
+        return True
+    try:
+        # An IP literal only: "127.0.0.1.nip.io" starts like a loopback address but is a DNS name.
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
 
 
 def require_local_endpoint(url: str) -> None:
