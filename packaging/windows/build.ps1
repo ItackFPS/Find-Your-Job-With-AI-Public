@@ -204,7 +204,12 @@ $Info = [ordered]@{
     python = $PyInfo[0]; built_at = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 }
 [IO.File]::WriteAllText((Join-Path $Stage "build-info.json"), ($Info | ConvertTo-Json), $Utf8)
-Get-ChildItem -Recurse -Force $Stage -Directory -Filter "__pycache__" | Remove-Item -Recurse -Force
+# The bundled interpreter never writes bytecode (._pth mode implies -B), so without these every
+# start would compile the whole stack again (measured: 80 s cold, 20 s warm). checked-hash .pyc
+# files stay valid whatever timestamps the installer gives the sources.
+Step "Precompiling bytecode"
+& $RuntimePython -m compileall -q -j 0 --invalidation-mode checked-hash (Join-Path $Runtime "Lib") (Join-Path $Stage "src") | Out-Null
+if ($LASTEXITCODE -ne 0) { Write-Host "note: some files did not compile (unused test or template files in packages); they run from source" -ForegroundColor Yellow }
 
 if ($StageOnly) {
     Write-Host "Stage ready (not compiled): $Stage" -ForegroundColor Green
