@@ -60,6 +60,14 @@ def test_errors_are_grouped_into_patterns_with_a_lever(committed, dataset):
     assert all(p["lever"]["kind"] in ("lab", "code") for p in committed["patterns"])
 
 
+def test_the_lab_lever_does_not_promise_a_candidate(committed):
+    # The lab agent mines a false-positive candidate only from a title word several such jobs share; on the
+    # committed benchmark it finds none, so the report must not say it "can attribute" the pattern.
+    fp = next(p for p in committed["patterns"] if p["kind"] == "false_positive")
+    assert "can attribute" not in fp["lever"]["detail"]
+    assert "human-written hypothesis" in fp["lever"]["detail"]
+
+
 def _golden_copy(tmp_path, **changes):
     g = read_golden(GOLDEN)
     decisions = [d.model_copy(update=changes[d.job_id]) if d.job_id in changes else d for d in g.decisions]
