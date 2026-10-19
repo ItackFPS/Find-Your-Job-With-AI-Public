@@ -87,6 +87,8 @@ Source: "{#StageDir}\config\*"; DestDir: "{app}\config"; Flags: recursesubdirs c
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\FindYourJob.ico"; Comment: "Start {#AppName} and open its dashboard"
 Name: "{group}\Stop {#AppName}"; Filename: "{app}\{#AppExeName}"; Parameters: "stop"; WorkingDir: "{app}"; IconFilename: "{app}\FindYourJob.ico"; Comment: "Stop the running {#AppName}"
 Name: "{group}\{#AppName} logs"; Filename: "{app}\logs"; Comment: "Open the folder with the application's logs"
+; Replays the current strategy on the bundled benchmark; the report appears on the Lab page.
+Name: "{group}\{#AppName} self-check"; Filename: "{cmd}"; Parameters: "/k """"{app}\runtime\python.exe"" -m src.evaluation self-check"""; WorkingDir: "{app}"; IconFilename: "{app}\FindYourJob.ico"; Comment: "Check the current strategy against its recorded baseline"
 Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
 Name: "{userdesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\FindYourJob.ico"; Comment: "Start {#AppName} and open its dashboard"; Tasks: desktopicon
 

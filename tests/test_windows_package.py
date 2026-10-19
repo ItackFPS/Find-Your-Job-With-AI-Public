@@ -219,3 +219,9 @@ def test_a_checkout_is_not_mistaken_for_an_installed_copy(tmp_path, monkeypatch)
     monkeypatch.setattr(sys, "base_prefix", str(tmp_path / "python312"))
     assert not core.bundled_runtime(tmp_path)
     assert "venv" not in _checks(tmp_path)  # inside a venv: no warning either
+
+
+def test_self_check_shortcut_runs_the_bundled_python_in_a_window_that_stays_open():
+    (line,) = [ln for ln in _section("Icons") if "self-check" in ln]
+    assert 'Filename: "{cmd}"' in line and "/k " in line
+    assert r"{app}\runtime\python.exe" in line and "-m src.evaluation self-check" in line
