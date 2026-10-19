@@ -648,6 +648,8 @@ export const listLinkedInScans = (limit = 10) =>
 
 export interface HelloWorkScanStats {
   collector_errors: number
+  /** First few error messages, so the reason is visible, not just the count (older scans: absent). */
+  collector_error_samples?: string[]
   collection_duration_seconds: number
   metier_slugs_queried: number | null
 }

@@ -254,6 +254,15 @@ class TestHelloWorkScannerPersistence:
         assert row["status"] == "completed"
         assert scan_id is not None
 
+    @patch("src.collectors.hellowork.HelloWorkCollector.collect")
+    def test_collector_error_reasons_are_kept_on_the_scan(self, mock_collect: MagicMock, scanner, staging) -> None:
+        errors = [f"error {i}" for i in range(8)]
+        mock_collect.side_effect = _collect_side_effect([_raw_job("1")], errors=errors)
+        scanner.run_scan()
+        stats = json.loads(staging.list_scan_runs()[0]["stats_json"])
+        assert stats["collector_errors"] == 8
+        assert stats["collector_error_samples"] == errors[:5]
+
 
 class TestSnapshotIntegration:
     @patch("src.collectors.hellowork.HelloWorkCollector.collect")
