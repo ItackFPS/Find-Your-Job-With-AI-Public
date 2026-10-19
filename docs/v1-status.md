@@ -6,7 +6,7 @@ user walkthrough).
 
 **Verdict: V1 READY WITH EXPLICIT LIMITATIONS.** Every change is merged into `main`. The
 Windows installer was built from `main` and passed an automated install → launch → stop →
-upgrade → uninstall test (62 checks) and a user walkthrough on real offers. The limitations
+upgrade → uninstall test (60 checks) and a user walkthrough on real offers. The limitations
 are listed under [Residual risks](#residual-risks). The main ones:
 
 - Real-world accuracy and ranking quality are not measured: no human-reviewed real labels,
@@ -76,7 +76,7 @@ the merge.
 | Hosted CI on `main` `3032d61` | Tests, Frontend, Lint, Secret scan, Dependency audit, Dependency graph | all success |
 | Self-check on the merged code | `python -m src.evaluation self-check --no-feedback --no-write --markdown` | PASS: unsafe rejections 0, precision 0.88, recall 1.0, baseline identical, ranking `not_measured` |
 | Installer rules | `pytest tests/test_windows_package.py tests/test_launcher.py` | all passed |
-| Installer end to end | `packaging\windows\acceptance.ps1 -Installer …Setup-1.0.0rc1.exe` | **ACCEPTANCE PASSED, 62/62 checks** |
+| Installer end to end | `packaging\windows\acceptance.ps1 -Installer …Setup-1.0.0rc1.exe` | **ACCEPTANCE PASSED, 60/60 checks, on the 3032d61 build and again on the final c86bba3 build** |
 | Live security probes on the installed backend | see G | 10/10 passed |
 
 The 9 skips are environmental: no local LLM on `:1234`, POSIX-permission cases on Windows,
@@ -96,7 +96,11 @@ and `tls_client`, which python-jobspy 1.3 no longer installs.
 ### B. Installation and launch (Windows)
 
 Installer `FindYourJobWithAI-Setup-1.0.0rc1.exe` built by `packaging\windows\build.ps1` from
-`main` with Inno Setup 6.7.3 and a bundled CPython 3.12.10.
+`main` with Inno Setup 6.7.3 and a bundled CPython 3.12.10. Final artifact: built from `main`
+`c86bba3`, 209,582,267 bytes, SHA-256
+`2ba2f0d2c1aac23b61a720aecbbe7ab7e1010a8208c7b1f12575546564e4d2d2` (not published; built
+locally). The walkthrough below used the `3032d61` build, which differs only in the bytecode
+paths fixed by #29.
 
 | Item | Status | Evidence |
 |---|---|---|
