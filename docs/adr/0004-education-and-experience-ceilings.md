@@ -50,6 +50,17 @@ decision needs explicit evidence), so the ceiling now applies to requirements on
 Rejection reasons carry `rule_version = "hard-filter.v3"` from this change on, so
 journaled decisions made under the old rule stay distinguishable.
 
+Two consistency rules follow from the table:
+
+- A level above the maximum with **no qualifier** ("Profil recherché : Un Master avec
+  une spécialisation…") is not known to be required, nor known not to be. The gate
+  records the education constraint as UNKNOWN (the job passes with uncertainty, visible
+  as `uncertain` in the decision journal), never as satisfied; still no reject and no
+  penalty. Explicit wordings (desirable, non-eliminatory) stay satisfied.
+- A rejection message names why the level counts as required: "(mandatory)" or
+  "(stated level, equivalence accepted)" — never the raw "preferred" importance, which
+  contradicted the decision it explained.
+
 Enforced by `tests/test_education_requirement_strength.py`, the hard-filter safety
 corpus (`tests/test_hard_filter_benchmark.py`) and the end-to-end safety gate on the
 synthetic benchmark (`tests/test_rejection_safety_gate.py`).
