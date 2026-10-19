@@ -182,6 +182,31 @@ class TestStartRunAIFlag:
         assert r.status_code == 202
         assert captured.get("use_ai") is True
 
+    def test_the_run_id_shown_by_the_api_reaches_run_pipeline(self, client: TestClient) -> None:
+        """Decisions are journaled under run_pipeline's run id: it must be the one the API returned."""
+        captured: dict = {}
+
+        def fake_run_pipeline(*args, **kwargs):
+            from datetime import datetime, timezone
+            from src.pipeline.orchestrator import PipelineResult, PipelineStats
+            captured.update(kwargs)
+            return PipelineResult(
+                run_id=kwargs["run_id"],
+                started_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(timezone.utc),
+                status="completed",
+                stats=PipelineStats(),
+                scored_jobs=[],
+                rejection_records=[],
+            )
+
+        with patch("src.api.runner.run_pipeline", side_effect=fake_run_pipeline):
+            r = client.post("/api/pipeline/run")
+            self._wait_for_run(client)
+
+        assert r.status_code == 202
+        assert captured.get("run_id") == r.json()["run_id"]
+
     def test_use_ai_recorded_in_run_stats_immediately(self, client: TestClient, tmp_db: str) -> None:
         """The AI flag must be visible in the run's stats as soon as the run
         starts — not only once the pipeline itself gets around to setting

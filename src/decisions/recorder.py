@@ -88,6 +88,8 @@ class DecisionRecorder:
         self._skipped = 0                 # per-job observations that failed and were skipped
         self._written = 0
         self._snapshots = 0
+        self._audit_sampled = 0
+        self._audit_error: str | None = None
 
     @classmethod
     def create(
@@ -323,12 +325,32 @@ class DecisionRecorder:
         store = DecisionStorage(self._db_path)
         try:
             store.init_db()
+            self._mark_audit_sample(store, records)
             store.register_strategy(self.strategy)
             self._written, self._snapshots = store.write_run(records, snapshots, compress=self.config.compress_text)
             store.purge_text(self.config.text_retention_days)
             store.purge_records(self.config.record_retention_days)
         finally:
             store.close()
+
+    def _mark_audit_sample(self, store: DecisionStorage, records: list[DecisionRecord]) -> None:
+        """Mark the rejection audit sample in ``signals.audit`` (fail-open: no sample on any error)."""
+        max_open = self.config.rejection_audit_max_open
+        if max_open <= 0:
+            return
+        try:
+            from src.decisions.audit import select_audit_sample
+
+            rejected = [r.job_id for r in records if r.outcome == "rejected"]
+            picked = select_audit_sample(
+                records, run_id=self.run_id, slots=max_open - store.open_audit_count(),
+                excluded_job_ids=store.audit_ineligible_jobs(rejected))
+            for record, info in picked:
+                record.signals["audit"] = {**info, "max_open": max_open}
+            self._audit_sampled = len(picked)
+        except Exception as exc:  # noqa: BLE001 — the audit sample must never cost the journal
+            self._audit_error = str(exc)[:200]
+            logger.warning("Rejection audit sample skipped (non-fatal): %s", exc)
 
     def _load_user_stances(self) -> dict[str, dict[str, Any]]:
         """The user's stance per job from the feedback journal (fail-open: none on any error)."""
@@ -455,7 +477,10 @@ class DecisionRecorder:
         return record, snap
 
     def summary(self) -> dict[str, Any]:
-        out: dict[str, Any] = {"enabled": self.enabled, "recorded": self._written, "snapshots": self._snapshots}
+        out: dict[str, Any] = {"enabled": self.enabled, "recorded": self._written, "snapshots": self._snapshots,
+                               "audit_sampled": self._audit_sampled}
+        if self._audit_error:
+            out["audit_error"] = self._audit_error
         if self._skipped:
             out["skipped_observations"] = self._skipped
         if self.strategy:

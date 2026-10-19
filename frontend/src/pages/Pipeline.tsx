@@ -295,6 +295,9 @@ const QUERY_COLUMNS: DataTableColumn<QueryRow>[] = [
   { key: 'jobs_staged', header: 'Staged', align: 'right', render: r => (
     <span style={{ fontWeight: r.jobs_staged > 0 ? 'var(--font-weight-semibold)' : 'var(--font-weight-normal)', color: r.jobs_staged > 0 ? 'var(--color-success)' : 'inherit' }}>{r.jobs_staged}</span>
   ) },
+  { key: 'stopped_by', header: 'Ended by', render: r => (
+    <span style={{ color: r.stopped_by === 'error' ? 'var(--color-error)' : 'inherit' }}>{r.stopped_by === 'error' ? 'failed (retried next scan)' : (r.stopped_by ?? '–').replace('_', ' ')}</span>
+  ) },
 ]
 
 function ScanStatsPanel({ stats }: { stats: LinkedInScanStats }) {
@@ -307,10 +310,12 @@ function ScanStatsPanel({ stats }: { stats: LinkedInScanStats }) {
           { label: 'Filtered out', value: stats.total_filtered_out },
           { label: 'Already known', value: stats.total_already_known },
           { label: 'Staged (new)', value: stats.total_staged },
-        ].map(({ label, value }) => (
+          // A failed query (rate limited, blocked, network error) is retried by the next scan.
+          { label: 'Failed queries', value: stats.queries_failed ?? 0, alert: (stats.queries_failed ?? 0) > 0 },
+        ].map(({ label, value, alert }) => (
           <div key={label}>
             <div style={{ fontSize: '0.73rem', color: 'var(--color-muted)', marginBottom: '0.1rem' }}>{label}</div>
-            <div style={{ fontWeight: 'var(--font-weight-bold)', fontSize: '1rem' }}>{value.toLocaleString()}</div>
+            <div style={{ fontWeight: 'var(--font-weight-bold)', fontSize: '1rem', color: alert ? 'var(--color-error)' : 'inherit' }}>{value.toLocaleString()}</div>
           </div>
         ))}
       </div>

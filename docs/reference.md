@@ -74,9 +74,11 @@ and soft penalties on top.
 `src/requirements/gate.py`'s `HardConstraintGate` runs *before* scoring and can reject a
 job outright, independent of how well it would otherwise score:
 
-- **Education**: a *mandatory* or *preferred* requirement above `profile.max_education`
-  is a hard rejection; an ambiguous ("core"/unknown) requirement is a soft penalty
-  (`education_preferred_penalty`, default 20%).
+- **Education**: a level above `profile.max_education` that the posting *requires*
+  ("Bac+5 requis", "Bac+4 ou équivalent") is a hard rejection; a level it only wishes
+  for ("Bac+5 souhaité", "un plus") is a soft penalty (`education_preferred_penalty`,
+  default 20%); a level it calls non-eliminatory ("non éliminatoire", "not required")
+  or mentions without any qualifier changes nothing.
 - **Experience**: mandatory years above your profile's max is a hard rejection;
   preferred excess is a soft 20% penalty.
 - **Principal skill**: a principal skill named in the job title that isn't in your
@@ -153,7 +155,7 @@ database, and checkpoint/resume logic:
 
 | Scanner | Config | Notes |
 |---|---|---|
-| **LinkedIn** (`src/linkedin/scanner.py`) | `config/linkedin.yaml` | Uses `python-jobspy` (the `linkedin` optional dependency); lazily imported with a clear install error if missing; enabled in the shipped `config/linkedin.yaml` (daily schedule in `config/schedules.yaml`). Wired into the API via `src/api/routes/linkedin.py` (`/api/linkedin/status`, `/scan`, `/pause`, `/resume`, `/scans`), not through `CollectorRegistry`. A scan can be paused and resumed from its last checkpoint (issue #81) |
+| **LinkedIn** (`src/linkedin/scanner.py`) | `config/linkedin.yaml` | Uses `python-jobspy` (the `linkedin` optional dependency); lazily imported with a clear install error if missing; enabled in the shipped `config/linkedin.yaml`; manual by default (`linkedin_daily` in `config/schedules.yaml` ships with `startup_policy: disabled`). Wired into the API via `src/api/routes/linkedin.py` (`/api/linkedin/status`, `/scan`, `/pause`, `/resume`, `/scans`), not through `CollectorRegistry`. A scan can be paused and resumed from its last checkpoint (issue #81) |
 | **HelloWork** (`src/hellowork/scanner.py`) | — | Runs on its own daily schedule, decoupled from the main pipeline. Wired into the API via `src/api/routes/hellowork.py` (`/api/hellowork/status`, `/scan`, `/pause`, `/resume`, `/scans`); pausable/resumable like LinkedIn |
 
 Both scanners write to their own staging tables; a `StagedSourceAdapter` bridges their
@@ -252,7 +254,7 @@ plain CSS custom properties for theming (no CSS framework).
 | `/jobs` | Jobs | Filterable, paginated job list with tier badges |
 | `/jobs/:id` | JobDetail | Full job detail, score explanation, application-status update |
 | `/stats` | Stats | Score-tier distribution, top skills, rejection reasons |
-| `/review` | Review | Review queue: decisions flagged for a human (disagreement/abstention, ADR 0010) and feedback |
+| `/review` | Review | Review queue: decisions flagged for a human (disagreement/abstention, ADR 0010), a few audit-sampled rule-backed rejections, and feedback (want / not for me / not sure) |
 | `/skills` | Skills | Skill graph built from collected jobs |
 | `/lab` | Lab | Read-only view of lab runs, experiments, memory and the active strategy (ADR 0011) |
 | `/profile` | Profile | Profile editor with ESCO-backed skill/occupation autocomplete; saves to `config/profile.local.yaml` |
@@ -277,7 +279,8 @@ grouped by route module in `src/api/routes/`:
 - **decisions** — `GET /api/jobs/{id}/decision`, `GET /api/decisions/review-queue`, `GET /api/decisions/{id}`,
   `GET /api/decisions/{id}/snapshot`, `GET /api/pipeline/runs/{id}/decisions`
 - **skills** — `GET /api/skills/graph`
-- **lab** (read-only) — `GET /api/lab/runs`, `/experiments`, `/memory`, `/active-strategy`
+- **lab** (read-only) — `GET /api/lab/runs`, `/experiments` (each with a recommended `next_action`), `/memory`,
+  `/active-strategy`, `/self-check` (latest self-check report and earlier statuses)
 - **health** — `GET /api/health` (no database access; used by the launcher)
 - **n8n-facing** (optional shared-secret auth) — `GET /api/jobs/digest/weekly`,
   `GET /api/jobs/digest/weekly-combined`, `GET /api/pipeline/runs/{id}/jobs/n8n`

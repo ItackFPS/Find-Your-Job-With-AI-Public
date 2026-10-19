@@ -43,9 +43,15 @@ def job(tmp_db: str) -> Job:
 
 def test_vocabulary_is_served(client):
     body = client.get("/api/jobs/feedback/vocabulary").json()
-    assert set(body["explicit_types"]) == {"interested", "not_interested", "ranking_feedback"}
+    assert set(body["explicit_types"]) == {"interested", "not_interested", "ranking_feedback", "unsure"}
     assert "too_far" in body["allowed_reasons"]["not_interested"]
     assert "withdrawn" in body["canonical_statuses"]
+
+
+def test_unsure_answer_is_recorded_as_explicit_feedback(client, job):
+    r = client.post(f"/api/jobs/{job.id}/feedback", json={"type": "unsure", "reasons": []})
+    assert r.status_code == 201
+    assert r.json()["signal_class"] == "explicit" and r.json()["type"] == "unsure"
 
 
 def test_post_and_list_feedback(client, job):

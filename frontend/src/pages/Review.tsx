@@ -32,14 +32,19 @@ function Snapshot({ decisionId }: { decisionId: string }) {
   )
 }
 
-// Presentational: one queued decision with the reasons it needs a human, and the two answers.
+type Answer = 'interested' | 'not_interested' | 'unsure'
+
+// Presentational: one queued decision with the reasons it needs a human, and the three answers.
 export function ReviewCard({
   item, pending, onAnswer,
-}: { item: ReviewItem; pending: boolean; onAnswer: (type: 'interested' | 'not_interested') => void }) {
+}: { item: ReviewItem; pending: boolean; onAnswer: (type: Answer) => void }) {
   const [open, setOpen] = useState<'none' | 'decision' | 'posting'>('none')
   const d = item.decision
   const a = d.signals?.assessment
+  const audit = d.signals?.audit?.sampled ? d.signals.audit : undefined
   const rejected = d.outcome === 'rejected'
+  // The rule(s) that decided: the violated evidence of the deciding stage.
+  const deciding = d.evidence.filter(e => e.state === 'violated' && e.source.stage === d.deciding_stage)
   const title = d.job?.title || d.job_id
   return (
     <Card style={{ marginBottom: 'var(--space-3)' }}>
@@ -54,11 +59,34 @@ export function ReviewCard({
         </div>
         <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
           <Chip tone={rejected ? 'error' : 'info'}>{rejected ? `Rejected at ${d.deciding_stage}` : 'Accepted'}</Chip>
+          {audit && (
+            <Chip title="Picked among rule-backed rejections so a wrong rule cannot hide good jobs silently">
+              Audit sample
+            </Chip>
+          )}
           {d.decision_confidence != null && (
             <Chip title="Agreement between signals — not calibrated">confidence {d.decision_confidence.toFixed(2)}</Chip>
           )}
         </div>
       </div>
+      {audit && (
+        <div style={{ margin: '0.6rem 0 0', fontSize: '0.85rem' }}>
+          <div style={{ color: 'var(--color-muted)' }}>
+            Rejected by rule <code>{audit.stratum}</code> ({audit.stratum_size} job(s) rejected by it in that run).
+            Does this job look suitable to you anyway? Your answer is recorded as evidence; it changes nothing by itself.
+          </div>
+          {deciding.length > 0 && (
+            <ul style={{ margin: '0.4rem 0 0', paddingLeft: '1.1rem' }}>
+              {deciding.map((e, i) => (
+                <li key={`${e.source.rule_id}-${i}`}>
+                  {e.message || e.source.rule_id}
+                  {e.span?.text ? <> — “{e.span.text}”</> : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
       {a && a.reasons.length > 0 && (
         <ul style={{ margin: '0.6rem 0 0', paddingLeft: '1.1rem', fontSize: '0.85rem' }}>
           {a.reasons.map(r => <li key={r}>{r}</li>)}
@@ -70,6 +98,9 @@ export function ReviewCard({
         </button>
         <button type="button" disabled={pending} onClick={() => onAnswer('not_interested')} style={pill(false)}>
           Not for me
+        </button>
+        <button type="button" disabled={pending} onClick={() => onAnswer('unsure')} style={pill(false)}>
+          Not sure
         </button>
         <button type="button" aria-expanded={open === 'decision'} onClick={() => setOpen(open === 'decision' ? 'none' : 'decision')} style={pill(open === 'decision')}>
           Why?
@@ -106,8 +137,8 @@ export default function Review() {
       <h1 style={{ marginBottom: '0.3rem' }}>Review</h1>
       <p style={{ color: 'var(--color-muted)', marginTop: 0, fontSize: '0.9rem' }}>
         Decisions the system was not sure about — signals disagree, evidence is missing, or your own feedback
-        contradicts them. Rejected jobs are listed too, so a doubtful rejection is never silent. Your answer is
-        recorded as feedback; it does not change rankings by itself.
+        contradicts them — plus a few rule-backed rejections picked for audit, so a wrong rule cannot hide good
+        jobs silently. Your answer is recorded as feedback; it does not change rankings or rejections by itself.
       </p>
       <div style={{ display: 'flex', gap: '0.4rem', margin: '0.75rem 0' }}>
         {(['all', 'rejected', 'accepted'] as Filter[]).map(f => (

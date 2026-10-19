@@ -254,3 +254,41 @@ def test_explanation_shows_extracted_experience_not_generic_message():
     assert not any("not explicitly stated in the title" in t for t in concern_texts), (
         f"Should not show generic message when requirement is in description. Got: {concern_texts}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Ranges: the requirement is the LOWER bound ("3 à 8 ans" accepts 3 years)
+# ---------------------------------------------------------------------------
+# Real posting, 2026-10-18 (HelloWork, "Ingénieur DevOps Cloud H/F"): "Expérience de 3 à 8 ans
+# minimum" was read as "at least 8 years" and hard-rejected a 3-year candidate the range includes.
+
+@pytest.mark.parametrize("text, lower", [
+    ("Expérience de 3 à 8 ans minimum sur des environnements cloud", 3),
+    ("Vous avez 2 à 5 ans minimum d'expérience", 2),
+    ("Expérience : 2-4 ans minimum", 2),
+    ("une expérience de 3 – 5 ans ou plus", 3),
+    ("3 to 5 years minimum of Python", 3),
+    ("3-5 years or more in a similar role", 3),
+    ("entre 2 et 6 ans minimum", 2),
+])
+def test_a_range_requires_its_lower_bound(text, lower):
+    exp = extract_experience(text)
+    assert exp is not None and exp.importance == Importance.MANDATORY
+    assert exp.min_years == lower
+    assert exp.span.text.lstrip().startswith(str(lower)) or str(lower) in exp.span.text
+
+
+def test_a_range_within_the_candidate_maximum_passes_the_gate():
+    exp = extract_experience("Profil : Expérience de 3 à 8 ans minimum sur des environnements cloud.")
+    gate = HardConstraintGate(user_max_education_level=None, user_max_years_experience=3)
+    result = gate.check(JobRequirements(experience=exp))
+    assert result.passes, result.reasons
+
+
+def test_single_minimums_are_unchanged():
+    assert extract_experience("Minimum 7 ans d'expérience").min_years == 7
+    assert extract_experience("5 ans minimum dans un environnement similaire").min_years == 5
+    # the highest mandatory minimum still wins over a lower one elsewhere
+    assert extract_experience("au moins 2 ans en Python ; 6 ans minimum en Java").min_years == 6
+    # a number that merely precedes the minimum is not a range ("Bac+5, 3 ans minimum")
+    assert extract_experience("Bac+5, 3 ans minimum").min_years == 3

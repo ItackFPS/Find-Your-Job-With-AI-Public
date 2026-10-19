@@ -150,15 +150,16 @@ class TestTitulaireIsMandatory:
 # ===========================================================================
 
 class TestPreferredPatternsRegression:
-    """Preferred Bac+5 above the candidate's max is a hard reject."""
+    """A desirable Bac+5 above the candidate's max is a wish, not a ceiling
+    (ADR 0004, amended 2026-10): soft penalty, never a hard reject."""
 
-    def test_bac5_souhaite_rejected(self):
+    def test_bac5_souhaite_passes(self):
         result = _extract_and_gate("Dev", "Formation Bac+5 souhaitée en informatique.")
-        assert not result.passes, "PREFERRED Bac+5 above max must hard-reject (not mandatory-only)"
+        assert result.passes, "desirable Bac+5 above max must not hard-reject"
 
-    def test_bac5_serait_un_plus_rejected(self):
+    def test_bac5_serait_un_plus_passes(self):
         result = _extract_and_gate("Dev", "Bac+5 serait un plus, Bac+3 accepté.")
-        assert not result.passes
+        assert result.passes
 
 
 # ===========================================================================
@@ -182,15 +183,15 @@ class TestAmbiguousCasesNotHardRejected:
 
 class TestExplicitPreferredEducationIsHardRejected:
     """'apprécié'/'ou équivalent' are PREFERRED patterns (extract_education
-    classifies them as PREFERRED, not UNKNOWN) — they name an explicit level,
-    just softly worded, so they now hard-reject like MANDATORY (see
-    TestPreferredPatternsRegression above). This is distinct from genuinely
-    ambiguous UNKNOWN mentions in TestAmbiguousCasesNotHardRejected."""
+    classifies them as PREFERRED, not UNKNOWN). Only the equivalence form
+    states the bar and hard-rejects; 'apprécié' is a wish (ADR 0004, amended
+    2026-10). This is distinct from genuinely ambiguous UNKNOWN mentions in
+    TestAmbiguousCasesNotHardRejected."""
 
-    def test_niveau_bac5_apprecie_is_rejected(self):
+    def test_niveau_bac5_apprecie_is_not_rejected(self):
         desc = "Niveau Bac+5 apprécié pour ce poste en développement logiciel."
         result = _extract_and_gate("Développeur", desc)
-        assert not result.passes
+        assert result.passes
 
     def test_ou_equivalent_still_rejected(self):
         """'ou équivalent' softens MANDATORY to PREFERRED, but PREFERRED above

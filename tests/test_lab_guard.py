@@ -193,6 +193,29 @@ def test_the_guard_cannot_be_reinstalled_with_wider_roots(tmp_path):
     assert out.stdout.strip() == "refused", out.stderr
 
 
+def test_a_fresh_install_can_create_the_labs_own_store(tmp_path):
+    # Fresh install: neither data/lab nor the default store data/lab/strategies exists. Creating the store
+    # (parents=True) first creates data/lab, which is no writable root itself; the guard prepares the
+    # missing parents of its validated roots before it is installed, and still refuses everything else.
+    script = textwrap.dedent('''
+        import sys
+        from pathlib import Path
+        from src.lab.guard import GuardViolation, install_write_guard
+        root = Path(sys.argv[1])
+        store = root / "data" / "lab" / "strategies"
+        install_write_guard(root, [root / "data" / "lab.db", store])
+        (store / "bundle-1").mkdir(parents=True)
+        try:
+            (root / "data" / "lab" / "other").mkdir()
+            print("widened")
+        except GuardViolation:
+            print("store ok, rest refused")
+    ''')
+    out = subprocess.run([sys.executable, "-c", script, str(tmp_path)], cwd=ROOT, capture_output=True,
+                         text=True, timeout=60)
+    assert out.stdout.strip() == "store ok, rest refused", out.stderr
+
+
 @pytest.mark.parametrize("writable", ["data/jobs.db", "data/jobs.db-wal", "data", "config", "config/x",
                                       "src", ".", "elsewhere/prod.db"])
 def test_production_paths_can_never_be_made_writable(tmp_path, writable):
@@ -211,6 +234,7 @@ def test_production_paths_can_never_be_made_writable(tmp_path, writable):
     out = subprocess.run([sys.executable, "-c", script, str(tmp_path), writable], cwd=ROOT, capture_output=True,
                          text=True, timeout=60)
     assert out.stdout.strip() == "refused False", out.stderr
+    assert not (tmp_path / "elsewhere").exists() and not (tmp_path / "config").exists()   # a refusal creates nothing
 
 
 def test_the_lab_cli_refuses_a_lab_db_that_is_the_production_db(tmp_path):

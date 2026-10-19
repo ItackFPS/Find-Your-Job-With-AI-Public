@@ -993,8 +993,8 @@ class TestPhase2ConfigWiring:
         """Endpoint from config is passed through to LocalLLMProvider unchanged."""
         from src.ai.interfaces import LocalLLMProvider
 
-        provider = LocalLLMProvider(endpoint="http://192.168.1.10:1234")
-        assert provider.endpoint == "http://192.168.1.10:1234"
+        provider = LocalLLMProvider(endpoint="http://127.0.0.1:4321")
+        assert provider.endpoint == "http://127.0.0.1:4321"
 
     def test_lmstudio_model_name_format_accepted(self):
         """LM Studio model identifiers (slashes, hyphens) are accepted."""

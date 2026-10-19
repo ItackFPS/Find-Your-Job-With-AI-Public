@@ -38,5 +38,16 @@ revised without rewriting history.
 - Selection bias is real (only exposed jobs get feedback); the linked decision carries the
   exposure (rank/tier), and behaviour is kept separate from explicit feedback.
 - Explicit feedback does **not** change rankings by default: mirroring it into the legacy
-  personalization table is opt-in (`personalization_bridge`).
+  personalization table is opt-in (`personalization_bridge`). The mirror is a derived view of
+  the journal (2026-10): per job at most one `job_feedback` row, `bridge:<event id>`, holding the
+  latest interested / not_interested answer with its original timestamp, so repeated clicks
+  count once and a changed mind replaces the earlier answer instead of cancelling it.
+  `python -m src.feedback.cli bridge-clear` removes every mirrored row (undoing the effect after
+  switching the bridge off) and `bridge-sync` rebuilds them from the journal; rows written by the
+  personalization CLI, and rows mirrored before this change (plain ids), are never touched.
+  Personalization only re-ranks jobs that passed every gate; with the bridge on, a job the user
+  marked not_interested is hidden from the ranking (`exclude_actioned_jobs`), never journaled as a
+  rejection. Whether personalization improves ranking has not been measured (no labelled
+  feedback dataset yet): one answer can move similar jobs by up to `max_abs_adjustment` (0.3),
+  which is why it stays opt-in.
 - Discord stays outbound-only; no gateway/worker is added to capture reactions.
