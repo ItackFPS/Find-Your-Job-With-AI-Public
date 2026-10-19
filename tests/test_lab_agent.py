@@ -56,10 +56,20 @@ def test_investigate_attributes_missed_accepts_to_the_exact_keyword(dataset, tmp
 
 
 def test_findings_without_a_data_lever_are_left_to_a_human(dataset):
+    """A missed accept caused by a requirements-gate rule (code, not data) is reported, never acted on.
+
+    The synthetic baseline no longer has such a miss (bm46 was fixed, ADR 0004 amendment), so one
+    correctly gate-rejected job is relabelled ``accept`` in an in-memory copy of the dataset."""
     strategy = StrategyRef(config_dir=str(ROOT / "config"), profile_path=str(PROFILE))
-    findings = investigate(dataset, run_evaluation(dataset, strategy), strategy)
+    baseline = run_evaluation(dataset, strategy)
+    gated = sorted(d.job_id for d in baseline.decisions if d.stage == "requirements_gate")
+    assert gated, "the synthetic baseline rejects some jobs at the requirements gate"
+    labels = {**dataset.labels, gated[0]: dataset.labels[gated[0]].model_copy(update={"expected": "accept"})}
+    relabelled = type(dataset)(dataset.path, dataset.manifest, dataset.job_dicts, labels, ())
+    findings = investigate(relabelled, run_evaluation(relabelled, strategy), strategy)
     no_lever = [f for f in findings if f.kind == "no_lever_rejection"]
-    assert no_lever and all(f.overrides is None for f in no_lever)          # the baseline's 1 missed accept
+    assert no_lever and all(f.overrides is None for f in no_lever)
+    assert gated[0] in no_lever[0].job_ids
 
 
 def test_the_agent_refuses_to_run_unguarded(dataset, tmp_path):

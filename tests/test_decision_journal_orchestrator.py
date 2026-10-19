@@ -515,3 +515,20 @@ def test_disagreement_config_hash_is_recorded_not_part_of_strategy_version(tmp_p
     (cfg / "disagreement.yaml").write_text("mode: shadow\nspread_review: 0.5\n")
     assert build_strategy_manifest(cfg, cfg / "profile.yaml")["strategy_version"] == a["strategy_version"]
     assert load_disagreement_config(cfg).config_hash() != h
+
+def test_a_caller_supplied_run_id_keys_the_journal(tmp_path):
+    """The API runner creates the run row first; its decisions must be found under that same id."""
+    from src.decisions.storage import DecisionStorage
+    from src.pipeline.orchestrator import run_pipeline
+
+    cfg = _config_dir(tmp_path, None)
+    db = tmp_path / "jobs.db"
+    with patch("src.embeddings.embedding.EmbeddingService", _FakeEmbeddingService):
+        result = run_pipeline(db_path=str(db), config_dir=str(cfg), run_id="api-run-1",
+                              prefetched_linkedin_jobs=load_dataset(DS).build_jobs())
+    assert result.status == "completed" and result.run_id == "api-run-1"
+    st = DecisionStorage(str(db))
+    try:
+        assert len(st.get_decisions_for_run("api-run-1")) == result.stats.collected == 50
+    finally:
+        st.close()

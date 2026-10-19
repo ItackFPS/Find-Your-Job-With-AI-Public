@@ -143,6 +143,13 @@ class EducationRequirement:
     softer wording of the same degree requirement), so it DOES exempt the
     requirement from the hard education ceiling — the candidate can qualify
     without the degree at all.
+
+    ``is_desirable`` is True when a desirability cue ("souhaité", "apprécié",
+    "un plus", "preferred", ...) qualifies the mention: the level is wished
+    for, not required, so it is never a hard ceiling (ADR 0004). A PREFERRED
+    mention softened *only* by an equivalence clause ("Bac+4 ou équivalent")
+    keeps ``is_desirable`` False: it states the bar and accepts equivalent
+    diplomas.
     """
 
     level_bac_plus: int          # 0, 2, 3, 4, 5, 8
@@ -152,6 +159,7 @@ class EducationRequirement:
     span: EvidenceSpan | None = None  # provenance (char offsets + extractor id)
     is_or_alternative: bool = False   # True → OR structure; skip score penalty
     is_experience_alternative: bool = False  # True → experience substitutes; exempt from hard ceiling
+    is_desirable: bool = False        # True → desirability wording; never a hard ceiling
     source: EvidenceSource = EvidenceSource.HEURISTIC
     kind: EducationKind = EducationKind.HELD
     # ENROLLED only: lowest Bac+N year the candidate must currently be in
@@ -232,7 +240,7 @@ class HardRejectionReason:
     message: str = ""
     constraint_state: ConstraintState = ConstraintState.VIOLATED
     span: EvidenceSpan | None = None
-    rule_version: str = "hard-filter.v2"
+    rule_version: str = "hard-filter.v3"
     # Provenance of the evidence that produced this rejection — always HEURISTIC
     # or LLM_CORROBORATED in practice, since LLM_UNCORROBORATED evidence is
     # blocked from reaching a rejection reason by HardConstraintGate.
@@ -281,7 +289,7 @@ class GateResult:
     # SHA-256 prefix of the profile config used for this evaluation (for audit trail).
     profile_version_hash: str = ""
     # Rule-set version applied (incremented when gate logic changes).
-    rule_version: str = "hard-filter.v2"
+    rule_version: str = "hard-filter.v3"
     # Three-valued state the gate computed per dimension ("education", "experience", "skills").
     # Observability only (decision journal): never read by any gate/scoring decision.
     states: dict[str, ConstraintState] = field(default_factory=dict)

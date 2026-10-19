@@ -195,3 +195,14 @@ describe('ScannerStatusCard — work-based LinkedIn progress', () => {
     expect(screen.getByText('~20%')).toBeInTheDocument()  // 60 s of a 300 s average
   })
 })
+
+describe('ScannerStatusCard — before any scan', () => {
+  it('does not claim a completed scan when there has been none', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const neverScanned = { enabled: true, is_scanning: false, state: 'idle', progress: null, last_scan: null }
+    render(<QueryClientProvider client={client}>{card(neverScanned, vi.fn())}</QueryClientProvider>)
+    expect(screen.getByText('No scans yet.')).toBeTruthy()
+    expect(screen.queryByText('completed')).toBeNull()
+    expect(screen.getByText('idle')).toBeTruthy()
+  })
+})

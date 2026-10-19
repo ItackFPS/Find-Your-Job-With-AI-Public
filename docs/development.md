@@ -189,7 +189,26 @@ python -m src.evaluation run tests/fixtures/evaluation/datasets/synthetic-ai-fil
 python -m src.evaluation golden <dataset> <golden.json> --check      # change detector
 python -m src.evaluation run <dataset> --assess --markdown          # shadow review metrics
 python -m src.evaluation compare <run-a.json> <run-b.json> --dataset <dataset>
+python -m src.evaluation self-check --markdown                      # current strategy vs recorded baseline
 ```
+
+**Self-check** (`src/evaluation/selfcheck.py`) is the repeatable quality check: it replays each
+dataset under the current strategy, compares the decisions with the dataset's recorded baseline
+(its golden file, so there is one record of "what the system decided before") and writes a report
+under `data/benchmarks/self-check/` (gitignored, never overwritten) that the **Lab** page shows.
+With no `--dataset` it checks the committed synthetic benchmark against its golden file; add real
+labelled datasets with `--dataset <dir>=<golden.json>` (repeatable) and feedback coverage with
+`--db data/jobs.db` (read-only). Status, worst first: `safety_violation` (a suitable-labelled job
+rejected, or a rejection without a recorded reason), `baseline_mismatch` (the baseline was recorded
+on other data), `regression` (a job the baseline decided correctly is now wrong), `changed`
+(decisions differ without breaking a labelled job, or no baseline is recorded), `pass`. The exit code
+is 0 only for `pass`. The report keeps eligibility safety apart from ranking (not measured: the
+datasets carry eligibility labels, not relevance labels), groups the current errors into patterns
+and points those with a configuration lever at the lab agent (`python -m src.lab agent`), which tests
+a bounded candidate in isolation and never approves. Recommendations are tagged `action` (follows from
+a measured result) or `suggestion` (to test, not a result). Feedback is reported as signals: latest
+explicit answer per job, `unsure` apart, and contradictions with the decision journal as leads to
+review — never as labels.
 
 Decisions include the deterministic `score` and per-factor breakdown for accepted jobs (ESCO
 synonyms are off unless `--esco-db <path>` is given, so results do not depend on your local

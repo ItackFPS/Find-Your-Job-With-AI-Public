@@ -214,19 +214,29 @@ class TestUnknownIsNeverRejection:
         assert result.passes  # No profile max → cannot evaluate → pass
 
     def test_preferred_education_mismatch_rejects(self):
-        """Behavior change, 2026-09: PREFERRED is an explicit, attributable
-        level mention (not the ambiguous UNKNOWN this class is about) —
-        exceeding user max is now a hard reject, same as MANDATORY."""
-        req = JobRequirements(
+        """A PREFERRED level stated as the bar ("Bac+5 ou équivalent") is an
+        explicit, attributable requirement (not the ambiguous UNKNOWN this
+        class is about) — exceeding user max is a hard reject, same as
+        MANDATORY. A desirable one is not (ADR 0004, amended 2026-10)."""
+        gate = _gate(user_max_edu=2)
+        stated_bar = JobRequirements(
             education=EducationRequirement(
                 level_bac_plus=5,
                 level_label="Bac+5",
                 importance=Importance.PREFERRED,
+                is_or_alternative=True,
             )
         )
-        gate = _gate(user_max_edu=2)
-        result = gate.check(req)
-        assert not result.passes
+        assert not gate.check(stated_bar).passes
+        desirable = JobRequirements(
+            education=EducationRequirement(
+                level_bac_plus=5,
+                level_label="Bac+5",
+                importance=Importance.PREFERRED,
+                is_desirable=True,
+            )
+        )
+        assert gate.check(desirable).passes
 
     def test_unknown_education_importance_passes(self):
         req = JobRequirements(

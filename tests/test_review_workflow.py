@@ -94,10 +94,20 @@ def test_a_wanted_job_that_gets_rejected_is_reviewed_once_and_becomes_a_measurab
     assert item["decision"]["outcome"] == "rejected" and item["has_snapshot"]
 
     # the user confirms on the rejected decision: answered, and not asked again on the next runs
+    before = client.get(f"/api/decisions/{rejected.decision_id}").json()
     resp = client.post(f"/api/jobs/{wanted.job_id}/feedback",
                        json={"type": "interested", "source": "ui", "decision_id": rejected.decision_id})
     assert resp.status_code == 201, resp.text
     assert wanted.job_id not in _queue(client)
+    # answering is recorded beside the decision, never into it: the original rejection stays auditable
+    assert client.get(f"/api/decisions/{rejected.decision_id}").json() == before
+
+    # the self-check reads the contradiction as a lead to review, not as a label (read-only on jobs.db)
+    from src.evaluation.selfcheck import feedback_coverage
+
+    fb = feedback_coverage(db)
+    assert wanted.job_id in fb["contradictions"]["rejected_but_interested"]["job_ids"]
+    assert fb["status"] == "measured" and "not a verified label" in fb["note"]
     _run(cfg, db)
     again = _latest(db, wanted.job_id)
     assert again.decision_id != rejected.decision_id and again.signals["assessment"]["state"] == "review"
