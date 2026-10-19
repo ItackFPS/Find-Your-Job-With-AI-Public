@@ -402,7 +402,7 @@ class Launcher:
         llm = self.s.llm_endpoint
         if not core.is_loopback_url(llm):
             self.out(f"[!!] PHASE2_LLM_ENDPOINT points to a non-local address ({llm}). AI-enabled "
-                     "runs would send job text there.")
+                     "runs refuse it and run without AI, unless FYJ_ALLOW_REMOTE_LLM=1.")
 
     # ---- helpers
 

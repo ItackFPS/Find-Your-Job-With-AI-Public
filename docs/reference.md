@@ -155,7 +155,7 @@ database, and checkpoint/resume logic:
 
 | Scanner | Config | Notes |
 |---|---|---|
-| **LinkedIn** (`src/linkedin/scanner.py`) | `config/linkedin.yaml` | Uses `python-jobspy` (the `linkedin` optional dependency); lazily imported with a clear install error if missing; enabled in the shipped `config/linkedin.yaml` (daily schedule in `config/schedules.yaml`). Wired into the API via `src/api/routes/linkedin.py` (`/api/linkedin/status`, `/scan`, `/pause`, `/resume`, `/scans`), not through `CollectorRegistry`. A scan can be paused and resumed from its last checkpoint (issue #81) |
+| **LinkedIn** (`src/linkedin/scanner.py`) | `config/linkedin.yaml` | Uses `python-jobspy` (the `linkedin` optional dependency); lazily imported with a clear install error if missing; enabled in the shipped `config/linkedin.yaml`; manual by default (`linkedin_daily` in `config/schedules.yaml` ships with `startup_policy: disabled`). Wired into the API via `src/api/routes/linkedin.py` (`/api/linkedin/status`, `/scan`, `/pause`, `/resume`, `/scans`), not through `CollectorRegistry`. A scan can be paused and resumed from its last checkpoint (issue #81) |
 | **HelloWork** (`src/hellowork/scanner.py`) | — | Runs on its own daily schedule, decoupled from the main pipeline. Wired into the API via `src/api/routes/hellowork.py` (`/api/hellowork/status`, `/scan`, `/pause`, `/resume`, `/scans`); pausable/resumable like LinkedIn |
 
 Both scanners write to their own staging tables; a `StagedSourceAdapter` bridges their
@@ -254,7 +254,7 @@ plain CSS custom properties for theming (no CSS framework).
 | `/jobs` | Jobs | Filterable, paginated job list with tier badges |
 | `/jobs/:id` | JobDetail | Full job detail, score explanation, application-status update |
 | `/stats` | Stats | Score-tier distribution, top skills, rejection reasons |
-| `/review` | Review | Review queue: decisions flagged for a human (disagreement/abstention, ADR 0010) and feedback |
+| `/review` | Review | Review queue: decisions flagged for a human (disagreement/abstention, ADR 0010), a few audit-sampled rule-backed rejections, and feedback (want / not for me / not sure) |
 | `/skills` | Skills | Skill graph built from collected jobs |
 | `/lab` | Lab | Read-only view of lab runs, experiments, memory and the active strategy (ADR 0011) |
 | `/profile` | Profile | Profile editor with ESCO-backed skill/occupation autocomplete; saves to `config/profile.local.yaml` |

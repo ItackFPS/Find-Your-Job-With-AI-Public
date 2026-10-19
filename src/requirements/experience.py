@@ -74,6 +74,14 @@ _EXPERIENCE_PATTERNS: list[tuple[re.Pattern, Importance]] = [
 ]
 
 
+# The lower bound of a year range ending right where a pattern's year count starts:
+# "3 à 8", "2-4", "3 – 5", "entre 2 et 6", "3 to 5", "3 ans à 5". Anchored at the end ($ with
+# search(pos, endpos)), so only a number joined to the count by a range connector qualifies.
+_RANGE_LOWER = re.compile(
+    r"\b([0-9]|1[0-9])\s*(?:" + _FR_YEAR_UNIT + r"\s*)?(?:à|a|au|-|–|—|to|et|and)\s*$", re.I
+)
+
+
 def extract_experience(text: str) -> ExperienceRequirement | None:
     """Extract the most significant explicit minimum experience requirement.
 
@@ -94,13 +102,21 @@ def extract_experience(text: str) -> ExperienceRequirement | None:
             years = int(match.group(1))
             if years < 1 or years > 20:
                 continue
-            raw_text = text[max(0, match.start() - 20) : match.end() + 20].strip()
+            m_start = match.start()
+            # "3 à 8 ans minimum": the qualifier follows the range's upper bound, but the
+            # requirement is its lower bound (a 3-year candidate is in range).
+            lower = _RANGE_LOWER.search(text, max(0, match.start(1) - 16), match.start(1))
+            if lower is not None and int(lower.group(1)) < years:
+                years, m_start = int(lower.group(1)), lower.start(1)
+                if years == 0:              # "0 à 2 ans": no minimum at all
+                    continue
+            raw_text = text[max(0, m_start - 20) : match.end() + 20].strip()
             if importance == Importance.MANDATORY:
                 if best_mandatory is None or years > best_mandatory[0]:
-                    best_mandatory = (years, raw_text, match.start(), match.end())
+                    best_mandatory = (years, raw_text, m_start, match.end())
             else:
                 if best_preferred is None or years > best_preferred[0]:
-                    best_preferred = (years, raw_text, match.start(), match.end())
+                    best_preferred = (years, raw_text, m_start, match.end())
 
     if best_mandatory is not None:
         years, raw_text, start, end = best_mandatory
@@ -113,7 +129,7 @@ def extract_experience(text: str) -> ExperienceRequirement | None:
                 start=start,
                 end=end,
                 field="description",
-                extractor_id="experience.min_years.v1",
+                extractor_id="experience.min_years.v2",
             ),
         )
     if best_preferred is not None:
@@ -127,7 +143,7 @@ def extract_experience(text: str) -> ExperienceRequirement | None:
                 start=start,
                 end=end,
                 field="description",
-                extractor_id="experience.preferred_years.v1",
+                extractor_id="experience.preferred_years.v2",
             ),
         )
     return None

@@ -2,8 +2,12 @@
 # linked to the decision/strategy the user reacted to. All keys are optional.
 
 # Mirror explicit interested / not_interested feedback into the legacy `job_feedback` table that
-# the personalization stage reads. OFF: recording feedback does not change any ranking until you
-# decide it should.
+# the personalization stage reads. OFF (default): dashboard feedback is journaled and used for review
+# and evaluation, but does not change any ranking. ON: from the next run, jobs similar to ones you
+# marked interesting move up and similar ones you declined move down (bounded by
+# config/personalization.yaml: max_abs_adjustment), and a job you marked not_interested is hidden from
+# the ranking. Accept/reject decisions never change. Switching it back off stops new mirroring;
+# already mirrored rows stay in `job_feedback` (clear them with python -m src.personalization.cli).
 personalization_bridge: false
 
 # Meaning of the legacy application statuses that nothing in the code defines. Until you resolve
