@@ -118,12 +118,16 @@ def test_reports_are_never_overwritten(tmp_path):
 
 
 def test_cli_exit_code_follows_the_status(tmp_path, capsys):
-    assert main(["self-check", "--config-dir", str(ROOT / "config"), "--out", str(tmp_path)]) == 0
+    assert main(["self-check", "--config-dir", str(ROOT / "config"), "--out", str(tmp_path),
+                 "--db", str(tmp_path / "none.db")]) == 0
     assert json.loads(capsys.readouterr().out)["status"] == "pass"
-    assert len(list(tmp_path.glob("*.json"))) == 1
+    written = list(tmp_path.glob("*.json"))
+    assert len(written) == 1
+    # feedback is reported by default; a missing database is said, not skipped silently
+    assert json.loads(written[0].read_text(encoding="utf-8"))["feedback"]["status"] == "unavailable"
     bad = tmp_path / "bad.json"
     bad.write_text(golden_to_json(read_golden(GOLDEN).model_copy(update={"decisions": []})), encoding="utf-8")
-    assert main(["self-check", "--dataset", f"{DS_DIR}={bad}", "--no-write"]) == 1
+    assert main(["self-check", "--dataset", f"{DS_DIR}={bad}", "--no-write", "--no-feedback"]) == 1
 
 
 # -- feedback coverage (read-only jobs.db) -------------------------------------------------------

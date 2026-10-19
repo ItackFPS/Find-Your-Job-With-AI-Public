@@ -448,6 +448,11 @@ function HelloWorkScanStatsPanel({ stats }: { stats: HelloWorkScanStats }) {
           <div style={{ fontWeight: 'var(--font-weight-bold)', fontSize: '1rem' }}>{value ?? '–'}</div>
         </div>
       ))}
+      {stats.collector_error_samples && stats.collector_error_samples.length > 0 && (
+        <ul style={{ flexBasis: '100%', margin: 0, paddingLeft: '1.1rem', fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>
+          {stats.collector_error_samples.map((msg, i) => <li key={i}>{msg}</li>)}
+        </ul>
+      )}
     </div>
   )
 }

@@ -12,7 +12,9 @@ from src.ai.interfaces import LocalLLMProvider
 from src.models.job import Job
 
 REMOTE = ("https://api.openai.com", "http://192.168.1.20:1234", "http://localhost.example.com:1234",
-          "http://10.0.0.5:11434", "http://0.0.0.0:1234", "not a url")
+          "http://10.0.0.5:11434", "http://0.0.0.0:1234", "not a url",
+          # DNS names that only look like loopback addresses: they resolve wherever their owner wants
+          "http://127.0.0.1.nip.io:1234", "http://127.example.com:1234")
 
 
 @pytest.fixture(autouse=True)

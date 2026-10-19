@@ -16,6 +16,10 @@ from src.requirements.models import EvidenceSpan, ExperienceRequirement, Importa
 # Used inline in every French pattern.
 _FR_YEAR_UNIT = r"(?:ann?[eé][eé]?es?|ans?)"
 
+# A desirability word right after a mandatory cue turns it into a wish
+# ("3 ans d'expérience minimum souhaitée", "3 years of experience minimum preferred").
+_NO_WISH_AFTER = r"(?!\s+(?:souhait|appr[eé]ci|id[eé]al|bienvenu|preferred|desired|ideally))"
+
 # French/English year patterns with explicit mandatory/preferred context.
 # Each tuple: (compiled pattern, importance).
 # Group 1 captures the integer year count.
@@ -46,7 +50,22 @@ _EXPERIENCE_PATTERNS: list[tuple[re.Pattern, Importance]] = [
         r"\b([1-9][0-9]?)\s*\*{0,2}\s*" + _FR_YEAR_UNIT + r"\s+ou\s+plus\b", re.I
     ), Importance.MANDATORY),
 
+    # "N ans d'expérience (professionnelle) minimum/requise/exigée/obligatoire/
+    # indispensable": the cue directly follows the noun, so a negation ("non
+    # requis") or a wish right after it ("minimum souhaitée") is no match.
+    (re.compile(
+        r"\b([1-9][0-9]?)\s*\*{0,2}\s*" + _FR_YEAR_UNIT
+        + r"\s+d['’]\s*exp[eé]rience(?:\s+professionnelle)?\s+"
+        r"(?:minimum|requise?s?|exig[eé]e?s?|obligatoires?|indispensables?)\b"
+        + _NO_WISH_AFTER, re.I
+    ), Importance.MANDATORY),
+
     # ── English mandatory ─────────────────────────────────────────────────────
+    # "N years of (relevant|professional ...) experience (is) required/minimum/mandatory"
+    (re.compile(
+        r"\b([1-9][0-9]?)\s+years?\s+of\s+(?:[a-z-]+\s+){0,2}experience\s+(?:is\s+)?"
+        r"(?:required|minimum|mandatory)\b" + _NO_WISH_AFTER, re.I
+    ), Importance.MANDATORY),
     # "at least N years"
     (re.compile(r"\bat\s+least\s+([1-9][0-9]?)\s+years?\b", re.I), Importance.MANDATORY),
     # "minimum N years"
@@ -75,10 +94,10 @@ _EXPERIENCE_PATTERNS: list[tuple[re.Pattern, Importance]] = [
 
 
 # The lower bound of a year range ending right where a pattern's year count starts:
-# "3 à 8", "2-4", "3 – 5", "entre 2 et 6", "3 to 5", "3 ans à 5". Anchored at the end ($ with
+# "3 à 8", "2-4", "3 – 5", "8/10", "entre 2 et 6", "3 to 5", "3 ans à 5". Anchored at the end ($ with
 # search(pos, endpos)), so only a number joined to the count by a range connector qualifies.
 _RANGE_LOWER = re.compile(
-    r"\b([0-9]|1[0-9])\s*(?:" + _FR_YEAR_UNIT + r"\s*)?(?:à|a|au|-|–|—|to|et|and)\s*$", re.I
+    r"\b([0-9]|1[0-9])\s*(?:" + _FR_YEAR_UNIT + r"\s*)?(?:à|a|au|-|–|—|/|to|et|and)\s*$", re.I
 )
 
 
