@@ -197,8 +197,10 @@ dataset under the current strategy, compares the decisions with the dataset's re
 (its golden file, so there is one record of "what the system decided before") and writes a report
 under `data/benchmarks/self-check/` (gitignored, never overwritten) that the **Lab** page shows.
 With no `--dataset` it checks the committed synthetic benchmark against its golden file; add real
-labelled datasets with `--dataset <dir>=<golden.json>` (repeatable) and feedback coverage with
-`--db data/jobs.db` (read-only). Status, worst first: `safety_violation` (a suitable-labelled job
+labelled datasets with `--dataset <dir>=<golden.json>` (repeatable). It also reports feedback
+coverage from `data/jobs.db` (opened read-only; `--db <path>` for another, `--no-feedback` to skip):
+how many decided jobs have an explicit answer and where an answer disagrees with the decision. These
+are user signals, shown apart and never counted as labels or in the status. Status, worst first: `safety_violation` (a suitable-labelled job
 rejected, or a rejection without a recorded reason), `baseline_mismatch` (the baseline was recorded
 on other data), `regression` (a job the baseline decided correctly is now wrong), `changed`
 (decisions differ without breaking a labelled job, or no baseline is recorded), `pass`. The exit code

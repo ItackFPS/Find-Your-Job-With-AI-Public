@@ -485,8 +485,15 @@ export interface SelfCheckDataset {
 export interface SelfCheckReport {
   created_at: string; status: SelfCheckStatus; generated_by: string; datasets: SelfCheckDataset[]
   recommendations: { kind: 'action' | 'suggestion'; dataset: string; text: string }[]; next_steps: string
-  feedback?: Record<string, unknown>
+  feedback?: SelfCheckFeedback
 }
+// What explicit feedback says about the latest decisions (selfcheck.feedback_coverage): user signals, not labels.
+export type SelfCheckFeedback =
+  | { status: 'unavailable'; why: string }
+  | { status: 'measured'; decided_jobs: number; jobs_with_explicit_feedback: number; coverage: number | null
+      latest_answers: Record<string, number>; decisions_with_evidence: number; explanation_coverage: number | null
+      contradictions: Record<'rejected_but_interested' | 'accepted_but_not_interested', { count: number; job_ids: string[] }>
+      note: string }
 export interface SelfCheckResponse {
   latest: SelfCheckReport | null; unreadable: number
   history: { file: string; created_at: string; status: SelfCheckStatus | null; datasets: Record<string, string> }[]
