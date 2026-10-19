@@ -18,7 +18,7 @@ Running from a source checkout (`FindYourJob.cmd` in a clone, see the
 | What | Where |
 |---|---|
 | Application and your data | `%LOCALAPPDATA%\Programs\Find Your Job With AI` (one folder, see below) |
-| Start Menu | **Find Your Job With AI**, **Stop Find Your Job With AI**, **… logs**, **Uninstall …** |
+| Start Menu | **Find Your Job With AI**, **Stop Find Your Job With AI**, **… logs**, **… self-check**, **Uninstall …** |
 | Desktop | **Find Your Job With AI** (optional) |
 | Disk | about 1 GB installed, plus ~470 MB for the embedding model on the first run |
 
@@ -69,6 +69,16 @@ see the README's [Local AI](../README.md#local-ai) section to opt in to a local 
   dashboard again; it never starts a second backend.
 - If port 8000 is taken by another program, the console says so. Set another port: add
   `FYJ_PORT=8010` to `.env`.
+
+## Self-check and the Lab
+
+Start Menu → **Find Your Job With AI self-check** replays the current strategy on the
+bundled synthetic benchmark (50 labelled jobs), compares it with its recorded baseline and
+prints the result; the report then appears on the **Lab** page. It reports safety
+(unsafe rejections) and eligibility quality separately; ranking quality is `not_measured`
+until reviewed relevance labels exist. Nothing it finds changes your strategy: only a
+human approval from the command line (`python -m src.lab approve`, see
+[ADR 0011](adr/0011-experiment-lab.md)) can promote one.
 
 ## Logs
 
