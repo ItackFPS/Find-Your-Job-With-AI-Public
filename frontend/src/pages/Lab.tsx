@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import {
-  getActiveStrategy, getEvalRuns, getLabExperiments, getLabMemory, type ActiveStrategy,
-  type EvalRunSummary, type LabExperiment, type LabMemoryItem,
+  getActiveStrategy, getEvalRuns, getLabExperiments, getLabMemory, getSelfCheck, type ActiveStrategy,
+  type EvalRunSummary, type LabExperiment, type LabMemoryItem, type SelfCheckResponse, type SelfCheckStatus,
 } from '../api/client'
 import { Card, Chip, EmptyState, LoadingState, type ChipTone } from '../components'
 
@@ -11,6 +11,109 @@ const signed = (v: number | null | undefined, asPct = false) =>
 
 const VERDICT_TONE: Record<string, ChipTone> = {
   improvement: 'success', regression: 'error', inconclusive: 'warning', insufficient_evidence: 'default',
+}
+
+const NEXT_ACTION: Record<string, { label: string; tone: ChipTone; title: string }> = {
+  submit_for_human_approval: { label: 'next: your review', tone: 'info', title: 'Worth a human decision: python -m src.lab approve (typed confirmation)' },
+  reject: { label: 'next: discard', tone: 'error', title: 'The candidate did worse or broke a guardrail' },
+  investigate: { label: 'next: investigate', tone: 'warning', title: 'Not enough evidence either way: more labelled jobs or another hypothesis' },
+  approved: { label: 'approved by a human', tone: 'accent', title: 'Promoted through the human approval command' },
+}
+
+const STATUS: Record<SelfCheckStatus, { label: string; tone: ChipTone; text: string }> = {
+  pass: { label: 'pass', tone: 'success', text: 'Same decisions as the recorded baseline, and no suitable job rejected.' },
+  changed: { label: 'changed', tone: 'warning', text: 'Some decisions differ from the recorded baseline without breaking a labelled job: review them before refreshing the baseline.' },
+  regression: { label: 'regression', tone: 'error', text: 'A job the baseline decided correctly is now decided wrongly.' },
+  baseline_mismatch: { label: 'baseline mismatch', tone: 'error', text: 'The baseline was recorded on other data: nothing could be compared.' },
+  safety_violation: { label: 'safety violation', tone: 'error', text: 'A job labelled suitable was rejected, or a rejection has no recorded reason.' },
+}
+
+// Presentational: the latest self-check (current strategy vs the recorded baseline) in plain words.
+export function SelfCheckView({ data }: { data: SelfCheckResponse }) {
+  const r = data.latest
+  if (!r) {
+    return <EmptyState message="No self-check recorded yet. Run: python -m src.evaluation self-check" />
+  }
+  const st = STATUS[r.status]
+  return (
+    <div style={{ fontSize: '0.85rem' }}>
+      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+        <Chip tone={st.tone}>{st.label}</Chip>
+        <span>{st.text}</span>
+      </div>
+      <div style={{ fontSize: '0.78rem', color: 'var(--color-muted)', marginTop: '0.3rem' }}>
+        {r.created_at.slice(0, 16).replace('T', ' ')} · computed from decisions and labels ({r.generated_by}), no AI
+      </div>
+      {r.datasets.map(e => {
+        const q = e.eligibility
+        const flips = e.baseline.flips
+        return (
+          <div key={e.dataset.id} style={{ marginTop: '0.7rem' }}>
+            <div style={{ fontWeight: 'var(--font-weight-semibold)' }}>
+              {e.dataset.id}@{e.dataset.version}{' '}
+              <span style={{ color: 'var(--color-muted)', fontWeight: 'normal' }}>
+                ({e.dataset.kind}, {e.dataset.n_jobs} jobs, {e.dataset.accept_labels} labelled suitable)
+              </span>{' '}
+              <Chip tone={STATUS[e.status].tone}>{STATUS[e.status].label}</Chip>
+            </div>
+            <div>
+              Suitable jobs rejected:{' '}
+              <strong style={{ color: e.safety.unsafe_rejections.length ? 'var(--color-error)' : undefined }}>
+                {e.safety.unsafe_rejections.length}
+              </strong>
+              {' '}· unsuitable jobs let through: {q.fp ?? '–'} · precision {pct(q.precision)} · recall {pct(q.recall)}
+              {' '}· rejections with a stated reason: {pct(e.explanations.coverage)}
+            </div>
+            {flips && flips.fixed.length + flips.broken.length + flips.unjudged.length > 0 && (
+              <div>
+                Since the baseline: {flips.fixed.length} fixed · {flips.broken.length} broken ·{' '}
+                {flips.unjudged.length} unlabelled or borderline
+              </div>
+            )}
+            {e.baseline.status === 'missing' && <div>No baseline is recorded for this dataset.</div>}
+            <div style={{ color: 'var(--color-muted)' }}>Ranking quality: not measured — {e.ranking.why}.</div>
+            {e.patterns.length > 0 && (
+              <ul style={{ margin: '0.3rem 0 0', paddingLeft: '1.1rem' }}>
+                {e.patterns.map(p => (
+                  <li key={`${p.kind}-${p.key}`}>
+                    {p.count} × {p.kind.replaceAll('_', ' ')} <code>{p.key}</code> ({p.job_ids.join(', ')})
+                  </li>
+                ))}
+              </ul>
+            )}
+            {e.limitations.length > 0 && (
+              <ul style={{ margin: '0.3rem 0 0', paddingLeft: '1.1rem', fontSize: '0.78rem', color: 'var(--color-muted)' }}>
+                {e.limitations.map(l => <li key={l}>{l}</li>)}
+              </ul>
+            )}
+          </div>
+        )
+      })}
+      {r.recommendations.length > 0 && (
+        <div style={{ marginTop: '0.7rem' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--color-muted)', letterSpacing: '0.06em', marginBottom: '0.3rem' }}>
+            WHAT TO DO NEXT
+          </div>
+          <ul style={{ margin: 0, paddingLeft: '1.1rem' }}>
+            {r.recommendations.map(x => (
+              <li key={x.text}>
+                <Chip tone={x.kind === 'action' ? 'warning' : 'default'}
+                  title={x.kind === 'action' ? 'Follows from a measured result' : 'A suggestion to test in the lab, not a result'}>
+                  {x.kind}
+                </Chip>{' '}
+                {x.text}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {data.history.length > 1 && (
+        <div style={{ fontSize: '0.78rem', color: 'var(--color-muted)', marginTop: '0.5rem' }}>
+          Earlier: {data.history.slice(1, 8).map(h => `${h.created_at.slice(0, 10)} ${h.status ?? '?'}`).join(' · ')}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // Presentational: one evaluation run as a table row.
@@ -47,7 +150,10 @@ export function ExperimentCard({ exp }: { exp: LabExperiment }) {
           {exp.eligible_for_approval && <Chip tone="info" title="A human may approve it; nothing is promoted automatically">eligible for human approval</Chip>}
           {exp.promotion_evidence === 'independently_supported' && <Chip tone="success" title="The independent human labels alone support the improvement">independently supported</Chip>}
           {exp.promotion_evidence === 'exploratory_only' && <Chip tone="warning" title="Worth investigating only: the independent human labels alone do not support it">exploratory only — not independently validated</Chip>}
-          {exp.candidate_status === 'approved' && <Chip tone="accent">approved</Chip>}
+          {exp.next_action && NEXT_ACTION[exp.next_action]
+            ? <Chip tone={NEXT_ACTION[exp.next_action].tone} title={NEXT_ACTION[exp.next_action].title}>
+                {NEXT_ACTION[exp.next_action].label}</Chip>
+            : exp.candidate_status === 'approved' && <Chip tone="accent">approved</Chip>}
         </div>
       </div>
       {exp.explanation && <div style={{ fontSize: '0.85rem', marginTop: '0.4rem' }}>{exp.explanation}</div>}
@@ -112,6 +218,7 @@ export default function Lab() {
   const exps = useQuery({ queryKey: ['lab-experiments'], queryFn: getLabExperiments })
   const memory = useQuery({ queryKey: ['lab-memory'], queryFn: getLabMemory })
   const active = useQuery({ queryKey: ['lab-active'], queryFn: getActiveStrategy })
+  const check = useQuery({ queryKey: ['lab-self-check'], queryFn: getSelfCheck })
   return (
     <div>
       <h1 style={{ marginBottom: '0.3rem' }}>Lab</h1>
@@ -119,6 +226,12 @@ export default function Lab() {
         Benchmark runs and strategy experiments, read-only. Changes are tested here on frozen labelled datasets and only a
         human approval (command line) can promote one.
       </p>
+      <Card title="Self-check" subtitle="the current strategy replayed on frozen labelled jobs, compared with the recorded baseline"
+        style={{ marginBottom: 'var(--space-4)' }}>
+        {check.isLoading && <LoadingState />}
+        {check.isError && <EmptyState message="The self-check is unavailable." />}
+        {check.data && <SelfCheckView data={check.data} />}
+      </Card>
       <Card title="Active strategy" style={{ marginBottom: 'var(--space-4)' }}>
         {active.isLoading && <LoadingState />}
         {active.isError && <EmptyState message="The active strategy is unavailable." />}

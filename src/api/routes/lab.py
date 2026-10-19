@@ -4,6 +4,8 @@ GET /api/lab/runs             — evaluation run results (``data/benchmarks/runs
 GET /api/lab/experiments      — lab experiments with verdict, guardrails and metric comparison
 GET /api/lab/memory           — the lab agent's memory items with their current status
 GET /api/lab/active-strategy  — the human-approved ``active_strategy`` pointer history (``jobs.db``)
+GET /api/lab/self-check       — the latest self-check report (``data/benchmarks/self-check/*.json``) and
+                                the status of earlier ones
 
 Production never imports ``src.evaluation`` or ``src.lab``: this module only reads their files with
 read-only SQLite URIs and plain JSON, and tolerates them being absent or older/newer schemas.
@@ -39,6 +41,10 @@ def _runs_dir(request: Request) -> Path:
     return Path(getattr(request.app.state, "benchmark_runs_dir", None) or _data_dir(request) / "benchmarks" / "runs")
 
 
+def _self_check_dir(request: Request) -> Path:
+    return Path(getattr(request.app.state, "self_check_dir", None) or _data_dir(request) / "benchmarks" / "self-check")
+
+
 def _query(db: Path, sql: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
     """Rows as dicts from a read-only connection; a missing file/table is simply no rows."""
     if not db.is_file():
@@ -53,6 +59,15 @@ def _query(db: Path, sql: str, params: tuple[Any, ...] = ()) -> list[dict[str, A
         raise
     finally:
         conn.close()
+
+
+def _next_action(verdict: str | None, eligible: bool, candidate_status: str | None) -> str:
+    """What the evidence recommends a human do with an experiment; nothing here acts on it."""
+    if candidate_status == "approved":
+        return "approved"
+    if eligible:
+        return "submit_for_human_approval"
+    return "reject" if verdict == "regression" else "investigate"
 
 
 _METRICS = ("tp", "tn", "fp", "fn", "borderline", "accuracy", "precision", "recall", "unsafe_rejection_rate")
@@ -80,6 +95,27 @@ def list_runs(request: Request, limit: int = Query(default=50, ge=1, le=500)) ->
     return {"total": len(runs), "unreadable": unreadable, "runs": runs[:limit]}
 
 
+@router.get("/self-check")
+def self_check(request: Request, history: int = Query(default=20, ge=1, le=200)) -> dict[str, Any]:
+    """The latest readable report in full, and the status of the earlier ones (newest first)."""
+    root = _self_check_dir(request)
+    reports, unreadable = [], 0
+    for path in root.glob("*.json") if root.is_dir() else []:
+        try:
+            d = json.loads(path.read_text(encoding="utf-8"))
+            reports.append((d["created_at"], path.name, d))
+        except (OSError, ValueError, KeyError, TypeError):
+            unreadable += 1
+    reports.sort(key=lambda r: (r[0], r[1]), reverse=True)
+    return {
+        "latest": reports[0][2] if reports else None,
+        "history": [{"file": name, "created_at": at, "status": d.get("status"),
+                     "datasets": {e.get("dataset", {}).get("id"): e.get("status") for e in d.get("datasets", [])}}
+                    for at, name, d in reports[:history]],
+        "unreadable": unreadable,
+    }
+
+
 @router.get("/experiments")
 def list_experiments(request: Request, limit: int = Query(default=50, ge=1, le=500)) -> dict[str, Any]:
     rows = _query(_lab_db(request), """
@@ -98,6 +134,7 @@ def list_experiments(request: Request, limit: int = Query(default=50, ge=1, le=5
             res, overrides = {}, {}
         cmp_ = res.get("comparison") or {}
         out.append({**r, "eligible_for_approval": bool(r["eligible_for_approval"]), "overrides": overrides,
+                    "next_action": _next_action(r["verdict"], bool(r["eligible_for_approval"]), r["candidate_status"]),
                     # experiments recorded before the tier existed are not independently validated
                     "promotion_evidence": res.get("promotion_evidence") or (
                         "exploratory_only" if r["eligible_for_approval"] else "not_eligible"),

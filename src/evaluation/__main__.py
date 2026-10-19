@@ -1,4 +1,4 @@
-"""CLI: ``python -m src.evaluation <validate|run|compare|golden> ...``."""
+"""CLI: ``python -m src.evaluation <validate|run|compare|golden|self-check> ...``."""
 
 from __future__ import annotations
 
@@ -17,6 +17,9 @@ from src.evaluation.store import (
 )
 
 DEFAULT_RUNS_DIR = "data/benchmarks/runs"
+_FIXTURES = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "evaluation"
+# The committed benchmark and its recorded baseline (the golden decisions): the default self-check target.
+DEFAULT_SELF_CHECK = (_FIXTURES / "datasets" / "synthetic-ai-filter-50", _FIXTURES / "golden" / "synthetic-ai-filter-50.json")
 
 
 def _strategy(ns: argparse.Namespace) -> StrategyRef:
@@ -115,6 +118,16 @@ def main(argv: list[str] | None = None) -> int:
     i.add_argument("--labeler", required=True)
     i.add_argument("--version", default=None)
 
+    sc = sub.add_parser("self-check", help="replay frozen datasets, compare with the recorded baseline, report")
+    sc.add_argument("--dataset", action="append", metavar="DIR[=GOLDEN]",
+                    help="dataset dir, optionally =its baseline golden file (repeatable; "
+                         "default: the committed synthetic benchmark and its golden)")
+    sc.add_argument("--db", default=None, help="also report feedback coverage from this jobs.db (read-only)")
+    sc.add_argument("--out", default=None, help="reports dir (default data/benchmarks/self-check)")
+    sc.add_argument("--no-write", action="store_true")
+    sc.add_argument("--markdown", action="store_true")
+    _add_strategy_args(sc)
+
     ns = ap.parse_args(argv)
     try:
         if ns.cmd == "validate":
@@ -200,6 +213,19 @@ def main(argv: list[str] | None = None) -> int:
                 provenance = effective_sources(ds.labels, frozenset(assisted_job_ids(ds.path)))
             print(json.dumps(compare_runs(base, cand, labels, provenance), indent=2))
             return 0
+        if ns.cmd == "self-check":
+            from src.evaluation.selfcheck import DEFAULT_REPORTS_DIR, render_markdown as render_check,                 run_self_check, write_report
+
+            targets: list[tuple[str | Path, str | Path | None]] = (
+                [(t.split("=", 1)[0], t.split("=", 1)[1] if "=" in t else None) for t in ns.dataset]
+                if ns.dataset else [DEFAULT_SELF_CHECK])
+            report = run_self_check(targets, _strategy(ns), db=ns.db)
+            print(render_check(report) if ns.markdown else json.dumps(
+                {"status": report["status"], "datasets": {e["dataset"]["id"]: e["status"] for e in report["datasets"]}},
+                indent=2))
+            if not ns.no_write:
+                print(f"written: {write_report(report, ns.out or DEFAULT_REPORTS_DIR)}", file=sys.stderr)
+            return 0 if report["status"] == "pass" else 1
         if ns.cmd == "golden":
             ds = load_dataset(ns.dataset)
             actual = to_golden(run_evaluation(ds, _strategy(ns)))
