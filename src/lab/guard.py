@@ -288,6 +288,11 @@ def install_write_guard(
         if _state["root"] != root or set(_state["writable"]) != set(roots) or _state["loopback_ports"] != ports:
             raise GuardViolation("lab guard already installed with different roots")
         return
+    # The roots' missing parents, created while unguarded: on a fresh install the default store
+    # data/lab/strategies needs data/lab, which is no root itself. A parent of a validated root is never
+    # protected (the root would then lie inside a protected path and have been refused above).
+    for w in roots:
+        w.parent.mkdir(parents=True, exist_ok=True)
     sys.dont_write_bytecode = True               # no .pyc writes into src/ while guarded
     protected_ids = frozenset(i for i in (_identity(p) for p in protected if p.is_file()) if i is not None)
     _state.update(root=root, writable=roots, loopback_ports=ports, root_id=_identity(root),
