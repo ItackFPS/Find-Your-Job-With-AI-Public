@@ -114,4 +114,4 @@ There is no installer: the app runs from its folder (which may contain spaces).
 | `backend exited during startup` | the printed log lines say why (often a broken `.env` value or a locked database); full output in `logs\launcher\backend.log` |
 | `backend did not become ready within 180s` | startup on a large database can be slow: `--timeout 600` |
 | n8n `not running` | optional; `FindYourJob.cmd start --n8n`, or install it with `npm install -g n8n` |
-| `PHASE2_LLM_ENDPOINT points to a non-local address` | AI-enabled runs would send job text to that host; point it at LM Studio/Ollama on this machine |
+| `PHASE2_LLM_ENDPOINT points to a non-local address` | AI-enabled runs refuse that host and run without AI; point it at LM Studio/Ollama on this machine, or set `FYJ_ALLOW_REMOTE_LLM=1` for a server you control |

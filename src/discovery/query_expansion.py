@@ -435,6 +435,9 @@ class DiscoveryQueryExpander:
             skills=", ".join(skills) if skills else "programming",
         )
 
+        from src.ai.endpoint import require_local_endpoint
+
+        require_local_endpoint(self._llm_endpoint)
         url = f"{self._llm_endpoint}/v1/chat/completions"
         payload: dict[str, Any] = {
             "model": self._llm_model,

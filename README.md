@@ -240,7 +240,10 @@ the internet):
 
 Not present: no analytics, no telemetry of this project, no update checks, no account,
 no paid cloud AI, and no fallback to a cloud model when the local one is down (the AI
-stages fail open to the deterministic result). The dashboard loads no external scripts
+stages fail open to the deterministic result). An LLM endpoint that is not on this machine
+is refused, not used: the AI stages then run without AI and record why
+(`FYJ_ALLOW_REMOTE_LLM=1` opts into a server you control elsewhere, such as a GPU box on
+your network). The dashboard loads no external scripts
 or fonts. n8n, when started by the launcher or `scripts/Start_n8n.bat` (which the logon
 task runs), listens on `127.0.0.1` with its telemetry and update checks off; it is a
 separate product and still contacts n8n.io when you browse workflow templates in its
