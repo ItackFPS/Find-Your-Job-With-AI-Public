@@ -163,6 +163,24 @@ class TestMapJobPostingLdToRaw:
         assert out["work_mode"] == "hybrid"
         assert out["remote"] is False
 
+    def test_telecommute_at_a_workplace_without_full_remote_wording_is_hybrid(self) -> None:
+        """HelloWork marks "Télétravail partiel" jobs TELECOMMUTE (3 of 3 checked live, 2026-10-19):
+        with a workplace address and no full-remote wording, that is partial telework, not remote."""
+        ld = json.loads(json.dumps(JOBPOSTING_LD))
+        ld["jobLocation"]["address"]["addressLocality"] = "Vannes"
+        ld["description"] = "<p>Poste basé à Vannes (56). Stack PHP / MySQL.</p>"
+        out = map_jobposting_ld_to_raw(ld, "https://example.com/job/10", "job-10")
+        assert out["work_mode"] == "hybrid"
+        assert out["remote"] is False
+
+    def test_telecommute_without_a_workplace_is_remote(self) -> None:
+        ld = dict(JOBPOSTING_LD)
+        del ld["jobLocation"]
+        ld["description"] = "<p>Stack PHP / MySQL.</p>"
+        out = map_jobposting_ld_to_raw(ld, "https://example.com/job/11", "job-11")
+        assert out["work_mode"] == "remote"
+        assert out["remote"] is True
+
     def test_missing_title_and_description(self) -> None:
         out = map_jobposting_ld_to_raw({"@type": "JobPosting"}, "https://example.com/job/9", "job-9")
         assert out["title"] == ""

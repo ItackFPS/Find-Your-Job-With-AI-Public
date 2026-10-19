@@ -145,7 +145,9 @@ def map_jobposting_ld_to_raw(ld: dict[str, Any], canonical_url: str, source_job_
     if isinstance(location_type, list):
         location_type = location_type[0] if location_type else None
     if isinstance(location_type, str) and "TELECOMMUTE" in location_type.upper():
-        work_mode = "remote"
+        # With a workplace given, TELECOMMUTE is not proof of full remote: HelloWork sets it on
+        # "Télétravail partiel" jobs. Full remote then needs the description to say so.
+        work_mode = "remote" if not city or detect_work_mode(description) == "remote" else "hybrid"
     else:
         work_mode = detect_work_mode(description)
 
