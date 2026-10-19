@@ -125,7 +125,10 @@ Then:
    an example.
 2. **Secrets, only for what you use** — in `.env`: France Travail API credentials (the
    one source that needs them), Discord bot token, n8n key. Everything is optional;
-   see [Configuration](#configuration).
+   see [Configuration](#configuration). Without France Travail credentials each run
+   skips that source and says so in the run's errors (status DEGRADED); credentials
+   that are set but rejected stop the run until they are fixed. To silence the
+   warning, set `active: false` on `france-travail` in `config/sources.yaml`.
 
 ### Run
 

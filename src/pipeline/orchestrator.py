@@ -326,8 +326,10 @@ def run_pipeline(
 
         if preflight_result.status == "DEGRADED":
             # Non-blocking: recorded so the final result clearly shows
-            # notifications could not be delivered, without stopping the scan.
+            # notifications could not be delivered, or that an unconfigured
+            # source was skipped, without stopping the scan.
             stats.errors.extend(preflight_result.degraded_errors)
+        skipped_source_types = set(preflight_result.skipped_source_types)
 
         # =================================================================
         # EARLY PROFILE LOAD (for discovery query expansion)
@@ -414,7 +416,10 @@ def run_pipeline(
         _t_collect = time.perf_counter()
         sources_path = Path(config_dir) / "sources.yaml"
         source_registry = SourceRegistry(config_path=str(sources_path))
-        active_sources = [s for s in source_registry.all_sources if s.get("active", True)]
+        active_sources = [
+            s for s in source_registry.all_sources
+            if s.get("active", True) and s.get("type") not in skipped_source_types
+        ]
 
         all_jobs: list[Job] = []
 
