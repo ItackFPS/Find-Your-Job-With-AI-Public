@@ -32,6 +32,8 @@ import re
 import threading
 import time
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -53,6 +55,34 @@ from src.scan_control import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class _MessageCollector(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__(level=logging.ERROR)
+        self.messages: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.messages.append(record.getMessage())
+
+
+@contextmanager
+def _jobspy_errors() -> Iterator[list[str]]:
+    """ERROR messages python-jobspy logs during the block.
+
+    jobspy does not raise on an HTTP error (429 when rate limited), a network
+    error or a blocked page: it logs an ERROR on its "JobSpy:LinkedIn" logger
+    and returns the rows it has, possibly none. Its end-of-results cases log
+    nothing above WARNING, so an ERROR here is what tells a failed page apart
+    from an exhausted query.
+    """
+    collector = _MessageCollector()
+    jobspy_logger = logging.getLogger("JobSpy:LinkedIn")
+    jobspy_logger.addHandler(collector)
+    try:
+        yield collector.messages
+    finally:
+        jobspy_logger.removeHandler(collector)
 
 # ---------------------------------------------------------------------------
 # Location / field helpers
@@ -1418,7 +1448,18 @@ class LinkedInScanner:
             if self.config.hours_old > 0:
                 kwargs["hours_old"] = self.config.hours_old
 
-            df = scrape_jobs(**kwargs)
+            with _jobspy_errors() as jobspy_errors:
+                df = scrape_jobs(**kwargs)
+
+            if (df is None or df.empty) and jobspy_errors:
+                # Rate limited or blocked, not exhausted: fail the query so it is neither
+                # reported nor checkpointed as done (the caller keeps it resumable).
+                raise RuntimeError(f"python-jobspy returned no rows and reported: {jobspy_errors[0]}")
+            if jobspy_errors:
+                logger.warning(
+                    "LinkedIn: query %r page %d returned %d row(s) but python-jobspy reported: %s",
+                    query.search_term, page, len(df), "; ".join(jobspy_errors),
+                )
 
             if df is None or df.empty:
                 logger.info(
