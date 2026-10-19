@@ -28,7 +28,7 @@ describe('ReviewCard', () => {
     render(<MemoryRouter><ReviewCard item={item()} pending={false} onAnswer={() => {}} /></MemoryRouter>)
     expect(screen.getByText('Technicien support')).toBeInTheDocument()
     expect(screen.queryByRole('link')).toBeNull()
-    expect(screen.getByText('Rejected at filter')).toBeInTheDocument()
+    expect(screen.getByText('Rejected at Hard Filter')).toBeInTheDocument()
     expect(screen.getByText(/explicit:interested/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Posting' })).toBeInTheDocument()
   })
@@ -56,7 +56,7 @@ describe('ReviewCard', () => {
       }] as never,
     })} pending={false} onAnswer={onAnswer} /></MemoryRouter>)
     expect(screen.getByText('Audit sample')).toBeInTheDocument()
-    expect(screen.getByText('requirements_gate:education')).toBeInTheDocument()
+    expect(screen.getByText('Requirements Gate · education')).toBeInTheDocument()
     expect(screen.getByText(/Job requires Bac\+5 \(mandatory\)/)).toBeInTheDocument()
     expect(screen.getByText(/Bac\+5 requis/)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Not sure' }))

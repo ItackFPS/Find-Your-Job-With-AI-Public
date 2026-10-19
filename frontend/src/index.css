@@ -58,6 +58,12 @@ body {
   margin: 0;
 }
 
+/* Links without their own style (e.g. job titles on the Review page) would otherwise get the
+   browser's default dark blue, unreadable on the dark background. */
+a {
+  color: var(--color-blue);
+}
+
 /* Shared indeterminate progress animation (ProgressBar component) */
 @keyframes fyj-indeterminate {
   0% { left: -30%; }
