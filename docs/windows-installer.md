@@ -38,9 +38,11 @@ Then:
 
 1. **Profile** page: your target roles, skills, locations, languages. It is saved to
    `config\profile.local.yaml`.
-2. **Sources.** These work without any account: RemoteOK, Jobicy, We Work Remotely,
-   EURES, APEC (pipeline run), HelloWork and LinkedIn (**Scan now** on their dashboard
-   cards). Two need credentials and are *skipped*, never failed, until you add them:
+2. **Sources.** These work without any account: RemoteOK, Jobicy, We Work Remotely and
+   EURES (pipeline run), HelloWork and LinkedIn (**Scan now** on their dashboard cards).
+   APEC also needs no account but currently refuses automated access (HTTP 403 with a
+   CAPTCHA), so runs list it as *failed*; see the README's known limitations. Two
+   sources need credentials and are *skipped* until you add them:
 
    | Source | What to set in `.env` | Where to get it |
    |---|---|---|
