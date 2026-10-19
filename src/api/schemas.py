@@ -89,6 +89,10 @@ class SourceStats(BaseModel):
     collected: int = 0
     accepted: int = 0
     errors: int = 0
+    # completed | partial | failed | skipped (absent on runs recorded before it existed)
+    status: str | None = None
+    # why a skipped source was left out and what to set up
+    reason: str | None = None
 
 
 class RunStats(BaseModel):

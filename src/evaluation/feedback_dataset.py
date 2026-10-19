@@ -62,6 +62,8 @@ def derive_label(events: list[dict[str, Any]], config: FeedbackConfig) -> tuple[
                 explicit = ("reject", "explicit:not_interested[" + ",".join(reasons) + "]")
             elif e["type"] == "ranking_feedback" and "interesting_despite_low_score" in reasons:
                 explicit = ("accept", "explicit:interesting_despite_low_score")
+            elif e["type"] == "unsure":
+                explicit = ("borderline", "explicit:unsure")
         elif e["signal_class"] == "outcome":
             meta = json.loads(e["metadata_json"] or "{}")
             canon, _ = canonical_status(meta.get("legacy_to"), config)
@@ -70,7 +72,7 @@ def derive_label(events: list[dict[str, Any]], config: FeedbackConfig) -> tuple[
     if explicit and outcome_accept and explicit[0] == "reject":
         return "borderline", "low", f"contested: {explicit[1]} vs {outcome_accept}"
     if explicit:
-        return explicit[0], "high", explicit[1]
+        return explicit[0], "low" if explicit[0] == "borderline" else "high", explicit[1]
     if outcome_accept:
         return "accept", "medium", outcome_accept
     return None
@@ -125,6 +127,7 @@ def build_feedback_dataset(
     real_companies: dict[str, str | None] = {}
     decision_of: dict[str, dict[str, Any]] = {}
     seen_content: set[str] = set()
+    audited = 0
     try:
         try:
             conn.execute("SELECT 1 FROM job_decisions LIMIT 1")
@@ -198,6 +201,11 @@ def build_feedback_dataset(
             # the decision the label answers, kept private: the dataset itself stays blind to the outcome
             decision_of[new_id] = {k: row[k] for k in (
                 "decision_id", "run_id", "decided_at", "outcome", "deciding_stage", "strategy_version")}
+            # a rejection the user saw through the audit sample: its stratum, for stratified analysis
+            audit = (json.loads(row["signals_json"] or "{}") or {}).get("audit")
+            if audit:
+                decision_of[new_id]["audit"] = audit
+                audited += 1
             id_map[new_id] = job_id
             real_companies[new_id] = company
             labels.append(LabelRecord(
@@ -222,7 +230,9 @@ def build_feedback_dataset(
         jobs=jobs, labels=labels, profile_yaml=profile_yaml,
         notes=(f"Derived from feedback_events + job_decisions. status={status}. "
                "SELECTION BIAS: only jobs shown to the user can receive feedback; behaviour signals never "
-               "create labels; labels are derived (reliability in each reason), not human-annotated."),
+               "create labels; labels are derived (reliability in each reason), not human-annotated. "
+               f"{audited} rejected job(s) were shown through the rejection audit sample (stratified, "
+               "bounded, NOT a uniform sample: stratum per job in the private sidecar)."),
     )
     (out / EXPORT_META).write_text(json.dumps(
         {"WARNING": "PRIVATE: maps anonymised ids back to real jobs; never share or commit",
@@ -237,7 +247,8 @@ def build_feedback_dataset(
 
 def labelling_queue(db_path: str | Path, limit: int = 50) -> list[dict[str, Any]]:
     """Active labelling queue: each job's latest decision flagged ``review`` by the disagreement
-    engine (or with outcome ``review``) that has no explicit feedback yet, least confident first."""
+    engine (or with outcome ``review``, or picked by the rejection audit sample) that has no explicit
+    feedback yet, least confident first."""
     conn = open_readonly(db_path)
     try:
         rows = conn.execute(
@@ -248,7 +259,8 @@ def labelling_queue(db_path: str | Path, limit: int = 50) -> list[dict[str, Any]
                       json_extract(d.signals_json, '$.assessment.reasons') AS reasons
                FROM latest d
                WHERE d.rn = 1
-                 AND (d.outcome = 'review' OR json_extract(d.signals_json, '$.assessment.state') = 'review')
+                 AND (d.outcome = 'review' OR json_extract(d.signals_json, '$.assessment.state') = 'review'
+                      OR json_extract(d.signals_json, '$.audit.sampled') = 1)
                  AND NOT EXISTS (SELECT 1 FROM feedback_events f
                                  WHERE f.job_id = d.job_id AND f.signal_class = 'explicit')
                ORDER BY COALESCE(d.decision_confidence, 0), d.job_id LIMIT ?""", (limit,)).fetchall()

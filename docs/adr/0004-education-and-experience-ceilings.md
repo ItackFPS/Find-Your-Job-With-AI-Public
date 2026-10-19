@@ -2,9 +2,18 @@
 
 The requirements gate (`src/requirements/gate.py`) treats the profile's
 `max_education` and experience bounds as ceilings, not preferences. An education
-requirement classified MANDATORY **or PREFERRED** above `max_education`, with
-attributable evidence, hard-rejects the job (commit fe67427); CORE above the maximum is
-a 20% soft penalty; UNKNOWN / ambiguous / contradicted evidence never hard-rejects.
+level above `max_education`, with attributable evidence, hard-rejects the job only
+when the posting makes it a **requirement**:
+
+| Wording around the level | Importance | Above `max_education` |
+|---|---|---|
+| mandatory cue: "exigé", "requis", "minimum", "obligatoire", "required" | MANDATORY | hard reject |
+| stated as the bar, softened only by equivalence: "Bac+4 ou équivalent" | PREFERRED, `is_desirable` false | hard reject |
+| desirability cue: "souhaité", "apprécié", "idéalement", "un plus", "preferred" | PREFERRED, `is_desirable` true | 20% soft penalty |
+| explicitly non-eliminatory, in the same sentence: "non éliminatoire", "pas obligatoire", "facultatif", "not required", "optional" | OPTIONAL | nothing |
+| LLM-only reading (CORE), or a PREFERRED reading with no equivalence evidence | CORE / PREFERRED | 20% soft penalty |
+| no qualifier, contradicted, or uncorroborated | UNKNOWN | nothing |
+
 Mandatory years of experience above the maximum hard-reject; preferred excess is a 20%
 soft penalty. A degree offered as an alternative to experience
 (`EducationRequirement.is_experience_alternative`) is not a ceiling violation.
@@ -15,10 +24,54 @@ exemption and the "in-progress diploma" handling (e.g. "vous préparez un Bac+N"
 commit 8859322) keep the gate from rejecting apprenticeships and internships aimed at
 students still studying.
 
+## Amendment 2026-10: a wish is not a ceiling
+
+From commit fe67427 until this amendment, any PREFERRED level above the maximum
+hard-rejected, desirability wording included. That rejected the synthetic benchmark job
+bm46 ("Bac+2 en informatique. Un niveau Bac+5 est apprécié mais absolument pas un
+critère éliminatoire") for a Bac+2 profile, and "Bac+3 souhaité ou Bac+5 bienvenu"
+for a Bac+3 profile: postings that say in words that the higher level is not required.
+That contradicts the project's first safety rule (no unsafe rejection; a negative
+decision needs explicit evidence), so the ceiling now applies to requirements only:
+
+- A desirability cue makes the level a preference (soft penalty), never a ceiling.
+- An explicit non-eliminatory cue in the mention's sentence makes it OPTIONAL.
+  Negated mandatory words ("not required", "non obligatoire") are no longer read as
+  mandatory cues; before, "Diplôme Bac+5 non obligatoire" hard-rejected.
+- Competing cues around one mention are resolved by distance, ties going to the
+  reading that cannot reject: "Bac+5 requis, anglais souhaité" and "Bac+5 requis,
+  permis B non obligatoire" stay MANDATORY.
+- When a posting states several levels, the enforceable one is checked first
+  ("Bac+3 ou équivalent. Bac+5 apprécié" checks Bac+3): a wish never hides a
+  requirement.
+- "Bac+4 ou équivalent" still rejects: it states the bar and accepts equivalent
+  diplomas, it does not lower it (the owner's documented case).
+
+Rejection reasons carry `rule_version = "hard-filter.v3"` from this change on, so
+journaled decisions made under the old rule stay distinguishable.
+
+Two consistency rules follow from the table:
+
+- A level above the maximum with **no qualifier** ("Profil recherché : Un Master avec
+  une spécialisation…") is not known to be required, nor known not to be. The gate
+  records the education constraint as UNKNOWN (the job passes with uncertainty, visible
+  as `uncertain` in the decision journal), never as satisfied; still no reject and no
+  penalty. Explicit wordings (desirable, non-eliminatory) stay satisfied.
+- A rejection message names why the level counts as required: "(mandatory)" or
+  "(stated level, equivalence accepted)" — never the raw "preferred" importance, which
+  contradicted the decision it explained.
+
+Enforced by `tests/test_education_requirement_strength.py`, the hard-filter safety
+corpus (`tests/test_hard_filter_benchmark.py`) and the end-to-end safety gate on the
+synthetic benchmark (`tests/test_rejection_safety_gate.py`).
+
 ## Consequences
 
 - Extraction precision matters more than recall: a misclassified importance becomes a
-  false rejection (known case: issue #19).
+  false rejection (known case: issue #19). The distance rule bounds, but does not
+  remove, the risk of a cue being attributed to the wrong requirement.
+- Jobs that only *wish* for a higher level now reach scoring with a 20% penalty instead
+  of being dropped; they rank lower but stay visible.
 - Each constraint can be switched off per profile
   (`matching.education_hard_constraint`, `principal_skill_gate`,
   `mandatory_central_skill_gate`).

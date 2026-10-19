@@ -489,3 +489,57 @@ class TestAPECCollectorMultiQuery:
         col = APECCollector(config={"max_pages": 1, "rate_limit_delay": 0})
         result = col.collect()
         assert result.jobs[0]["work_mode"] is None
+
+
+# ---------------------------------------------------------------------------
+# Tests: the site's bot protection (DataDome, observed live 2026-10-19)
+# ---------------------------------------------------------------------------
+
+
+def _blocked_response() -> Any:
+    import httpx
+
+    return httpx.Response(
+        403,
+        json={"url": "https://geo.captcha-delivery.com/captcha/?initialCid=x&cid=y"},
+        headers=[("set-cookie", "datadome=abc; Max-Age=31536000; Domain=.apec.fr; Path=/")],
+        request=httpx.Request("POST", "https://www.apec.fr/cms/webservices/rechercheOffre"),
+    )
+
+
+class TestAPECBotProtection:
+    @patch("src.collectors.apec.time.sleep")
+    @patch("src.collectors.apec.httpx.post")
+    def test_blocked_access_stops_at_once_with_an_actionable_error(
+        self, mock_post: MagicMock, _sleep: MagicMock
+    ) -> None:
+        mock_post.return_value = _blocked_response()
+        collector = APECCollector(config={"max_pages": 4, "page_size": 50, "rate_limit_delay": 0,
+                                          "discovery_queries": ["python", "data", "devops"]})
+        result = collector.collect()
+
+        assert mock_post.call_count == 1  # no retry, no other page, no other keyword
+        assert result.jobs == []
+        assert len(result.errors) == 1
+        assert "refused automated access" in result.errors[0]
+        assert "CAPTCHA" in result.errors[0] and "active: false" in result.errors[0]
+
+    @patch("src.collectors.apec.time.sleep")
+    @patch("src.collectors.apec.httpx.post")
+    def test_jobs_collected_before_the_block_are_kept(self, mock_post: MagicMock, _sleep: MagicMock) -> None:
+        mock_post.side_effect = [_make_response([_make_job()], total=1), _blocked_response()]
+        collector = APECCollector(config={"max_pages": 1, "page_size": 1, "rate_limit_delay": 0,
+                                          "discovery_queries": ["python", "data"]})
+        result = collector.collect()
+
+        assert len(result.jobs) == 1
+        assert len(result.errors) == 1 and "refused automated access" in result.errors[0]
+
+    def test_a_plain_403_is_not_taken_for_bot_protection(self) -> None:
+        import httpx
+
+        from src.collectors.apec import _is_bot_challenge
+
+        plain = httpx.Response(403, text="Forbidden", request=httpx.Request("POST", "https://www.apec.fr/x"))
+        assert not _is_bot_challenge(plain)
+        assert _is_bot_challenge(_blocked_response())

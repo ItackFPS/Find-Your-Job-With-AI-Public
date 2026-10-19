@@ -16,3 +16,9 @@ compress_text: true
 # snapshot metadata stay, so the audit trail survives without the personal text.
 text_retention_days: 60
 record_retention_days: 365
+
+# Rejection audit sample: a rule-backed rejection is otherwise never shown, so a wrong rule could hide
+# good jobs silently. At most this many rejected jobs (one per filter/gate rule in turn, posting text
+# kept) wait in the Review page at once for your answer; the answers become labelled evidence for
+# evaluation. Outcomes, scores, ranking and notifications are unchanged. 0 = off.
+rejection_audit_max_open: 3

@@ -225,6 +225,7 @@ def run_pipeline(
     use_ai: bool = False,
     prefetched_linkedin_jobs: "list[Any] | None" = None,
     prefetched_hellowork_jobs: "list[Any] | None" = None,
+    run_id: str | None = None,
 ) -> PipelineResult:
     """Run the full job discovery pipeline and return a structured result.
 
@@ -240,13 +241,16 @@ def run_pipeline(
                            src/ai/config.py for PHASE2_* environment variables.
                            Phase 2 is non-blocking — if the LLM is unavailable
                            the pipeline continues without AI enrichment.
+        run_id:            Identifier of this run. The API runner passes the id of the run row it
+                           created, so the decision journal and the run share one id; generated when
+                           omitted (CLI, tests).
 
     Returns:
         A :class:`PipelineResult` with status, statistics, scored job records,
         and rejection records.  Never raises — failures are captured in the
         result's ``error`` field and ``status = 'failed'``.
     """
-    run_id = str(uuid.uuid4())
+    run_id = run_id or str(uuid.uuid4())
     started_at = datetime.now(UTC)
     stats = PipelineStats()
     stats.use_ai = use_ai
@@ -322,8 +326,11 @@ def run_pipeline(
 
         if preflight_result.status == "DEGRADED":
             # Non-blocking: recorded so the final result clearly shows
-            # notifications could not be delivered, without stopping the scan.
+            # notifications could not be delivered, or that an unconfigured
+            # source was skipped, without stopping the scan.
             stats.errors.extend(preflight_result.degraded_errors)
+        skipped_source_types = set(preflight_result.skipped_source_types)
+        skip_reasons = preflight_result.skip_reasons
 
         # =================================================================
         # EARLY PROFILE LOAD (for discovery query expansion)
@@ -410,7 +417,18 @@ def run_pipeline(
         _t_collect = time.perf_counter()
         sources_path = Path(config_dir) / "sources.yaml"
         source_registry = SourceRegistry(config_path=str(sources_path))
-        active_sources = [s for s in source_registry.all_sources if s.get("active", True)]
+        active_sources = [
+            s for s in source_registry.all_sources
+            if s.get("active", True) and s.get("type") not in skipped_source_types
+        ]
+        # An active source left out by the preflight is listed as skipped, with what
+        # to set up, so a missing credential never looks like a source that ran.
+        for s in source_registry.all_sources:
+            if s.get("active", True) and s.get("type") in skipped_source_types:
+                stats.by_source[s["name"]] = {
+                    "collected": 0, "accepted": 0, "errors": 0,
+                    "status": "skipped", "reason": skip_reasons.get(s.get("type", ""), ""),
+                }
 
         all_jobs: list[Job] = []
 
@@ -476,6 +494,7 @@ def run_pipeline(
             for future in concurrent.futures.as_completed(futures):
                 name, normalized, source_stats, errors = future.result()
                 all_jobs.extend(normalized)
+                source_stats["status"] = collection_status(source_stats["collected"], source_stats["errors"])
                 stats.by_source[name] = source_stats
                 for err in errors:
                     stats.errors.append(err)
@@ -493,6 +512,7 @@ def run_pipeline(
                 "accepted": 0,
                 "errors": 0,
                 "from_staging": True,
+                "status": "completed",
             }
             logger.info(
                 "LinkedIn: injected %d pre-collected job(s) from staging snapshot.",
@@ -510,6 +530,7 @@ def run_pipeline(
                 "accepted": 0,
                 "errors": 0,
                 "from_staging": True,
+                "status": "completed",
             }
             logger.info(
                 "HelloWork: injected %d pre-collected job(s) from staging snapshot.",
@@ -1224,6 +1245,15 @@ def run_pipeline(
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def collection_status(collected: int, errors: int) -> str:
+    """How one source's collection went: ``completed`` (no error), ``partial`` (errors,
+    but jobs came back) or ``failed`` (errors and nothing collected). A source the
+    preflight left out is ``skipped`` instead (set where it is skipped)."""
+    if not errors:
+        return "completed"
+    return "partial" if collected else "failed"
+
 
 def _build_collector_config(source_config: dict[str, Any]) -> dict[str, Any]:
     """Merge top-level source fields with its nested 'config' sub-dict.

@@ -240,6 +240,7 @@ const FEEDBACK_TYPE_LABELS: Record<string, string> = {
   interested: 'Interested',
   not_interested: 'Not interested',
   ranking_feedback: 'Mis-ranked',
+  unsure: 'Not sure',
 }
 
 const FEEDBACK_REASON_LABELS: Record<string, string> = {

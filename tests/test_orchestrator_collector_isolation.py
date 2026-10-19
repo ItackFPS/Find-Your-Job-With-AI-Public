@@ -75,5 +75,40 @@ def test_one_failing_collector_does_not_fail_the_run(tmp_path, monkeypatch, brok
 
     assert result.status == "completed", result.error
     assert result.stats.by_source["healthy"]["collected"] == 1
-    assert result.stats.by_source["broken"] == {"collected": 0, "accepted": 0, "errors": 1}
+    assert result.stats.by_source["healthy"]["status"] == "completed"
+    assert result.stats.by_source["broken"] == {"collected": 0, "accepted": 0, "errors": 1, "status": "failed"}
     assert any(e.startswith("Failed to collect from broken:") for e in result.stats.errors)
+
+
+class _Partial(BaseCollector):
+    def __init__(self, config: dict | None = None) -> None:
+        pass
+
+    def collect(self) -> CollectorResult:
+        healthy = _Healthy().collect()
+        return CollectorResult(source_name="partial", jobs=healthy.jobs, errors=["page 2: HTTP 403"])
+
+
+def test_each_source_reports_how_its_collection_went(tmp_path, monkeypatch):
+    from src.collectors.registry import registry
+    from src.pipeline.orchestrator import run_pipeline
+
+    classes = {**_CLASSES, "partial": _Partial}
+    monkeypatch.setattr(registry, "get_collector_class", lambda src_type: classes[src_type])
+    config_dir = _config_dir(tmp_path, "collect_fails")
+    with open(config_dir / "sources.yaml", "a", encoding="utf-8") as f:
+        f.write("  - {name: partial, type: partial, active: true}\n")
+
+    result = run_pipeline(db_path=str(tmp_path / "t.db"), config_dir=str(config_dir))
+
+    status = {name: s["status"] for name, s in result.stats.by_source.items()}
+    assert status == {"healthy": "completed", "broken": "failed", "partial": "partial"}
+
+
+@pytest.mark.parametrize(("collected", "errors", "expected"), [
+    (5, 0, "completed"), (0, 0, "completed"), (3, 1, "partial"), (0, 2, "failed"),
+])
+def test_collection_status(collected, errors, expected):
+    from src.pipeline.orchestrator import collection_status
+
+    assert collection_status(collected, errors) == expected

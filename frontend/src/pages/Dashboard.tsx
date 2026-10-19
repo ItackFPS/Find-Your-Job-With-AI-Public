@@ -5,10 +5,10 @@ import {
   pauseLinkedInScan, resumeLinkedInScan,
   getHelloWorkStatus, triggerHelloWorkScan, listHelloWorkScans,
   pauseHelloWorkScan, resumeHelloWorkScan,
-  type RunStats, type ScanState, type LinkedInScanProgress, type HelloWorkScanProgress,
+  type RunStats, type SourceStats, type ScanState, type LinkedInScanProgress, type HelloWorkScanProgress,
 } from '../api/client'
 import { Link } from 'react-router-dom'
-import { Card, StatTile, StatusBadge, Chip, ProgressBar, EmptyState, LoadingState, DataTable, Switch, type DataTableColumn } from '../components'
+import { Card, StatTile, StatusBadge, SourceStatus, Chip, ProgressBar, EmptyState, LoadingState, DataTable, Switch, type DataTableColumn } from '../components'
 import { PIPELINE_STAGES, type PipelineStageDef } from '../config/pipelineStages'
 import { usePipelineEvents, stageLabel, type ConnectionState, type ActivityEntry } from '../hooks/usePipelineEvents'
 import {
@@ -156,7 +156,7 @@ export function ScannerStatusCard({ name, queryKey, triggerFn, pauseFn, resumeFn
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-3)' }}>
         <div style={{ fontWeight: 'var(--font-weight-semibold)' }}>{name}</div>
         <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
-          <StatusBadge status={control.state === 'idle' ? (scan?.status ?? 'completed') : control.state} />
+          <StatusBadge status={control.state === 'idle' ? (scan?.status ?? 'idle') : control.state} />
           <button
             onClick={onControl}
             disabled={!controlEnabled}
@@ -229,6 +229,8 @@ interface SourceRow {
   collected: number
   accepted: number
   errors: number
+  status?: string | null
+  reason?: string | null
 }
 
 const SOURCE_COLUMNS: DataTableColumn<SourceRow>[] = [
@@ -237,9 +239,10 @@ const SOURCE_COLUMNS: DataTableColumn<SourceRow>[] = [
   { key: 'accepted', header: 'Accepted', align: 'right', render: r => <span style={{ color: 'var(--color-success)' }}>{r.accepted}</span> },
   { key: 'rejected', header: 'Rejected', align: 'right', render: r => <span style={{ color: 'var(--color-muted)' }}>{r.collected - r.accepted}</span> },
   { key: 'errors', header: 'Errors', align: 'right', render: r => <span style={{ color: r.errors > 0 ? 'var(--color-error)' : 'var(--color-muted)' }}>{r.errors}</span> },
+  { key: 'status', header: 'Status', render: r => <SourceStatus status={r.status} reason={r.reason} /> },
 ]
 
-function BySourceTable({ bySource }: { bySource: Record<string, { collected: number; accepted: number; errors: number }> }) {
+function BySourceTable({ bySource }: { bySource: Record<string, SourceStats> }) {
   const rows: SourceRow[] = Object.entries(bySource)
     .map(([name, s]) => ({ name, ...s }))
     .sort((a, b) => b.collected - a.collected)

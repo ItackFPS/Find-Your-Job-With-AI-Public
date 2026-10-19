@@ -84,6 +84,10 @@ export interface SourceStats {
   collected: number
   accepted: number
   errors: number
+  // completed | partial | failed | skipped; absent on runs recorded before it existed
+  status?: string | null
+  // why a skipped source was left out and what to set up
+  reason?: string | null
 }
 
 export interface RunStats {
@@ -379,6 +383,16 @@ export interface DecisionAssessment {
   calibrated: boolean
 }
 
+// A rule-backed rejection picked by the rejection audit sample (src/decisions/audit.py)
+export interface DecisionAudit {
+  sampled: boolean
+  sampler: string
+  stratum: string
+  stratum_size: number
+  rank_in_stratum: number
+  max_open?: number
+}
+
 export interface DecisionRecord {
   decision_id: string
   run_id: string
@@ -391,7 +405,7 @@ export interface DecisionRecord {
   // agreement-based, NOT a verbalised LLM confidence; uncalibrated until calibrated on labelled data
   decision_confidence?: number | null
   confidence_calibrated?: boolean
-  signals?: { assessment?: DecisionAssessment } & Record<string, unknown>
+  signals?: { assessment?: DecisionAssessment; audit?: DecisionAudit } & Record<string, unknown>
   evidence: DecisionEvidence[]
   conflicts: { dimensions: string[]; description: string }[]
   stage_trace: { stage: string; result: string; detail: string | null }[]
@@ -450,6 +464,43 @@ export interface LabExperiment {
   independently_validated: boolean; evidence_basis: string | null
   overrides: Record<string, unknown>; explanation: string | null; fixed: number | null; broken: number | null
   guardrails: Record<string, boolean>; delta: Record<string, number | null> | null; limitations: string[]
+  // what the evidence recommends a human do; absent from backends that predate it
+  next_action?: 'approved' | 'submit_for_human_approval' | 'reject' | 'investigate'
+}
+// Self-check report (src/evaluation/selfcheck.py): the current strategy vs the recorded baseline.
+export type SelfCheckStatus = 'safety_violation' | 'baseline_mismatch' | 'regression' | 'changed' | 'pass'
+export interface SelfCheckPattern {
+  kind: 'unsafe_rejection' | 'false_positive' | 'borderline_rejected_without_review'; key: string; count: number
+  job_ids: string[]; example_reasons: string[]; lever: { kind: 'lab' | 'code'; detail: string }
+}
+export interface SelfCheckDataset {
+  status: SelfCheckStatus
+  dataset: { id: string; version: string; kind: string; n_jobs: number; n_labelled: number; accept_labels: number
+             label_provenance: Record<string, number> }
+  strategy: { name: string | null; fingerprint: string | null }
+  safety: { unsafe_rejections: { job_id: string; reasons: string[] }[]; rejections_without_reason: string[] }
+  eligibility: Record<string, number | null>
+  explanations: { rejections: number; with_reason: number; coverage: number | null }
+  ranking: { status: string; why: string; score_separation: { status: string; pairwise_auc?: number } }
+  baseline: { status: 'identical' | 'differs' | 'mismatch' | 'missing'
+              flips?: { fixed: string[]; broken: string[]; unjudged: string[] }; delta?: Record<string, number | null> }
+  patterns: SelfCheckPattern[]; limitations: string[]
+}
+export interface SelfCheckReport {
+  created_at: string; status: SelfCheckStatus; generated_by: string; datasets: SelfCheckDataset[]
+  recommendations: { kind: 'action' | 'suggestion'; dataset: string; text: string }[]; next_steps: string
+  feedback?: SelfCheckFeedback
+}
+// What explicit feedback says about the latest decisions (selfcheck.feedback_coverage): user signals, not labels.
+export type SelfCheckFeedback =
+  | { status: 'unavailable'; why: string }
+  | { status: 'measured'; decided_jobs: number; jobs_with_explicit_feedback: number; coverage: number | null
+      latest_answers: Record<string, number>; decisions_with_evidence: number; explanation_coverage: number | null
+      contradictions: Record<'rejected_but_interested' | 'accepted_but_not_interested', { count: number; job_ids: string[] }>
+      note: string }
+export interface SelfCheckResponse {
+  latest: SelfCheckReport | null; unreadable: number
+  history: { file: string; created_at: string; status: SelfCheckStatus | null; datasets: Record<string, string> }[]
 }
 export interface LabMemoryItem { item_id: string; created_at: string; kind: string; statement: string; status: string | null }
 // What the pipeline actually runs (src/decisions/active_strategy.py): `active` = the approved bundle; any other
@@ -468,6 +519,7 @@ export const getEvalRuns = () => api.get<{ total: number; unreadable: number; ru
 export const getLabExperiments = () => api.get<{ experiments: LabExperiment[] }>('/lab/experiments').then(r => r.data)
 export const getLabMemory = () => api.get<{ items: LabMemoryItem[] }>('/lab/memory').then(r => r.data)
 export const getActiveStrategy = () => api.get<ActiveStrategy>('/lab/active-strategy').then(r => r.data)
+export const getSelfCheck = () => api.get<SelfCheckResponse>('/lab/self-check').then(r => r.data)
 
 // ---- Feedback journal (append-only; see docs/adr/0009-feedback-journal.md) ----
 export interface FeedbackEvent {
@@ -607,6 +659,8 @@ export const listLinkedInScans = (limit = 10) =>
 
 export interface HelloWorkScanStats {
   collector_errors: number
+  /** First few error messages, so the reason is visible, not just the count (older scans: absent). */
+  collector_error_samples?: string[]
   collection_duration_seconds: number
   metier_slugs_queried: number | null
 }

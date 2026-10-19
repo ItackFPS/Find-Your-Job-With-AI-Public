@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getRun, listRuns, getLinkedInStatus, listLinkedInScans, getHelloWorkStatus, listHelloWorkScans, type PipelineRun, type RunStats, type LinkedInScanRun, type LinkedInScanStats, type HelloWorkScanRun, type HelloWorkScanStats } from '../api/client'
 import { Link } from 'react-router-dom'
-import { Card, StatusBadge, FunnelChart, DataTable, EmptyState, LoadingState, type DataTableColumn, type FunnelRow } from '../components'
+import { Card, StatusBadge, SourceStatus, FunnelChart, DataTable, EmptyState, LoadingState, type DataTableColumn, type FunnelRow } from '../components'
 import { findPipelineStage } from '../config/pipelineStages'
 import { formatDuration, formatElapsedBetween, formatDateTime } from '../utils'
 
@@ -71,6 +71,8 @@ interface SourceRow {
   collected: number
   accepted: number
   errors: number
+  status?: string | null
+  reason?: string | null
 }
 
 const SOURCE_COLUMNS: DataTableColumn<SourceRow>[] = [
@@ -78,6 +80,7 @@ const SOURCE_COLUMNS: DataTableColumn<SourceRow>[] = [
   { key: 'collected', header: 'Collected', align: 'right', render: r => r.collected },
   { key: 'accepted', header: 'Accepted', align: 'right', render: r => r.accepted },
   { key: 'errors', header: 'Errors', align: 'right', render: r => <span style={{ color: r.errors > 0 ? 'var(--color-error)' : 'inherit' }}>{r.errors}</span> },
+  { key: 'status', header: 'Status', render: r => <SourceStatus status={r.status} reason={r.reason} /> },
 ]
 
 function SourcesTable({ bySource }: { bySource: RunStats['by_source'] }) {
@@ -295,6 +298,9 @@ const QUERY_COLUMNS: DataTableColumn<QueryRow>[] = [
   { key: 'jobs_staged', header: 'Staged', align: 'right', render: r => (
     <span style={{ fontWeight: r.jobs_staged > 0 ? 'var(--font-weight-semibold)' : 'var(--font-weight-normal)', color: r.jobs_staged > 0 ? 'var(--color-success)' : 'inherit' }}>{r.jobs_staged}</span>
   ) },
+  { key: 'stopped_by', header: 'Ended by', render: r => (
+    <span style={{ color: r.stopped_by === 'error' ? 'var(--color-error)' : 'inherit' }}>{r.stopped_by === 'error' ? 'failed (retried next scan)' : (r.stopped_by ?? '–').replace('_', ' ')}</span>
+  ) },
 ]
 
 function ScanStatsPanel({ stats }: { stats: LinkedInScanStats }) {
@@ -307,10 +313,12 @@ function ScanStatsPanel({ stats }: { stats: LinkedInScanStats }) {
           { label: 'Filtered out', value: stats.total_filtered_out },
           { label: 'Already known', value: stats.total_already_known },
           { label: 'Staged (new)', value: stats.total_staged },
-        ].map(({ label, value }) => (
+          // A failed query (rate limited, blocked, network error) is retried by the next scan.
+          { label: 'Failed queries', value: stats.queries_failed ?? 0, alert: (stats.queries_failed ?? 0) > 0 },
+        ].map(({ label, value, alert }) => (
           <div key={label}>
             <div style={{ fontSize: '0.73rem', color: 'var(--color-muted)', marginBottom: '0.1rem' }}>{label}</div>
-            <div style={{ fontWeight: 'var(--font-weight-bold)', fontSize: '1rem' }}>{value.toLocaleString()}</div>
+            <div style={{ fontWeight: 'var(--font-weight-bold)', fontSize: '1rem', color: alert ? 'var(--color-error)' : 'inherit' }}>{value.toLocaleString()}</div>
           </div>
         ))}
       </div>
@@ -443,6 +451,11 @@ function HelloWorkScanStatsPanel({ stats }: { stats: HelloWorkScanStats }) {
           <div style={{ fontWeight: 'var(--font-weight-bold)', fontSize: '1rem' }}>{value ?? '–'}</div>
         </div>
       ))}
+      {stats.collector_error_samples && stats.collector_error_samples.length > 0 && (
+        <ul style={{ flexBasis: '100%', margin: 0, paddingLeft: '1.1rem', fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>
+          {stats.collector_error_samples.map((msg, i) => <li key={i}>{msg}</li>)}
+        </ul>
+      )}
     </div>
   )
 }
