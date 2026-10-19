@@ -200,6 +200,36 @@ _PREFERRED_PATTERNS = [
     re.compile(r"\bbienvenu[e]?\b", re.I),
 ]
 
+# Explicitly non-eliminatory wording: the posting says the qualification is
+# not a requirement. Matched only in the mention's own sentence (see
+# _sentence_bounds), and masked out before the mandatory check so that
+# "not required" / "non obligatoire" never read as mandatory cues. A mention
+# governed by one is OPTIONAL: no hard reject, no penalty (ADR 0004).
+_NOT_STRICTLY = r"(?:forc[eé]ment\s+|n[eé]cessairement\s+|strictement\s+|absolument\s+)?"
+_NON_ELIMINATORY_PATTERNS = [
+    re.compile(
+        r"\b(?:non|pas)\s+(?:un\s+|une\s+)?(?:crit[eè]res?\s+)?[eé]liminatoires?\b", re.I
+    ),
+    re.compile(
+        r"\b(?:non|pas)\s+" + _NOT_STRICTLY
+        + r"(?:obligatoires?|requis(?:es)?|requise|exig[eé]e?s?|n[eé]cessaires?"
+        r"|indispensables?|imp[eé]ratifs?|imp[eé]ratives?)\b",
+        re.I,
+    ),
+    re.compile(r"\bfacultati(?:f|ve)s?\b", re.I),
+    re.compile(r"\boptionnel(?:le)?s?\b", re.I),
+    re.compile(
+        r"\bnot\s+(?:a\s+|an\s+)?(?:strict\s+|strictly\s+|necessarily\s+)?"
+        r"(?:required|mandatory|essential|requirement|prerequisite|eliminatory)\b",
+        re.I,
+    ),
+    re.compile(r"\boptional\b", re.I),
+]
+
+# Sentence terminators for the non-eliminatory scope. A dot only ends a
+# sentence when followed by whitespace or the end ("B.Sc" stays one word).
+_SENTENCE_END = re.compile(r"[.!?;](?=\s|$)|\n|•")
+
 # OR-alternative phrases — subset of _PREFERRED_PATTERNS.
 # When present, the candidate may satisfy either the education branch OR the
 # alternative (e.g. "ou expérience équivalente"), so no score penalty is due.
@@ -224,6 +254,13 @@ _OR_ALTERNATIVE_PATTERNS = [
 _EXPERIENCE_ALTERNATIVE_PATTERNS = [
     re.compile(r"\bou\s+exp[eé]rience\s+[eé]quivalente?\b", re.I),
     re.compile(r"\bsinon\s+exp[eé]rience\s+[eé]quivalente?\b", re.I),
+]
+
+# Preferred cues that express a wish rather than an equivalence: the level
+# is desirable, not required (EducationRequirement.is_desirable).
+_DESIRABILITY_PATTERNS = [
+    p for p in _PREFERRED_PATTERNS
+    if p.pattern not in {q.pattern for q in _OR_ALTERNATIVE_PATTERNS}
 ]
 
 
@@ -472,16 +509,30 @@ def _extract_importance(
     match_end: int,
     other_spans: list[tuple[int, int]] | None = None,
     experience_spans: list[tuple[int, int]] | None = None,
-) -> tuple[Importance, bool, bool]:
+) -> tuple[Importance, bool, bool, bool]:
     """Determine importance and OR-alternative flags from context around an education match.
 
-    Returns (importance, is_or_alternative, is_experience_alternative).
+    Returns (importance, is_or_alternative, is_experience_alternative,
+    is_desirable).
 
     Scans 120 characters before the match and 120 after for modifier keywords,
     clipped to the mention's own clause when ``other_spans`` (the other
     education mentions in *text*) places a neighbour across a clause separator
-    — see _clause_bounds. Preferred modifiers take precedence over mandatory
-    ones when both appear in that context.
+    — see _clause_bounds.
+
+    Competing cues are resolved by distance to the mention, ties going to the
+    reading that cannot reject (ADR 0004):
+
+    - a non-eliminatory cue in the mention's sentence ("non éliminatoire",
+      "not required") nearer than any mandatory cue → OPTIONAL;
+    - a desirability cue ("souhaité", "un plus") nearer than any mandatory
+      cue → PREFERRED with is_desirable (never a hard ceiling);
+    - otherwise an equivalence clause ("ou équivalent") → PREFERRED stating
+      the bar (is_desirable False), as before;
+    - otherwise a mandatory cue → MANDATORY; no cue → UNKNOWN.
+
+    "Bac+5 requis, anglais souhaité" therefore stays MANDATORY: the nearer
+    cue qualifies the degree, the farther one the language.
 
     is_or_alternative is True when any OR-alternative phrase ("ou équivalent",
     "ou expérience équivalente", etc.) is detected — the candidate may satisfy
@@ -503,18 +554,57 @@ def _extract_importance(
         window_after = window_after[:connector.start()]
     context = window_before + " " + window_after
 
-    has_mandatory = any(p.search(context) for p in _MANDATORY_PATTERNS)
-    has_preferred = any(p.search(context) for p in _PREFERRED_PATTERNS)
+    # Non-eliminatory cues count only inside the mention's sentence, but are
+    # masked everywhere so "not required" never reads as "required".
+    sentence_start = max(
+        (m.end() for m in _SENTENCE_END.finditer(text, 0, match_start)), default=0
+    )
+    sentence_end_match = _SENTENCE_END.search(text, match_end)
+    sentence_end = sentence_end_match.start() if sentence_end_match else len(text)
+    negation_distance = _nearest_cue(
+        _NON_ELIMINATORY_PATTERNS,
+        window_before[max(0, sentence_start - left):],
+        window_after[:max(0, sentence_end - match_end)],
+    )
+    masked_before = _mask(window_before, _NON_ELIMINATORY_PATTERNS)
+    masked_after = _mask(window_after, _NON_ELIMINATORY_PATTERNS)
+    mandatory_distance = _nearest_cue(_MANDATORY_PATTERNS, masked_before, masked_after)
+    desirability_distance = _nearest_cue(_DESIRABILITY_PATTERNS, masked_before, masked_after)
+
     is_or_alt = any(p.search(context) for p in _OR_ALTERNATIVE_PATTERNS)
     is_experience_alt = any(p.search(context) for p in _EXPERIENCE_ALTERNATIVE_PATTERNS)
 
-    if has_preferred:
-        return Importance.PREFERRED, is_or_alt, is_experience_alt
-    if has_mandatory:
-        return Importance.MANDATORY, False, False  # OR-alt doesn't soften mandatory
-    # No qualifier found → UNKNOWN (ambiguous); applies soft 20% penalty, never hard-rejects.
+    def nearer_than_mandatory(distance: int | None) -> bool:
+        return distance is not None and (
+            mandatory_distance is None or distance <= mandatory_distance
+        )
+
+    if nearer_than_mandatory(negation_distance):
+        return Importance.OPTIONAL, is_or_alt, is_experience_alt, False
+    if nearer_than_mandatory(desirability_distance):
+        return Importance.PREFERRED, is_or_alt, is_experience_alt, True
+    if is_or_alt:
+        return Importance.PREFERRED, is_or_alt, is_experience_alt, False
+    if mandatory_distance is not None:
+        return Importance.MANDATORY, False, False, False  # OR-alt doesn't soften mandatory
+    # No qualifier found → UNKNOWN (ambiguous): never hard-rejects, no penalty.
     # Only hard-reject when an explicit mandatory word ("minimum", "requis", etc.) is present.
-    return Importance.UNKNOWN, False, False
+    return Importance.UNKNOWN, False, False, False
+
+
+def _nearest_cue(patterns: list[re.Pattern[str]], before: str, after: str) -> int | None:
+    """Distance in characters from the mention to the nearest cue, or None."""
+    distances = [
+        len(before) - m.end() for p in patterns for m in p.finditer(before)
+    ] + [m.start() for p in patterns if (m := p.search(after))]
+    return min(distances, default=None)
+
+
+def _mask(window: str, patterns: list[re.Pattern[str]]) -> str:
+    """Blank out *patterns* matches, keeping every other offset unchanged."""
+    for p in patterns:
+        window = p.sub(lambda m: " " * len(m.group(0)), window)
+    return window
 
 
 def find_level_evidence(text: str, level_bac_plus: int) -> EvidenceSpan | None:
@@ -614,6 +704,9 @@ def _merge_held_ranges(
             continue
         if _IMPORTANCE_STRENGTH[upper.importance] > _IMPORTANCE_STRENGTH[lower.importance]:
             lower.importance = upper.importance
+            lower.is_desirable = upper.is_desirable
+        elif upper.importance == lower.importance:
+            lower.is_desirable = lower.is_desirable or upper.is_desirable
         lower.is_or_alternative = lower.is_or_alternative or upper.is_or_alternative
         lower.is_experience_alternative = (
             lower.is_experience_alternative or upper.is_experience_alternative
@@ -665,7 +758,7 @@ def extract_education(text: str) -> EducationRequirement | None:
         others = [
             (start, end) for start, end in spans if end <= m.start() or start >= m.end()
         ]
-        importance, is_or_alt, is_experience_alt = _extract_importance(
+        importance, is_or_alt, is_experience_alt, is_desirable = _extract_importance(
             text, m.start(), m.end(), others, experience_spans
         )
         raw_snippet = text[max(0, m.start() - 30): m.end() + 30].strip()
@@ -683,6 +776,7 @@ def extract_education(text: str) -> EducationRequirement | None:
             importance=importance,
             is_or_alternative=is_or_alt,
             is_experience_alternative=is_experience_alt,
+            is_desirable=is_desirable,
             raw_text=raw_snippet,
             span=span,
             kind=kind,
@@ -698,11 +792,20 @@ def extract_education(text: str) -> EducationRequirement | None:
 
     _merge_held_ranges(text, found, cues)
 
-    # Held requirements with an explicit qualifier win, with today's rules:
-    # 1. the HIGHEST mandatory level, 2. highest preferred, 3. highest core.
+    # Held requirements with an explicit qualifier win, enforceable ones
+    # first: 1. the HIGHEST mandatory level, 2. highest preferred stating the
+    # bar ("Bac+3 ou équivalent"), 3. highest desirable preferred ("Bac+5
+    # apprécié"), 4. highest core. A wish never hides a requirement.
     held = [r for r in found if r.kind == EducationKind.HELD]
-    for importance in (Importance.MANDATORY, Importance.PREFERRED, Importance.CORE):
-        candidates = [r for r in held if r.importance == importance]
+    for importance, desirable in (
+        (Importance.MANDATORY, False),
+        (Importance.PREFERRED, False),
+        (Importance.PREFERRED, True),
+        (Importance.CORE, False),
+    ):
+        candidates = [
+            r for r in held if r.importance == importance and r.is_desirable == desirable
+        ]
         if candidates:
             return max(candidates, key=lambda r: r.level_bac_plus)
 

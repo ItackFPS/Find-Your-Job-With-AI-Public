@@ -135,13 +135,17 @@ class FeedbackStorage:
                         FROM feedback_events
                         WHERE job_id IN ({",".join("?" * len(chunk))})
                           AND (signal_class = 'outcome'
-                               OR (signal_class = 'explicit' AND type IN ('interested', 'not_interested')))
+                               OR (signal_class = 'explicit'
+                                   AND type IN ('interested', 'not_interested', 'unsure')))
                         ORDER BY occurred_at, rowid""", chunk).fetchall()
             except sqlite3.OperationalError as exc:
                 if "no such table" in str(exc):
                     return {}
                 raise
             for r in rows:
+                if r["signal_class"] == "explicit" and r["type"] == "unsure":
+                    out.pop(r["job_id"], None)      # the latest answer is "I can't tell": no stance
+                    continue
                 if r["signal_class"] == "explicit":
                     stance, basis = ("wants" if r["type"] == "interested" else "declines"), f"explicit:{r['type']}"
                 else:
@@ -153,6 +157,21 @@ class FeedbackStorage:
                         continue                    # unmapped/ambiguous status: no stance either way
                     stance, basis = "wants", f"status:{to}"
                 out[r["job_id"]] = {"stance": stance, "basis": basis, "at": r["occurred_at"], "event_id": r["event_id"]}
+        return out
+
+    def latest_explicit(self, types: tuple[str, ...], job_ids: list[str] | None = None) -> dict[str, FeedbackEvent]:
+        """Per job, its latest explicit event of one of ``types`` (all jobs when ``job_ids`` is None)."""
+        conn = self._get_conn()
+        where = f"signal_class = 'explicit' AND type IN ({','.join('?' * len(types))})"
+        params: list[Any] = list(types)
+        if job_ids is not None:
+            if not job_ids:
+                return {}
+            where += f" AND job_id IN ({','.join('?' * len(job_ids))})"
+            params += job_ids
+        out: dict[str, FeedbackEvent] = {}
+        for r in conn.execute(f"SELECT * FROM feedback_events WHERE {where} ORDER BY occurred_at, rowid", params):
+            out[r["job_id"]] = self._row(r)
         return out
 
     def has_outcome_ref(self, outcome_event_id: str) -> bool:

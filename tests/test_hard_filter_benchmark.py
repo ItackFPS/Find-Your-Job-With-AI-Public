@@ -95,10 +95,60 @@ BENCHMARK_CORPUS: list[BenchmarkCase] = [
     BenchmarkCase(
         "Backend Engineer",
         "Idéalement Bac+5 en informatique.",
+        "safe",
+        "Bac+5 only wished for ('idéalement') → soft penalty, not rejection "
+        "(ADR 0004, amended 2026-10; labelled 'incompatible' under the "
+        "2026-09 rule that let any PREFERRED level reject)",
+    ),
+    # Mandatory vs preferred vs explicitly non-eliminatory (ADR 0004, 2026-10).
+    BenchmarkCase(
+        "Développeur Python Junior",
+        "Bac+2 en informatique. Un niveau Bac+5 est apprécié mais absolument "
+        "pas un critère éliminatoire.",
+        "safe",
+        "Bac+5 explicitly non-eliminatory (synthetic benchmark bm46) → pass",
+    ),
+    BenchmarkCase(
+        "Développeur",
+        "Diplôme Bac+5 non obligatoire.",
+        "safe",
+        "'non obligatoire' negates the mandatory word → optional → pass",
+    ),
+    BenchmarkCase(
+        "Developer",
+        "A Master's degree is not required.",
+        "safe",
+        "'not required' negates the mandatory word → optional → pass",
+    ),
+    BenchmarkCase(
+        "Développeur",
+        "Bac+2 ou équivalent. Bac+5 apprécié.",
+        "safe",
+        "the stated bar (Bac+2) is met; Bac+5 is only wished for → pass",
+    ),
+    BenchmarkCase(
+        "Développeur",
+        "Bac+5 requis, anglais souhaité.",
         "incompatible",
-        "Bac+5 preferred exceeds Bac+2 max → hard reject (behavior change, "
-        "2026-09: PREFERRED is no longer exempt, only 'mandatory only' was "
-        "the old rule)",
+        "'requis' qualifies the degree, 'souhaité' the language → reject",
+    ),
+    BenchmarkCase(
+        "Développeur",
+        "Bac+5 requis, permis B non obligatoire.",
+        "incompatible",
+        "the negation qualifies the licence, not the degree → reject",
+    ),
+    BenchmarkCase(
+        "Développeur",
+        "Bac+4 ou équivalent.",
+        "incompatible",
+        "a level stated as the bar with an equivalence clause → reject",
+    ),
+    BenchmarkCase(
+        "Développeur",
+        "Bac+3 ou équivalent. Bac+5 apprécié.",
+        "incompatible",
+        "the stated bar (Bac+3) exceeds Bac+2; the wish does not hide it → reject",
     ),
     BenchmarkCase(
         "Dev",

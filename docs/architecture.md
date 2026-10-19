@@ -182,9 +182,12 @@ in location, city, or contract type.
 `src/requirements/gate.py`'s `HardConstraintGate` runs after hard filtering and before
 scoring, and can reject a job regardless of how well it would otherwise score:
 
-- **Education**: mandatory or preferred requirement above `profile.max_education` →
-  hard reject; ambiguous ("core"/unknown) requirement → soft penalty
-  (`education_preferred_penalty`, default 20%).
+- **Education**: a level above `profile.max_education` that the posting *requires*
+  (mandatory wording, or stated as the bar: "Bac+4 ou équivalent") → hard reject; a
+  level only wished for ("souhaité", "apprécié", "un plus") or an LLM-only ("core")
+  reading → soft penalty (`education_preferred_penalty`, default 20%); explicitly
+  non-eliminatory ("non éliminatoire", "not required") or unqualified mentions →
+  nothing. See ADR 0004.
 - **Experience**: mandatory years above the profile's max → hard reject; preferred
   excess → soft 20% penalty.
 - **Principal skill in the title** not present in the profile → hard reject.
@@ -330,7 +333,8 @@ Docker Compose setup starts or manages an n8n instance.
 - Serves the built React frontend as a SPA from `frontend/dist/` in production, if
   present.
 - `GET /api/lab/*` (`src/api/routes/lab.py`, **Lab** page) shows evaluation run results
-  (`data/benchmarks/runs/`), lab experiments with verdicts, guardrails and metric deltas, the lab
+  (`data/benchmarks/runs/`), the latest self-check report (`data/benchmarks/self-check/`), lab
+  experiments with verdicts, guardrails, metric deltas and a recommended next action, the lab
   agent's memory and the `active_strategy` pointer history. It reads those files with read-only
   SQLite URIs and plain JSON and imports neither `src.evaluation` nor `src.lab`.
 

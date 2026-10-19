@@ -12,7 +12,8 @@ SignalClass = Literal["explicit", "behavior", "outcome"]
 Source = Literal["ui", "api", "cli", "import", "system"]
 
 # explicit: what the user SAYS about the matching
-EXPLICIT_TYPES = ("interested", "not_interested", "ranking_feedback")
+# ``unsure``: the user looked and cannot tell (answers a review item; a ``borderline`` label, no stance)
+EXPLICIT_TYPES = ("interested", "not_interested", "ranking_feedback", "unsure")
 # behavior: what the user DOES with the job
 BEHAVIOR_TYPES = ("viewed", "apply_link_opened")
 # outcome: what really happened after acting (application status transitions)
@@ -30,6 +31,7 @@ ALLOWED_REASONS: dict[str, frozenset[str]] = {
         "mis_ranked", "other",
     }),
     "ranking_feedback": frozenset({"mis_ranked", "interesting_despite_low_score", "other"}),
+    "unsure": frozenset({"other"}),
 }
 
 # Application-status vocabulary. Legacy values stay stored verbatim in jobs.application_status;

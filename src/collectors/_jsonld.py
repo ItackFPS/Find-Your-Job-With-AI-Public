@@ -17,8 +17,10 @@ import json
 import re
 from typing import Any
 
+# The "+" may be HTML-entity encoded in the attribute (HelloWork serves "application/ld&#x2B;json"):
+# browsers decode it, so it is the same block type.
 _JSON_LD_RE = re.compile(
-    r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+    r'<script[^>]+type=["\']application/ld(?:\+|&#x2b;|&#43;|&plus;)json["\'][^>]*>(.*?)</script>',
     re.DOTALL | re.IGNORECASE,
 )
 
@@ -56,6 +58,15 @@ def extract_jobposting_ld(html: str) -> dict[str, Any] | None:
                 if isinstance(item, dict) and item.get("@type") == "JobPosting":
                     return item
     return None
+
+
+def has_itemlist(html: str) -> bool:
+    """True when the page carries a schema.org/ItemList block (possibly empty: no jobs listed)."""
+    for data in iter_jsonld_blocks(html):
+        for item in [data] if isinstance(data, dict) else (data if isinstance(data, list) else []):
+            if isinstance(item, dict) and item.get("@type") == "ItemList":
+                return True
+    return False
 
 
 def extract_itemlist_urls(html: str) -> list[str]:
@@ -145,7 +156,9 @@ def map_jobposting_ld_to_raw(ld: dict[str, Any], canonical_url: str, source_job_
     if isinstance(location_type, list):
         location_type = location_type[0] if location_type else None
     if isinstance(location_type, str) and "TELECOMMUTE" in location_type.upper():
-        work_mode = "remote"
+        # With a workplace given, TELECOMMUTE is not proof of full remote: HelloWork sets it on
+        # "Télétravail partiel" jobs. Full remote then needs the description to say so.
+        work_mode = "remote" if not city or detect_work_mode(description) == "remote" else "hybrid"
     else:
         work_mode = detect_work_mode(description)
 

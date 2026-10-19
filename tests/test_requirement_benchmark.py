@@ -110,27 +110,25 @@ class TestCase01_Bac5Required:
 # ===========================================================================
 
 class TestCase02_Bac5Preferred:
-    """Preferred Bac+5 above the candidate's max is now a hard reject
-    (behavior change, 2026-09: PREFERRED is an explicit, attributable level
-    mention, not the ambiguous UNKNOWN case — see
-    HardConstraintGate._check_education). The soft-penalty-only path still
-    exists but is now reachable only when education_hard_constraint=False,
-    tested separately in test_education_penalty_injected_when_toggle_off."""
+    """A desirable Bac+5 above the candidate's max is a wish, not a ceiling
+    (ADR 0004, amended 2026-10): it passes, with the soft penalty applied by
+    gate_jobs. Only a level stated as the bar ("Bac+5 ou équivalent") or a
+    mandatory one hard-rejects — see test_education_requirement_strength.py."""
 
     def test_souhaite(self):
         desc = "Formation Bac+5 souhaitée en informatique."
         result = _extract_and_gate("Developer", desc)
-        assert not result.passes, f"Should reject but got: {result}"
+        assert result.passes, f"Should pass but got: {result}"
 
     def test_idealement(self):
         desc = "Idéalement un Master ou équivalent."
         result = _extract_and_gate("Backend Engineer", desc)
-        assert not result.passes
+        assert result.passes
 
     def test_de_preference(self):
         desc = "De préférence Bac+5 en informatique."
         result = _extract_and_gate("Software Engineer", desc)
-        assert not result.passes
+        assert result.passes
 
     def test_education_penalty_injected_when_toggle_off(self):
         """With education_hard_constraint disabled, a PREFERRED mismatch
@@ -336,17 +334,25 @@ class TestCase10_AmbiguousEducation:
         assert result.passes
 
     def test_ou_equivalent_softens_to_preferred_but_still_rejects(self):
-        """'ou équivalent' softens MANDATORY to PREFERRED, but PREFERRED above
-        the candidate's max is still a hard reject (behavior change, 2026-09)
-        — generic "ou équivalent" still names an explicit level, unlike the
-        experience-substitution alternative ("ou expérience équivalente"),
-        which remains exempt (see EducationRequirement.is_experience_alternative)."""
-        desc = "Bac+5 ou équivalent souhaité."
+        """'ou équivalent' alone classifies PREFERRED but states the bar, so a
+        level above the candidate's max still hard-rejects — generic "ou
+        équivalent" names an explicit level, unlike the experience-substitution
+        alternative ("ou expérience équivalente"), which remains exempt (see
+        EducationRequirement.is_experience_alternative)."""
+        desc = "Bac+5 ou équivalent."
         edu = extract_education(desc)
         assert edu is not None
         assert edu.importance == Importance.PREFERRED
         result = _extract_and_gate("Developer", desc)
         assert not result.passes
+
+    def test_ou_equivalent_souhaite_is_a_wish(self):
+        """Adding a desirability cue ("souhaité") makes it a wish (ADR 0004)."""
+        desc = "Bac+5 ou équivalent souhaité."
+        edu = extract_education(desc)
+        assert edu is not None
+        assert edu.importance == Importance.PREFERRED and edu.is_desirable
+        assert _extract_and_gate("Developer", desc).passes
 
 
 # ===========================================================================

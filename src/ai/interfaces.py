@@ -15,6 +15,7 @@ from typing import Any, Callable
 
 import requests
 
+from src.ai.endpoint import require_local_endpoint
 from src.ai.models import (
     BatchJobUnderstandingResult,
     JobUnderstanding,
@@ -167,6 +168,7 @@ class LocalLLMProvider(LLMProvider):
         thinking_enabled: bool = False,
         max_workers: int = 1,
     ):
+        require_local_endpoint(endpoint)     # local-first: refuse, never silently use, a remote server
         self.endpoint = endpoint
         self.model_name = model_name
         self.temperature = temperature
