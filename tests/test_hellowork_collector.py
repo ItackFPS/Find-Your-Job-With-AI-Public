@@ -61,6 +61,38 @@ def _detail_html(title: str = "Développeur Python", company: str = "Acme") -> s
     return f'<html><script type="application/ld+json">{json.dumps(ld)}</script></html>'
 
 
+def _encoded(html: str) -> str:
+    """The script type as HelloWork serves it since 2026-10: the "+" HTML-entity encoded."""
+    return html.replace('type="application/ld+json"', 'type="application/ld&#x2B;json"')
+
+
+class TestPageFormat:
+    @patch("src.collectors.hellowork.HelloWorkCollector._enforce_rate_limit")
+    def test_entity_encoded_jsonld_pages_are_collected(self, _mock_rl: MagicMock) -> None:
+        job_url = "https://www.hellowork.com/fr-fr/emplois/83072305.html"
+        with patch(
+            "src.collectors.hellowork.HelloWorkCollector._fetch_with_retry",
+            side_effect=[_html_response(_encoded(_listing_html([job_url]))),
+                         _html_response(_encoded(_detail_html()))],
+        ):
+            result = HelloWorkCollector(config={"metier_slugs": ["developpeur"]}).collect()
+        assert result.errors == []
+        assert [j["source_job_id"] for j in result.jobs] == ["83072305"]
+
+    @patch("src.collectors.hellowork.HelloWorkCollector._enforce_rate_limit")
+    def test_listing_pages_it_cannot_read_are_reported_not_silent(self, _mock_rl: MagicMock) -> None:
+        unreadable = _html_response('<html><script type="text/x-unknown">{}</script></html>')
+        empty = _html_response(_listing_html([]))           # a real "no jobs for this role" page
+        with patch(
+            "src.collectors.hellowork.HelloWorkCollector._fetch_with_retry",
+            side_effect=[unreadable, unreadable, empty],
+        ):
+            result = HelloWorkCollector(config={"metier_slugs": ["a", "b", "c"]}).collect()
+        assert result.jobs == []
+        assert len(result.errors) == 1
+        assert "2 listing page(s) carried no ItemList JSON-LD" in result.errors[0]
+
+
 class TestRegistry:
     def test_hellowork_registered(self) -> None:
         assert "hellowork" in CollectorRegistry().list_collectors()
