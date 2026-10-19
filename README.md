@@ -52,7 +52,7 @@ feedback, evaluation, lab) · [ADRs](docs/adr/README.md) · [Windows app](docs/w
 | Decision journal: an auditable record per job and run, accepted and rejected ([ADR 0008](docs/adr/0008-decision-journal.md)) | ✅ default-on |
 | Web dashboard (FastAPI + React): runs, jobs, explanations, review queue, stats, profile editor | ✅ |
 | Windows launcher: one entry point that starts, monitors and stops the app ([docs](docs/windows-app.md)) | ✅ new — Windows only |
-| LinkedIn / HelloWork background scanners with pause/resume | ✅ enabled in the shipped config; daily schedule, and the first scan starts shortly after the backend first starts |
+| LinkedIn / HelloWork background scanners with pause/resume | ✅ manual in the shipped config (**Scan now**); an optional daily schedule |
 | Background scheduler (recurring scans/runs) | ✅ config-gated |
 | Feedback journal, disagreement/abstention review queue ([ADR 0009](docs/adr/0009-feedback-journal.md), [0010](docs/adr/0010-disagreement-and-abstention.md)) | ✅ |
 | Discord notifications (per-location channels, top-10 boards, status heartbeat) | ✅ opt-in (needs a bot/webhooks) |
@@ -95,12 +95,13 @@ cd frontend && npm ci && npm run build && cd ..
 copy .env.example .env
 ```
 
-#### Automatic job scans (LinkedIn, HelloWork)
+#### Job scans (LinkedIn, HelloWork)
 
-The shipped config turns on two background scanners. **On the first start of the
-backend, and then once per UTC day, each one starts a live scan within seconds**:
-LinkedIn through `python-jobspy`, HelloWork by fetching its job pages (about 30 minutes,
-one request per job). They send search queries built from your profile — see
+The shipped config has two background scanners, **both manual**: starting the backend
+collects nothing. A scan starts only when you press **Scan now** on its dashboard card
+(and can be paused there): LinkedIn through `python-jobspy`, HelloWork by fetching its
+job pages (about 30 minutes, one request per job). They send search queries built from
+your profile, so fill in the **Profile** page first — see
 [Privacy and network behaviour](#privacy-and-network-behaviour). The LinkedIn scanner
 needs the optional extra (`.venv\Scripts\python -m pip install -e ".[linkedin]"`);
 without it, its scan fails with an install message and everything else works.
@@ -109,8 +110,8 @@ To change this, edit these files, then restart the backend:
 
 | You want | Setting |
 |---|---|
-| No automatic scans (the dashboard's **Scan now** still works) | `config/schedules.yaml`: `enabled: false` on `linkedin_daily` and/or `hellowork_daily` |
-| Manual scans only, keeping the schedule listed | same entries: `startup_policy: disabled` |
+| A scan at every start, then once per UTC day | `config/schedules.yaml`: `startup_policy: run_once_per_day` on `linkedin_daily` and/or `hellowork_daily` |
+| Manual scans only (shipped default) | same entries: `startup_policy: disabled` |
 | LinkedIn off entirely (no automatic or manual scan) | `config/linkedin.yaml`: `enabled: false` |
 | HelloWork off entirely (no automatic or manual scan) | `config/sources.yaml`: delete the `- name: hellowork` entry (its `active: false` only keeps it out of pipeline runs; it does not stop the scanner) |
 
