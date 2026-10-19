@@ -122,7 +122,10 @@ def main(argv: list[str] | None = None) -> int:
     sc.add_argument("--dataset", action="append", metavar="DIR[=GOLDEN]",
                     help="dataset dir, optionally =its baseline golden file (repeatable; "
                          "default: the committed synthetic benchmark and its golden)")
-    sc.add_argument("--db", default=None, help="also report feedback coverage from this jobs.db (read-only)")
+    sc.add_argument("--db", default="data/jobs.db",
+                    help="report feedback coverage from this jobs.db, opened read-only (default data/jobs.db; "
+                         "reported as unavailable when the file is missing)")
+    sc.add_argument("--no-feedback", action="store_true", help="skip the feedback coverage section")
     sc.add_argument("--out", default=None, help="reports dir (default data/benchmarks/self-check)")
     sc.add_argument("--no-write", action="store_true")
     sc.add_argument("--markdown", action="store_true")
@@ -219,7 +222,7 @@ def main(argv: list[str] | None = None) -> int:
             targets: list[tuple[str | Path, str | Path | None]] = (
                 [(t.split("=", 1)[0], t.split("=", 1)[1] if "=" in t else None) for t in ns.dataset]
                 if ns.dataset else [DEFAULT_SELF_CHECK])
-            report = run_self_check(targets, _strategy(ns), db=ns.db)
+            report = run_self_check(targets, _strategy(ns), db=None if ns.no_feedback else ns.db)
             print(render_check(report) if ns.markdown else json.dumps(
                 {"status": report["status"], "datasets": {e["dataset"]["id"]: e["status"] for e in report["datasets"]}},
                 indent=2))

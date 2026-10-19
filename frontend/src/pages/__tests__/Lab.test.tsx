@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { ActiveStrategyView, ExperimentCard, RunRow, SelfCheckView } from '../Lab'
+import { ActiveStrategyView, ExperimentCard, RunRow, SelfCheckFeedbackView, SelfCheckView } from '../Lab'
 import type {
   ActiveStrategy, EvalRunSummary, LabExperiment, SelfCheckDataset, SelfCheckResponse,
 } from '../../api/client'
@@ -125,6 +125,26 @@ describe('Lab', () => {
     expect(screen.getByText('action')).toBeInTheDocument()
     expect(screen.getByText('suggestion')).toBeInTheDocument()
     expect(screen.getByText(/Earlier: 2026-10-17 pass/)).toBeInTheDocument()
+  })
+
+  it('shows feedback as signals, with disagreements as leads, never as labels', () => {
+    render(<SelfCheckFeedbackView fb={{
+      status: 'measured', decided_jobs: 40, jobs_with_explicit_feedback: 4, coverage: 0.1,
+      latest_answers: { interested: 2, not_interested: 1, unsure: 1 }, decisions_with_evidence: 40,
+      explanation_coverage: 1,
+      contradictions: { rejected_but_interested: { count: 1, job_ids: ['j1'] },
+        accepted_but_not_interested: { count: 0, job_ids: [] } },
+      note: 'signals',
+    }} />)
+    expect(screen.getByText(/4 of 40 decided \(10%\)/)).toBeInTheDocument()
+    expect(screen.getByText(/2 interested, 1 not interested, 1 unsure/)).toBeInTheDocument()
+    expect(screen.getByText(/1 rejected but interested/)).toBeInTheDocument()
+    expect(screen.getByText(/signals, not verified labels/)).toBeInTheDocument()
+  })
+
+  it('says when feedback could not be measured', () => {
+    render(<SelfCheckFeedbackView fb={{ status: 'unavailable', why: 'database not found: jobs.db' }} />)
+    expect(screen.getByText(/Feedback: not measured \(database not found/)).toBeInTheDocument()
   })
 
   it('tells a human what an experiment recommends without acting on it', () => {

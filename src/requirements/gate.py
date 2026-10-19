@@ -338,8 +338,13 @@ class HardConstraintGate:
             )
             return [reason], ConstraintState.VIOLATED, None
 
-        # Desirable PREFERRED, OPTIONAL, UNKNOWN/CORE, or a requirement with
-        # the hard constraint disabled → at most a soft penalty (gate_jobs).
+        # No qualifier at all: whether the level is required is not known.
+        # Recorded as such (PASS_WITH_UNCERTAINTY), never a reject or penalty.
+        if edu.importance == Importance.UNKNOWN:
+            return [], ConstraintState.UNKNOWN, None
+
+        # Desirable PREFERRED, OPTIONAL, CORE, or a requirement with the hard
+        # constraint disabled → at most a soft penalty (gate_jobs).
         return [], ConstraintState.SATISFIED, None
 
     def _check_enrolment(

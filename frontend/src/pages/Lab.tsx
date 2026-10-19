@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import {
   getActiveStrategy, getEvalRuns, getLabExperiments, getLabMemory, getSelfCheck, type ActiveStrategy,
-  type EvalRunSummary, type LabExperiment, type LabMemoryItem, type SelfCheckResponse, type SelfCheckStatus,
+  type EvalRunSummary, type LabExperiment, type LabMemoryItem, type SelfCheckFeedback, type SelfCheckResponse,
+  type SelfCheckStatus,
 } from '../api/client'
 import { Card, Chip, EmptyState, LoadingState, type ChipTone } from '../components'
 
@@ -26,6 +27,36 @@ const STATUS: Record<SelfCheckStatus, { label: string; tone: ChipTone; text: str
   regression: { label: 'regression', tone: 'error', text: 'A job the baseline decided correctly is now decided wrongly.' },
   baseline_mismatch: { label: 'baseline mismatch', tone: 'error', text: 'The baseline was recorded on other data: nothing could be compared.' },
   safety_violation: { label: 'safety violation', tone: 'error', text: 'A job labelled suitable was rejected, or a rejection has no recorded reason.' },
+}
+
+const ANSWER_LABEL: Record<string, string> = {
+  interested: 'interested', not_interested: 'not interested', unsure: 'unsure', ranking_feedback: 'ranking feedback',
+}
+
+// Presentational: explicit feedback on the latest decisions. These are the user's answers, never verified
+// labels: a disagreement with a decision is a lead to review, and nothing here changes the self-check status.
+export function SelfCheckFeedbackView({ fb }: { fb: SelfCheckFeedback }) {
+  if (fb.status === 'unavailable') {
+    return <div style={{ color: 'var(--color-muted)' }}>Feedback: not measured ({fb.why}).</div>
+  }
+  const answers = Object.entries(fb.latest_answers)
+  const c = fb.contradictions
+  return (
+    <div>
+      <div>
+        Jobs with an answer: {fb.jobs_with_explicit_feedback} of {fb.decided_jobs} decided ({pct(fb.coverage)})
+        {answers.length > 0 && <> · latest answers: {answers.map(([k, n]) => `${n} ${ANSWER_LABEL[k] ?? k}`).join(', ')}</>}
+      </div>
+      <div>
+        Answer disagrees with the decision: {c.rejected_but_interested.count} rejected but interested ·{' '}
+        {c.accepted_but_not_interested.count} accepted but not interested
+      </div>
+      <div>Decisions with recorded evidence: {pct(fb.explanation_coverage)}</div>
+      <div style={{ fontSize: '0.78rem', color: 'var(--color-muted)' }}>
+        Your answers are signals, not verified labels: a disagreement is a job to review, not proof of an error.
+      </div>
+    </div>
+  )
 }
 
 // Presentational: the latest self-check (current strategy vs the recorded baseline) in plain words.
@@ -89,6 +120,14 @@ export function SelfCheckView({ data }: { data: SelfCheckResponse }) {
           </div>
         )
       })}
+      {r.feedback && (
+        <div style={{ marginTop: '0.7rem' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--color-muted)', letterSpacing: '0.06em', marginBottom: '0.3rem' }}>
+            YOUR FEEDBACK (SIGNALS, NOT LABELS)
+          </div>
+          <SelfCheckFeedbackView fb={r.feedback} />
+        </div>
+      )}
       {r.recommendations.length > 0 && (
         <div style={{ marginTop: '0.7rem' }}>
           <div style={{ fontSize: '0.75rem', color: 'var(--color-muted)', letterSpacing: '0.06em', marginBottom: '0.3rem' }}>
