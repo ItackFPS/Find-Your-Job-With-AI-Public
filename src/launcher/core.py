@@ -245,6 +245,15 @@ def in_virtualenv() -> bool:
     return sys.prefix != getattr(sys, "base_prefix", sys.prefix)
 
 
+def bundled_runtime(root: Path) -> bool:
+    """True when this interpreter is the private Python the Windows installer ships in
+    ``<root>/runtime`` (packaging/windows): an installed copy, not a development checkout."""
+    try:
+        return Path(sys.prefix).resolve() == (root / "runtime").resolve()
+    except OSError:
+        return False
+
+
 @dataclass(frozen=True)
 class Frontend:
     built: bool
@@ -286,26 +295,33 @@ def frontend_state(root: Path) -> Frontend:
     )
 
 
+REINSTALL_FIX = "Run the Find Your Job With AI installer again (your data is kept)"
+
+
 def prerequisite_checks(root: Path) -> list[Check]:
     checks: list[Check] = []
+    installed = bundled_runtime(root)
     py = sys.version_info
     if py < (3, 12):
         checks.append(Check("python", Level.ERROR, f"Python {py.major}.{py.minor} is too old",
-                            "Install Python 3.12 and recreate .venv"))
+                            REINSTALL_FIX if installed else "Install Python 3.12 and recreate .venv"))
     else:
-        checks.append(Check("python", Level.OK, f"Python {py.major}.{py.minor}.{py.micro}"))
-    if not in_virtualenv():
+        where = " (bundled)" if installed else ""
+        checks.append(Check("python", Level.OK, f"Python {py.major}.{py.minor}.{py.micro}{where}"))
+    if not installed and not in_virtualenv():
         checks.append(Check("venv", Level.WARN, "not running inside a virtual environment",
                             "Create one: py -3.12 -m venv .venv"))
     missing = missing_modules()
     if missing:
         dists = " ".join(REQUIRED_MODULES[m] for m in missing)
         checks.append(Check("packages", Level.ERROR, f"missing Python packages: {dists}",
-                            ".venv\\Scripts\\python -m pip install -e ."))
+                            REINSTALL_FIX if installed else ".venv\\Scripts\\python -m pip install -e ."))
     else:
         checks.append(Check("packages", Level.OK, "backend packages installed"))
     fe = frontend_state(root)
-    if fe.built and not fe.stale:
+    if installed and not fe.built:
+        checks.append(Check("dashboard", Level.ERROR, "dashboard files are missing", REINSTALL_FIX))
+    elif fe.built and not fe.stale:
         checks.append(Check("dashboard", Level.OK, "dashboard build is up to date"))
     elif fe.can_build:
         what = "out of date" if fe.built else "not built yet"
@@ -319,7 +335,8 @@ def prerequisite_checks(root: Path) -> list[Check]:
         checks.append(Check("dashboard", Level.ERROR, "dashboard is not built", fix))
     if not (root / ".env").is_file():
         checks.append(Check(".env", Level.INFO, "no .env file: optional sources and notifications are off",
-                            "copy .env.example .env, then fill in only what you use"))
+                            f"copy .env.example to .env in {root}, then fill in only what you use"
+                            if installed else "copy .env.example .env, then fill in only what you use"))
     return checks
 
 
