@@ -449,6 +449,10 @@ issue for a security problem.
   in their terms: check each site's terms before enabling a source.
 - Welcome to the Jungle is blocked by bot protection; several registered collectors have
   no configured source.
+- APEC answers automated requests with HTTP 403 and a CAPTCHA (bot protection, seen
+  since October 2026). It stays active in the shipped config, so each run lists it as
+  *failed* after one request with that reason; set `active: false` on `apec` in
+  `config/sources.yaml` to stop trying. The app never tries to get round a CAPTCHA.
 - The Docker image runs the CLI pipeline only.
 - The lab agent's OS-level isolation is not proven; treat lab output as untrusted
   ([ADR 0011](docs/adr/0011-experiment-lab.md)).

@@ -100,9 +100,16 @@ def _patterns(decisions: list[Decision], dataset: Dataset) -> list[dict[str, Any
         groups.setdefault(key, []).append(d)
     out = []
     for (kind, pattern), ds in sorted(groups.items(), key=lambda kv: (-len(kv[1]), kv[0])):
-        if kind == "false_positive" or pattern.startswith("filter:"):
-            # the lab agent attributes it (which keyword, or that the profile/code is the cause) and tests a fix
-            lever = {"kind": "lab", "detail": "the lab agent can attribute this pattern and test a bounded candidate"}
+        # What the lab agent actually tries (src/lab/agent.py): it proposes a candidate only when it finds one,
+        # so the text says when it finds nothing rather than promising an attribution.
+        if kind == "false_positive":
+            lever = {"kind": "lab", "detail": "the lab agent proposes a title exclusion only when several of these "
+                                              "jobs share a title word no wanted job has; otherwise it proposes "
+                                              "nothing and the pattern needs a human-written hypothesis"}
+        elif pattern.startswith("filter:"):
+            lever = {"kind": "lab", "detail": "the lab agent tests removing each filters.yaml keyword behind this "
+                                              "rejection; one no single keyword explains is reported as outside "
+                                              "its levers"}
         else:
             lever = {"kind": "code", "detail": "no configuration lever: needs a code change with a regression test"}
         out.append({"kind": kind, "key": pattern, "count": len(ds), "job_ids": sorted(d.job_id for d in ds),

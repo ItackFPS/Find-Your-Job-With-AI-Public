@@ -61,6 +61,25 @@ _TELETRAVAIL_MAP: dict[int, str] = {
 }
 
 
+BLOCKED_MESSAGE = (
+    "refused automated access (HTTP 403: its bot protection asks for a CAPTCHA). "
+    "This collector does not try to get round it; to stop trying, set active: false "
+    "on apec in config/sources.yaml"
+)
+
+
+class AccessBlocked(RuntimeError):
+    """The site's bot protection refused the request: no retry, page or keyword can help."""
+
+
+def _is_bot_challenge(resp: httpx.Response) -> bool:
+    """A 403 from APEC's bot protection (DataDome), which answers with a CAPTCHA URL."""
+    if resp.status_code != 403:
+        return False
+    cookies = " ".join(resp.headers.get_list("set-cookie")).lower()
+    return "captcha-delivery.com" in resp.text or "datadome=" in cookies
+
+
 class APECCollector(BaseCollector):
     """httpx-based collector for APEC (apec.fr).
 
@@ -113,6 +132,10 @@ class APECCollector(BaseCollector):
                 start_index = page * self.page_size
                 try:
                     raw_jobs, total = self._fetch_page(start_index, keyword=keyword)
+                except AccessBlocked as exc:
+                    errors.append(f"APEC: {exc}")
+                    logger.warning("APEC: %s", exc)
+                    return self._result(jobs, errors, start_time)
                 except Exception as exc:  # noqa: BLE001
                     errors.append(
                         f"APEC: keyword='{keyword}' page {page + 1}: {exc}"
@@ -140,6 +163,9 @@ class APECCollector(BaseCollector):
                 if len(raw_jobs) < self.page_size:
                     break  # reached the last page for this keyword
 
+        return self._result(jobs, errors, start_time)
+
+    def _result(self, jobs: list[dict[str, Any]], errors: list[str], start_time: float) -> CollectorResult:
         duration = time.time() - start_time
         self._log_collection("apec", len(jobs), errors, duration)
         return CollectorResult(
@@ -189,6 +215,9 @@ class APECCollector(BaseCollector):
             try:
                 logger.debug("APEC: POST page at startIndex=%d (attempt %d)", start_index, attempt)
                 resp = httpx.post(_API_URL, json=body, headers=_HEADERS, timeout=self.timeout)
+
+                if _is_bot_challenge(resp):
+                    raise AccessBlocked(BLOCKED_MESSAGE)
 
                 if resp.status_code in {408, 429, 500, 502, 503, 504}:
                     last_error = f"HTTP {resp.status_code}"
