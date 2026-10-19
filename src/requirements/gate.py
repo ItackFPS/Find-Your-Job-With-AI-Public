@@ -238,12 +238,15 @@ class HardConstraintGate:
                                               same as CORE)
               + CORE                          → SATISFIED from gate perspective
                                                (soft penalty handled by gate_jobs)
-              + UNKNOWN                       → SATISFIED from gate perspective
-                                               (2026-09-11: NO penalty either —
+              + UNKNOWN                       → UNKNOWN (pass with uncertainty;
+                                               2026-09-11: NO penalty either —
                                                see gate_jobs; an ambiguous
                                                mention with no explicit
                                                qualifier is not evidence of a
-                                               real requirement)
+                                               real requirement, nor of its
+                                               absence: "Profil recherché :
+                                               Un Master …" is recorded as
+                                               uncertain, never rejected)
 
         Why some PREFERRED readings reject (not "mandatory only"): the
         profile's `max_education` is a ceiling on *requirements*. "Bac+4 ou
@@ -306,6 +309,13 @@ class HardConstraintGate:
 
         candidate_label = f"bac+{self._user_max_edu}"
         required_label = edu.level_label or f"bac+{edu.level_bac_plus}"
+        # The message names why the level counts as required: a PREFERRED
+        # reading only rejects as a stated bar ("Bac+5 ou équivalent"), and
+        # calling that "preferred" would contradict the decision it explains.
+        stated_as = (
+            "mandatory" if edu.importance == Importance.MANDATORY
+            else "stated level, equivalence accepted"
+        )
 
         if (
             _states_required_level(edu)
@@ -320,7 +330,7 @@ class HardConstraintGate:
                 constraint_state=ConstraintState.VIOLATED,
                 rule_version=_RULE_VERSION,
                 message=(
-                    f"Job requires {required_label} ({edu.importance.value}); "
+                    f"Job requires {required_label} ({stated_as}); "
                     f"candidate maximum is {candidate_label}."
                 ),
                 span=edu.span,

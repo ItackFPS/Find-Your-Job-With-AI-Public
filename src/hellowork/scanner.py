@@ -34,6 +34,7 @@ from src.scan_control import (
 )
 
 logger = logging.getLogger(__name__)
+_MAX_ERROR_SAMPLES = 5
 
 
 class HelloWorkScanner:
@@ -381,6 +382,8 @@ class HelloWorkScanner:
 
             stats_json = json.dumps({
                 "collector_errors": len(result.errors),
+                # The reasons, not only the count: a changed page format must be diagnosable from the UI.
+                "collector_error_samples": result.errors[:_MAX_ERROR_SAMPLES],
                 "collection_duration_seconds": result.duration_seconds,
                 "metier_slugs_queried": result.metadata.get("metier_slugs_queried"),
             })

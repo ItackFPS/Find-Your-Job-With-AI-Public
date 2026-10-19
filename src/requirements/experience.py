@@ -16,6 +16,10 @@ from src.requirements.models import EvidenceSpan, ExperienceRequirement, Importa
 # Used inline in every French pattern.
 _FR_YEAR_UNIT = r"(?:ann?[eé][eé]?es?|ans?)"
 
+# A desirability word right after a mandatory cue turns it into a wish
+# ("3 ans d'expérience minimum souhaitée", "3 years of experience minimum preferred").
+_NO_WISH_AFTER = r"(?!\s+(?:souhait|appr[eé]ci|id[eé]al|bienvenu|preferred|desired|ideally))"
+
 # French/English year patterns with explicit mandatory/preferred context.
 # Each tuple: (compiled pattern, importance).
 # Group 1 captures the integer year count.
@@ -46,7 +50,22 @@ _EXPERIENCE_PATTERNS: list[tuple[re.Pattern, Importance]] = [
         r"\b([1-9][0-9]?)\s*\*{0,2}\s*" + _FR_YEAR_UNIT + r"\s+ou\s+plus\b", re.I
     ), Importance.MANDATORY),
 
+    # "N ans d'expérience (professionnelle) minimum/requise/exigée/obligatoire/
+    # indispensable": the cue directly follows the noun, so a negation ("non
+    # requis") or a wish right after it ("minimum souhaitée") is no match.
+    (re.compile(
+        r"\b([1-9][0-9]?)\s*\*{0,2}\s*" + _FR_YEAR_UNIT
+        + r"\s+d['’]\s*exp[eé]rience(?:\s+professionnelle)?\s+"
+        r"(?:minimum|requise?s?|exig[eé]e?s?|obligatoires?|indispensables?)\b"
+        + _NO_WISH_AFTER, re.I
+    ), Importance.MANDATORY),
+
     # ── English mandatory ─────────────────────────────────────────────────────
+    # "N years of (relevant|professional ...) experience (is) required/minimum/mandatory"
+    (re.compile(
+        r"\b([1-9][0-9]?)\s+years?\s+of\s+(?:[a-z-]+\s+){0,2}experience\s+(?:is\s+)?"
+        r"(?:required|minimum|mandatory)\b" + _NO_WISH_AFTER, re.I
+    ), Importance.MANDATORY),
     # "at least N years"
     (re.compile(r"\bat\s+least\s+([1-9][0-9]?)\s+years?\b", re.I), Importance.MANDATORY),
     # "minimum N years"
@@ -74,6 +93,14 @@ _EXPERIENCE_PATTERNS: list[tuple[re.Pattern, Importance]] = [
 ]
 
 
+# The lower bound of a year range ending right where a pattern's year count starts:
+# "3 à 8", "2-4", "3 – 5", "8/10", "entre 2 et 6", "3 to 5", "3 ans à 5". Anchored at the end ($ with
+# search(pos, endpos)), so only a number joined to the count by a range connector qualifies.
+_RANGE_LOWER = re.compile(
+    r"\b([0-9]|1[0-9])\s*(?:" + _FR_YEAR_UNIT + r"\s*)?(?:à|a|au|-|–|—|/|to|et|and)\s*$", re.I
+)
+
+
 def extract_experience(text: str) -> ExperienceRequirement | None:
     """Extract the most significant explicit minimum experience requirement.
 
@@ -94,13 +121,21 @@ def extract_experience(text: str) -> ExperienceRequirement | None:
             years = int(match.group(1))
             if years < 1 or years > 20:
                 continue
-            raw_text = text[max(0, match.start() - 20) : match.end() + 20].strip()
+            m_start = match.start()
+            # "3 à 8 ans minimum": the qualifier follows the range's upper bound, but the
+            # requirement is its lower bound (a 3-year candidate is in range).
+            lower = _RANGE_LOWER.search(text, max(0, match.start(1) - 16), match.start(1))
+            if lower is not None and int(lower.group(1)) < years:
+                years, m_start = int(lower.group(1)), lower.start(1)
+                if years == 0:              # "0 à 2 ans": no minimum at all
+                    continue
+            raw_text = text[max(0, m_start - 20) : match.end() + 20].strip()
             if importance == Importance.MANDATORY:
                 if best_mandatory is None or years > best_mandatory[0]:
-                    best_mandatory = (years, raw_text, match.start(), match.end())
+                    best_mandatory = (years, raw_text, m_start, match.end())
             else:
                 if best_preferred is None or years > best_preferred[0]:
-                    best_preferred = (years, raw_text, match.start(), match.end())
+                    best_preferred = (years, raw_text, m_start, match.end())
 
     if best_mandatory is not None:
         years, raw_text, start, end = best_mandatory
@@ -113,7 +148,7 @@ def extract_experience(text: str) -> ExperienceRequirement | None:
                 start=start,
                 end=end,
                 field="description",
-                extractor_id="experience.min_years.v1",
+                extractor_id="experience.min_years.v2",
             ),
         )
     if best_preferred is not None:
@@ -127,7 +162,7 @@ def extract_experience(text: str) -> ExperienceRequirement | None:
                 start=start,
                 end=end,
                 field="description",
-                extractor_id="experience.preferred_years.v1",
+                extractor_id="experience.preferred_years.v2",
             ),
         )
     return None

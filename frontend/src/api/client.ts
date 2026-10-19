@@ -379,6 +379,16 @@ export interface DecisionAssessment {
   calibrated: boolean
 }
 
+// A rule-backed rejection picked by the rejection audit sample (src/decisions/audit.py)
+export interface DecisionAudit {
+  sampled: boolean
+  sampler: string
+  stratum: string
+  stratum_size: number
+  rank_in_stratum: number
+  max_open?: number
+}
+
 export interface DecisionRecord {
   decision_id: string
   run_id: string
@@ -391,7 +401,7 @@ export interface DecisionRecord {
   // agreement-based, NOT a verbalised LLM confidence; uncalibrated until calibrated on labelled data
   decision_confidence?: number | null
   confidence_calibrated?: boolean
-  signals?: { assessment?: DecisionAssessment } & Record<string, unknown>
+  signals?: { assessment?: DecisionAssessment; audit?: DecisionAudit } & Record<string, unknown>
   evidence: DecisionEvidence[]
   conflicts: { dimensions: string[]; description: string }[]
   stage_trace: { stage: string; result: string; detail: string | null }[]
@@ -638,6 +648,8 @@ export const listLinkedInScans = (limit = 10) =>
 
 export interface HelloWorkScanStats {
   collector_errors: number
+  /** First few error messages, so the reason is visible, not just the count (older scans: absent). */
+  collector_error_samples?: string[]
   collection_duration_seconds: number
   metier_slugs_queried: number | null
 }

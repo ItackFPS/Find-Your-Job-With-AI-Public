@@ -61,6 +61,38 @@ def _detail_html(title: str = "Développeur Python", company: str = "Acme") -> s
     return f'<html><script type="application/ld+json">{json.dumps(ld)}</script></html>'
 
 
+def _encoded(html: str) -> str:
+    """The script type as HelloWork serves it since 2026-10: the "+" HTML-entity encoded."""
+    return html.replace('type="application/ld+json"', 'type="application/ld&#x2B;json"')
+
+
+class TestPageFormat:
+    @patch("src.collectors.hellowork.HelloWorkCollector._enforce_rate_limit")
+    def test_entity_encoded_jsonld_pages_are_collected(self, _mock_rl: MagicMock) -> None:
+        job_url = "https://www.hellowork.com/fr-fr/emplois/83072305.html"
+        with patch(
+            "src.collectors.hellowork.HelloWorkCollector._fetch_with_retry",
+            side_effect=[_html_response(_encoded(_listing_html([job_url]))),
+                         _html_response(_encoded(_detail_html()))],
+        ):
+            result = HelloWorkCollector(config={"metier_slugs": ["developpeur"]}).collect()
+        assert result.errors == []
+        assert [j["source_job_id"] for j in result.jobs] == ["83072305"]
+
+    @patch("src.collectors.hellowork.HelloWorkCollector._enforce_rate_limit")
+    def test_listing_pages_it_cannot_read_are_reported_not_silent(self, _mock_rl: MagicMock) -> None:
+        unreadable = _html_response('<html><script type="text/x-unknown">{}</script></html>')
+        empty = _html_response(_listing_html([]))           # a real "no jobs for this role" page
+        with patch(
+            "src.collectors.hellowork.HelloWorkCollector._fetch_with_retry",
+            side_effect=[unreadable, unreadable, empty],
+        ):
+            result = HelloWorkCollector(config={"metier_slugs": ["a", "b", "c"]}).collect()
+        assert result.jobs == []
+        assert len(result.errors) == 1
+        assert "2 listing page(s) carried no ItemList JSON-LD" in result.errors[0]
+
+
 class TestRegistry:
     def test_hellowork_registered(self) -> None:
         assert "hellowork" in CollectorRegistry().list_collectors()
@@ -335,6 +367,25 @@ class TestResumableCheckpointHooks:
             )
 
         assert calls == []
+
+    @patch("src.collectors.hellowork.HelloWorkCollector._enforce_rate_limit")
+    def test_unreadable_listing_does_not_trigger_on_slug_done(self, _mock_rl: MagicMock) -> None:
+        """A listing page without an ItemList (changed page format) was not
+        read, unlike an empty list: it must not be checked off, or a resumed
+        scan would skip that role for good (the 2026-10 HelloWork format
+        change left every role checked off with 0 jobs)."""
+        with patch(
+            "src.collectors.hellowork.HelloWorkCollector._fetch_with_retry",
+            side_effect=[_html_response("<html><body>new layout</body></html>"),
+                         _html_response(_listing_html([]))],
+        ):
+            calls: list[str] = []
+            result = HelloWorkCollector(config={"metier_slugs": ["unreadable", "empty"]}).collect(
+                on_slug_done=lambda slug, jobs: calls.append(slug)
+            )
+
+        assert calls == ["empty"]
+        assert "1 listing page(s) carried no ItemList JSON-LD" in result.errors[0]
 
 
 class TestGracefulShutdown:

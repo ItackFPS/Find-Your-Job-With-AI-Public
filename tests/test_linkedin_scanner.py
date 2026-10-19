@@ -664,6 +664,9 @@ class TestLinkedInScannerPagination:
         assert call_args[0]["offset"] == 0
         assert call_args[1]["offset"] == 2
         assert call_args[2]["offset"] == 4
+        # python-jobspy >= 1.3 name; the deprecated linkedin_fetch_description would land in **kwargs
+        # unread once removed, leaving every description empty without an error.
+        assert all("fetch_description" in c and "linkedin_fetch_description" not in c for c in call_args)
 
         count = staging._get_conn().execute(
             "SELECT COUNT(*) FROM linkedin_staging"
@@ -1159,6 +1162,37 @@ class TestScanStatistics:
         failed = [q for q in stats["queries"] if q["stopped_by"] == "error"]
         assert len(failed) == 1
         assert failed[0]["search_term"] == "engineer"
+
+    def test_rate_limited_empty_page_is_a_failure_not_exhaustion(self, staging, tmp_path) -> None:
+        """python-jobspy does not raise on HTTP 429 or a blocked page: it logs an ERROR on its
+        "JobSpy:LinkedIn" logger and returns no rows (seen live, 2026-10-19). That empty result is
+        a failed query, not the end of the results, so it must not be reported or checkpointed as done."""
+        import json as _json
+        import logging
+
+        from src.linkedin.scanner import LinkedInConfig, LinkedInQueryConfig, LinkedInScanner
+        cfg = LinkedInConfig(
+            enabled=True, rate_limit_seconds=0.0, max_pages_per_query=1,
+            queries=[LinkedInQueryConfig(search_term="engineer"), LinkedInQueryConfig(search_term="scientist")],
+        )
+        s = LinkedInScanner(config=cfg, staging=staging, config_dir=str(tmp_path))
+
+        def scrape(**kwargs):
+            if kwargs["search_term"] == "engineer":
+                logging.getLogger("JobSpy:LinkedIn").error("LinkedIn response status code 429")
+                return _make_mock_df([])
+            return _make_mock_df([])                      # genuinely no results, nothing logged
+
+        mock_jobspy = MagicMock()
+        mock_jobspy.scrape_jobs = scrape
+        with patch.dict("sys.modules", {"jobspy": mock_jobspy}):
+            scan_id = s.run_scan()
+
+        stats = _json.loads(staging._get_conn().execute(
+            "SELECT stats_json FROM linkedin_scan_runs WHERE id = ?", (scan_id,)).fetchone()["stats_json"])
+        by_term = {q["search_term"]: q["stopped_by"] for q in stats["queries"]}
+        assert by_term == {"engineer": "error", "scientist": "exhaustion"}
+        assert stats["queries_failed"] == 1
 
 
 # ---------------------------------------------------------------------------

@@ -254,3 +254,96 @@ def test_explanation_shows_extracted_experience_not_generic_message():
     assert not any("not explicitly stated in the title" in t for t in concern_texts), (
         f"Should not show generic message when requirement is in description. Got: {concern_texts}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Ranges: the requirement is the LOWER bound ("3 à 8 ans" accepts 3 years)
+# ---------------------------------------------------------------------------
+# Real posting, 2026-10-18 (HelloWork, "Ingénieur DevOps Cloud H/F"): "Expérience de 3 à 8 ans
+# minimum" was read as "at least 8 years" and hard-rejected a 3-year candidate the range includes.
+
+@pytest.mark.parametrize("text, lower", [
+    ("Expérience de 3 à 8 ans minimum sur des environnements cloud", 3),
+    ("Vous avez 2 à 5 ans minimum d'expérience", 2),
+    ("Expérience : 2-4 ans minimum", 2),
+    ("une expérience de 3 – 5 ans ou plus", 3),
+    ("3 to 5 years minimum of Python", 3),
+    ("3-5 years or more in a similar role", 3),
+    ("entre 2 et 6 ans minimum", 2),
+    ("(avec 8/10 ans d'expérience minimum)", 8),
+])
+def test_a_range_requires_its_lower_bound(text, lower):
+    exp = extract_experience(text)
+    assert exp is not None and exp.importance == Importance.MANDATORY
+    assert exp.min_years == lower
+    assert exp.span.text.lstrip().startswith(str(lower)) or str(lower) in exp.span.text
+
+
+def test_a_range_within_the_candidate_maximum_passes_the_gate():
+    exp = extract_experience("Profil : Expérience de 3 à 8 ans minimum sur des environnements cloud.")
+    gate = HardConstraintGate(user_max_education_level=None, user_max_years_experience=3)
+    result = gate.check(JobRequirements(experience=exp))
+    assert result.passes, result.reasons
+
+
+def test_single_minimums_are_unchanged():
+    assert extract_experience("Minimum 7 ans d'expérience").min_years == 7
+    assert extract_experience("5 ans minimum dans un environnement similaire").min_years == 5
+    # the highest mandatory minimum still wins over a lower one elsewhere
+    assert extract_experience("au moins 2 ans en Python ; 6 ans minimum en Java").min_years == 6
+    # a number that merely precedes the minimum is not a range ("Bac+5, 3 ans minimum")
+    assert extract_experience("Bac+5, 3 ans minimum").min_years == 3
+
+
+# ---------------------------------------------------------------------------
+# A mandatory cue right after "N ans d'expérience" / "N years of experience"
+# (real offers, 2026-10 sample: "10 ans d'expérience minimum", "5 ans
+# d'expérience minimum sur un poste DevOps" were read as no requirement).
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("text, years", [
+    ("(10 ans d'expérience minimum) en CDI sur notre site", 10),
+    ("5 ans d'expérience minimum sur un poste DevOps, Cloud ou SRE", 5),
+    ("3 ans d’expérience requise", 3),
+    ("4 années d'expérience professionnelle exigées", 4),
+    ("2 ans d'expérience obligatoire", 2),
+    ("3 ans d'expérience indispensable en support", 3),
+    ("3 years of experience required", 3),
+    ("5 years of relevant experience is required", 5),
+    ("4 years of professional experience minimum", 4),
+    ("3 à 5 ans d'expérience minimum", 3),
+])
+def test_cue_after_experience_noun_is_mandatory(text, years):
+    exp = extract_experience(text)
+    assert exp is not None and exp.importance == Importance.MANDATORY, text
+    assert exp.min_years == years
+
+
+@pytest.mark.parametrize("text", [
+    "3 ans d'expérience en conseil ou analyse métier.",        # no qualifier: context, not a constraint
+    "Forte de 30 ans d'expérience, notre école prépare…",       # the company's age
+    "3 ans d'expérience non requis",                            # negated
+    "3 years of experience not required",
+    "4 years of experience in a pre-sales role",
+])
+def test_no_mandatory_reading_without_a_direct_cue(text):
+    exp = extract_experience(text)
+    assert exp is None or exp.importance != Importance.MANDATORY, text
+
+
+@pytest.mark.parametrize("text", [
+    "3 ans d'expérience minimum souhaitée",
+    "3 ans d'expérience minimum appréciés",
+    "3 years of experience minimum preferred",
+])
+def test_desirability_after_the_cue_is_not_mandatory(text):
+    exp = extract_experience(text)
+    assert exp is None or exp.importance != Importance.MANDATORY, text
+
+
+def test_cue_after_noun_feeds_the_gate():
+    exp = extract_experience("5 ans d'expérience minimum sur un poste DevOps")
+    gate = HardConstraintGate(user_max_education_level=None, user_max_years_experience=2)
+    result = gate.check(JobRequirements(experience=exp))
+    assert not result.passes
+    assert result.reasons[0].type == "experience"

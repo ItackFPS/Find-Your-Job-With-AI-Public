@@ -3,6 +3,11 @@
 # Each entry defines one scheduled background job.
 # The scheduler reads this file on startup and upserts definitions into SQLite.
 #
+# Shipped default: both scans are MANUAL (startup_policy: disabled). Nothing
+# is collected until you press "Scan now" on the dashboard, so a first start
+# never sends queries built from the example profile. To scan automatically,
+# set startup_policy: run_once_per_day on an entry and restart the backend.
+#
 # startup_policy options:
 #   run_once_per_day  — trigger a run on backend startup if no successful run
 #                       has occurred today (UTC midnight boundary).
@@ -26,7 +31,7 @@ schedules:
     source_id: linkedin
     label: "LinkedIn daily scan"
     enabled: true
-    startup_policy: run_once_per_day   # run once per UTC day, triggered by startup or day rollover
+    startup_policy: disabled           # manual; run_once_per_day = once per UTC day at startup/rollover
     retry_max: 0                       # no automatic retry on failure
     retry_delay_seconds: 300
 
@@ -39,7 +44,7 @@ schedules:
     # and src/collectors/hellowork.py). The scheduler auto-triggers a
     # pipeline run after this completes, which snapshots the staged jobs
     # in ~0s (src/api/runner.py) rather than waiting on a live collection.
-    startup_policy: run_once_per_day
+    startup_policy: disabled           # manual; run_once_per_day = once per UTC day
     retry_max: 0
     retry_delay_seconds: 300
 

@@ -247,25 +247,27 @@ class DecisionStorage:
         ).fetchall()
         return total, [self._row_to_record(r) for r in rows]
 
-    def review_queue(
-        self, *, outcome: str | None = None, limit: int = 50, offset: int = 0,
-    ) -> tuple[int, list[DecisionRecord]]:
-        """``(total, page)`` of jobs whose LATEST decision the disagreement engine flagged ``review`` and
-        that the user has not answered. A doubtful decision is asked about once per *episode*: the run of
-        this job's latest decisions with the same outcome. Explicit feedback linked to any decision of the
-        current episode answers it (a job rejected run after run is asked about once, not after every run);
-        unlinked explicit feedback answers it when it came strictly after the latest decision (timestamps
-        are to the second, so a tie is not an answer). Feedback linked to a decision of an earlier episode
-        never does, whatever its timestamp — e.g. the user liked the job while it was accepted, or answered
-        an earlier rejection before the job was accepted again — so a job comes back here each time its
-        outcome changes to a doubtful one.
+    # A decision of job ``d`` in the same *episode* as ``d`` (no decision with another outcome after it)
+    # was marked by the rejection audit sample (src/decisions/audit.py).
+    _EPISODE_AUDITED = """EXISTS (SELECT 1 FROM job_decisions p
+                   WHERE p.job_id = d.job_id AND p.outcome = d.outcome
+                     AND json_extract(p.signals_json, '$.audit.sampled') = 1
+                     AND NOT EXISTS (SELECT 1 FROM job_decisions q
+                                     WHERE q.job_id = d.job_id AND q.outcome <> d.outcome
+                                       AND (q.decided_at > p.decided_at
+                                            OR (q.decided_at = p.decided_at AND q.rowid > p.rowid))))"""
+    _LATEST = """(SELECT *, ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY decided_at DESC, rowid DESC) AS rn
+                  FROM job_decisions) d"""
 
-        Rejected jobs are included: this is where a possibly-wrong rejection becomes visible. Newest
-        first. A database without a feedback table simply has nothing answered yet."""
-        conn = self._get_conn()
-        has_feedback = conn.execute(
+    def _has_feedback_table(self) -> bool:
+        return self._get_conn().execute(
             "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'feedback_events'").fetchone() is not None
-        answered = ("""AND NOT EXISTS (SELECT 1 FROM feedback_events f WHERE f.job_id = d.job_id
+
+    def _unanswered_clause(self) -> str:
+        """SQL condition: latest decision ``d`` has no explicit answer in its episode (see review_queue)."""
+        if not self._has_feedback_table():
+            return ""
+        return """AND NOT EXISTS (SELECT 1 FROM feedback_events f WHERE f.job_id = d.job_id
                          AND f.signal_class = 'explicit'
                          AND ((f.decision_id IS NULL AND f.occurred_at > d.decided_at)
                               OR f.decision_id IN (
@@ -276,18 +278,64 @@ class DecisionStorage:
                                                       AND (q.decided_at > p.decided_at
                                                            OR (q.decided_at = p.decided_at
                                                                AND q.rowid > p.rowid))))))"""
-                    if has_feedback else "")
+
+    def review_queue(
+        self, *, outcome: str | None = None, limit: int = 50, offset: int = 0,
+    ) -> tuple[int, list[DecisionRecord]]:
+        """``(total, page)`` of jobs whose LATEST decision the disagreement engine flagged ``review``, or
+        that the rejection audit sample picked in the current episode, and that the user has not
+        answered. A doubtful decision is asked about once per *episode*: the run of this job's latest
+        decisions with the same outcome. Explicit feedback linked to any decision of the current episode
+        answers it (a job rejected run after run is asked about once, not after every run); unlinked
+        explicit feedback answers it when it came strictly after the latest decision (timestamps are to
+        the second, so a tie is not an answer). Feedback linked to a decision of an earlier episode never
+        does, whatever its timestamp — e.g. the user liked the job while it was accepted, or answered an
+        earlier rejection before the job was accepted again — so a job comes back here each time its
+        outcome changes to a doubtful one.
+
+        Rejected jobs are included: this is where a possibly-wrong rejection becomes visible. Newest
+        first. A database without a feedback table simply has nothing answered yet."""
+        conn = self._get_conn()
         where, params = "", []
         if outcome:
             where, params = "AND d.outcome = ?", [outcome]
-        base = f"""FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY decided_at DESC, rowid DESC) AS rn
-                         FROM job_decisions) d
-                   WHERE d.rn = 1 AND json_extract(d.signals_json, '$.assessment.state') = 'review'
-                   {answered} {where}"""
+        base = f"""FROM {self._LATEST}
+                   WHERE d.rn = 1
+                     AND (json_extract(d.signals_json, '$.assessment.state') = 'review'
+                          OR {self._EPISODE_AUDITED})
+                   {self._unanswered_clause()} {where}"""
         total = int(conn.execute(f"SELECT COUNT(*) {base}", params).fetchone()[0])
         rows = conn.execute(f"SELECT d.* {base} ORDER BY d.decided_at DESC, d.job_id LIMIT ? OFFSET ?",
                             [*params, limit, offset]).fetchall()
         return total, [self._row_to_record(r) for r in rows]
+
+    def open_audit_count(self) -> int:
+        """Jobs whose latest decision is a rejection audited in its episode and not yet answered."""
+        return int(self._get_conn().execute(
+            f"""SELECT COUNT(*) FROM {self._LATEST}
+                WHERE d.rn = 1 AND d.outcome = 'rejected' AND {self._EPISODE_AUDITED}
+                {self._unanswered_clause()}""").fetchone()[0])
+
+    def audit_ineligible_jobs(self, job_ids: list[str]) -> set[str]:
+        """Of ``job_ids`` (about to be journaled as rejected), those not to sample again: the current
+        rejection episode was already audited, or the user already gave explicit feedback on the job
+        (their view is known; the disagreement engine uses it)."""
+        if not job_ids:
+            return set()
+        conn = self._get_conn()
+        out: set[str] = set()
+        for i in range(0, len(job_ids), 500):
+            chunk = job_ids[i : i + 500]
+            marks = ",".join("?" * len(chunk))
+            out |= {r[0] for r in conn.execute(
+                f"""SELECT d.job_id FROM {self._LATEST}
+                    WHERE d.rn = 1 AND d.outcome = 'rejected' AND d.job_id IN ({marks})
+                      AND {self._EPISODE_AUDITED}""", chunk)}
+            if self._has_feedback_table():
+                out |= {r[0] for r in conn.execute(
+                    f"""SELECT DISTINCT job_id FROM feedback_events
+                        WHERE signal_class = 'explicit' AND job_id IN ({marks})""", chunk)}
+        return out
 
     def get_decision_for_run(self, job_id: str, run_id: str) -> DecisionRecord | None:
         """The decision a specific run made about a job (not shadowed by newer runs)."""
