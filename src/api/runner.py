@@ -184,6 +184,7 @@ class PipelineRunner:
                 use_ai=use_ai,
                 prefetched_linkedin_jobs=prefetched_by_source.get("linkedin", []),
                 prefetched_hellowork_jobs=prefetched_by_source.get("hellowork", []),
+                run_id=run_id,          # one id for the run row and the decisions journaled for it
             )
 
             # Persist job scores

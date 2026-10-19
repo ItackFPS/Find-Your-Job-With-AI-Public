@@ -638,15 +638,19 @@
   },
   {
    "extraction_method": "heuristic",
-   "factors": null,
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.6,
+    "seniority_match": 1.0,
+    "skills_match": 0.88
+   },
    "flags": [],
    "job_id": "bm46",
-   "reasons": [
-    "Job requires Bac+5 (preferred); candidate maximum is bac+2."
-   ],
-   "score": null,
-   "stage": "requirements_gate",
-   "verdict": "reject"
+   "reasons": [],
+   "score": 0.6448,
+   "stage": "passed",
+   "verdict": "accept"
   },
   {
    "extraction_method": "heuristic",

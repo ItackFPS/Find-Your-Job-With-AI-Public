@@ -6,15 +6,18 @@ A job that violates a hard constraint is rejected before scoring,
 regardless of how high its semantic or skill score might be.
 
 Hard constraints (VIOLATED → REJECT):
-  1. Education MANDATORY or PREFERRED > candidate max (profile.max_education)
-     — with attributable span evidence. UNKNOWN/ambiguous mentions (e.g.
-     "vous préparez un Bac+5") remain exempt — see _check_education.
+  1. Education stated as a requirement > candidate max (profile.max_education)
+     — MANDATORY, or PREFERRED stating the bar ("Bac+4 ou équivalent"), with
+     attributable span evidence. Desirable ("Bac+5 souhaité"), OPTIONAL
+     ("non éliminatoire") and UNKNOWN mentions never reject — see
+     _check_education and ADR 0004.
   2. Principal skill in title not in profile
   3. Mandatory+principal skill in description
   4. Experience MANDATORY > candidate max — with attributable span evidence
 
 Soft mismatches (PASS, apply score penalty):
-  - Education CORE > candidate max → 20% penalty (UNKNOWN is exempt — see
+  - Education CORE or desirable PREFERRED > candidate max → 20% penalty
+    (UNKNOWN and OPTIONAL are exempt — see
     _check_education / gate_jobs: an ambiguous mention with no explicit
     qualifier is not evidence of an actual requirement, so it is not
     penalized at all, not even softly)
@@ -60,7 +63,7 @@ from src.requirements.models import (
 
 logger = logging.getLogger(__name__)
 
-_RULE_VERSION = "hard-filter.v2"
+_RULE_VERSION = "hard-filter.v3"
 
 # Score penalty for preferred/unknown/core education exceeding candidate max.
 _PREFERRED_EDUCATION_PENALTY = 0.20
@@ -78,6 +81,24 @@ def _norm(text: str) -> str:
     """Lowercase + strip diacritics."""
     nfd = unicodedata.normalize("NFD", text)
     return "".join(c for c in nfd if unicodedata.category(c) != "Mn").lower()
+
+
+def _states_required_level(edu: EducationRequirement) -> bool:
+    """True when the posting makes *edu* a requirement (ADR 0004).
+
+    MANDATORY always does. PREFERRED does only when the level is stated as
+    the bar and softened by nothing but an equivalence clause ("Bac+4 ou
+    équivalent"); a desirability cue ("Bac+5 souhaité", "un plus") is a wish,
+    and an LLM-only PREFERRED reading carries no equivalence evidence.
+    OPTIONAL ("non éliminatoire"), CORE and UNKNOWN never do.
+    """
+    if edu.importance == Importance.MANDATORY:
+        return True
+    return (
+        edu.importance == Importance.PREFERRED
+        and edu.is_or_alternative
+        and not edu.is_desirable
+    )
 
 
 class HardConstraintGate:
@@ -210,7 +231,7 @@ class HardConstraintGate:
                                             in extractor.py)
             edu.level ≤ user max         → SATISFIED
             edu.level > user max
-              + MANDATORY or PREFERRED importance
+              + MANDATORY, or PREFERRED stating the bar (_states_required_level)
                 + education_hard_constraint → VIOLATED (hard reject)
                 + hard constraint disabled  → SATISFIED from gate perspective
                                               (soft penalty handled by gate_jobs,
@@ -224,14 +245,13 @@ class HardConstraintGate:
                                                qualifier is not evidence of a
                                                real requirement)
 
-        Why PREFERRED is a hard reject here (not "mandatory only"): the user's
-        stated preference is an absolute ceiling on the profile's configured
-        `max_education` — any *attributable, explicit* mention of a level
-        above that ceiling must reject the job, regardless of how strongly
-        the posting words the requirement (e.g. "Bac+4 ou équivalent" is
-        PREFERRED-classified by extract_education() due to the "ou
-        équivalent" phrasing, but still names an explicit level and must
-        reject). The one exception is `is_experience_alternative` (e.g.
+        Why some PREFERRED readings reject (not "mandatory only"): the
+        profile's `max_education` is a ceiling on *requirements*. "Bac+4 ou
+        équivalent" is PREFERRED-classified by extract_education() because of
+        the "ou équivalent" phrasing, but it states the bar and must reject.
+        A desirability cue ("Bac+5 souhaité", "apprécié", "un plus") is a
+        wish, not a requirement: soft penalty only (ADR 0004, amended
+        2026-10 after the bm46 unsafe rejection). The one exception is `is_experience_alternative` (e.g.
         "Bac+5 ou expérience équivalente") — a genuinely different, explicit
         substitute path (professional experience instead of the degree), not
         just softer wording of the same requirement — which is exempt from
@@ -247,10 +267,9 @@ class HardConstraintGate:
         never produced by the heuristic path) but still receives the soft
         penalty via gate_jobs, since it represents an actual (if
         LLM-sourced) requirement claim rather than a genuine absence of one.
-        OPTIONAL importance never reaches this comparison as a competing
-        result in practice (extract_education's resolution prefers
-        MANDATORY/PREFERRED matches over incidental ones), but is excluded on
-        principle since it represents an incidental, non-requirement mention.
+        OPTIONAL importance marks an explicitly non-eliminatory mention
+        ("Bac+5 apprécié, non éliminatoire", "not required"): never a reject,
+        never a penalty.
         """
         edu = requirements.education
         if edu is None:
@@ -289,7 +308,7 @@ class HardConstraintGate:
         required_label = edu.level_label or f"bac+{edu.level_bac_plus}"
 
         if (
-            edu.importance in (Importance.MANDATORY, Importance.PREFERRED)
+            _states_required_level(edu)
             and self._education_hard_constraint
             and not edu.is_experience_alternative
         ):
@@ -309,8 +328,8 @@ class HardConstraintGate:
             )
             return [reason], ConstraintState.VIOLATED, None
 
-        # UNKNOWN/CORE, or MANDATORY/PREFERRED with the hard constraint
-        # disabled → soft penalty only (handled by gate_jobs).
+        # Desirable PREFERRED, OPTIONAL, UNKNOWN/CORE, or a requirement with
+        # the hard constraint disabled → at most a soft penalty (gate_jobs).
         return [], ConstraintState.SATISFIED, None
 
     def _check_enrolment(
@@ -531,11 +550,11 @@ def gate_jobs(
             # Apply soft education penalty for education mismatches that didn't
             # hard-reject. CORE always lands here (never hard-rejected by
             # _check_education — it's an LLM-only value, treated cautiously).
-            # MANDATORY and PREFERRED also land here only when
+            # Desirable PREFERRED ("Bac+5 souhaité") always lands here.
+            # MANDATORY and PREFERRED stating the bar land here only when
             # education_hard_constraint is disabled on the gate — otherwise
-            # _check_education would have rejected them outright (see its
-            # docstring: MANDATORY/PREFERRED > candidate max is now a hard
-            # reject, not "mandatory only").
+            # _check_education would have rejected them outright (ADR 0004).
+            # OPTIONAL ("non éliminatoire") is never penalised.
             #
             # UNKNOWN is deliberately EXCLUDED here (2026-09-11 audit fix):
             # it is reserved for genuinely ambiguous mentions with no explicit

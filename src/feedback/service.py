@@ -22,6 +22,10 @@ from src.feedback.storage import FeedbackStorage
 
 logger = logging.getLogger(__name__)
 MAX_NOTE = 500
+# Rows the bridge writes into the legacy ``job_feedback`` table: ``bridge:<feedback event id>``.
+BRIDGE_PREFIX = "bridge:"
+# Explicit answers that set (or, for ``unsure``, clear) the mirrored preference of a job.
+_BRIDGED_TYPES = ("interested", "not_interested", "unsure")
 
 
 class FeedbackError(ValueError):
@@ -158,31 +162,68 @@ class FeedbackService:
                       "mapping_hash": mapping_hash(self.config), **canon_extra, **ref, **(extra or {})})
 
     # -- optional bridge to the legacy personalization table -----------------------------------------
+    #
+    # The mirrored rows are a derived view of the journal, never a second source of truth: per job, at
+    # most one row (``bridge:<event id>``) carrying the LATEST explicit interested / not_interested
+    # answer with its original timestamp. Repeated clicks therefore count once, a changed mind replaces
+    # the earlier answer instead of cancelling it, and the whole effect can be removed
+    # (``clear_bridge``) or rebuilt from the journal (``sync_bridge``) at any time.
 
     def _bridge(self, event: FeedbackEvent) -> None:
-        if not self.config.personalization_bridge or event.type not in ("interested", "not_interested"):
+        if not self.config.personalization_bridge or event.type not in _BRIDGED_TYPES:
             return
         try:
-            from src.personalization.models import FeedbackType
-            from src.personalization.storage import PersonalizationStorage
-            from src.storage.sqlite import Storage
-
-            st = Storage(db_path=self._db_path)
-            st.init_db()
-            try:
-                job = st.get_job_by_id(event.job_id)
-            finally:
-                st.close()
-            if job is None:
-                return
-            ps = PersonalizationStorage(db_path=self._db_path)
-            ps.init_db()
-            try:
-                ps.add_feedback(job, FeedbackType(event.type), note=event.note)
-            finally:
-                ps.close()
+            self.sync_bridge([event.job_id])
         except Exception as exc:  # noqa: BLE001 — the bridge never blocks recording feedback
             logger.warning("Personalization bridge failed (non-fatal): %s", exc)
+
+    def sync_bridge(self, job_ids: list[str] | None = None) -> tuple[int, int]:
+        """Rebuild the mirrored rows of ``job_ids`` (all journaled jobs when ``None``) from the
+        journal → ``(written, removed)``. Rows written by the personalization CLI are never touched;
+        a job no longer in ``jobs`` keeps no mirrored row (its attributes cannot be snapshotted)."""
+        from src.personalization.models import FeedbackType
+        from src.personalization.storage import PersonalizationStorage
+        from src.storage.sqlite import Storage
+
+        fs = FeedbackStorage(self._db_path)
+        fs.init_db()
+        try:
+            latest = fs.latest_explicit(_BRIDGED_TYPES, job_ids)
+        finally:
+            fs.close()
+        st = Storage(db_path=self._db_path)
+        ps = PersonalizationStorage(db_path=self._db_path)
+        st.init_db()
+        ps.init_db()
+        written = removed = 0
+        try:
+            for job_id in (job_ids if job_ids is not None else sorted(latest)):
+                removed += ps.delete_feedback_with_id_prefix(BRIDGE_PREFIX, job_id)
+                event = latest.get(job_id)
+                if event is None or event.type == "unsure":
+                    continue
+                job = st.get_job_by_id(job_id)
+                if job is None:
+                    continue
+                ps.add_feedback(job, FeedbackType(event.type), note=event.note,
+                                feedback_id=f"{BRIDGE_PREFIX}{event.event_id}",
+                                created_at=datetime.fromisoformat(event.occurred_at))
+                written += 1
+        finally:
+            st.close()
+            ps.close()
+        return written, removed
+
+    def clear_bridge(self) -> int:
+        """Remove every mirrored row (the journal keeps every event): undoes the bridge's effect."""
+        from src.personalization.storage import PersonalizationStorage
+
+        ps = PersonalizationStorage(db_path=self._db_path)
+        ps.init_db()
+        try:
+            return ps.delete_feedback_with_id_prefix(BRIDGE_PREFIX)
+        finally:
+            ps.close()
 
     # -- one-time import of historical status transitions ----------------------------------------------
 

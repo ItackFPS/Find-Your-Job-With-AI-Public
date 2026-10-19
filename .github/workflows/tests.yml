@@ -45,13 +45,11 @@ jobs:
 
       - name: Install dependencies
         run: pip install -e ".[dev,mcp_admin]" "mypy==2.3.0"
-        # Deliberately excludes the optional "linkedin" extra (python-jobspy):
-        # its unbounded transitive version range makes pip's resolver
-        # backtrack into ancient sdist-only numpy releases with no cp312
-        # wheel. Tests that need it (pandas-backed LinkedIn record-building)
-        # skip themselves via pytest.mark.skipif when pandas isn't installed
-        # — see tests/test_quality_fixes.py and
-        # tests/test_linkedin_description_workmode.py.
+        # Excludes the optional "linkedin" extra (python-jobspy), which keeps
+        # this install small. Tests that need it (pandas-backed LinkedIn
+        # record-building) skip themselves here when pandas isn't installed
+        # (tests/test_quality_fixes.py, tests/test_linkedin_description_workmode.py)
+        # and run in the Dependency audit workflow, which installs the extra.
 
       - name: Run deterministic test suite
         run: pytest -m "not network"

@@ -30,6 +30,9 @@ class DecisionConfig(BaseModel):
     text_retention_days: int = Field(default=60, ge=0)
     # Whole records are deleted after this many days; 0 = keep forever.
     record_retention_days: int = Field(default=365, ge=0)
+    # Rejection audit sample (src/decisions/audit.py): at most this many rule-backed rejections are
+    # open in the review queue at once, so false rejections can surface; 0 = off. Changes no outcome.
+    rejection_audit_max_open: int = Field(default=3, ge=0, le=50)
 
 
 def load_decision_config(config_dir: str | Path) -> DecisionConfig:

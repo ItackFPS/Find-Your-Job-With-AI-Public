@@ -25,7 +25,8 @@ on by the owner in `config/disagreement.yaml` after reading the shadow metrics.
 - `python -m src.evaluation run <dataset> --assess` evaluates the engine offline on
   deterministic evidence (no semantic/Phase 2/LLM signals offline) and reports review rate,
   capture rate and lift. **On the 50-job synthetic dataset the result is
-  `insufficient_evidence` and the engine flags nothing**: 4 wrong decisions, none captured, so
+  `insufficient_evidence` and the engine flags nothing**: 3 wrong decisions (all false
+  positives; 4 before the ADR 0004 amendment fixed the bm46 unsafe rejection), none captured, so
   there is no evidence yet that the flag is useful and `active` should stay off.
 - Thresholds live in `config/disagreement.yaml`, whose hash is recorded in every assessment (`config_hash`). It is not part of the strategy fingerprint, which tracks only what changes accept/reject decisions or scores.
 - **Engine v2 — user feedback is a signal.** The feedback journal (ADR 0009) gives each job a
@@ -46,3 +47,29 @@ answers it, so a job rejected run after run is not asked about after every run. 
 feedback answers it only when given strictly after the latest decision. Feedback linked to an earlier
 episode never does, so a job the user wanted comes back when it is rejected again after having been
 accepted. Behavioural signals (views, clicks) never answer and never create a stance.
+
+## Rejection audit sample (2026-10)
+
+The engine never flags a solid rule-backed rejection, and rejected jobs are never shown, so a wrong
+hard-filter or requirements-gate rule hid good jobs with no way to notice: on the synthetic benchmark
+an unsafe rejection (bm46) stayed invisible to the review queue. The decision recorder now marks a few
+rule-backed rejections (`signals.audit`, `src/decisions/audit.py`) and the review queue lists them,
+like a `review` flag, until the user answers ("I want this job", "Not for me", or "Not sure", the
+explicit `unsure` feedback type). Rules:
+
+- **Outcome-neutral.** The mark is journal data only; outcome, score, ranking and notifications are
+  unchanged (the journal on/off equivalence test covers it).
+- **Bounded.** At most `rejection_audit_max_open` (`config/decisions.yaml`, default 3, `0` = off)
+  audit items are open at once; new ones are picked only for free slots, so the queue never floods.
+- **Representative, not uniform.** Eligible: rejections at `filter` (except `published_age`) or
+  `requirements_gate` whose posting text was kept, not already flagged `review`, whose job has no
+  explicit feedback and no audit in the current episode. Strata (`<stage>:<rule>`) take turns in a
+  run-rotated order; within a stratum the order is a hash of the job id. Each mark records its
+  stratum and the stratum's size, so answers can be analysed per stratum; they must not be pooled
+  as if they were a uniform sample.
+- **Answers are evidence, not overrides.** An answer is an ordinary explicit feedback event linked to
+  the decision. `python -m src.evaluation feedback-dataset` turns "I want this job" on a rejection
+  into an `accept` label (a measured false negative), "Not for me" into `reject`, "Not sure" into
+  `borderline`; the private sidecar keeps the audit stratum. Nothing changes production until a
+  strategy change is evaluated and approved through the lab (ADR 0011).
+- `unsure` never creates a stance: as the latest answer it clears an earlier one for the engine.

@@ -42,4 +42,24 @@ describe('ReviewCard', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Not for me' }))
     expect(onAnswer).toHaveBeenCalledWith('not_interested')
   })
+
+  it('explains an audit-sampled rejection with its rule and evidence, and accepts "Not sure"', async () => {
+    const onAnswer = vi.fn()
+    render(<MemoryRouter><ReviewCard item={item({
+      deciding_stage: 'requirements_gate',
+      signals: { audit: { sampled: true, sampler: 'rejection-audit.v1', stratum: 'requirements_gate:education', stratum_size: 4, rank_in_stratum: 1 } },
+      evidence: [{
+        dimension: 'education', polarity: 'negative', state: 'violated', message: 'Job requires Bac+5 (mandatory); candidate maximum is bac+2.',
+        observed: 'Bac+5', expected: 'bac+2', weight: null,
+        source: { stage: 'requirements_gate', rule_id: 'gate.education', rule_version: 'hard-filter.v3', evidence_source: 'heuristic' },
+        span: { field: 'description', start: 0, end: 5, text: 'Bac+5 requis', extractor_id: 'education.bacp5.v1' },
+      }] as never,
+    })} pending={false} onAnswer={onAnswer} /></MemoryRouter>)
+    expect(screen.getByText('Audit sample')).toBeInTheDocument()
+    expect(screen.getByText('requirements_gate:education')).toBeInTheDocument()
+    expect(screen.getByText(/Job requires Bac\+5 \(mandatory\)/)).toBeInTheDocument()
+    expect(screen.getByText(/Bac\+5 requis/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Not sure' }))
+    expect(onAnswer).toHaveBeenCalledWith('unsure')
+  })
 })
