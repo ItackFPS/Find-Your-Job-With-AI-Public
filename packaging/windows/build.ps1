@@ -163,7 +163,7 @@ Step "Installing the runtime dependencies (packaging/windows/requirements.txt)"
 $Requirements = Join-Path $Export "packaging\windows\requirements.txt"
 Invoke-Checked $RuntimePython @("-m", "ensurepip", "--default-pip") "ensurepip"
 Invoke-Checked $RuntimePython @("-m", "pip", "install", "--disable-pip-version-check", "--no-warn-script-location",
-                                "--only-binary=:all:", "-r", $Requirements) "pip install"
+                                "--only-binary=:all:", "--no-compile", "-r", $Requirements) "pip install"
 Invoke-Checked $RuntimePython @("-m", "pip", "check") "pip check"
 # The installed app never installs packages: drop the installer tools (and their advisories).
 Invoke-Checked $RuntimePython @("-m", "pip", "uninstall", "--disable-pip-version-check", "-y", "pip") "removing pip"
@@ -208,8 +208,13 @@ $Info = [ordered]@{
 # start would compile the whole stack again (measured: 80 s cold, 20 s warm). checked-hash .pyc
 # files stay valid whatever timestamps the installer gives the sources.
 Step "Precompiling bytecode"
-& $RuntimePython -m compileall -q -j 0 --invalidation-mode checked-hash (Join-Path $Runtime "Lib") (Join-Path $Stage "src") | Out-Null
+# -s: record paths relative to the stage, not this machine's checkout (Python reports the real
+# location at run time anyway).
+& $RuntimePython -m compileall -q -f -j 0 --invalidation-mode checked-hash -s $Stage (Join-Path $Runtime "Lib") (Join-Path $Stage "src") | Out-Null
 if ($LASTEXITCODE -ne 0) { Write-Host "note: some files did not compile (unused test or template files in packages); they run from source" -ForegroundColor Yellow }
+
+Step "Checking that no staged file names this checkout"
+Invoke-Checked $BasePython @((Join-Path $PSScriptRoot "find_build_path.py"), $Stage, $RepoRoot) "build path check"
 
 if ($StageOnly) {
     Write-Host "Stage ready (not compiled): $Stage" -ForegroundColor Green

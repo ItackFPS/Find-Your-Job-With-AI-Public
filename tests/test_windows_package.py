@@ -126,6 +126,23 @@ def test_bundled_python_is_isolated_from_the_users_environment():
     assert "PYTHONPATH = \"C:\\does-not-exist\"" in BUILD  # and the build proves it
 
 
+def test_bytecode_does_not_record_the_build_checkout(tmp_path):
+    assert "-f -j 0 --invalidation-mode checked-hash -s $Stage" in BUILD and "--no-compile" in BUILD
+    assert '"find_build_path.py"), $Stage, $RepoRoot) "build path check"' in BUILD
+
+    sys.path.insert(0, str(PKG))
+    try:
+        import find_build_path
+    finally:
+        sys.path.remove(str(PKG))
+    checkout = r"D:\Work\My Checkout"
+    (tmp_path / "ok.txt").write_text("nothing to see", encoding="utf-8")
+    assert find_build_path.main(["x", str(tmp_path), checkout]) == 0
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "m.pyc").write_bytes(b"\x00\x01d:/work/my checkout/build/stage/src/m.py\x00")
+    assert find_build_path.main(["x", str(tmp_path), checkout]) == 1
+
+
 def test_build_ships_what_the_self_check_reads():
     from src.evaluation.__main__ import DEFAULT_SELF_CHECK
 
