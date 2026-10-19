@@ -17,7 +17,8 @@ integration is skipped rather than failing the run.
 France Travail with no credentials at all (a fresh install) is not a broken
 connection but one that was never set up: the run goes ahead DEGRADED without
 that source, the skip named in the report and the run's errors. Credentials
-that are present but fail to authenticate still block the run.
+that are present but fail to authenticate still block the run. Indeed without
+its API key (``INDEED_API_KEY``) is skipped the same way.
 
 Never raises: any unexpected error while checking is captured as a failed
 status for that integration, since a preflight that crashes is worse than
@@ -68,8 +69,10 @@ class PreflightResult:
     report_lines: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)          # blocking (FAILED) reasons
     degraded_errors: list[str] = field(default_factory=list)  # non-blocking (DEGRADED) reasons
-    # Source types the run must not collect from (an unconfigured France Travail).
+    # Source types the run must not collect from (an unconfigured France Travail or Indeed).
     skipped_source_types: list[str] = field(default_factory=list)
+    # Why each of them is skipped, and what to set up (source type -> sentence).
+    skip_reasons: dict[str, str] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -78,6 +81,7 @@ class PreflightResult:
             "france_travail": asdict(self.france_travail),
             "n8n": asdict(self.n8n),
             "skipped_source_types": list(self.skipped_source_types),
+            "skip_reasons": dict(self.skip_reasons),
             "report_text": "\n".join(self.report_lines),
         }
 
@@ -102,6 +106,7 @@ def run_preflight(config_dir: str = "config") -> PreflightResult:
     """
     ft = _check_france_travail(config_dir)
     n8n = _check_n8n(config_dir)
+    indeed_missing = _indeed_key_missing(config_dir)
 
     ft_unconfigured = ft.status == "CONFIG_MISSING"
     ft_ok = ft.status in _READY_LIKE or ft_unconfigured
@@ -109,7 +114,7 @@ def run_preflight(config_dir: str = "config") -> PreflightResult:
 
     if not ft_ok:
         status = "FAILED"
-    elif ft_unconfigured or not n8n_ok:
+    elif ft_unconfigured or indeed_missing or not n8n_ok:
         status = "DEGRADED"
     else:
         status = "READY"
@@ -118,19 +123,51 @@ def run_preflight(config_dir: str = "config") -> PreflightResult:
     if not ft_ok and ft.detail:
         errors.append(f"France Travail: {ft.detail}")
 
+    skip_reasons: dict[str, str] = {}
+    if ft_unconfigured:
+        skip_reasons["france_travail"] = ft.detail or "credentials are not set"
+    if indeed_missing:
+        skip_reasons["indeed"] = _INDEED_MISSING
+
     degraded_errors: list[str] = []
     if ft_unconfigured:
         degraded_errors.append(f"France Travail skipped for this run: {ft.detail}")
+    if indeed_missing:
+        degraded_errors.append(f"Indeed skipped for this run: {_INDEED_MISSING}")
     if not n8n_ok and n8n.detail:
         degraded_errors.append(f"n8n: {n8n.detail}")
 
     result = PreflightResult(
         france_travail=ft, n8n=n8n, status=status, ready=ft_ok,
         errors=errors, degraded_errors=degraded_errors,
-        skipped_source_types=["france_travail"] if ft_unconfigured else [],
+        skipped_source_types=list(skip_reasons), skip_reasons=skip_reasons,
     )
     result.report_lines = _format_report(result)
     return result
+
+
+# ---------------------------------------------------------------------------
+# Indeed
+# ---------------------------------------------------------------------------
+
+_INDEED_MISSING = (
+    "INDEED_API_KEY is not set. Indeed is optional: the other sources still run. "
+    "To use it, set INDEED_API_KEY in .env (see .env.example)."
+)
+
+
+def _indeed_key_missing(config_dir: str) -> bool:
+    """An active Indeed source without its API key: the collector could only fail."""
+    from src.collectors.indeed import _api_key
+    from src.discovery.registry import SourceRegistry
+
+    try:
+        registry = SourceRegistry(config_path=str(Path(config_dir) / "sources.yaml"))
+    except Exception as exc:  # noqa: BLE001 — preflight must never raise
+        logger.warning("Preflight: could not read sources.yaml: %s", exc)
+        return False
+    active = any(s.get("type") == "indeed" and s.get("active", True) for s in registry.all_sources)
+    return active and not _api_key()
 
 
 # ---------------------------------------------------------------------------
@@ -358,6 +395,8 @@ def _format_report(result: PreflightResult) -> list[str]:
                 "  → France Travail is skipped for this run; the other sources still run. "
                 "Add the credentials to .env, or set active: false in sources.yaml."
             )
+    if "indeed" in result.skip_reasons:
+        lines.append(f"○ Indeed skipped: {result.skip_reasons['indeed']}")
 
     n8n = result.n8n
     if n8n.status == "SKIPPED":
