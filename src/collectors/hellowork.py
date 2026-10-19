@@ -221,8 +221,10 @@ class HelloWorkCollector(BaseCollector):
                 continue
             if not job_urls and not has_itemlist(response.text):
                 # "no jobs" and "a page we can no longer read" both yield 0 URLs: only the second has no list
+                # Not checked off (no on_slug_done), like a failed fetch: a resume retries it.
                 unreadable_listings += 1
                 logger.warning("HelloWork: no ItemList JSON-LD on the listing page for metier '%s'", slug)
+                continue
 
             logger.info("HelloWork: %d job URLs found for metier '%s'", len(job_urls), slug)
 
@@ -275,15 +277,17 @@ class HelloWorkCollector(BaseCollector):
                 # lose whatever job pages were never reached).
                 break
 
-            # This slug's listing + all its detail pages have been attempted
-            # (successfully or not) — safe to check off, even with 0 jobs.
+            # This slug's listing was read and all its detail pages have been
+            # attempted (successfully or not) — safe to check off, even with 0 jobs.
             if on_slug_done is not None:
                 on_slug_done(slug, slug_jobs)
 
         if unreadable_listings:
-            errors.append(
+            # First: the likeliest root cause when many pages fail, and kept by capped error lists
+            errors.insert(
+                0,
                 f"HelloWork: {unreadable_listings} listing page(s) carried no ItemList JSON-LD, so no job "
-                "could be read from them - the page format may have changed"
+                "could be read from them - the page format may have changed",
             )
         duration = time.time() - start_time
         self._log_collection("hellowork", len(jobs), errors, duration)

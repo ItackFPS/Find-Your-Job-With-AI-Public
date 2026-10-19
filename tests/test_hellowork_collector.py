@@ -368,6 +368,25 @@ class TestResumableCheckpointHooks:
 
         assert calls == []
 
+    @patch("src.collectors.hellowork.HelloWorkCollector._enforce_rate_limit")
+    def test_unreadable_listing_does_not_trigger_on_slug_done(self, _mock_rl: MagicMock) -> None:
+        """A listing page without an ItemList (changed page format) was not
+        read, unlike an empty list: it must not be checked off, or a resumed
+        scan would skip that role for good (the 2026-10 HelloWork format
+        change left every role checked off with 0 jobs)."""
+        with patch(
+            "src.collectors.hellowork.HelloWorkCollector._fetch_with_retry",
+            side_effect=[_html_response("<html><body>new layout</body></html>"),
+                         _html_response(_listing_html([]))],
+        ):
+            calls: list[str] = []
+            result = HelloWorkCollector(config={"metier_slugs": ["unreadable", "empty"]}).collect(
+                on_slug_done=lambda slug, jobs: calls.append(slug)
+            )
+
+        assert calls == ["empty"]
+        assert "1 listing page(s) carried no ItemList JSON-LD" in result.errors[0]
+
 
 class TestGracefulShutdown:
     """Regression coverage for shutdown_event, mirroring the LinkedIn scanner
