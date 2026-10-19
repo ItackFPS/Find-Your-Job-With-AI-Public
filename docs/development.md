@@ -15,9 +15,11 @@ Issue → branch → plan → small commits (tests green) → push → draft PR 
 
 ### 1. Install the pre-push guard
 
-GitHub branch protection is not available for this private repository on the Free
-plan, so `main` is protected locally by [`.githooks/pre-push`](../.githooks/pre-push),
-which refuses any push that updates or deletes the remote `main`.
+[`.githooks/pre-push`](../.githooks/pre-push) refuses any push that updates or deletes
+the remote `main`, so the mistake is caught before anything leaves your machine. On
+this public repository GitHub also enforces it (see the *Repository protections* list
+in step 3); on the private development repository this one is exported from, which
+has no branch protection on GitHub's Free plan, the hook is the only guard.
 
 ```bash
 git config core.hooksPath .githooks
@@ -61,9 +63,11 @@ for a in collectors discovery pipeline requirements scoring ai notifications dis
 done
 ```
 
-### 3. GitHub merge settings (repository settings, once)
+### 3. GitHub merge settings and repository protections (repository settings, once)
 
-Already applied on the GitHub repository:
+Intended merge settings — applied on the private development repository; this public
+repository still has GitHub's defaults (merge commits and rebase merging allowed, head
+branches kept after merging) until someone with admin rights runs the command below:
 
 - Squash merging: **on**, commit title = pull request title
 - Merge commits: **off** (keeps `main` linear)
@@ -78,9 +82,22 @@ gh api -X PATCH repos/{owner}/{repo} \
   -f squash_merge_commit_title=PR_TITLE -f squash_merge_commit_message=COMMIT_MESSAGES
 ```
 
-Branch protection, rulesets and GitHub secret scanning are not available for this
-private repository on the Free plan (API returns 403 / "disabled"); the local pre-push
-hook and the CI secret scan stand in for them.
+**Repository protections on this public repository** (Settings → Rules, Code
+security, Actions):
+
+- Ruleset *Protect main* on `main`, no bypass: changes arrive through a pull request
+  (no approval required, so a sole maintainer can merge); the checks `test`,
+  `frontend` and `gitleaks` from GitHub Actions must pass (see [CI](#ci)); force
+  pushes and branch deletion are blocked.
+- Secret scanning with push protection, Dependabot alerts and private vulnerability
+  reporting (the channel [`SECURITY.md`](../SECURITY.md) points to) are on.
+- Actions may use GitHub-owned actions only, need approval for first-time
+  contributors' pull requests, and get a read-only `GITHUB_TOKEN`.
+
+The private development repository runs on GitHub's Free plan, where branch
+protection, rulesets and secret scanning are not available for private repositories
+(its API returns 403 / "disabled"). There, the local pre-push hook and the CI secret
+scan stand in for them.
 
 ### 4. Personal configuration
 
@@ -308,10 +325,15 @@ Workflows run on every pull request and on pushes to `main`:
 
 | Workflow | What it runs | Gate |
 |---|---|---|
-| [`tests.yml`](../.github/workflows/tests.yml) | `pytest -m "not network"` (8–15 min), then `mypy src` in the same job | tests blocking, mypy advisory |
-| [`frontend.yml`](../.github/workflows/frontend.yml) | `npm ci`, oxlint, `tsc -b`, `vite build`, Vitest, `npm audit` (runtime deps) — only when `frontend/` changes | blocking |
-| [`lint.yml`](../.github/workflows/lint.yml) | `ruff check src tests` — only when Python sources change | advisory |
-| [`secret-scan.yml`](../.github/workflows/secret-scan.yml) | Gitleaks CLI over the commits the PR/push adds, output redacted | blocking |
+| [`tests.yml`](../.github/workflows/tests.yml) | `pytest -m "not network"` (8–15 min), then `mypy src` in the same job | tests blocking (required check `test`), mypy advisory |
+| [`frontend.yml`](../.github/workflows/frontend.yml) | `npm ci`, oxlint, `tsc -b`, `vite build`, Vitest, `npm audit` (runtime deps) — every time, with no path filter (about a minute) | blocking (required check `frontend`) |
+| [`lint.yml`](../.github/workflows/lint.yml) | `ruff check src tests` — only when Python sources change | advisory, not required |
+| [`secret-scan.yml`](../.github/workflows/secret-scan.yml) | Gitleaks CLI over the commits the PR/push adds, output redacted | blocking (required check `gitleaks`) |
+
+A required check must report on every pull request: GitHub leaves the check of a
+path-filtered workflow that did not run *pending*, which blocks the merge. So the
+three required workflows have no path filter; only the advisory Lint keeps one. If a
+workflow is ever made required, remove its path filter first.
 
 Cost and safety rules the workflows follow: a newer push to a pull request cancels
 its running checks (`concurrency`); jobs have timeouts; third-party actions are

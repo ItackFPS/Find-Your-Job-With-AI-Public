@@ -1,9 +1,10 @@
 #!/bin/sh
 # Refuses pushes that would update or delete the remote `main` branch.
 #
-# GitHub branch protection is unavailable for this private repository on the
-# Free plan, so this local hook is the guard. All work reaches main through a
-# pull request (see docs/development.md).
+# On the public repository a GitHub ruleset also protects main; on the private
+# development repository (GitHub Free plan, no branch protection) this local
+# hook is the only guard. All work reaches main through a pull request (see
+# docs/development.md).
 #
 # Install once per clone:   git config core.hooksPath .githooks
 # Uninstall:                git config --unset core.hooksPath

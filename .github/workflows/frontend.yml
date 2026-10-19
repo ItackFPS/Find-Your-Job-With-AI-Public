@@ -1,19 +1,17 @@
 name: Frontend
 
 # Type-checks, lints, builds and unit-tests the React/Vite frontend.
-# Path-filtered: backend-only changes don't spend CI minutes here.
+# Runs on every pull request and push to main, with no path filter: its job
+# (`frontend`) is a required check on main, and GitHub leaves a required check
+# from a path-filtered workflow pending forever, which blocks every pull request
+# that does not touch frontend/. Running always also re-checks npm advisories,
+# which change without any commit here. Costs about a minute per run.
 #
 # Reproduce locally: cd frontend && npm ci && npm run lint && npx tsc -b && npx vite build && npm test
 on:
   push:
     branches: [main]
-    paths:
-      - "frontend/**"
-      - ".github/workflows/frontend.yml"
   pull_request:
-    paths:
-      - "frontend/**"
-      - ".github/workflows/frontend.yml"
 
 permissions:
   contents: read
