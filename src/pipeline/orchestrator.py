@@ -225,6 +225,7 @@ def run_pipeline(
     use_ai: bool = False,
     prefetched_linkedin_jobs: "list[Any] | None" = None,
     prefetched_hellowork_jobs: "list[Any] | None" = None,
+    run_id: str | None = None,
 ) -> PipelineResult:
     """Run the full job discovery pipeline and return a structured result.
 
@@ -240,13 +241,16 @@ def run_pipeline(
                            src/ai/config.py for PHASE2_* environment variables.
                            Phase 2 is non-blocking — if the LLM is unavailable
                            the pipeline continues without AI enrichment.
+        run_id:            Identifier of this run. The API runner passes the id of the run row it
+                           created, so the decision journal and the run share one id; generated when
+                           omitted (CLI, tests).
 
     Returns:
         A :class:`PipelineResult` with status, statistics, scored job records,
         and rejection records.  Never raises — failures are captured in the
         result's ``error`` field and ``status = 'failed'``.
     """
-    run_id = str(uuid.uuid4())
+    run_id = run_id or str(uuid.uuid4())
     started_at = datetime.now(UTC)
     stats = PipelineStats()
     stats.use_ai = use_ai
