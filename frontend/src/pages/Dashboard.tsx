@@ -156,7 +156,7 @@ export function ScannerStatusCard({ name, queryKey, triggerFn, pauseFn, resumeFn
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-3)' }}>
         <div style={{ fontWeight: 'var(--font-weight-semibold)' }}>{name}</div>
         <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
-          <StatusBadge status={control.state === 'idle' ? (scan?.status ?? 'completed') : control.state} />
+          <StatusBadge status={control.state === 'idle' ? (scan?.status ?? 'idle') : control.state} />
           <button
             onClick={onControl}
             disabled={!controlEnabled}
