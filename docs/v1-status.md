@@ -1,213 +1,207 @@
 # V1 status record
 
-This is the working record of where V1 stands, so work can resume after an interruption. It states
-only what was verified, with the evidence; anything not re-run says so. Update it when the state
-changes. Last update: 2026-10-19 (round 3).
+The working record of where V1 stands. It states only what was verified, with the evidence;
+anything not re-run says so. Last update: 2026-10-19 (round 4: integration, Windows installer,
+user walkthrough).
 
-**Verdict: V1 READY WITH EXPLICIT LIMITATIONS, once the pull requests below are merged.** The
-integrated branch (all 25 PRs) passes its full suite, a clean install, a fresh-launch end-to-end
-run on real offers, the self-check and the lab loop. Nothing below is on `main` yet. The
-limitations are listed under [Residual risks](#residual-risks). The main ones:
+**Verdict: V1 READY WITH EXPLICIT LIMITATIONS.** Every change is merged into `main`. The
+Windows installer was built from `main` and passed an automated install → launch → stop →
+upgrade → uninstall test (62 checks) and a user walkthrough on real offers. The limitations
+are listed under [Residual risks](#residual-risks). The main ones:
 
-- Real-world accuracy is not measured: no human-reviewed real labels exist.
-- Ranking quality is not measured: there are no graded relevance labels.
-- Lab isolation is in-process only on this account.
+- Real-world accuracy and ranking quality are not measured: no human-reviewed real labels,
+  no graded relevance labels.
+- The lab agent's OS-level isolation (a separate Windows account) is not set up; under the
+  user's own account only the in-process guard and human approval protect production.
+- The installer is not code-signed (SmartScreen warning).
+- APEC refuses automated access (bot protection with a CAPTCHA); runs show it as failed.
 
 Status words: **verified** (shown by tests or by running it), **implemented, not verified**,
 **partial**, **blocked**, **not implemented**.
 
 ## Delivery state
 
-All pull requests are drafts with green hosted CI (`test`, `frontend`, `gitleaks`, `ruff`; #21
-adds `python-audit`), stacked as follows. Merge in this order and retarget each child to `main`
-once its base has merged (`gh pr edit N --base main`).
+All work is merged into `main` by squash. Required checks (`test`, `frontend`, `gitleaks`)
+and the advisory ones (`ruff`, `python-audit`) were green on each merged head.
 
-| PR | Base | Change |
+| PR | Change |
+|---|---|
+| #1 | required `frontend` check runs on every PR |
+| #2 | a wished-for education level is not a ceiling; CI unsafe-rejection gate |
+| #3 | bounded audit sample of rule-backed rejections; `unsure` feedback |
+| #4 | feedback→personalization bridge: latest answer per job, reversible |
+| #5 | self-check CLI/API/Lab panel |
+| #6 | refuse a non-loopback LLM endpoint unless `FYJ_ALLOW_REMOTE_LLM=1` |
+| #7 | HelloWork entity-encoded JSON-LD |
+| #8 | decision journal uses the API's run id |
+| #9 | "3 à 8 ans minimum" requires 3, not 8 |
+| #10 | readable stage names and job links on the Review page |
+| #11 | LinkedIn/HelloWork scans manual by default |
+| #12 | no France Travail credentials → that source skipped visibly |
+| #13 | unqualified education level = uncertain |
+| #14 | mandatory cue after "N ans d'expérience" |
+| #15 | feedback coverage in the self-check and Lab |
+| #16 | forwarding headers cannot bypass the local-only guards |
+| #18 | look-alike DNS names are not loopback LLM endpoints |
+| #19 | self-check wording matches what the lab agent tries |
+| #20 | an unreadable HelloWork listing is not checked off |
+| #21 | `python-jobspy>=1.3.0`; Python dependency audit in CI |
+| #22 | a never-run scanner is not badged "Completed" |
+| #23 | a rate-limited LinkedIn page is a failed query |
+| #24 | HelloWork TELECOMMUTE at a workplace is hybrid |
+| #25 | the lab CLI creates its bundle store on a fresh install |
+| #26 | each source reported as completed / partial / failed / skipped; Indeed without its key skipped |
+| #27 | Windows installer, desktop + Start Menu shortcuts, first-run guide, version 1.0.0rc1 |
+| #28 | APEC's bot protection reported as one clear failure |
+| #29 | build machine path kept out of the installer's bytecode |
+| #17 | this record |
+
+Stacked PRs (#5, #10, #13–#15, #18–#20) were brought up to date by merging `main` into their
+branches (no force-push). Each conflict resolution was compared file by file with the
+integration branch that had passed the full suite. #19 needed a correcting commit: a `-X ours`
+merge had kept stale copies of files changed by #13 and #15. The comparison caught it before
+the merge.
+
+**Tree identity.** After #1–#25, `main`'s tree equalled the round-3 integration tree
+(`f09f499`, full suite reproduced this round) except this file. After #26–#28, `main`
+`3032d61` equalled the round-4 integration tree whose results are below.
+
+## Test evidence (exact commands)
+
+| What | Command | Result |
 |---|---|---|
-| #1 | main | required `frontend` check runs on every PR |
-| #2 | #1 | a wished-for education level is not a ceiling (unsafe rejection bm46 fixed); CI safety gate |
-| #3 | #1 | bounded audit sample of rule-backed rejections in the review queue; `unsure` feedback |
-| #4 | #1 | feedback→personalization bridge: latest answer per job, reversible |
-| #5 | #2 | self-check CLI/API/Lab panel; experiment next steps |
-| #6 | #1 | refuse a non-loopback LLM endpoint unless `FYJ_ALLOW_REMOTE_LLM=1` |
-| #7 | #1 | HelloWork entity-encoded JSON-LD (collector silently returned 0 jobs) |
-| #8 | #1 | decision journal uses the API's run id |
-| #9 | #1 | "3 à 8 ans minimum" requires 3, not 8 (real unsafe rejection) |
-| #10 | #3 | readable stage names and job links on the Review page |
-| #11 | #1 | LinkedIn/HelloWork scans manual by default (no scan at first start) |
-| #12 | #1 | no France Travail credentials → that source skipped visibly, run continues |
-| #13 | #2 | unqualified education level = uncertain; rejection messages match the decision |
-| #14 | #9 | mandatory cue after "N ans d'expérience" / "N years of experience" |
-| #15 | #5 | feedback coverage in the self-check and the Lab page |
-| #16 | #1 | forwarding headers cannot bypass the local-only guards (tests) |
-| #17 | #1 | this record |
-| #18 | #6 | `127.example.com` / `127.0.0.1.nip.io` no longer pass as loopback LLM endpoints |
-| #19 | #5 | self-check no longer promises a lab candidate it does not find |
-| #20 | #7 | an unreadable HelloWork listing is not checked off; error reasons kept and shown |
-| #21 | #1 | `python-jobspy>=1.3.0` (markdownify advisory), `fetch_description`; Python dependency audit in CI |
-| #22 | #1 | a never-run scanner is no longer badged "Completed" |
-| #23 | #1 | a rate-limited (HTTP 429) LinkedIn page is a failed query, not "exhausted" |
-| #24 | #1 | HelloWork TELECOMMUTE at a workplace is hybrid, not fully remote |
-| #25 | #1 | the lab CLI can create its bundle store on a fresh install |
+| Backend, round-3 integration `f09f499` | `pytest -m "not network"` | 5249 passed, 9 skipped, 0 failed |
+| Backend, round-4 integration (= `main` `3032d61`) | `pytest -m "not network"` | **5280 passed, 9 skipped, 0 failed** |
+| Frontend, round-4 integration | `npm run lint`; `npx tsc -b`; `npx vitest run` | 0 errors; OK; **120 passed** (19 files) |
+| Hosted CI on `main` `3032d61` | Tests, Frontend, Lint, Secret scan, Dependency audit, Dependency graph | all success |
+| Self-check on the merged code | `python -m src.evaluation self-check --no-feedback --no-write --markdown` | PASS: unsafe rejections 0, precision 0.88, recall 1.0, baseline identical, ranking `not_measured` |
+| Installer rules | `pytest tests/test_windows_package.py tests/test_launcher.py` | all passed |
+| Installer end to end | `packaging\windows\acceptance.ps1 -Installer …Setup-1.0.0rc1.exe` | **ACCEPTANCE PASSED, 62/62 checks** |
+| Live security probes on the installed backend | see G | 10/10 passed |
 
-Merge order: #1 → #2, #3, #4, #6–#9, #11, #12, #16, #17, #21–#25 → #5, #10, #13, #14, #18, #20
-→ #15, #19. #18 needs #6; #20 needs #7; #19 needs #5.
-
-Full suite on the local integration of all 25 PRs (`integration/v1-round3` at `f09f499`, not
-pushed), clean venv with the `dev`, `linkedin` and `mcp_admin` extras: **5249 passed, 9 skipped, 0
-failed** (`pytest -m "not network"`, 2026-10-19). The skips are environmental: no local LLM on
-`:1234`, POSIX-permission and launcher cases on Windows, and `tls_client`, which python-jobspy 1.3
-no longer installs.
+The 9 skips are environmental: no local LLM on `:1234`, POSIX-permission cases on Windows,
+and `tls_client`, which python-jobspy 1.3 no longer installs.
 
 ## Checklist
 
-### A. Repository and integration baseline
+### A. Repository and integration
 
 | Item | Status | Evidence |
 |---|---|---|
-| State of the public repository and PRs | verified | table above; `main` = `24cf085` |
-| Conflicting / incorrectly based changes | verified | all 25 PRs merge cleanly together (local integration) |
-| Preferred vs mandatory education policy | verified (pending merge) | ADR 0004 amendment (#2, #13); `tests/test_education_requirement_strength.py`, `tests/test_hard_filter_three_valued.py` |
-| Unsafe-rejection gate active in CI | verified (pending merge) | `tests/test_rejection_safety_gate.py` in the required `test` job (#2) |
-| Public/private boundary respected | verified | all work in clones of `ItackFPS/Find-Your-Job-With-AI-Public`; no private-repo change |
-| Pre-existing failures | none found | full suite green |
+| Every finished PR merged, none stranded | verified | table above |
+| Stacked PRs revalidated on their new base | verified | CI green on each updated head; trees compared with the tested integration |
+| Public/private boundary | verified | all work in `ItackFPS/Find-Your-Job-With-AI-Public`; no private-repo change |
+| Branch protections respected | verified | ruleset "Protect main": PR + required checks; no bypass, no force-push |
 
-### B. Application experience
+### B. Installation and launch (Windows)
 
-Fresh-launch run on 2026-10-19, integrated branch, empty `data/`, shipped example profile, backend
-on `127.0.0.1:8765`:
+Installer `FindYourJobWithAI-Setup-1.0.0rc1.exe` built by `packaging\windows\build.ps1` from
+`main` with Inno Setup 6.7.3 and a bundled CPython 3.12.10.
 
 | Item | Status | Evidence |
 |---|---|---|
-| First start does not scan | verified (#11) | schedules seeded `startup_policy: disabled`; after 75 s (> 1 scheduler tick): no execution, no scan log line, no pipeline run |
-| Upgraded install does not scan | verified (#11) | schedule rows forced back to `run_once_per_day` in the DB, restart → reset to `disabled` from the YAML, 0 dispatches after a tick |
-| Restart after a hard kill | verified | backend killed (`taskkill /F`) three times; each restart recovered; jobs, run and feedback intact; 0 dispatches |
-| Manual, bounded scans from the UI | verified | "Scan now" on HelloWork (3 roles × ≤3 jobs) and LinkedIn (2 queries × 5 results); progress and Pause shown while running |
-| Fresh install without credentials can run | verified (#12) | pipeline run completed; France Travail and Indeed skipped with setup guidance in the run's errors |
-| Source failures visible | verified | run errors list APEC `403 Forbidden` per keyword; HelloWork scan detail lists its error reasons (#20); LinkedIn failed queries shown (#23) |
-| Dashboard, job list (filters, tiers, sort), job detail with original offer | verified | 67 jobs listed with tiers; job detail shows the posting and a link to it |
-| Explainable decision on the job page | verified | decision record: 11 supporting / 0 against / 3 unknown / 1 conflict, strategy `sv-f066dc7bc80db1fb`, decision and run id, confidence "not calibrated" |
-| Feedback from the UI reaches storage | verified | "Interested" → Save → `POST /feedback` → row with `decision_id`, `strategy_version`, `decision_run_id`; survives restart |
-| Windows launcher (`FindYourJob.cmd`) | implemented, verified 2026-10-18 | not re-run this round (backend started with uvicorn directly) |
-| Docs: install, usage, troubleshooting | implemented | README, `docs/windows-app.md`; not re-read end to end |
+| Per-user install, no admin rights | verified | `PrivilegesRequired=lowest`; silent `/CURRENTUSER` install exit 0; registered under HKCU |
+| No dependence on a checkout or developer path | verified | runtime `<app>\runtime\python.exe` with a `._pth` (ignores `PYTHONPATH`/`PYTHONHOME`/user site); the build imports the backend from outside any checkout with both set to bogus paths; no `.venv` |
+| Desktop and Start Menu shortcuts | verified | target `<app>\FindYourJob.cmd`, working folder `<app>`, app icon; Stop, logs and self-check entries; the desktop shortcut can be unticked |
+| Launch from the desktop shortcut | verified | walkthrough: backend healthy on `127.0.0.1:8000`, dashboard opened |
+| Health wait, single instance | verified | second launch exits 0 and reuses the backend (same pid, one backend process) |
+| No scan at launch, restart or upgrade | verified | `/api/pipeline/runs` = `[]`; LinkedIn/HelloWork `last_scan: null`, `is_scanning: false` |
+| Clean stop and restart | verified | Start Menu Stop → backend process gone (no orphan); relaunch → data intact |
+| Port conflict / failed startup | verified (tests) | `tests/test_launcher.py` (foreign port refused, crash at startup reported with log lines) |
+| Upgrade keeps data and settings | verified | upgrade while running: app stopped first; `jobs.db`, `profile.local.yaml` and an edited default config kept |
+| Uninstall | verified | app files and shortcuts removed, unregistered; `data\`, `config\`, `logs\` kept (interactive uninstall asks, default No) |
+| Startup time | measured | 41–76 s cold (precompiled bytecode; a fresh copy is also scanned by antivirus), about 20 s warm |
+| Logs locatable, no secrets | verified | Start Menu → logs; walkthrough logs scanned: no credential values |
+| Package free of secrets, databases and personal files | verified (#29) | the build refuses `.env`, `*.local.*`, databases, logs and `data\`; a scan of the stage found none. It found the build machine's checkout path in 14,019 `.pyc` files; #29 strips it and fails the build if any staged file contains it |
 
-### C. Decision safety and explainability
-
-| Item | Status | Evidence |
-|---|---|---|
-| No unsupported rejection of benchmark-suitable jobs | verified | self-check: unsafe rejections 0 / 22 suitable |
-| Mandatory vs preferred vs non-eliminatory | verified | ADR 0004 table; tests above |
-| Ambiguity kept as uncertainty | verified (#13) | an unqualified level above the ceiling → `ConstraintState.UNKNOWN`, never a reject |
-| Eligibility separate from ranking | verified | ADR 0002/0003; self-check reports them apart |
-| Rejections traceable to a rule and evidence | verified | self-check "rejections with a stated reason: 100%"; live: 1012 decisions with evidence |
-| Rule-backed rejections can reach review | verified (#3) | audit sample, `rejection_audit_max_open=3` |
-| Experience thresholds read correctly | verified (#9, #14) | ranges use the lower bound; cue after the noun is mandatory |
-| Messages match decisions | verified (#13) | "(stated level, equivalence accepted)" instead of "(preferred)" |
-| Explanations state true facts | fixed (#24) | live: 3/3 HelloWork "Télétravail partiel" offers were labelled fully remote and explained as matching a remote preference |
-| Synthetic false positives bm31, bm36, bm39 | investigated, not changed | "keyword traps": the postings say they are sales / business-analyst roles. They are kept (the safe direction). A deterministic fix would be a title or keyword exclusion, which the policy rules out without evidence; see F |
-
-### D. Feedback and personalization
+### C. First run and sources
 
 | Item | Status | Evidence |
 |---|---|---|
-| Feedback persisted and traceable to job and decision | verified | live UI test above; `tests/test_feedback_*` |
-| Latest answer wins; repeated answers do not stack; clearing is scoped | verified (#4) | bridge rows `bridge:<event_id>` |
-| Personalization opt-in and its off state | verified (#4) | README; job page says feedback "does not change your ranking yet" |
-| Feedback visible in the self-check | verified (#15) | live: `jobs_with_explicit_feedback: 1`, `latest_answers: {interested: 1}`, reported as "signals, not labels" |
-| Feedback improves ranking | **not measured** | no reviewed real dataset with graded labels |
+| First-run guidance | verified | Dashboard "Getting started" card while the database is empty; `docs/windows-installer.md` |
+| Usable without credentials | verified | walkthrough run completed with no `.env` |
+| Skipped vs failed vs completed | verified (#26) | live run: France Travail and Indeed *skipped* (with the variables to set), APEC *failed*, Jobicy, WWR, RemoteOK, EURES *completed* |
+| APEC HTTP 403 | root cause found (#28) | DataDome bot protection: `403` with a `captcha-delivery.com` URL. The collector stops after one request and says so; it never tries to get round the CAPTCHA. APEC stays active in the shipped config (pinned by `tests/test_indeed_redundancy_coverage.py`): owner decision |
+| Local-first | verified | AI off by default; non-loopback LLM endpoint refused (#6, #18); the first run downloads the embedding model from Hugging Face once |
 
-### E. Self-checking and evaluation
+### D. User walkthrough (installed app, real offers, 2026-10-19)
+
+| Step | Result |
+|---|---|
+| Install, launch from the desktop shortcut | healthy, version 1.0.0rc1, no run, scanners idle |
+| Profile edited in the UI (added a skill) | `PUT /api/profile` 200, saved to `config\profile.local.yaml` |
+| Bounded manual run (**Run pipeline**, AI off) | completed in 121 s: 2568 collected, 2169 after dedup, 210 past the hard filter, 141 past the requirements gate, 141 scored |
+| Jobs list | 141 jobs with scores and tiers; search filters correctly |
+| Job detail | original offer and link, score, decision record (12 supporting, 0 against, 2 unknown; strategy and run id), "things to check", match factors |
+| Feedback | "Interested" → `201`, stored with `decision_id`, `strategy_version`, `decision_run_id`; counted in the self-check as a signal |
+| Self-check (Start Menu entry) | report written; Lab: pass, 0 unsafe, precision 88 %, recall 100 %, ranking not measured |
+| Lab | no strategy promoted; the pipeline runs on `config/` |
+| Stop (Start Menu) and relaunch (desktop) | 141 jobs, 1 run, feedback and profile kept; no new run or scan |
+| Uninstall | data kept as documented |
+
+### E. Decision safety and evaluation
 
 | Item | Status | Evidence |
 |---|---|---|
-| Reproducible from a clean checkout | verified | `python -m src.evaluation self-check` on the integrated branch: PASS, baseline identical |
-| Reproducible dataset with provenance | verified | `synthetic-ai-filter-50`: 50 jobs, 50 human labels, hash-pinned |
-| Versioned baseline, regression detection | verified (#5) | golden file; status `regression`/`changed`; exit code |
-| Safety gate fails on a deliberate unsafe rejection | verified (#2) | `tests/test_rejection_safety_gate.py` |
-| Eligibility metrics | verified | precision 0.88, recall 1.0, FP 3, FN 0, unsafe 0 (synthetic only) |
-| Honest recommendations | verified (#19) | the lever text says what the lab agent tries; live agent run: no findings, matching the text |
-| Ranking metrics | **not implemented** | dataset has eligibility labels, not graded relevance |
-| Reviewed real-world dataset | **blocked** | needs a human; see H |
+| No unsafe rejection on the benchmark | verified | self-check: 0 of 22 suitable jobs rejected |
+| Mandatory vs preferred vs non-eliminatory education; ambiguity kept uncertain | verified | ADR 0004; #2, #13; `tests/test_rejection_safety_gate.py` in the required job |
+| Experience minimums and ranges | verified | #9, #14 |
+| Remote vs hybrid | verified | #24 |
+| Decision provenance and strategy version | verified | job page decision record; feedback rows carry decision, strategy, run |
+| Benchmark | reproduced | precision 0.88, recall 1.0, 3 FP (keyword traps bm31, bm36, bm39), 0 FN; synthetic only |
+| Ranking metrics | **not measured** | no graded relevance labels |
+| Real-world accuracy | **blocked** | needs human-reviewed labels |
+| Thresholds, blacklists, promotions | unchanged | nothing tuned to move a metric |
 
-### F. Controlled self-improvement
-
-Live loop on 2026-10-19 (integrated branch, fresh `data/`):
+### F. Lab
 
 | Item | Status | Evidence |
 |---|---|---|
-| Frozen baseline | verified | lab `status`: no pointer, production = the configuration directory; `config/*.yaml` hashed before |
-| Pattern → hypothesis → candidate | verified | `hyp-daae16045e` ("sales-engineer titles are pre-sales", bm31/bm39), `cand-2b6a207dd1e9` (title exclusion "sales engineer") |
-| Same dataset, baseline vs candidate | verified | `exp-648ebb346b`: fixed 2, broken 0; precision 0.88 → 0.957, recall 1.0 → 1.0, unsafe 0 → 0; guardrails no-new-unsafe, reproducible, latency (ratio 0.91) all passed |
-| Weak evidence cannot be promoted | verified | verdict `insufficient_evidence` ("2 discordant pairs (need 5)"), `eligible_for_approval: false`; `tests/test_lab_promotion_authority.py::test_an_honestly_ineligible_experiment_cannot_be_approved` |
-| An agent cannot approve | verified | `approve` (with and without `--accept-exploratory-evidence`) → "refusing approve: automated-agent environment", exit 2 |
-| Production unchanged | verified | pointer still null; `config/*.yaml` byte-identical after the loop |
-| Fresh-install lab | fixed (#25) | `candidate` failed on a fresh install (guard refused `data/lab`) |
-| Agent cannot alter its own gates | partial | in-process guard verified; OS-level isolation **not enforced** on this account (the agent reports 34 writable production targets) |
+| Weak evidence cannot be promoted; agents cannot approve | verified (round 3) | `insufficient_evidence` verdict; `approve` refused in an agent environment; `tests/test_lab_promotion_authority.py` |
+| Lab cannot silently alter production | verified | active strategy = `config/` after every step; promotion only through `python -m src.lab approve` (typed confirmation) |
+| OS-level isolation | **not enforced** | `python -m src.lab isolation-check` from the installed copy: `os_enforced: false`, exit 3. Cause: the agent runs under the user's own account. The dedicated account of ADR 0011 (`scripts/lab_isolation.ps1`) needs an administrator to create it, which is the owner's action. The Lab page and README say so |
 
 ### G. Security
 
 | Item | Status | Evidence |
 |---|---|---|
-| Binding | verified | backend and Vite bind `127.0.0.1` |
-| Host / Origin guards cover every route | verified (code review) | both are app-wide ASGI middlewares (all routers, `/assets`, the SPA catch-all, the SSE stream); every write route lives under `/api`; no GET route writes; no WebSocket route |
-| DNS rebinding, cross-site writes, forwarded headers | verified | `tests/test_api_host_guard.py`, origin guard tests, `tests/test_api_forwarded_headers.py` (#16) |
-| SPA path traversal | verified (code review) | `spa_file` resolves and requires `is_relative_to(dist)` |
-| Untrusted posting content in the UI | verified (code review) | no `dangerouslySetInnerHTML`; posting text rendered as text; `apply_url` goes into an `href`, where React 19 blocks `javascript:` URLs. There is no backend scheme check |
-| Local-first, no cloud fallback | verified (#6, #18) | non-loopback LLM endpoint refused unless opted in; look-alike DNS names now refused too |
-| Secrets | verified | 0 secret-scanning alerts; Gitleaks in CI |
-| Python dependencies (fresh install) | verified (#21) | clean venv `.[dev,linkedin]`: `python-jobspy` 1.3.0, `markdownify` 1.2.3, pip-audit "No known vulnerabilities found" (82 packages, locally and in hosted CI run 39182024433) |
-| Python audit in CI | verified (#21) | `Dependency audit` workflow: PRs, `main`, weekly |
-| npm dependencies | verified | `npm audit --omit=dev --audit-level=high` in the required `frontend` job |
-| Lab isolation | partial | see F |
-
-### H. Real-world validation
-
-| Item | Status | Evidence |
-|---|---|---|
-| Bounded live collection, fresh install | verified 2026-10-19 | 1012 offers collected, 981 after dedup, 92 past the hard filter, 67 past the requirements gate, 67 scored (sources: WWR 33, EURES 22, RemoteOK 6, HelloWork 3, Jobicy 3); LinkedIn 5 fetched, all pre-filtered |
-| Real-source defects found and fixed | verified | earlier rounds: #7, #9, #13, #14. This round: #20 (unreadable listing checked off), #23 (HTTP 429 read as exhausted), #24 (partial telework read as remote), #22 (misleading badge) |
-| python-jobspy 1.3.0 against real LinkedIn | verified | 3 bounded calls: every column the scanner reads present, descriptions returned with `fetch_description`; no crash when loaded after torch + scikit-learn |
-| Labels reviewed by a human | **blocked** | none of the real decisions has an independent human label; no accuracy claim is made on real offers. The one "interested" answer in the test database was entered during the UI test, not by the owner |
-
-### I. Reliability and presentation
-
-| Item | Status | Evidence |
-|---|---|---|
-| Backend tests | verified | integration of all 25 PRs: 5249 passed, 9 skipped (environmental), 0 failed |
-| Frontend | verified | lint 0 errors (3 pre-existing warnings), `tsc -b` OK, build OK, 108 tests (with #22) |
-| Hosted CI | verified | every PR #1–#25 green |
-| V1 presentation | not done | to write once the PRs are merged |
+| Loopback binding | verified live | installed backend listens on `127.0.0.1` only; LAN, link-local and virtual adapter addresses refused |
+| Host guard (DNS rebinding) | verified live | foreign `Host` → 400, also with `X-Forwarded-Host`/`X-Forwarded-For` |
+| Origin guard (cross-site writes) | verified live | `Origin: https://evil.example` → 403, `Origin: null` → 403, also with forwarded headers |
+| Dashboard path traversal | verified live | `/%2e%2e/%2e%2e/config/profile.yaml` does not serve the file |
+| Same-origin UI writes on another port | verified | acceptance ran on `:8765` |
+| Local LLM only, remote opt-in | verified | #6, #18 |
+| Python dependencies | verified | `pip-audit` on `.[dev,linkedin]` and on the installer's pinned runtime set (`packaging/windows/requirements.txt`): no known vulnerabilities; both in CI |
+| npm dependencies | verified | `npm audit`: 0 vulnerabilities |
+| Secrets in the repository | verified | Gitleaks in CI; secret scanning and push protection on |
 
 ## Residual risks
 
-- **Real-world accuracy and ranking quality are unmeasured.** All accuracy figures rest on 50
-  synthetic jobs (22 suitable). Ranking has no graded labels.
-- **Lab agent isolation is in-process only** on an account that can write production state.
-  ADR 0011's OS-level setup (`scripts/lab_isolation.ps1`) is not applied here.
-- **APEC answers 403 to every search** (2026-10-19). The failure is visible in the run's errors
-  and the source contributes nothing. It is not investigated here.
-- **Deep Windows install paths break the LinkedIn extra.** `curl_cffi`'s bundled DLL fails to load
-  when its path exceeds about 250 characters ("file name too long").
-- **`browser` extra** (crawl4ai, inactive by default) pulls `nltk` 3.10.3 with PYSEC-2026-3740
-  (unpatched; NLTK model save/load with caller paths). The app never calls those APIs, so the
-  advisory does not apply today. The extra is not audited in CI.
-- **HelloWork full remote is under-claimed** (#24). A fully remote job whose description does not
-  say so is now `hybrid`.
-- **Host guard accepts requests without a `Host` header** (HTTP/1.0). Browsers always send one, so
-  this is not a rebinding path.
-- **`apply_url` scheme is not validated by the backend.** The UI relies on React 19 blocking
+- **Real-world accuracy and ranking quality are unmeasured.** All figures rest on 50 synthetic
+  jobs (22 suitable).
+- **Lab isolation is in-process only** unless the owner sets up ADR 0011's separate account.
+- **Unsigned installer**: SmartScreen warns; users should check the published SHA-256.
+- **Bundled CPython 3.12.10** is the build machine's; rebuild with the latest 3.12 patch release
+  for its security fixes.
+- **APEC** fails on every run while its bot protection lasts (visible, one request).
+- **Deep install paths can break the LinkedIn extra** (`curl_cffi` DLL path over about 250
+  characters). The default install path is far shorter.
+- **`browser` extra** (crawl4ai, inactive, not bundled): `nltk` advisory PYSEC-2026-3740, not
+  reachable from the app; not audited in CI.
+- **Host guard accepts requests without a `Host` header** (HTTP/1.0 only; browsers always send
+  one).
+- **`apply_url` scheme is not validated by the backend**; the UI relies on React 19 blocking
   `javascript:` URLs.
 
-## Blockers
+## Owner actions
 
-1. **Merge the PRs** (owner), in the order above.
-2. **Review real labels** (owner), before any real-world metric is reported.
+1. Decide whether to ship `apec` with `active: false` while it is blocked (needs updating the
+   redundancy tripwire test).
+2. Review real labels before any real-world metric is reported.
+3. Optional: set up the lab agent's separate Windows account (`scripts/lab_isolation.ps1`).
+4. Optional: code-sign the installer; publish a GitHub release with the `.exe` and `.sha256`.
 
-## Next steps (not blocked)
+## How to test it yourself
 
-- Small graded-relevance dataset (for example 30 real offers, rated 0–3 by the owner) so ranking
-  can be measured.
-- Read HelloWork's telework badge directly; count detail pages without JobPosting JSON-LD.
-- Investigate the APEC 403.
-- Remove the dead `tls_client` preload once #21 is merged.
-- The LinkedIn per-page log line uses `→`, which is lost on a cp1252 stderr.
+See `docs/windows-installer.md`. In short: run the setup `.exe`, keep the desktop shortcut,
+double-click **Find Your Job With AI**, fill in the Profile, press **Run pipeline**.
