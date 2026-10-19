@@ -151,8 +151,15 @@ def test_runtime_requirements_pin_every_declared_dependency():
     for requirement in declared:
         name = re.match(r"[A-Za-z0-9_.-]+", requirement).group(0)
         assert norm(name) in pins, f"{name} is declared in pyproject.toml but not pinned"
-    for tool in ("pip", "setuptools", "wheel", "pytest", "mypy", "ruff"):
+    for tool in ("pip", "wheel", "pytest", "mypy", "ruff"):
         assert tool not in pins, f"{tool} must not be bundled"
+
+
+def test_api_reports_the_packaged_version():
+    from src.api.app import app
+
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    assert app.version == project["version"]
 
 
 def test_icon_matches_its_generator():

@@ -2,6 +2,7 @@
 # The project's dependencies plus the [linkedin] extra, resolved once on CPython 3.12 x64
 # and pinned so a rebuild installs the same versions. Regenerate after changing
 # pyproject.toml: see docs/windows-installer.md, "Updating the pinned dependencies".
+# setuptools is pinned because torch requires it at run time on Python 3.12.
 annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.15.1
@@ -14,8 +15,8 @@ cloudpickle==3.1.2
 colorama==0.4.6
 curl_cffi==0.16.3
 fastapi==0.146.0
-feedparser==6.0.14
 feedparser-sgmllib==2.1.0
+feedparser==6.0.14
 filelock==4.2.3
 fsspec==2026.9.0
 h11==0.16.0
@@ -38,8 +39,8 @@ opentelemetry-api==1.45.1
 packaging==26.3
 pandas==3.0.6
 pycparser==3.11
-pydantic==2.14.1
 pydantic-settings==2.16.0
+pydantic==2.14.1
 pydantic_core==2.50.1
 Pygments==2.21.0
 python-dateutil==2.9.0.post0
@@ -54,6 +55,7 @@ safetensors==0.8.0
 scikit-learn==1.9.1
 scipy==1.18.1
 sentence-transformers==6.1.0
+setuptools==84.0.0
 shellingham==1.5.4
 six==1.17.0
 soupsieve==3.0.3

@@ -197,12 +197,13 @@ try {
 }
 
 $Packages = & $RuntimePython -c "import importlib.metadata as m; print('\n'.join(sorted(f'{d.metadata[\""Name\""]}=={d.version}' for d in m.distributions())))"
-Set-Content -Encoding utf8 (Join-Path $Stage "runtime-packages.txt") $Packages
+$Utf8 = New-Object System.Text.UTF8Encoding $false  # no BOM: Python reads these files
+[IO.File]::WriteAllText((Join-Path $Stage "runtime-packages.txt"), ($Packages -join "`n") + "`n", $Utf8)
 $Info = [ordered]@{
     app = "find-your-job-with-ai"; version = $Version; commit = $Commit; dirty_worktree_ignored = $Dirty
     python = $PyInfo[0]; built_at = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 }
-$Info | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $Stage "build-info.json")
+[IO.File]::WriteAllText((Join-Path $Stage "build-info.json"), ($Info | ConvertTo-Json), $Utf8)
 Get-ChildItem -Recurse -Force $Stage -Directory -Filter "__pycache__" | Remove-Item -Recurse -Force
 
 if ($StageOnly) {

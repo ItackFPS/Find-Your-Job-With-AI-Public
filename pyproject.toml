@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "find-your-job-with-ai"
-version = "0.1.0"
+version = "1.0.0rc1"
 description = "Automated remote job discovery system"
 readme = "README.md"
 license = {text = "MIT"}
