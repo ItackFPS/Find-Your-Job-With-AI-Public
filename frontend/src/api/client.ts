@@ -84,6 +84,10 @@ export interface SourceStats {
   collected: number
   accepted: number
   errors: number
+  // completed | partial | failed | skipped; absent on runs recorded before it existed
+  status?: string | null
+  // why a skipped source was left out and what to set up
+  reason?: string | null
 }
 
 export interface RunStats {

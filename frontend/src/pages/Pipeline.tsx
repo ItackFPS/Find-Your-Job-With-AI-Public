@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getRun, listRuns, getLinkedInStatus, listLinkedInScans, getHelloWorkStatus, listHelloWorkScans, type PipelineRun, type RunStats, type LinkedInScanRun, type LinkedInScanStats, type HelloWorkScanRun, type HelloWorkScanStats } from '../api/client'
 import { Link } from 'react-router-dom'
-import { Card, StatusBadge, FunnelChart, DataTable, EmptyState, LoadingState, type DataTableColumn, type FunnelRow } from '../components'
+import { Card, StatusBadge, SourceStatus, FunnelChart, DataTable, EmptyState, LoadingState, type DataTableColumn, type FunnelRow } from '../components'
 import { findPipelineStage } from '../config/pipelineStages'
 import { formatDuration, formatElapsedBetween, formatDateTime } from '../utils'
 
@@ -71,6 +71,8 @@ interface SourceRow {
   collected: number
   accepted: number
   errors: number
+  status?: string | null
+  reason?: string | null
 }
 
 const SOURCE_COLUMNS: DataTableColumn<SourceRow>[] = [
@@ -78,6 +80,7 @@ const SOURCE_COLUMNS: DataTableColumn<SourceRow>[] = [
   { key: 'collected', header: 'Collected', align: 'right', render: r => r.collected },
   { key: 'accepted', header: 'Accepted', align: 'right', render: r => r.accepted },
   { key: 'errors', header: 'Errors', align: 'right', render: r => <span style={{ color: r.errors > 0 ? 'var(--color-error)' : 'inherit' }}>{r.errors}</span> },
+  { key: 'status', header: 'Status', render: r => <SourceStatus status={r.status} reason={r.reason} /> },
 ]
 
 function SourcesTable({ bySource }: { bySource: RunStats['by_source'] }) {

@@ -332,8 +332,34 @@ class TestPipelinePreflightWiring:
         assert result.status == "completed", f"Pipeline failed: {result.error}"
         assert result.stats.preflight.get("status") == "DEGRADED"
         assert result.stats.preflight.get("skipped_source_types") == ["france_travail"]
-        assert "france_travail" not in result.stats.by_source
+        # listed as skipped, with what to set up -- never as a source that ran
+        skipped = result.stats.by_source["france_travail"]
+        assert (skipped["status"], skipped["collected"], skipped["errors"]) == ("skipped", 0, 0)
+        assert "FRANCE_TRAVAIL_CLIENT_ID" in skipped["reason"]
         assert any("France Travail skipped" in e for e in result.stats.errors)
+
+    def test_indeed_without_api_key_is_skipped_visibly_and_never_called(self, tmp_path, monkeypatch):
+        from src.pipeline.orchestrator import run_pipeline
+
+        monkeypatch.delenv("INDEED_API_KEY", raising=False)
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "sources.yaml").write_text(
+            "sources:\n  - {name: indeed, type: indeed, active: true}\n", encoding="utf-8")
+
+        mock_embed = MagicMock()
+        mock_embed.embed.return_value = [0.1] * 384
+        with patch("src.collectors.indeed.IndeedCollector.collect") as mock_collect, patch(
+            "src.embeddings.embedding.EmbeddingService", return_value=mock_embed
+        ):
+            result = run_pipeline(db_path=str(tmp_path / "test.db"), config_dir=str(config_dir))
+
+        mock_collect.assert_not_called()
+        assert result.status == "completed", result.error
+        assert result.stats.preflight["skipped_source_types"] == ["indeed"]
+        assert result.stats.by_source["indeed"]["status"] == "skipped"
+        assert "INDEED_API_KEY" in result.stats.by_source["indeed"]["reason"]
+        assert any(e.startswith("Indeed skipped for this run") for e in result.stats.errors)
 
     def test_preflight_runs_exactly_once_per_run(self, tmp_path):
         from src.pipeline import preflight as preflight_module
@@ -426,6 +452,35 @@ class TestPipelinePreflightWiring:
 # ---------------------------------------------------------------------------
 # Overall preflight status (FAILED vs DEGRADED vs READY)
 # ---------------------------------------------------------------------------
+
+class TestIndeedPreflight:
+    @staticmethod
+    def _sources(config_dir: Path, *, active: bool) -> None:
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "sources.yaml").write_text(
+            f"sources:\n  - {{name: indeed, type: indeed, active: {str(active).lower()}}}\n", encoding="utf-8")
+
+    def test_active_indeed_without_key_is_skipped(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("INDEED_API_KEY", raising=False)
+        self._sources(tmp_path, active=True)
+        result = run_preflight(str(tmp_path))
+        assert (result.status, result.ready) == ("DEGRADED", True)
+        assert result.skipped_source_types == ["indeed"]
+        assert "INDEED_API_KEY" in result.skip_reasons["indeed"]
+        assert ".env" in result.skip_reasons["indeed"]
+        assert any("Indeed skipped" in line for line in result.report_lines)
+        assert not result.errors  # optional source: never blocks the run
+
+    def test_indeed_with_key_or_inactive_is_not_skipped(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("INDEED_API_KEY", SECRET)
+        self._sources(tmp_path, active=True)
+        result = run_preflight(str(tmp_path))
+        assert result.skipped_source_types == [] and result.status == "READY"
+        assert SECRET not in "\n".join(result.report_lines) + str(result.to_dict())
+        monkeypatch.delenv("INDEED_API_KEY")
+        self._sources(tmp_path, active=False)
+        assert run_preflight(str(tmp_path)).skipped_source_types == []
+
 
 class TestOverallPreflightStatus:
     def test_both_healthy_is_ready(self, tmp_path, monkeypatch):
