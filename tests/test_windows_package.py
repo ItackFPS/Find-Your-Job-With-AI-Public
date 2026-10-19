@@ -127,7 +127,7 @@ def test_bundled_python_is_isolated_from_the_users_environment():
 
 
 def test_bytecode_does_not_record_the_build_checkout(tmp_path):
-    assert "--invalidation-mode checked-hash -s $Stage" in BUILD
+    assert "-f -j 0 --invalidation-mode checked-hash -s $Stage" in BUILD and "--no-compile" in BUILD
     assert '"find_build_path.py"), $Stage, $RepoRoot) "build path check"' in BUILD
 
     sys.path.insert(0, str(PKG))
