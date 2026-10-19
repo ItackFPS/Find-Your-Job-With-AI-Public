@@ -31,3 +31,9 @@ could itself change production). Time-dependent checks are frozen to the dataset
 - ESCO synonym enrichment is off by default in evaluation runs (results must not depend
   on a developer's `data/esco.db`); `--esco-db` enables the production lookup and joins
   the strategy fingerprint.
+- `self-check` (2026-10) reuses the golden file as the **recorded baseline** instead of adding a
+  second baseline store: it classifies each verdict that moved since the baseline as fixed, broken or
+  unjudged, and reports `regression` only for broken labelled jobs. Refreshing the golden file is
+  still a reviewed change. The status is not a quality verdict either. It says the benchmark did not
+  move the wrong way, and it reports ranking as "not measured" because these labels say "eligible
+  or not", not "how relevant".

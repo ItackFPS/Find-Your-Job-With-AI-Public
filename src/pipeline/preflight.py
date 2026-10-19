@@ -14,6 +14,11 @@ its own configuration file (``sources.yaml`` for France Travail,
 ``notifications.yaml`` / ``N8N_WEBHOOK_URL`` for n8n) — a disabled/inactive
 integration is skipped rather than failing the run.
 
+France Travail with no credentials at all (a fresh install) is not a broken
+connection but one that was never set up: the run goes ahead DEGRADED without
+that source, the skip named in the report and the run's errors. Credentials
+that are present but fail to authenticate still block the run.
+
 Never raises: any unexpected error while checking is captured as a failed
 status for that integration, since a preflight that crashes is worse than
 one that reports a clear failure.
@@ -63,6 +68,8 @@ class PreflightResult:
     report_lines: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)          # blocking (FAILED) reasons
     degraded_errors: list[str] = field(default_factory=list)  # non-blocking (DEGRADED) reasons
+    # Source types the run must not collect from (an unconfigured France Travail).
+    skipped_source_types: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -70,6 +77,7 @@ class PreflightResult:
             "ready": self.ready,
             "france_travail": asdict(self.france_travail),
             "n8n": asdict(self.n8n),
+            "skipped_source_types": list(self.skipped_source_types),
             "report_text": "\n".join(self.report_lines),
         }
 
@@ -80,9 +88,12 @@ _READY_LIKE = frozenset({"READY", "SKIPPED"})
 def run_preflight(config_dir: str = "config") -> PreflightResult:
     """Check France Travail and n8n connectivity/auth before collection starts.
 
-    France Travail is a collection source: an active source that cannot
-    authenticate blocks the run entirely (status FAILED) — a partial scan
-    silently missing a configured source is worse than no run at all.
+    France Travail is a collection source: an active source whose credentials
+    cannot authenticate blocks the run entirely (status FAILED) — a partial
+    scan silently missing a configured source is worse than no run at all. An
+    active source with no credentials set was never configured: it is skipped
+    for this run, visibly (status DEGRADED), so a fresh install can still
+    collect from the sources that need no account.
 
     n8n is downstream notification infrastructure: a reachability or webhook
     problem is reported (status DEGRADED) but never blocks collection,
@@ -92,12 +103,13 @@ def run_preflight(config_dir: str = "config") -> PreflightResult:
     ft = _check_france_travail(config_dir)
     n8n = _check_n8n(config_dir)
 
-    ft_ok = ft.status in _READY_LIKE
+    ft_unconfigured = ft.status == "CONFIG_MISSING"
+    ft_ok = ft.status in _READY_LIKE or ft_unconfigured
     n8n_ok = n8n.status in _READY_LIKE
 
     if not ft_ok:
         status = "FAILED"
-    elif not n8n_ok:
+    elif ft_unconfigured or not n8n_ok:
         status = "DEGRADED"
     else:
         status = "READY"
@@ -107,12 +119,15 @@ def run_preflight(config_dir: str = "config") -> PreflightResult:
         errors.append(f"France Travail: {ft.detail}")
 
     degraded_errors: list[str] = []
+    if ft_unconfigured:
+        degraded_errors.append(f"France Travail skipped for this run: {ft.detail}")
     if not n8n_ok and n8n.detail:
         degraded_errors.append(f"n8n: {n8n.detail}")
 
     result = PreflightResult(
         france_travail=ft, n8n=n8n, status=status, ready=ft_ok,
         errors=errors, degraded_errors=degraded_errors,
+        skipped_source_types=["france_travail"] if ft_unconfigured else [],
     )
     result.report_lines = _format_report(result)
     return result
@@ -338,6 +353,11 @@ def _format_report(result: PreflightResult) -> list[str]:
             lines.append(f"  → {ft.detail}")
         if ft.status == "AUTH_FAILED":
             lines.append("  → Collection will not start until the connection is fixed.")
+        if ft.status == "CONFIG_MISSING":
+            lines.append(
+                "  → France Travail is skipped for this run; the other sources still run. "
+                "Add the credentials to .env, or set active: false in sources.yaml."
+            )
 
     n8n = result.n8n
     if n8n.status == "SKIPPED":

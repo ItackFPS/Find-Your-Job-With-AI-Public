@@ -333,7 +333,8 @@ Docker Compose setup starts or manages an n8n instance.
 - Serves the built React frontend as a SPA from `frontend/dist/` in production, if
   present.
 - `GET /api/lab/*` (`src/api/routes/lab.py`, **Lab** page) shows evaluation run results
-  (`data/benchmarks/runs/`), lab experiments with verdicts, guardrails and metric deltas, the lab
+  (`data/benchmarks/runs/`), the latest self-check report (`data/benchmarks/self-check/`), lab
+  experiments with verdicts, guardrails, metric deltas and a recommended next action, the lab
   agent's memory and the `active_strategy` pointer history. It reads those files with read-only
   SQLite URIs and plain JSON and imports neither `src.evaluation` nor `src.lab`.
 
