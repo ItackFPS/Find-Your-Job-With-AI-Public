@@ -74,9 +74,11 @@ and soft penalties on top.
 `src/requirements/gate.py`'s `HardConstraintGate` runs *before* scoring and can reject a
 job outright, independent of how well it would otherwise score:
 
-- **Education**: a *mandatory* or *preferred* requirement above `profile.max_education`
-  is a hard rejection; an ambiguous ("core"/unknown) requirement is a soft penalty
-  (`education_preferred_penalty`, default 20%).
+- **Education**: a level above `profile.max_education` that the posting *requires*
+  ("Bac+5 requis", "Bac+4 ou équivalent") is a hard rejection; a level it only wishes
+  for ("Bac+5 souhaité", "un plus") is a soft penalty (`education_preferred_penalty`,
+  default 20%); a level it calls non-eliminatory ("non éliminatoire", "not required")
+  or mentions without any qualifier changes nothing.
 - **Experience**: mandatory years above your profile's max is a hard rejection;
   preferred excess is a soft 20% penalty.
 - **Principal skill**: a principal skill named in the job title that isn't in your

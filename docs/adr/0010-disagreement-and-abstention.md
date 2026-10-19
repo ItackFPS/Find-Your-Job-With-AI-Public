@@ -25,7 +25,8 @@ on by the owner in `config/disagreement.yaml` after reading the shadow metrics.
 - `python -m src.evaluation run <dataset> --assess` evaluates the engine offline on
   deterministic evidence (no semantic/Phase 2/LLM signals offline) and reports review rate,
   capture rate and lift. **On the 50-job synthetic dataset the result is
-  `insufficient_evidence` and the engine flags nothing**: 4 wrong decisions, none captured, so
+  `insufficient_evidence` and the engine flags nothing**: 3 wrong decisions (all false
+  positives; 4 before the ADR 0004 amendment fixed the bm46 unsafe rejection), none captured, so
   there is no evidence yet that the flag is useful and `active` should stay off.
 - Thresholds live in `config/disagreement.yaml`, whose hash is recorded in every assessment (`config_hash`). It is not part of the strategy fingerprint, which tracks only what changes accept/reject decisions or scores.
 - **Engine v2 — user feedback is a signal.** The feedback journal (ADR 0009) gives each job a

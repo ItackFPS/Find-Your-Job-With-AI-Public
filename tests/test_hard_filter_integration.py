@@ -126,7 +126,7 @@ class TestProductionPathProvenance:
         result = _check(gate, extractor, job)
         assert not result.passes
         for reason in result.reasons:
-            assert reason.rule_version == "hard-filter.v2", (
+            assert reason.rule_version == "hard-filter.v3", (
                 f"Rejection reason missing rule_version: {reason}"
             )
 
@@ -221,18 +221,18 @@ class TestEducationHardConstraintToggle:
             assert result.passes, f"toggle={toggle} must still pass a within-limit requirement"
 
     def test_preferred_education_toggle_behavior(self):
-        """PREFERRED education above the candidate's max is now a hard reject
-        (behavior change, 2026-09: not "mandatory only" — see
-        HardConstraintGate._check_education) when education_hard_constraint
-        is on, and falls back to the existing soft-penalty pass when off,
-        exactly like MANDATORY."""
+        """A PREFERRED level stated as the bar ("Bac+5 ou équivalent") above
+        the candidate's max is a hard reject when education_hard_constraint is
+        on, and falls back to the soft-penalty pass when off, exactly like
+        MANDATORY. A desirable one ("Bac+5 souhaité") passes either way
+        (ADR 0004, amended 2026-10)."""
         gate_on, extractor = _gate(max_edu=2, education_hard_constraint=True)
-        job_on = _job(description="Bac+5 souhaité.")
-        assert not _check(gate_on, extractor, job_on).passes
+        assert not _check(gate_on, extractor, _job(description="Bac+5 ou équivalent.")).passes
+        assert _check(gate_on, extractor, _job(description="Bac+5 souhaité.")).passes
 
         gate_off, extractor = _gate(max_edu=2, education_hard_constraint=False)
-        job_off = _job(description="Bac+5 souhaité.")
-        assert _check(gate_off, extractor, job_off).passes
+        assert _check(gate_off, extractor, _job(description="Bac+5 ou équivalent.")).passes
+        assert _check(gate_off, extractor, _job(description="Bac+5 souhaité.")).passes
 
     def test_or_alternative_and_unknown_education_unaffected_by_toggle(self):
         """OR-alternative and UNKNOWN-importance education requirements are
@@ -587,11 +587,11 @@ class TestOrEquivalentSemantics:
         assert not result.passes
         assert any(r.type == "education" for r in result.reasons)
 
-    def test_bac5_appreciate_is_rejected(self):
-        """'Bac+5 apprécié' → preferred, explicit level, above max → hard reject
-        (behavior change, 2026-09 — see TestPreferredPatternsRegression in
+    def test_bac5_appreciate_is_not_rejected(self):
+        """'Bac+5 apprécié' → desirable, a wish rather than a ceiling → passes
+        (ADR 0004, amended 2026-10 — see TestPreferredPatternsRegression in
         test_education_extraction.py)."""
-        assert not self._result("Bac+5 apprécié. Expérience valorisée.").passes
+        assert self._result("Bac+5 apprécié. Expérience valorisée.").passes
 
     def test_bac5_ou_experience_equivalente_does_not_reject(self):
         """'Bac+5 ou expérience équivalente' → PREFERRED → must never hard-reject."""
@@ -642,7 +642,7 @@ class TestRejectionProvenance:
             assert reason.span.field == "description"
             assert reason.span.start >= 0
             assert reason.span.end > reason.span.start
-            assert reason.rule_version == "hard-filter.v2"
+            assert reason.rule_version == "hard-filter.v3"
 
     def test_principal_skill_rejection_has_type_and_requirement(self):
         """Principal skill rejection must carry the tech name."""
@@ -655,7 +655,7 @@ class TestRejectionProvenance:
         assert skill_reasons, "No principal_skill rejection found"
         for reason in skill_reasons:
             assert reason.requirement, "requirement field must be non-empty"
-            assert reason.rule_version == "hard-filter.v2"
+            assert reason.rule_version == "hard-filter.v3"
 
     def test_rejection_to_dict_is_complete(self):
         """to_dict() must include all required provenance fields."""
@@ -722,17 +722,30 @@ class TestUnknownAndContradictionSafety:
         )
         assert gate.check(reqs).passes
 
-    def test_preferred_education_exceeding_max_rejects(self):
-        """PREFERRED is an explicit, attributable level mention (not ambiguous
-        like UNKNOWN) — exceeding user max is a hard reject, same as
-        MANDATORY (behavior change, 2026-09)."""
+    def test_preferred_education_stating_the_bar_exceeding_max_rejects(self):
+        """A PREFERRED level stated as the bar ("ou équivalent", no wish
+        wording) exceeding user max is a hard reject, same as MANDATORY."""
         gate, _ = _gate(max_edu=2)
         reqs = JobRequirements(
             education=EducationRequirement(
                 level_bac_plus=5, level_label="Master", importance=Importance.PREFERRED,
+                is_or_alternative=True,
             )
         )
         assert not gate.check(reqs).passes
+
+    def test_desirable_preferred_education_exceeding_max_passes(self):
+        """A desirable PREFERRED level (or one with no equivalence evidence,
+        e.g. an LLM reading) is a wish, not a ceiling (ADR 0004)."""
+        gate, _ = _gate(max_edu=2)
+        for flags in ({"is_desirable": True}, {}):
+            reqs = JobRequirements(
+                education=EducationRequirement(
+                    level_bac_plus=5, level_label="Master",
+                    importance=Importance.PREFERRED, **flags,
+                )
+            )
+            assert gate.check(reqs).passes, flags
 
     def test_no_evidence_job_passes_clean(self):
         """A job with no extractable requirements → PASS, no uncertainty."""
@@ -777,12 +790,14 @@ class TestUnknownAndContradictionSafety:
         """Two separately qualified PREFERRED mentions ('Bac+3 souhaité ou
         Bac+5 bienvenu') are not an adjacent range (#58 covers only
         'Bac+3 ou Bac+5' with nothing but the connector between them), so the
-        highest explicit level (Bac+5) wins — not a genuine UNKNOWN/contradiction, so it correctly rejects
-        when that highest level exceeds the candidate's max (behavior change,
-        2026-09: PREFERRED above max is a hard reject)."""
+        highest explicit level (Bac+5) is the one checked. Both are wishes, so
+        it passes even though Bac+5 exceeds the candidate's max (ADR 0004,
+        amended 2026-10; it was hard-rejected before)."""
         gate, extractor = _gate(max_edu=3)
         job = _job(description="Bac+3 souhaité ou Bac+5 bienvenu selon expérience.")
-        assert not _check(gate, extractor, job).passes
+        reqs = extractor.extract(job)
+        assert reqs.education.level_bac_plus == 5
+        assert _check(gate, extractor, job).passes
 
     def test_negated_tech_requirement_passes(self):
         """Generic title (no core language) + negated tech → no principal skill rejection."""
@@ -937,10 +952,11 @@ class TestAllConstraintDimensions:
         gate, extractor = _gate(max_edu=2)
         assert _check(gate, extractor, _job(description="Développeur passionné.")).passes
 
-    def test_edu_preferred_above_max_rejects(self):
-        """Behavior change, 2026-09: PREFERRED above max is now a hard reject."""
+    def test_edu_preferred_above_max(self):
+        """ADR 0004 (amended 2026-10): a level stated as the bar rejects, a wish does not."""
         gate, extractor = _gate(max_edu=2)
-        assert not _check(gate, extractor, _job(description="Bac+5 souhaité.")).passes
+        assert not _check(gate, extractor, _job(description="Bac+5 ou équivalent.")).passes
+        assert _check(gate, extractor, _job(description="Bac+5 souhaité.")).passes
 
     def test_edu_unknown_importance_does_not_reject(self):
         gate, _ = _gate(max_edu=2)
