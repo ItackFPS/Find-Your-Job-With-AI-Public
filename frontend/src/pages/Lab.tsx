@@ -63,7 +63,7 @@ export function SelfCheckFeedbackView({ fb }: { fb: SelfCheckFeedback }) {
 export function SelfCheckView({ data }: { data: SelfCheckResponse }) {
   const r = data.latest
   if (!r) {
-    return <EmptyState message="No self-check recorded yet. Run: python -m src.evaluation self-check" />
+    return <EmptyState message="No self-check recorded yet. Run it from the Start Menu (Find Your Job With AI self-check), or from a source checkout: python -m src.evaluation self-check" />
   }
   const st = STATUS[r.status]
   return (
@@ -263,7 +263,9 @@ export default function Lab() {
       <h1 style={{ marginBottom: '0.3rem' }}>Lab</h1>
       <p style={{ color: 'var(--color-muted)', marginTop: 0, fontSize: '0.9rem' }}>
         Benchmark runs and strategy experiments, read-only. Changes are tested here on frozen labelled datasets and only a
-        human approval (command line) can promote one.
+        human approval (command line) can promote one. What the lab agent writes is untrusted input: unless it runs
+        under its own Windows account (ADR 0011, not set up by the installer), only an in-process guard keeps it away
+        from your data.
       </p>
       <Card title="Self-check" subtitle="the current strategy replayed on frozen labelled jobs, compared with the recorded baseline"
         style={{ marginBottom: 'var(--space-4)' }}>

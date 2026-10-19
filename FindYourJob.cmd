@@ -8,7 +8,10 @@ REM and stops only what it started when you press Ctrl+C or close this window.
 title Find Your Job With AI
 cd /d "%~dp0"
 
-set "FYJ_PY=%~dp0.venv\Scripts\python.exe"
+REM An installed copy runs the private Python the installer put in runtime\;
+REM a development checkout runs its .venv.
+set "FYJ_PY=%~dp0runtime\python.exe"
+if not exist "%FYJ_PY%" set "FYJ_PY=%~dp0.venv\Scripts\python.exe"
 if not exist "%FYJ_PY%" (
     echo Find Your Job With AI is not set up yet: no Python environment in "%~dp0.venv".
     echo.

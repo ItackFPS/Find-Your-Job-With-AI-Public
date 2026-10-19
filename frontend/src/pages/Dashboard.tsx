@@ -8,7 +8,7 @@ import {
   type RunStats, type SourceStats, type ScanState, type LinkedInScanProgress, type HelloWorkScanProgress,
 } from '../api/client'
 import { Link } from 'react-router-dom'
-import { Card, StatTile, StatusBadge, SourceStatus, Chip, ProgressBar, EmptyState, LoadingState, DataTable, Switch, type DataTableColumn } from '../components'
+import { Card, StatTile, StatusBadge, SourceStatus, Chip, ProgressBar, EmptyState, LoadingState, DataTable, Switch, GettingStarted, type DataTableColumn } from '../components'
 import { PIPELINE_STAGES, type PipelineStageDef } from '../config/pipelineStages'
 import { usePipelineEvents, stageLabel, type ConnectionState, type ActivityEntry } from '../hooks/usePipelineEvents'
 import {
@@ -496,7 +496,15 @@ export default function Dashboard() {
   })
 
   if (isLoading) return <LoadingState />
-  if (error) return <div style={{ color: 'var(--color-error)', padding: '2rem' }}>Could not reach API. Is the backend running?</div>
+  if (error) {
+    return (
+      <div style={{ color: 'var(--color-error)', padding: '2rem', lineHeight: 1.6 }}>
+        Could not reach the backend. Start the app again with its <strong>Find Your Job With AI</strong>{' '}
+        shortcut (or <code>FindYourJob.cmd</code>); if it does not start, its window shows why, and the
+        details are in <code>logs\launcher\launcher.log</code> in the application folder.
+      </div>
+    )
+  }
 
   const d = data!
 
@@ -555,6 +563,8 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
+
+      {!currentRun && d.total_jobs_in_db === 0 && <GettingStarted />}
 
       <ScannerStatusRow />
 
