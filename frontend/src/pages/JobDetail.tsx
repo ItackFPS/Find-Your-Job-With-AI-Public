@@ -7,7 +7,7 @@ import {
   type Job, type JobExplanation, type ExplanationReason, type FeedbackEvent, type FeedbackVocabulary, type DecisionRecord, type DecisionEvidence,
 } from '../api/client'
 import { Card, Chip, LoadingState } from '../components'
-import { daysAgo } from '../utils'
+import { daysAgo, httpUrl } from '../utils'
 
 function OverallScore({ score }: { score: number }) {
   const color = score >= 70 ? 'var(--color-success)' : score >= 45 ? 'var(--color-warning)' : 'var(--color-muted)'
@@ -417,7 +417,7 @@ export function DecisionPanel({ decision }: { decision: DecisionRecord }) {
 
 function JobHeader({ job, overallScore }: { job: Job; overallScore: number | null }) {
   const age = daysAgo(job.published_at)
-  const originalUrl = job.apply_url || job.canonical_url
+  const originalUrl = httpUrl(job.apply_url) ?? httpUrl(job.canonical_url)
 
   return (
     <Card style={{ marginBottom: 'var(--space-4)' }}>

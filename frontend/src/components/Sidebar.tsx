@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getNotificationStatus } from '../api/client'
+import { httpUrl } from '../utils'
 
 const NAV_ITEMS: { to: string; label: string; icon: React.ReactNode; end?: boolean }[] = [
   {
@@ -107,7 +108,7 @@ export function Sidebar() {
 
   const backendConnected = isError ? false : notifStatus !== undefined ? true : undefined
   const n8nReachable = notifStatus?.providers?.n8n?.reachable
-  const discordServerUrl = notifStatus?.discord_server_url
+  const discordServerUrl = httpUrl(notifStatus?.discord_server_url)
 
   return (
     <div style={{
