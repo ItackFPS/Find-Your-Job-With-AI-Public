@@ -63,6 +63,10 @@ mcp_admin = [
 [tool.setuptools.packages.find]
 include = ["src*"]
 
+# The bundled commune and département tables (scripts/build_geo_data.py).
+[tool.setuptools.package-data]
+"src.geo" = ["data/*"]
+
 [tool.ruff]
 # Pinned explicitly so the rules don't drift with the installed Ruff version
 # (recent Ruff releases enable far more rules by default). 88 matches the
