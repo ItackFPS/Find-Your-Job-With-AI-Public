@@ -187,6 +187,13 @@ def test_backend_binds_loopback_only():
     assert "--reload" not in cmd
 
 
+def test_backend_stops_within_the_launchers_grace_period():
+    # an open dashboard keeps its live-events stream open: uvicorn waited for it until the launcher
+    # killed the backend after GRACEFUL_STOP_S (seen in the 1.0.0 walkthrough)
+    cmd = core.backend_command("python", 8123)
+    assert float(cmd[cmd.index("--timeout-graceful-shutdown") + 1]) < run.GRACEFUL_STOP_S
+
+
 def test_n8n_env_is_local_and_user_values_win():
     env = core.n8n_env({}, 5678)
     assert env["N8N_LISTEN_ADDRESS"] == "127.0.0.1"
@@ -299,6 +306,37 @@ def test_stop_event_single_instance_and_signal(tmp_path):
     finally:
         owner.close()
     assert not StopEvent(name).signal_existing()  # nothing left to signal
+
+
+@windows_only
+def test_a_stopping_owner_is_told_apart_from_a_running_one(tmp_path):
+    name = Settings(root=tmp_path).stop_event_name
+    assert not StopEvent(name).owner_stopping()               # nobody owns it
+    owner = StopEvent(name)
+    assert owner.create()
+    try:
+        assert not StopEvent(name).owner_stopping()           # running
+        StopEvent(name).signal_existing()
+        assert StopEvent(name).owner_stopping()               # stop requested, not finished
+    finally:
+        owner.close()
+
+
+@windows_only
+def test_a_start_while_the_app_is_stopping_waits_then_starts(tmp_path, monkeypatch):
+    # seen in the 1.0.0 walkthrough: Stop, then Start a few seconds later -> "already running,
+    # opening the dashboard", then the stopping launcher killed the backend: nothing was left running
+    port = free_port()
+    old = StopEvent(Settings(root=tmp_path).stop_event_name)
+    assert old.create()
+    old.signal_existing()                                      # the old launcher is stopping...
+    threading.Timer(1.5, old.close).start()                    # ...and finishes 1.5 s later
+    launcher = _launcher(tmp_path, port, monkeypatch)
+    started: list[bool] = []
+    monkeypatch.setattr(run.Launcher, "_start_all", lambda self: started.append(True) or 1)
+    monkeypatch.setattr(run, "open_dashboard", lambda *a, **k: pytest.fail("opened a dying dashboard"))
+    assert launcher.run() == 1                                 # _start_all's code: it did start
+    assert started == [True]
 
 
 # -- lifecycle -----------------------------------------------------------------------------

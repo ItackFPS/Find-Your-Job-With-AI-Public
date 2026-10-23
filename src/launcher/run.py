@@ -31,6 +31,8 @@ from src.launcher.winproc import (
 
 MARK = {Level.OK: "[ok]", Level.INFO: "[..]", Level.WARN: "[!!]", Level.ERROR: "[XX]"}
 GRACEFUL_STOP_S = 20.0
+# a launch while the previous launcher is still stopping waits for it, then starts the app
+STOPPING_WAIT_S = GRACEFUL_STOP_S + 40.0
 STARTING_GRACE_S = 30.0  # how long a port that is open but silent may take to answer
 
 
@@ -211,9 +213,18 @@ class Launcher:
             out("Cannot start: fix the [XX] items above, then run this again.")
             return 2
         if not self.event.create():
-            out("The app is already running (another launcher window owns it); opening the dashboard.")
-            open_dashboard(self._dashboard_url(), self.window, out)
-            return 0
+            if not self.event.owner_stopping():
+                out("The app is already running (another launcher window owns it); opening the dashboard.")
+                open_dashboard(self._dashboard_url(), self.window, out)
+                return 0
+            # Stop, then Start at once: opening the dashboard now would show a backend about to exit
+            out("The app is still stopping; starting it again once it has stopped ...")
+            deadline = time.monotonic() + STOPPING_WAIT_S
+            while not self.event.create():
+                if time.monotonic() > deadline:
+                    out(f"It has not stopped after {STOPPING_WAIT_S:.0f}s; try again in a moment.")
+                    return 1
+                time.sleep(0.5)
         self._install_signal_handlers()
         self.state.save(self.s.state_file)
         self.job = JobObject()
