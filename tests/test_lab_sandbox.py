@@ -80,6 +80,30 @@ def test_the_grant_plan_changes_nothing(monkeypatch, tmp_path, capsys):
     assert "--apply" in capsys.readouterr().err
 
 
+@pytest.mark.skipif(not sandbox.supported(), reason="Windows AppContainer")
+@pytest.mark.parametrize("action", ["grant", "revoke"])
+def test_apply_after_the_action_changes_the_acls(monkeypatch, tmp_path, action):
+    # regression: an argparse.REMAINDER command swallowed "--apply", so the grant stayed a silent plan
+    monkeypatch.setattr(lab_cli, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(sandbox, "container_sid", lambda: SID)
+    applied: list[list[list[str]]] = []
+    monkeypatch.setattr(sandbox, "apply", applied.append)
+    (tmp_path / "data").mkdir()
+    assert lab_cli.main(["sandbox", action, "--apply"]) == 0
+    assert len(applied) == 1 and applied[0]
+
+
+@pytest.mark.skipif(not sandbox.supported(), reason="Windows AppContainer")
+def test_run_passes_the_command_after_the_separator_untouched(monkeypatch):
+    monkeypatch.setattr(sandbox, "container_sid", lambda: SID)
+    calls: list[tuple[list[str], bool]] = []
+    monkeypatch.setattr(sandbox, "run", lambda argv, cwd, internet=False: calls.append((argv, internet)) or 7)
+    assert lab_cli.main(["sandbox", "run", "--internet", "--", "python", "-m", "src.lab", "--lab-db",
+                         "data/lab/lab.db", "isolation-check", "--apply"]) == 7
+    assert calls == [([sys.executable, "-m", "src.lab", "--lab-db", "data/lab/lab.db", "isolation-check", "--apply"],
+                      True)]
+
+
 def test_the_sandboxed_environment_carries_no_credentials(tmp_path):
     env = sandbox.sandbox_env(tmp_path, {"PATH": "p", "SystemRoot": r"C:\Windows", "INDEED_API_KEY": "k",
                                          "FRANCE_TRAVAIL_CLIENT_SECRET": "s", "GITHUB_TOKEN": "t"})

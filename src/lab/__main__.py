@@ -209,7 +209,9 @@ def main(argv: list[str] | None = None) -> int:
                    help="grant/revoke: another folder the sandboxed command must read (e.g. an agent's install)")
     s.add_argument("--internet", action="store_true",
                    help="run: allow outbound internet (loopback stays blocked by the OS)")
-    s.add_argument("command", nargs=argparse.REMAINDER,
+    # "*", not REMAINDER: REMAINDER swallowed "--apply" after the action, leaving grant a silent plan.
+    # The command comes after "--", so its own options never reach this parser.
+    s.add_argument("command", nargs="*",
                    help="run: the command after '--'; a leading 'python' means this interpreter")
     m = sub.add_parser("memory", help="list the lab memory with current status and staleness")
     m.add_argument("--kind", default=None, choices=("evidence", "hypothesis", "observation", "conclusion"))
