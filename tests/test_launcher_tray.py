@@ -16,7 +16,7 @@ from src.launcher import core, run
 from src.launcher.autostart import Autostart, command
 from src.launcher.core import Backend
 from src.launcher.tray import HINT_MARKER, RunWatcher, TrayApp
-from tests.test_launcher import _launcher, free_port
+from tests.test_launcher import _launcher, free_port, windows_only
 
 # -- autostart ------------------------------------------------------------------------------
 
@@ -195,6 +195,7 @@ def test_first_run_hint_is_shown_once(tmp_path: Path) -> None:
 # -- backend restart (real processes, as in test_launcher) ----------------------------------------------
 
 
+@windows_only  # job objects, like the other real-process launcher tests
 def test_tray_launcher_restarts_a_crashed_backend_once(tmp_path, monkeypatch):
     port = free_port()
     launcher = _launcher(tmp_path, port, monkeypatch)
