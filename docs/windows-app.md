@@ -31,6 +31,10 @@ never stopped. A second double-click while the app runs just opens the dashboard
 
 ```bat
 FindYourJob.cmd                  :: same as "start"
+FindYourJob.cmd tray             :: the installed app's mode: no console, an icon in the
+                                 ::   notification area; closing the dashboard keeps scans
+                                 ::   running, Quit from the icon stops everything
+FindYourJob.cmd autostart on     :: start the app (tray) when you sign in; "off", "status"
 FindYourJob.cmd start --n8n      :: also start n8n for the weekly digest
 FindYourJob.cmd start --window browser   :: default browser instead of an app window
 FindYourJob.cmd start --port 8100        :: another backend port (or FYJ_PORT in .env)

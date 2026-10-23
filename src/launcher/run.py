@@ -26,6 +26,7 @@ from src.launcher.winproc import (
     StopEvent,
     process_alive,
     process_creation_time,
+    STOP_EVENT_ENV,
     request_graceful_stop,
 )
 
@@ -43,7 +44,8 @@ class Output:
         self.log_path = log_path
 
     def __call__(self, line: str = "") -> None:
-        print(line, flush=True)
+        if sys.stdout is not None:  # None under pythonw (the tray app): the log is enough
+            print(line, flush=True)
         if self.log_path is None:
             return
         try:
@@ -182,8 +184,16 @@ def open_dashboard(url: str, window: str, out: Output) -> None:
 
 class Launcher:
     def __init__(self, settings: Settings, out: Output, *, mode: str, with_n8n: bool,
-                 window: str, reload: bool = False) -> None:
+                 window: str, reload: bool = False, handle_signals: bool = True,
+                 backend_restarts: int = 0) -> None:
         self.s = settings
+        # The tray app runs the launcher in a worker thread, where signal handlers
+        # cannot be installed; it stops it with request_stop() instead.
+        self.handle_signals = handle_signals
+        # How many times a backend that crashes is started again (the tray app: 1).
+        self.backend_restarts = backend_restarts
+        self.notify: Callable[[str], None] = lambda _message: None
+        self._stop_events: dict[str, str] = {}  # child name -> its graceful-stop event
         self.out = out
         self.mode = mode
         self.with_n8n = with_n8n
@@ -201,7 +211,11 @@ class Launcher:
 
     # ---- lifecycle
 
-    def run(self) -> int:
+    def request_stop(self) -> None:
+        """Stop everything this launcher started (thread-safe; the tray's Quit)."""
+        self.stop_requested = True
+
+    def run(self, on_ready: Callable[[], None] | None = None) -> int:
         out = self.out
         out(f"{core.APP_TITLE} -- starting ({self.mode} mode)")
         checks = core.prerequisite_checks(self.s.root)
@@ -225,12 +239,15 @@ class Launcher:
                     out(f"It has not stopped after {STOPPING_WAIT_S:.0f}s; try again in a moment.")
                     return 1
                 time.sleep(0.5)
-        self._install_signal_handlers()
+        if self.handle_signals:
+            self._install_signal_handlers()
         self.state.save(self.s.state_file)
         self.job = JobObject()
         try:
             code = self._start_all()
             if code == 0:
+                if on_ready is not None:
+                    on_ready()
                 code = self._watch()
             elif self.stop_requested:
                 code = 0  # stopped while starting (Ctrl+C, window closed): not a failure
@@ -273,6 +290,14 @@ class Launcher:
                 for line in core.log_tail(self._log(name)):
                     self.out(f"     {line}")
                 if name == "backend":
+                    if self.backend_restarts > 0 and not self.stop_requested:
+                        self.backend_restarts -= 1
+                        self.out("Starting the backend again ...")
+                        if self._ensure_backend():
+                            self.notify("The app's background service stopped unexpectedly "
+                                        "and was restarted.")
+                            continue
+                    self.notify("The app's background service stopped. See the logs folder.")
                     self.out("The dashboard cannot work without the backend; stopping.")
                     return 1
         return 0
@@ -284,7 +309,7 @@ class Launcher:
             if proc.poll() is not None:
                 continue
             self.out(f"Stopping {name} ...")
-            request_graceful_stop(proc)
+            request_graceful_stop(proc, self._stop_events.get(name))
             try:
                 proc.wait(timeout=self.graceful_stop_s)
             except subprocess.TimeoutExpired:
@@ -433,7 +458,11 @@ class Launcher:
         with open(log, "a", encoding="utf-8") as f:
             f.write(f"\n===== {datetime.now().isoformat(timespec='seconds')} launcher: "
                     f"starting {name} =====\n")
-        proc = self.job.spawn(cmd, cwd=cwd, env=env or _environ(), log_path=log)
+        env = dict(env or _environ())
+        stop_event = f"FindYourJobWithAI.stop.{os.getpid()}.{name}.{len(self._stop_events)}"
+        env[STOP_EVENT_ENV] = stop_event
+        proc = self.job.spawn(cmd, cwd=cwd, env=env, log_path=log)
+        self._stop_events[name] = stop_event
         if own:
             self.children[name] = proc
             self.state.components[name] = core.Owned(proc.pid, process_creation_time(proc.pid), port)

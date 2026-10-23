@@ -201,6 +201,10 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
     scheduler.start()
     application.state.scheduler = scheduler
 
+    # -- Graceful stop for a launcher without a console (the tray app) -------
+    from src.api.stop_signal import start_stop_signal_watcher
+    stop_signal_event = start_stop_signal_watcher()
+
     # -- Discord location-channel reconciliation (automatic, independent of
     # Claude/MCP/any LLM — see src/notifications/discord_reconciler_worker.py
     # for the reload/duplicate-start safety reasoning). No-ops harmlessly on
@@ -264,6 +268,8 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
         system_status_worker.stop()
         li_staging.close()
         hw_staging.close()
+        if stop_signal_event is not None:
+            stop_signal_event.close()
 
 
 app = FastAPI(
