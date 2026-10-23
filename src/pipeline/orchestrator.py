@@ -495,6 +495,9 @@ def run_pipeline(
                 name, normalized, source_stats, errors = future.result()
                 all_jobs.extend(normalized)
                 source_stats["status"] = collection_status(source_stats["collected"], source_stats["errors"])
+                if source_stats["status"] in ("failed", "partial") and errors:
+                    # the Sources table shows a row's reason, as it does for a skipped source
+                    source_stats["reason"] = errors[0].removeprefix(f"{name}: ")
                 stats.by_source[name] = source_stats
                 for err in errors:
                     stats.errors.append(err)

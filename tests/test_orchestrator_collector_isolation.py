@@ -76,8 +76,12 @@ def test_one_failing_collector_does_not_fail_the_run(tmp_path, monkeypatch, brok
     assert result.status == "completed", result.error
     assert result.stats.by_source["healthy"]["collected"] == 1
     assert result.stats.by_source["healthy"]["status"] == "completed"
-    assert result.stats.by_source["broken"] == {"collected": 0, "accepted": 0, "errors": 1, "status": "failed"}
+    broken = result.stats.by_source["broken"]
+    assert {k: broken[k] for k in ("collected", "accepted", "errors", "status")} == {
+        "collected": 0, "accepted": 0, "errors": 1, "status": "failed"}
     assert any(e.startswith("Failed to collect from broken:") for e in result.stats.errors)
+    # the row says why, like a skipped source does (the Sources table shows it)
+    assert broken["reason"].startswith("Failed to collect from broken:")
 
 
 class _Partial(BaseCollector):
@@ -103,6 +107,8 @@ def test_each_source_reports_how_its_collection_went(tmp_path, monkeypatch):
 
     status = {name: s["status"] for name, s in result.stats.by_source.items()}
     assert status == {"healthy": "completed", "broken": "failed", "partial": "partial"}
+    assert result.stats.by_source["partial"]["reason"] == "page 2: HTTP 403"      # without the "name: " prefix
+    assert "reason" not in result.stats.by_source["healthy"]
 
 
 @pytest.mark.parametrize(("collected", "errors", "expected"), [
