@@ -59,19 +59,21 @@ feedback, evaluation, lab) · [ADRs](docs/adr/README.md) · [Windows app](docs/w
 | n8n weekly e-mail digest | ✅ opt-in (needs your own n8n and SMTP) |
 | Local-LLM enrichment and LLM eligibility gate | ✅ implemented, **off by default** |
 | Evaluation harness (labelled datasets, metrics, comparisons; [ADR 0007](docs/adr/0007-evaluation-harness-outside-production-path.md)) | 🧪 developer tooling, outside the production path |
-| Experiment lab with human-approved promotion ([ADR 0011](docs/adr/0011-experiment-lab.md)) | 🧪 experimental; OS-level isolation of the lab agent is in progress and **not proven** |
+| Experiment lab with human-approved promotion ([ADR 0011](docs/adr/0011-experiment-lab.md)) | 🧪 experimental; the lab agent is OS-isolated only when you run it in its sandbox (`python -m src.lab sandbox`, Windows AppContainer) |
 | Greenhouse, Lever, SmartRecruiters, WorkingNomads collectors | ⚙️ implemented, no source configured |
 | Welcome to the Jungle collector | ⚠️ implemented, disabled — blocked by the site's bot protection |
 | macOS / Linux | ⚠️ backend, CLI and tests run (CI is Linux); the launcher and startup scripts are Windows-only |
 | Docker | ⚠️ the image runs the CLI pipeline only, not the web UI or n8n |
-| Windows installer: per-user, bundled Python, desktop + Start Menu shortcuts ([docs](docs/windows-installer.md)) | ✅ new — release candidate, not code-signed |
+| Windows installer: per-user, bundled Python, desktop + Start Menu shortcuts ([docs](docs/windows-installer.md)) | ✅ 1.0.0, not code-signed |
 
 ---
 
 ## Quick start (Windows)
 
-**Easiest: the installer.** Run `FindYourJobWithAI-Setup-<version>.exe`, then double-click
-**Find Your Job With AI** on the desktop. No Python, Node.js or Git needed, no administrator
+**Easiest: the installer.** Download `FindYourJobWithAI-Setup-<version>.exe` and its `.sha256`
+from the [latest release](https://github.com/ItackFPS/Find-Your-Job-With-AI-Public/releases/latest),
+check the hash (`Get-FileHash .\FindYourJobWithAI-Setup-<version>.exe` in PowerShell), run it,
+then double-click **Find Your Job With AI** on the desktop. No Python, Node.js or Git needed, no administrator
 rights; nothing is collected until you start a run. Install, first run, sources and
 credentials, stopping, logs, upgrades and uninstalling: [docs/windows-installer.md](docs/windows-installer.md).
 To build the installer yourself: `powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1`
@@ -458,8 +460,11 @@ issue for a security problem.
   *failed* after one request with that reason; set `active: false` on `apec` in
   `config/sources.yaml` to stop trying. The app never tries to get round a CAPTCHA.
 - The Docker image runs the CLI pipeline only.
-- The lab agent's OS-level isolation is not proven; treat lab output as untrusted
-  ([ADR 0011](docs/adr/0011-experiment-lab.md)).
+- The lab agent is OS-isolated only when it runs in the lab sandbox (Windows AppContainer:
+  `python -m src.lab sandbox grant --apply`, then `sandbox run -- …`; see
+  [docs/development.md](docs/development.md#sandboxed-lab-agent-windows-appcontainer-no-administrator)).
+  Started any other way, only an in-process guard keeps it away from your data. Treat lab
+  output as untrusted either way ([ADR 0011](docs/adr/0011-experiment-lab.md)).
 - `ruff` and `mypy` run in CI as advisory checks against documented baselines.
 
 ---

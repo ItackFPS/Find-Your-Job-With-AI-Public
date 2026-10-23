@@ -269,7 +269,7 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title="Find Your Job With AI",
     description="Local-first job discovery pipeline with web UI.",
-    version="1.0.0rc1",  # = pyproject.toml [project] version (tests/test_windows_package.py)
+    version="1.0.0",  # = pyproject.toml [project] version (tests/test_windows_package.py)
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",

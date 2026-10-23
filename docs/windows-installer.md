@@ -9,9 +9,12 @@ Running from a source checkout (`FindYourJob.cmd` in a clone, see the
 
 ## Install
 
-1. Run `FindYourJobWithAI-Setup-<version>.exe`. Windows SmartScreen may warn that the
-   publisher is unknown (the installer is not code-signed): **More info → Run anyway**,
-   after checking the file's SHA-256 against the `.sha256` file next to it.
+1. Download `FindYourJobWithAI-Setup-<version>.exe` and `….exe.sha256` from the
+   [latest release](https://github.com/ItackFPS/Find-Your-Job-With-AI-Public/releases/latest).
+   In PowerShell, `Get-FileHash .\FindYourJobWithAI-Setup-<version>.exe` must print the hash in
+   the `.sha256` file. Then run the `.exe`. Windows SmartScreen may warn that the
+   publisher is unknown (the installer is not code-signed): **More info → Run anyway**
+   once the hash matches.
 2. Keep or untick **Create a desktop shortcut**, then **Install**.
 3. Leave **Start Find Your Job With AI now** ticked to open it at the end.
 
@@ -179,5 +182,7 @@ that audit on every pull request (`Dependency audit`), and
   patch release to pick up its security fixes.
 - Application files and user data share one folder; the uninstaller keeps the data, but
   "repair" means reinstalling over it.
-- The experiment lab's OS-level isolation (a separate Windows account, ADR 0011) is not
-  set up by the installer; see [ADR 0011](adr/0011-experiment-lab.md).
+- The installer does not set up the lab agent's sandbox. Nothing in the app starts a lab agent;
+  if you run one, use the AppContainer sandbox (from the install folder:
+  `runtime\python.exe -m src.lab sandbox grant --apply`, then `sandbox run -- python -m src.lab …`;
+  see [docs/development.md](development.md#sandboxed-lab-agent-windows-appcontainer-no-administrator)).
