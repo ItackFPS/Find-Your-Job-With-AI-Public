@@ -47,7 +47,8 @@ REQUIRED_MODULES = {
     "yaml": "pyyaml",
     "httpx": "httpx",
     "dotenv": "python-dotenv",
-    "sentence_transformers": "sentence-transformers",
+    "onnxruntime": "onnxruntime",
+    "tokenizers": "tokenizers",
 }
 
 # Environment for an n8n the launcher starts. setdefault semantics: a value the user
