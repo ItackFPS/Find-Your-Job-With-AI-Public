@@ -379,8 +379,16 @@ def revoke_plan(root: Path, lab_dir: Path, sid: str, extra_read: Iterable[Path] 
     return [["icacls", str(p), "/remove", who] for p in paths if p.exists()]
 
 
-def apply(cmds: list[list[str]]) -> None:
+def apply(cmds: list[list[str]], *, keep_going: bool = False) -> None:
+    """Run the plan. A grant stops at the first failure; a revoke (``keep_going``) still tries every
+    path, so one path it cannot change does not leave the ACEs on all the paths after it."""
+    failures = []
     for cmd in cmds:
         done = subprocess.run(cmd, capture_output=True, text=True, errors="replace")
         if done.returncode != 0:
-            raise SandboxError(f"{subprocess.list2cmdline(cmd)} failed: {(done.stdout + done.stderr).strip()}")
+            failure = f"{subprocess.list2cmdline(cmd)} failed: {(done.stdout + done.stderr).strip()}"
+            if not keep_going:
+                raise SandboxError(failure)
+            failures.append(failure)
+    if failures:
+        raise SandboxError(f"{len(failures)} of {len(cmds)} commands failed:\n" + "\n".join(failures))

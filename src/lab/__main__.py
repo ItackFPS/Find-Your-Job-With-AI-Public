@@ -125,7 +125,7 @@ def _sandbox(ns: argparse.Namespace) -> int:
                 print(f"plan only ({len(plan)} commands for AppContainer {sandbox.DEFAULT_NAME}, SID {sid}): "
                       "add --apply to change the ACLs", file=sys.stderr)
                 return 0
-            sandbox.apply(plan)
+            sandbox.apply(plan, keep_going=ns.action == "revoke")
             print(f"{ns.action}: done", file=sys.stderr)
             return 0
         command = list(ns.command[1:] if ns.command[:1] == ["--"] else ns.command)

@@ -68,6 +68,22 @@ def test_revoke_removes_the_container_from_everything_grant_touched(tmp_path):
     assert {c[1] for c in revoke} == grant and all(c[2:] == ["/remove", f"*{SID}"] for c in revoke)
 
 
+def test_revoke_keeps_removing_after_a_path_fails(monkeypatch, tmp_path):
+    # regression: apply() stopped at the first failing icacls, so one unrevocable path left every later ACE
+    lab = _tree(tmp_path)
+    revoke = sandbox.revoke_plan(tmp_path, lab, SID, runtimes=[])
+    ran: list[list[str]] = []
+
+    def icacls(cmd, **_kw):
+        ran.append(cmd)
+        return subprocess.CompletedProcess(cmd, 5 if len(ran) == 1 else 0, "Access is denied.", "")
+
+    monkeypatch.setattr(sandbox.subprocess, "run", icacls)
+    with pytest.raises(sandbox.SandboxError, match="1 of"):
+        sandbox.apply(revoke, keep_going=True)
+    assert ran == revoke                                      # every path was still attempted
+
+
 @pytest.mark.skipif(not sandbox.supported(), reason="Windows AppContainer")
 def test_the_grant_plan_changes_nothing(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(lab_cli, "PROJECT_ROOT", tmp_path)
@@ -86,11 +102,12 @@ def test_apply_after_the_action_changes_the_acls(monkeypatch, tmp_path, action):
     # regression: an argparse.REMAINDER command swallowed "--apply", so the grant stayed a silent plan
     monkeypatch.setattr(lab_cli, "PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(sandbox, "container_sid", lambda: SID)
-    applied: list[list[list[str]]] = []
-    monkeypatch.setattr(sandbox, "apply", applied.append)
+    applied: list[tuple[list[list[str]], bool]] = []
+    monkeypatch.setattr(sandbox, "apply", lambda cmds, keep_going=False: applied.append((cmds, keep_going)))
     (tmp_path / "data").mkdir()
     assert lab_cli.main(["sandbox", action, "--apply"]) == 0
-    assert len(applied) == 1 and applied[0]
+    assert len(applied) == 1 and applied[0][0]
+    assert applied[0][1] is (action == "revoke")              # a revoke never stops at its first failure
 
 
 @pytest.mark.skipif(not sandbox.supported(), reason="Windows AppContainer")
