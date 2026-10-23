@@ -6,15 +6,12 @@ the pipeline already computes every run: ``PipelineStats.by_source`` (see
 src/pipeline/orchestrator.py), persisted verbatim in
 ``pipeline_runs.stats_json`` on every completed run. No new table, no new
 background worker — this module is a pure function over that existing
-history, called once per pipeline completion from
-NotificationEngine._send_pipeline_completed (see engine.py), which already
-owns the exact "#errors channel, dedup via notification_history" delivery
-path this reuses for the "pipeline.warnings" event.
+history. It no longer has a caller: its former consumer, the Discord
+notification engine, was removed, and the desktop app's source-health view and
+notifications (update plan F1.3, F2.4) are its next consumers.
 
 Design (thresholds are module-level constants with sensible defaults below,
-not yet exposed via notifications.yaml — kept out of scope for this pass;
-see the NEXT-phase config-schema-validation item for adding config-driven
-tuning here):
+not configurable yet):
   - A source is only ever considered if it appears in the CURRENT run's
     by_source dict — i.e. it actually ran this time. An intentionally
     disabled source (active: false in sources.yaml) never appears there at

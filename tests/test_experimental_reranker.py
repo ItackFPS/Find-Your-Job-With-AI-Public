@@ -189,7 +189,6 @@ class TestNoCloudOrProductionCoupling:
             "src/pipeline/orchestrator.py",
             "src/requirements/gate.py",
             "src/personalization/engine.py",
-            "src/notifications/engine.py",
         ],
     )
     def test_production_module_never_imports_reranker(self, production_file: str) -> None:

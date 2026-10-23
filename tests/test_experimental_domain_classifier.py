@@ -276,8 +276,6 @@ class TestShadowModeCannotAffectProduction:
             "src/pipeline/scoring.py",
             "src/requirements/gate.py",
             "src/personalization/engine.py",
-            "src/notifications/engine.py",
-            "src/notifications/discord.py",
         ],
     )
     def test_production_module_never_imports_experimental_package(

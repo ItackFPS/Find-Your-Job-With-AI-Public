@@ -122,10 +122,10 @@ def _hash_config_dir() -> dict[str, str]:
     """Content hash of every file directly under the real config/ directory.
 
     Tests must never write to the real config/ directory (CLAUDE.md: "Never
-    modify/reset real data") — several NotificationEngine/discord_admin
-    entry points default `config_dir` to the real "config" string when a
-    test forgets to override it, which previously corrupted
-    config/notifications.yaml with a MagicMock repr during a full test run.
+    modify/reset real data") — entry points that default `config_dir` to
+    the real "config" string when a test forgets to override it once
+    corrupted a tracked config file with a MagicMock repr during a full
+    test run.
     This guard fails loudly, close to the offending test, instead of
     silently leaving the repo's committed config mutated.
     """
@@ -159,7 +159,7 @@ def _guard_real_config_dir_untouched():
         pytest.fail(
             "Test wrote to the real config/ directory instead of an "
             f"isolated tmp_path: {changed}. Pass an explicit config_dir "
-            "(e.g. NotificationEngine(config_dir=str(tmp_path))). "
+            "(e.g. PipelineRunner(config_dir=str(tmp_path))). "
             f"Removed newly created files: {created}.\n\n" + report
         )
 
@@ -168,9 +168,8 @@ def _guard_real_config_dir_untouched():
 def _restore_environment():
     """Undo environment changes a test makes without monkeypatch.
 
-    src.discord_admin.secrets.store_webhook_secret sets os.environ directly;
-    a webhook URL left behind enables Discord providers in every later test
-    (issue #46).
+    Code under test may set os.environ directly; a value left behind would
+    change the behaviour of every later test (issue #46).
     """
     before = dict(os.environ)
     yield
@@ -187,24 +186,20 @@ def _restore_environment():
 def isolated_app(tmp_path, monkeypatch):
     """The FastAPI app with everything its lifespan uses pointed at tmp paths.
 
-    `with TestClient(app)` runs the real lifespan: scheduler, Discord
-    reconciler and system-status workers. Overriding app.state's paths is not
-    enough — app.state.notification_engine and app.state.runner are built at
-    import time against the real config/ and data/ (issue #46).
+    `with TestClient(app)` runs the real lifespan (the scheduler). Overriding
+    app.state's paths is not enough — app.state.runner is built at import
+    time against the real config/ and data/ (issue #46).
     """
     from src.api.app import app
     from src.api.runner import PipelineRunner
-    from src.notifications.engine import NotificationEngine
 
     db_path = str(tmp_path / "app_test.db")
     config_dir = str(tmp_path / "empty_config")
-    engine = NotificationEngine(db_path=db_path, config_dir=config_dir)
     monkeypatch.setattr(app.state, "db_path", db_path)
     monkeypatch.setattr(app.state, "config_dir", config_dir)
     monkeypatch.setattr(app.state, "esco_db_path", str(tmp_path / "esco_test.db"))
-    monkeypatch.setattr(app.state, "notification_engine", engine)
     monkeypatch.setattr(app.state, "runner", PipelineRunner(
         db_path=db_path, config_dir=config_dir,
-        notification_engine=engine, progress_bus=app.state.progress_bus,
+        progress_bus=app.state.progress_bus,
     ))
     return app

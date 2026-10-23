@@ -16,5 +16,5 @@ decay keeps location a strong but predictable signal on top of its 0.30 weight.
 
 ## Consequences
 
-- Reordering the list changes rankings and notification routing (ADR 0006) together,
+- Reordering the list changed rankings and notification routing (ADR 0006, since removed) together,
   because both use the same resolver.
