@@ -169,6 +169,21 @@ from doing what the OS lets it do, so:
   The exact commands, and the check that proves them, are in `docs/development.md` → *Isolated lab
   agent*. A container with the repository mounted read-only, `data/lab` read-write and
   `--network none` is an equivalent alternative where the agent can run inside it.
+- **Decision (2026-10-23): a Windows AppContainer is the default boundary; the separate account stays
+  an option.** The account needs an administrator to create, which most users of the installed app
+  are not willing to do for an optional tool. An AppContainer needs neither elevation nor a second
+  account, and Microsoft services it as a security boundary. Every access must also be granted to the
+  container's SID, so the user's own ACLs (and a drive root open to Authenticated Users) grant it
+  nothing. It has no network unless `internetClient` is given, and never loopback unless an
+  administrator exempts it, so the API and relays are out of reach without `API_SAME_USER_ONLY`.
+  `src/lab/sandbox.py` (`python -m src.lab sandbox grant|run|revoke`) grants it read on the application
+  folder and its Python and modify on `data/lab/` only. A deny ACE for an AppContainer SID is ignored
+  (measured), so secrets are kept closed by never being granted: the root and `config/` pass only a
+  folder grant down. `isolation-check` run inside reads a dead loopback port as `blocked` (the OS's
+  refusal) and counts only an *enabled* Administrators membership. `tests/test_lab_sandbox.py` starts
+  a real container and checks every refusal and the `os_enforced: true` verdict from inside. What it
+  does not cover: an agent tool that needs files outside the granted folders must have them granted
+  (`--grant-read`), and the lab can still read production data (by design, for replays).
 - **What is enforced in code, whatever the account:** the approval path never trusts `lab.db` (above),
   so an agent that may write `lab.db` — by design, in the isolated setup — cannot manufacture the
   verdict, eligibility or tier that approval consumes; bundles are content-addressed and re-verified by
