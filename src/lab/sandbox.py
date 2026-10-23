@@ -277,7 +277,9 @@ if sys.platform == "win32":
                 si.StartupInfo.dwFlags = _STARTF_USESTDHANDLES
                 si.StartupInfo.hStdInput, si.StartupInfo.hStdOutput, si.StartupInfo.hStdError = handles
             cmd = ctypes.create_unicode_buffer(_command_line(argv))
-            block = _environment_block(env if env is not None else sandbox_env(container_folder(_sid_string(sid))))
+            folder = container_folder(_sid_string(sid))
+            (folder / "Temp").mkdir(parents=True, exist_ok=True)
+            block = _environment_block(env if env is not None else sandbox_env(folder))
             if not _kernel32.CreateProcessW(None, cmd, None, None, bool(handles),
                                             _EXTENDED_STARTUPINFO_PRESENT | _CREATE_UNICODE_ENVIRONMENT,
                                             block, str(cwd), ctypes.byref(si), ctypes.byref(pi)):
@@ -318,13 +320,17 @@ else:
 
 def sandbox_env(folder: Path, environ: Mapping[str, str] = os.environ) -> dict[str, str]:
     """The environment of a sandboxed command: system variables only (no API keys or tokens), with every
-    per-user location pointed at the container's own folder, and the lab-agent marker set."""
+    per-user location pointed at the container's own folder, and the lab-agent marker set.
+
+    ``LOCALAPPDATA`` stays the real one (``folder`` is ``<it>/Packages/<name>/AC``): Windows derives an
+    AppContainer's ``TEMP`` from it, and pointing it at ``folder`` gave a nested path that does not exist,
+    so nothing in the container could create a temporary file (measured)."""
     upper = {k.upper(): v for k, v in environ.items()}
     env = {k: upper[k] for k in KEEP_ENV if k in upper}
     temp = folder / "Temp"
-    env.update({"TEMP": str(temp), "TMP": str(temp), "LOCALAPPDATA": str(folder), "APPDATA": str(folder),
-                "USERPROFILE": str(folder), "HOME": str(folder), "FYJ_LAB_AGENT": "appcontainer",
-                "PYTHONDONTWRITEBYTECODE": "1", "PYTHONUTF8": "1"})
+    env.update({"TEMP": str(temp), "TMP": str(temp), "LOCALAPPDATA": str(folder.parents[2]),
+                "APPDATA": str(folder), "USERPROFILE": str(folder), "HOME": str(folder),
+                "FYJ_LAB_AGENT": "appcontainer", "PYTHONDONTWRITEBYTECODE": "1", "PYTHONUTF8": "1"})
     return env
 
 

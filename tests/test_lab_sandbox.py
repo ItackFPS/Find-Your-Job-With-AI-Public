@@ -105,11 +105,13 @@ def test_run_passes_the_command_after_the_separator_untouched(monkeypatch):
 
 
 def test_the_sandboxed_environment_carries_no_credentials(tmp_path):
-    env = sandbox.sandbox_env(tmp_path, {"PATH": "p", "SystemRoot": r"C:\Windows", "INDEED_API_KEY": "k",
-                                         "FRANCE_TRAVAIL_CLIENT_SECRET": "s", "GITHUB_TOKEN": "t"})
+    folder = tmp_path / "Packages" / "app.lab" / "AC"
+    env = sandbox.sandbox_env(folder, {"PATH": "p", "SystemRoot": r"C:\Windows", "INDEED_API_KEY": "k",
+                                       "FRANCE_TRAVAIL_CLIENT_SECRET": "s", "GITHUB_TOKEN": "t"})
     assert env["PATH"] == "p" and env["SYSTEMROOT"] == r"C:\Windows"
     assert not {"INDEED_API_KEY", "FRANCE_TRAVAIL_CLIENT_SECRET", "GITHUB_TOKEN"} & set(env)
-    assert env["TEMP"].startswith(str(tmp_path)) and env["USERPROFILE"] == str(tmp_path)
+    assert env["TEMP"] == str(folder / "Temp") and env["USERPROFILE"] == str(folder)
+    assert env["LOCALAPPDATA"] == str(tmp_path)          # Windows derives the container's TEMP from it
     assert env["FYJ_LAB_AGENT"]                  # the human commands refuse to run in there
 
 
@@ -168,6 +170,8 @@ attempt("read_env", lambda: open(j(".env")).read())
 attempt("read_local", lambda: open(j("config", "notifications.local.yaml")).read())
 attempt("read_env_created_later", lambda: open(j(".env.later")).read())
 attempt("write_lab", lambda: open(j("data", "lab", "lab.db"), "wb").close())
+import tempfile
+attempt("temp_file", lambda: os.close(tempfile.mkstemp()[0]))
 attempt("loopback", lambda: socket.create_connection(("127.0.0.1", port), timeout=3).close())
 attempt("internet", lambda: socket.create_connection(("1.1.1.1", 443), timeout=3).close())
 out["check"] = check_isolation(root, j("data", "jobs.db"), j("config"), lab_dir=j("data", "lab"),
@@ -196,7 +200,7 @@ def test_the_os_enforces_the_boundary_from_inside_a_real_appcontainer(tmp_path):
         assert code == 0
         out = json.loads((lab / "probe.json").read_text())
         assert out["in_container"] is True
-        assert out["read_code"] == out["read_jobs_db"] == out["write_lab"] == "allowed"
+        assert out["read_code"] == out["read_jobs_db"] == out["write_lab"] == out["temp_file"] == "allowed", out
         for denied in ("write_jobs_db", "plant_in_data", "write_config", "plant_module", "delete_jobs_db",
                        "read_env", "read_local", "read_env_created_later", "internet"):
             assert out[denied] == "PermissionError", (denied, out[denied])
