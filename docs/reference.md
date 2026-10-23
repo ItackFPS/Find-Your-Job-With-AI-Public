@@ -1,7 +1,7 @@
 # Technical reference
 
 The detailed companion to the [README](../README.md): pipeline stages, scoring,
-collectors, caches, notifications, the web API and the database. Durable decisions
+collectors, caches, the web API and the database. Durable decisions
 and their reasons are in the [ADRs](adr/README.md); stage internals (decision journal,
 feedback journal, evaluation harness, lab) are in [architecture.md](architecture.md).
 Source code is the source of truth: when this page and the code disagree, the code wins.
@@ -23,7 +23,7 @@ Source code is the source of truth: when this page and the code disagree, the co
 | 11 | Local AI enrichment *(opt-in, `--ai`)* | `src/ai/pipeline.py` (`Phase2Pipeline`) | Runs a local LLM over the top-ranked candidates only, to enrich the text semantic matching uses; failures are logged and never block the run |
 | 12 | Semantic matching | `src/pipeline/semantic_matching.py` | Cosine similarity between job and profile embeddings, blended into the final score |
 | 13 | Personalization | `src/personalization/engine.py` | Bounded, feedback-driven score adjustment; re-applies the scoring gates afterward so positive feedback can't undo a hard gate |
-| — | Output | Web dashboard, CLI summary, Discord, n8n | See the dedicated sections below |
+| — | Output | Web dashboard, CLI summary | See the dedicated sections below |
 
 ### Deduplication
 
@@ -181,60 +181,6 @@ in `jobs.db`:
 On a warm cache (unchanged jobs and profile), semantic matching and personalization
 approach zero compute time.
 
-## Discord Notifications
-
-An optional, fairly complete Discord integration. All of it is silently skipped if
-unconfigured — the backend runs fine with zero Discord setup.
-
-### Channel model (`config/notifications.yaml`)
-
-- **Static channels**: `pipeline`, `errors`, `statistics`, `system-status` — one webhook
-  URL each, from `DISCORD_PIPELINE_WEBHOOK_URL` etc. A single legacy `DISCORD_WEBHOOK_URL`
-  acts as a fallback for these four only.
-- **Per-location channels**: one per entry in your profile's location preferences (e.g.
-  `dept-83`, `remote-remote_france`), each with its own
-  `DISCORD_LOCATION_<SLUG>_WEBHOOK_URL`. A job is routed to a location channel by
-  `src/pipeline/location_match.py`'s `resolve_job_location()`, which matches the job's
-  department/remote/country data against your ordered location preferences (dropping
-  excluded matches). There is **no fallback** for an unmapped location — it simply
-  doesn't get a location notification, rather than landing in the wrong channel.
-- **Per-location "Top 10" channels**: a standing, edited-in-place leaderboard message per
-  location, computed by `src/notifications/top10_query.py` from the highest-scoring
-  active jobs for that location's slug.
-
-### Automatic channel provisioning
-
-Set `DISCORD_BOT_TOKEN` and `DISCORD_GUILD_ID` and the backend will automatically create
-and adopt the Discord channels and webhooks above for you, based on your profile's
-location preferences — no manual channel/webhook setup required. This runs as a
-background thread (`src/notifications/discord_reconciler_worker.py`, started
-automatically with the API) on a configurable interval (`DISCORD_RECONCILER_INTERVAL_SECONDS`,
-default 300s). The bot needs **View Channel, Manage Channels, Manage Webhooks** — not
-Administrator. Leaving these two variables unset simply disables reconciliation; nothing
-else is affected.
-
-### System status heartbeat
-
-A separate background worker (`src/notifications/system_status_worker.py`, also started
-automatically) edits one standing message in `#system-status` on an interval
-(`SYSTEM_STATUS_INTERVAL_SECONDS`, default 300s) reporting backend/database/pipeline/n8n/
-Discord-config health — independent of whether a pipeline run is in progress.
-
-### Duplicate prevention
-
-A `notification_history` table with a partial unique index on
-`(provider, event_type, entity_id) WHERE status='sent'` prevents the same notification
-from being sent twice, even under concurrent sends.
-
-### Administering Discord infrastructure from Claude Code
-
-`src/discord_admin/` is a separate, on-demand MCP server (`python -m src.discord_admin.mcp_server`,
-requires the `mcp_admin` extra) exposing read-only inspection and reconciliation tools
-(`list_channels`, `list_webhooks`, `get_reconciliation_plan`, `reconcile_now`, etc.) that
-call the same reconciliation logic as the automatic worker above. It is **not** imported
-by the main backend — it's a standalone tool for administering Discord infra from an
-agent session, not something that runs as part of the app.
-
 ## Background Scheduler
 
 `config/schedules.yaml` configures a generic scheduler service (started automatically
@@ -266,7 +212,7 @@ grouped by route module in `src/api/routes/`:
 
 - **profile** — `GET /api/profile`, `PUT /api/profile`
 - **pipeline** — `POST /api/pipeline/run`, `GET /api/pipeline/runs`, `GET /api/pipeline/runs/{id}`,
-  `GET /api/pipeline/events` (SSE), `GET /api/pipeline/notifications`, `GET /api/pipeline/runs/{id}/jobs`
+  `GET /api/pipeline/events` (SSE), `GET /api/pipeline/runs/{id}/jobs`
 - **jobs** — `GET /api/jobs`, `GET /api/jobs/{id}`, `GET /api/jobs/{id}/explanation`,
   `PATCH /api/jobs/{id}/application-status`, `POST /api/jobs/{id}/events`, `GET /api/jobs/stats`,
   `GET /api/jobs/countries`
@@ -282,11 +228,9 @@ grouped by route module in `src/api/routes/`:
 - **lab** (read-only) — `GET /api/lab/runs`, `/experiments` (each with a recommended `next_action`), `/memory`,
   `/active-strategy`, `/self-check` (latest self-check report and earlier statuses)
 - **health** — `GET /api/health` (no database access; used by the launcher)
-- **n8n-facing** (optional shared-secret auth) — `GET /api/jobs/digest/weekly`,
-  `GET /api/jobs/digest/weekly-combined`, `GET /api/pipeline/runs/{id}/jobs/n8n`
 
 At startup, `src/api/app.py` initializes/recovers the databases, seeds the bundled ESCO
-data if missing, starts the scheduler and both Discord background workers, and serves
+data if missing, starts the scheduler, and serves
 the built frontend as a SPA from `frontend/dist/` if present. Pipeline runs execute on a
 background daemon thread (`src/api/runner.py`), one at a time; progress is written to
 the run's database row and mirrored over SSE for the dashboard.
@@ -296,7 +240,7 @@ the run's database row and mirrored over SSE for the dashboard.
 A single SQLite database, **`data/jobs.db`**, in WAL mode (`synchronous=NORMAL`,
 `busy_timeout=5000ms`), holds nearly all application state: jobs (with an FTS5
 full-text index), pipeline run history, per-run job scores, rejection records, source
-checkpoints, embedding caches, personalization data, notification history, and the
+checkpoints, embedding caches, personalization data, notification history (kept, no longer written), and the
 LinkedIn/HelloWork staging tables. A separate **`data/esco.db`** holds the ESCO skill
 taxonomy. Both are created automatically on first run under `data/`, which is not
 tracked in git.

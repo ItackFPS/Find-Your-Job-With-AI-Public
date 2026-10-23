@@ -202,8 +202,7 @@ class ScoreBreakdownOut(BaseModel):
     # Phase 5 (2026-09-10): expose the same canonical tier every notification
     # channel already uses (src.pipeline.scoring.score_to_tier), so the
     # dashboard/frontend never needs its own copy of the tier thresholds.
-    # score_100 = final_score * 100, rounded — same convention as
-    # N8nJobOut/WeeklyDigestJobOut/notification payloads.
+    # score_100 = final_score * 100, rounded.
     score_100: int | None = None
     tier: str | None = None
 

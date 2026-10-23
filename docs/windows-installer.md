@@ -23,7 +23,7 @@ Running from a source checkout (`FindYourJob.cmd` in a clone, see the
 | Application and your data | `%LOCALAPPDATA%\Programs\Find Your Job With AI` (one folder, see below) |
 | Start Menu | **Find Your Job With AI**, **Stop Find Your Job With AI**, **… logs**, **… self-check**, **Uninstall …** |
 | Desktop | **Find Your Job With AI** (optional) |
-| Disk | about 1 GB installed, plus ~470 MB for the embedding model on the first run |
+| Disk | about 300 MB installed (62 MB download), plus ~470 MB for the embedding model on the first run |
 
 Requirements: Windows 10 1809 or later / Windows 11, 64-bit. Nothing else.
 

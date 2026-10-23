@@ -57,7 +57,7 @@ gh label create "type:security" --color b60205 --description "Security finding o
 gh label create "priority:P1" --color b60205 --description "Do next"
 gh label create "priority:P2" --color d93f0b --description "Soon"
 gh label create "priority:P3" --color fef2c0 --description "Eventually"
-for a in collectors discovery pipeline requirements scoring ai notifications discord-admin \
+for a in collectors discovery pipeline requirements scoring ai \
          api storage scheduler frontend tests ci config tooling security; do
   gh label create "area:$a" --color bfdadc
 done
@@ -101,11 +101,10 @@ scan stand in for them.
 
 ### 4. Personal configuration
 
-`config/profile.yaml` and `config/notifications.yaml` are tracked defaults. Your own
-values go in the gitignored `config/profile.local.yaml` and
-`config/notifications.local.yaml`, which replace the default file as a whole when present
-(`src/config_files.py`). The web UI's profile save and Discord reconciliation write the
-`.local.yaml` files; the tracked defaults are only read.
+`config/profile.yaml` is a tracked default. Your own values go in the gitignored
+`config/profile.local.yaml`, which replaces the default file as a whole when present
+(`src/config_files.py`). The web UI's profile save writes the `.local.yaml` file; the
+tracked default is only read.
 
 Migrating a clone that has personal edits in the tracked files (nothing is lost — the
 app already seeds the local file from the values in effect on its first save, so this
@@ -113,8 +112,7 @@ only matters if you edit by hand):
 
 ```bash
 cp config/profile.yaml config/profile.local.yaml
-cp config/notifications.yaml config/notifications.local.yaml
-git restore config/profile.yaml config/notifications.yaml
+git restore config/profile.yaml
 ```
 
 Once a `.local.yaml` file exists, edits to the tracked file no longer apply locally.
@@ -148,8 +146,8 @@ gh pr merge --squash --delete-branch
 git switch main && git pull --ff-only
 ```
 
-Never stage `data/`, `config/*.local.yaml`, personal edits to `config/profile.yaml` /
-`config/notifications.yaml`, `.env`, logs or caches. Stage explicit paths and check `git diff --cached --stat`
+Never stage `data/`, `config/*.local.yaml`, personal edits to `config/profile.yaml`,
+`.env`, logs or caches. Stage explicit paths and check `git diff --cached --stat`
 before every commit.
 
 ## Local checks
@@ -164,8 +162,6 @@ Run the smallest relevant set while working; CI runs the full backend suite.
 | `src/pipeline/scoring.py` | `pytest tests/test_*scoring*.py tests/test_score_*.py tests/test_ranking_*.py tests/test_location_priority_protection.py` |
 | `src/requirements/` | `pytest tests/test_education_*.py tests/test_experience_requirement.py tests/test_requirement*.py` |
 | `src/ai/` | `pytest tests/test_eligibility_gate*.py tests/test_phase2*.py tests/test_pipeline_ai_integration.py` |
-| `src/notifications/` | `pytest tests/test_notification_engine.py tests/test_discord_*.py tests/test_weekly_digest*.py tests/test_system_status*.py` |
-| `src/discord_admin/` | `pytest tests/test_discord_admin_*.py` |
 | `src/api/` | `pytest tests/test_api_*.py` |
 | `src/evaluation/` | `pytest tests/test_evaluation_*.py` |
 | `src/storage/` | `pytest tests/test_storage.py tests/test_run_*.py tests/test_source_checkpoints.py` |
@@ -361,7 +357,6 @@ its running checks (`concurrency`); jobs have timeouts; third-party actions are
 pinned to a commit SHA (with the tag in a comment — update both together); every
 workflow has read-only `contents` permission, uses `pull_request` (never
 `pull_request_target`), so pull requests from forks get no secrets and no write token.
-CI installs CPU-only torch to avoid downloading CUDA wheels.
 
 ### Run the CI checks locally
 
@@ -534,9 +529,9 @@ and that check probes all four from the agent's account:
    - In this mode the Vite origins are also dropped from CORS and the origin guard.
    - It is off by default.
 4. **No relays**: a service of *your* account that forwards requests to the API is served as you. That
-   includes the Vite dev proxy on 5173 (often on `::1` only), n8n on 5678 (its webhooks and API, via
-   Docker's proxy), or anything else. Stop them while the agent runs. The `FindYourJobWithAI_N8n` task
-   starts n8n at logon, so disable it for those sessions. The check fails if anything answers on those
+   includes the Vite dev proxy on 5173 (often on `::1` only), an n8n left on 5678 by an older version
+   (its webhooks and API, via Docker's proxy; remove its logon task with
+   `scripts\uninstall_n8n_startup.py`), or anything else. Stop them while the agent runs. The check fails if anything answers on those
    ports, on 127.0.0.1 or ::1.
 
 Setup, as yourself. Every step marked *elevated* changes machine security settings and is yours to

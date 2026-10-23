@@ -80,9 +80,8 @@ def test_leak_from_a_background_thread_names_the_thread(pytester, tmp_path):
 
 
 def test_environment_changes_do_not_leak_into_later_tests(pytester, tmp_path):
-    # src.discord_admin.secrets.store_webhook_secret writes os.environ
-    # directly; a leaked webhook URL enabled Discord providers in later
-    # tests (issue #46).
+    # Code that writes os.environ directly once leaked a value that changed
+    # later tests (issue #46).
     _sub_session(pytester, tmp_path)
     pytester.makepyfile(textwrap.dedent("""
         import os

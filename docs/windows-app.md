@@ -16,14 +16,12 @@ or Google Chrome is installed, otherwise in your default browser.
 | Backend (FastAPI, `src/api`) | API, pipeline runs, scanners, scheduler; serves the dashboard | yes | starts it on `127.0.0.1:8000`, or reuses one that is already running |
 | Dashboard (`frontend/dist`) | the web UI, built once with Vite | yes | rebuilds it when `frontend/` sources are newer than the build (needs Node.js and `frontend/node_modules`) |
 | SQLite (`data/jobs.db`, `data/esco.db`) | all application data | yes | nothing: the backend opens and migrates it; the launcher never touches data |
-| n8n | weekly e-mail digest only | no | starts it with `--n8n` if it is installed and not running, bound to `127.0.0.1` with telemetry off |
 | LM Studio / Ollama | local LLM, only for AI-enabled runs (`use_ai`) | no | never starts it; reports whether it answers at `PHASE2_LLM_ENDPOINT` and warns if that address is not local |
-| Discord | optional notifications | no | nothing: configured through `.env` |
 
 **Ownership rule.** The launcher stops only processes it started itself. Every child it
 starts is placed in a Windows *job object* with kill-on-close before its first
 instruction runs, so if the launcher crashes or its window is closed, its children —
-and anything they spawned — end with it. A backend or n8n that was already running (the
+and anything they spawned — end with it. A backend that was already running (the
 startup tasks below, a terminal, another tool) is reused and shown as "external", and is
 never stopped. A second double-click while the app runs just opens the dashboard again.
 
@@ -34,8 +32,8 @@ FindYourJob.cmd                  :: same as "start"
 FindYourJob.cmd tray             :: the installed app's mode: no console, an icon in the
                                  ::   notification area; closing the dashboard keeps scans
                                  ::   running, Quit from the icon stops everything
-FindYourJob.cmd autostart on     :: start the app (tray) when you sign in; "off", "status"
-FindYourJob.cmd start --n8n      :: also start n8n for the weekly digest
+FindYourJob.cmd autostart on     :: installed app only: start it (tray) when you sign in;
+                                 ::   "off", "status"
 FindYourJob.cmd start --window browser   :: default browser instead of an app window
 FindYourJob.cmd start --port 8100        :: another backend port (or FYJ_PORT in .env)
 FindYourJob.cmd status           :: what is running and who owns it; starts nothing
@@ -69,19 +67,19 @@ the Hugging Face Hub).
 | File | Content |
 |---|---|
 | `logs\launcher\launcher.log` | what the launcher printed |
-| `logs\launcher\backend.log`, `n8n.log`, `vite.log`, `frontend-build.log` | raw output of each child the launcher started (one previous generation kept past 5 MB) |
+| `logs\launcher\backend.log`, `vite.log`, `frontend-build.log` | raw output of each child the launcher started (one previous generation kept past 5 MB) |
 | `logs\backend\backend-<date>.log` | the backend's own application log (rotating) |
 
 `logs/` is git-ignored. The launcher never prints or logs the content of `.env`.
 
 ## Running at logon instead
 
-`scripts\install_startup.py` and `scripts\install_n8n_startup.py` register per-user Task
-Scheduler tasks (`FindYourJobWithAI_Backend`, `FindYourJobWithAI_N8n`) that start the
-backend and n8n in the background at logon, without the launcher. They still work, and
-the launcher detects and reuses what they started. Remove them with
-`scripts\uninstall_startup.py` / `scripts\uninstall_n8n_startup.py`. Nothing is
-registered unless you run those scripts yourself.
+`scripts\install_startup.py` registers a per-user Task Scheduler task
+(`FindYourJobWithAI_Backend`) that starts the backend in the background at logon, without
+the launcher. It still works, and the launcher detects and reuses what it started. Remove
+it with `scripts\uninstall_startup.py`. Nothing is registered unless you run that script
+yourself. n8n support was removed in 2.0: if you once registered its logon task, remove it
+with `scripts\uninstall_n8n_startup.py`.
 
 ## Installing, updating, uninstalling
 
@@ -103,8 +101,6 @@ There is no installer: the app runs from its folder (which may contain spaces).
   machine can call it. `API_SAME_USER_ONLY=1` (in `.env`) restricts it to processes of
   your Windows account — recommended when another account (such as the isolated lab
   agent) uses this machine; the dev server cannot be used in that mode.
-- n8n started by the launcher (or `scripts\Start_n8n.bat`) listens on `127.0.0.1`
-  unless you set `N8N_LISTEN_ADDRESS` yourself.
 - The stop request is a named event in your logon session; only your own processes can
   send it, and it can only stop the app.
 
@@ -117,5 +113,4 @@ There is no installer: the app runs from its folder (which may contain spaces).
 | `port 8000 is already used by another program` | something that is not this app holds the port: stop it, or `FindYourJob.cmd --port 8100` |
 | `backend exited during startup` | the printed log lines say why (often a broken `.env` value or a locked database); full output in `logs\launcher\backend.log` |
 | `backend did not become ready within 180s` | startup on a large database can be slow: `--timeout 600` |
-| n8n `not running` | optional; `FindYourJob.cmd start --n8n`, or install it with `npm install -g n8n` |
 | `PHASE2_LLM_ENDPOINT points to a non-local address` | AI-enabled runs refuse that host and run without AI; point it at LM Studio/Ollama on this machine, or set `FYJ_ALLOW_REMOTE_LLM=1` for a server you control |

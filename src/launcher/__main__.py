@@ -19,8 +19,6 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--port", type=int, help="backend port (default: FYJ_PORT or 8000)")
 
     run = argparse.ArgumentParser(add_help=False, parents=[common])
-    run.add_argument("--n8n", action="store_true",
-                     help="also start n8n (weekly e-mail digest) if it is installed and not running")
     run.add_argument("--window", choices=("app", "browser", "none"), default="app",
                      help="open the dashboard in an app window (Edge/Chrome; falls back to the "
                           "default browser), the default browser, or not at all (default: app)")
@@ -70,10 +68,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "tray":
             from src.launcher.tray import TrayApp
 
-            launcher = Launcher(settings, out, mode="start", with_n8n=args.n8n, window=args.window,
+            launcher = Launcher(settings, out, mode="start", window=args.window,
                                 handle_signals=False, backend_restarts=1)
             return TrayApp(launcher, Autostart(root)).run()
-        return Launcher(settings, out, mode=args.command, with_n8n=args.n8n, window=args.window,
+        return Launcher(settings, out, mode=args.command, window=args.window,
                         reload=getattr(args, "reload", False)).run()
     out = Output(None)
     if args.command == "autostart":

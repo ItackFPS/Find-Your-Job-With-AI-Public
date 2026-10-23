@@ -12,8 +12,3 @@ services:
       - LOG_LEVEL=INFO
     command: python src/main.py
 
-  # n8n itself is not part of this Compose setup and is not planned to be — it
-  # runs as a separate, externally-managed instance. The application already
-  # has a working n8n integration (a weekly email digest): import
-  # config/n8n_weekly_digest.json into your own n8n install and point it at
-  # this backend. See docs/architecture.md and the README's n8n section.

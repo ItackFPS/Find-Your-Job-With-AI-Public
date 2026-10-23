@@ -1,6 +1,7 @@
 """Embedding service for semantic matching.
 
-Provides a lightweight, local semantic embedding system using sentence-transformers.
+Provides a lightweight, local semantic embedding system: the model's official ONNX
+export run by ONNX Runtime (``src/embeddings/onnx_encoder.py``), with no PyTorch.
 No cloud or paid AI APIs are required. Network: the model is downloaded once from the
 Hugging Face Hub, and each later load asks the Hub whether it changed unless
 HF_HUB_OFFLINE=1 is set (safe once the model is cached). Hub telemetry is off.
@@ -17,27 +18,9 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import os
-import threading
 from dataclasses import dataclass
 
-# Hugging Face libraries attach usage telemetry to Hub requests unless told not to;
-# read when huggingface_hub is first imported, so set before sentence-transformers.
-# A value the user set (shell or .env) is kept.
-os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
-
-# tls-client (python-jobspy's HTTP backend, used by the LinkedIn scanner) bundles
-# a Go DLL that aborts the process on Windows if it is first loaded after torch +
-# scikit-learn (via sentence-transformers). Loading it first avoids the crash.
-# Optional: only installed with the [linkedin] extra.
-try:
-    import tls_client  # type: ignore[import-untyped, import-not-found]  # noqa: F401
-except ImportError:
-    pass
-
-import torch
-from sentence_transformers import SentenceTransformer
-
+from src.embeddings.onnx_encoder import SUPPORTED_MODELS, OnnxSentenceEncoder, model_spec
 from src.models.job import Job
 
 logger = logging.getLogger(__name__)
@@ -112,14 +95,14 @@ class EmbeddingCache:
 class EmbeddingService:
     """Local semantic embedding service.
 
-    Uses sentence-transformers with a configurable lightweight model.
+    Runs a supported model's pinned ONNX export on the CPU.
     Embeddings are cached to avoid recomputation.
 
     Configuration:
-        - model_name: Name of the sentence-transformer model
+        - model_name: Name of a model listed in onnx_encoder.SUPPORTED_MODELS
           (default: paraphrase-multilingual-MiniLM-L12-v2)
         - cache_max_entries: Maximum number of embeddings to cache (default: 10,000)
-        - device: Device to use ('cpu' or 'cuda'; default: auto-detect)
+        - device: kept for configuration compatibility; inference runs on the CPU
     """
 
     def __init__(
@@ -131,11 +114,7 @@ class EmbeddingService:
         self._model_name = model_name
         self._device = device
         self._cache = EmbeddingCache(max_entries=cache_max_entries)
-        self._transformer: SentenceTransformer | None = None
-        # Fix #5: guards lazy model loading against concurrent requests
-        # (relevant since this service is meant to be exposed as an HTTP
-        # API called by n8n, which may fire requests in parallel).
-        self._model_lock = threading.Lock()
+        self._encoder_instance: OnnxSentenceEncoder | None = None
 
     @property
     def model_name(self) -> str:
@@ -143,71 +122,35 @@ class EmbeddingService:
         return self._model_name
 
     @property
+    def cache_model_id(self) -> str:
+        """Key for persisted vectors.
+
+        The fp32 reference export reproduces the former PyTorch vectors (measured,
+        see onnx_encoder), so it keeps the bare model name and reuses vectors
+        already stored. Any other export gets its own key, so vectors of different
+        numerics are never mixed.
+        """
+        spec = SUPPORTED_MODELS.get(self._model_name.removeprefix("sentence-transformers/"))
+        if spec is None or spec.variant == "model":
+            return self._model_name
+        return f"{self._model_name}@{spec.variant}"
+
+    @property
+    def _encoder(self) -> OnnxSentenceEncoder:
+        """The ONNX encoder, created on first use (no download until then).
+
+        Raises ValueError for a model with no pinned ONNX export.
+        """
+        if self._encoder_instance is None:
+            self._encoder_instance = OnnxSentenceEncoder(model_spec(self._model_name))
+        return self._encoder_instance
+
+    @property
     def cache_size(self) -> int:
         """Current number of cached embeddings."""
         # Fix #6: use the public EmbeddingCache.size property instead of
         # reaching into its private _cache attribute.
         return self._cache.size
-
-    # -- Model initialization ------------------------------------------------
-
-    @staticmethod
-    def _resolve_device(device: str) -> str:
-        """Resolve a configured device string into one SentenceTransformer accepts.
-
-        "auto" is not a valid torch/SentenceTransformer device string and
-        crashes if passed straight through. This resolves it to "cuda" when
-        a CUDA GPU is available, otherwise "cpu". Any other explicit value
-        (e.g. "cpu", "cuda", "cuda:0") is returned unchanged so an explicit
-        configuration choice is always respected.
-        """
-        if device != "auto":
-            return device
-        return "cuda" if torch.cuda.is_available() else "cpu"
-
-    def _ensure_model_loaded(self) -> SentenceTransformer:
-        """Load or re-load the transformer model if needed (thread-safe).
-
-        Returns the loaded model. Callers should use the returned value
-        instead of reading self._transformer directly — that keeps the
-        type checker aware it's non-None (Pylance can't infer that a
-        separate method call narrowed an Optional attribute).
-        """
-        if self._transformer is not None:
-            return self._transformer
-        # Fix #5: double-checked locking so two concurrent callers can't
-        # both start loading the model at once.
-        with self._model_lock:
-            if self._transformer is None:
-                resolved_device = self._resolve_device(self._device)
-                logger.info(
-                    "Loading embedding model '%s' on device '%s' (configured: '%s')",
-                    self._model_name,
-                    resolved_device,
-                    self._device,
-                )
-                self._transformer = SentenceTransformer(self._model_name, device=resolved_device)
-                logger.info("Model loaded successfully")
-        return self._transformer
-
-    @staticmethod
-    def _get_embedding_dimension(model: SentenceTransformer) -> int:
-        """Return the model's embedding dimension, failing loudly if unknown.
-
-        get_sentence_embedding_dimension() is typed Optional[int] because a
-        small number of exotic model configs can't report a dimension
-        up-front. That's not a case we can silently paper over with a
-        default (any guessed dimension would create vectors of the wrong
-        size for cosine_similarity), so we raise instead of returning None.
-        """
-        dim = model.get_sentence_embedding_dimension()
-        if dim is None:
-            raise RuntimeError(
-                "Could not determine embedding dimension for model "
-                f"'{model}'. This model config doesn't report a fixed "
-                "output size."
-            )
-        return int(dim)
 
     # -- Embedding methods ----------------------------------------------------
 
@@ -222,9 +165,7 @@ class EmbeddingService:
         """
         if not text or not text.strip():
             logger.warning("Empty text provided for embedding, returning zero vector")
-            model = self._ensure_model_loaded()
-            dim = self._get_embedding_dimension(model)
-            return list([0.0] * dim)
+            return [0.0] * self._encoder.dimension
 
         cache_key = self._make_cache_key(text)
         cached = self._cache.get(cache_key)
@@ -232,11 +173,9 @@ class EmbeddingService:
             logger.debug("Cache hit for embedding key: %s", cache_key[:16])
             return cached[:]  # Return a copy
 
-        model = self._ensure_model_loaded()
-        # Fix #1: sentence-transformers returns a numpy.ndarray; convert to
-        # a plain list so the return type actually matches List[float]
-        # (important for JSON serialization downstream, e.g. over HTTP to n8n).
-        vector: list[float] = model.encode([text])[0].tolist()
+        # A plain list (not numpy) so the return type matches list[float] and
+        # serializes to JSON as is.
+        vector: list[float] = self._encoder.encode([text])[0].tolist()
         self._cache.put(cache_key, vector)
         logger.debug("Computed embedding for text '%s' (len=%d)", text[:50], len(text))
         return vector
@@ -268,8 +207,7 @@ class EmbeddingService:
 
         resolved_ids = ids if ids is not None else [str(i) for i in range(len(texts))]
 
-        model = self._ensure_model_loaded()
-        dim = self._get_embedding_dimension(model)
+        dim = self._encoder.dimension
 
         # Fix #2: check the cache first and only encode texts that are
         # actually missing, then populate the cache with the new results —
@@ -292,7 +230,7 @@ class EmbeddingService:
                 to_encode_positions.append(i)
 
         if to_encode_texts:
-            batch_vectors = model.encode(to_encode_texts)
+            batch_vectors = self._encoder.encode(to_encode_texts)
             for pos, text, vec in zip(to_encode_positions, to_encode_texts, batch_vectors):
                 vec_list = vec.tolist()
                 self._cache.put(self._make_cache_key(text), vec_list)

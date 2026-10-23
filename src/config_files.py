@@ -1,7 +1,7 @@
 """Resolve personal configuration files against tracked defaults.
 
-``config/profile.yaml`` and ``config/notifications.yaml`` are tracked
-repository defaults. A developer's own values live in the gitignored sibling
+``config/profile.yaml`` is a tracked repository default. A developer's own
+values live in the gitignored sibling
 ``config/<name>.local.yaml``: when it exists it replaces the default as a
 whole file (no key-level merge — missing keys fall back to the model defaults
 exactly as they would in the tracked file).
