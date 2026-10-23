@@ -129,8 +129,7 @@ def detect_source_yield_anomalies(
             ``RunStorage.list_runs()`` returns (each a dict with at least
             "status" and "stats"). Should NOT include the current run.
         min_baseline_runs / min_baseline_yield / drop_ratio_threshold /
-            lookback_runs: see module docstring and
-            config/notifications.yaml's ``source_health`` section — exposed
+            lookback_runs: see module docstring — exposed
             as keyword args so the caller can thread config values through
             without this function reading config itself.
 

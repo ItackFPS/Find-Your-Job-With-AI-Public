@@ -5,6 +5,9 @@ private repository; this public repository starts from one reviewed snapshot of 
 private history is not published (see *History* below). Secrets are never reproduced
 here.
 
+> Historical record. Discord, n8n, the weekly digest and `config/notifications.yaml`
+> described below were removed after 1.0 (2.0 plan F1.1–F1.3).
+
 **Verdict:** suitable for public release with the limitations listed in §6. No live
 credential exists in this repository. The application binds to `127.0.0.1`, sends no
 telemetry of its own and uses no cloud AI.

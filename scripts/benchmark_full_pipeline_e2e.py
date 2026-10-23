@@ -215,14 +215,8 @@ def main() -> int:
     original_call_llm = _install_llm_timing_patch()
 
     from src.api.runner import PipelineRunner
-    from src.notifications.engine import NotificationEngine
 
-    notification_engine = NotificationEngine(db_path=DB_PATH, config_dir=CONFIG_DIR)
-    runner = PipelineRunner(
-        db_path=DB_PATH,
-        config_dir=CONFIG_DIR,
-        notification_engine=notification_engine,
-    )
+    runner = PipelineRunner(db_path=DB_PATH, config_dir=CONFIG_DIR)
 
     mon = ResourceMonitor(interval=1.0)
     mon.start()
