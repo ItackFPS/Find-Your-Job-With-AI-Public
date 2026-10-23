@@ -1,20 +1,56 @@
 # V1 status record
 
 The working record of where V1 stands. It states only what was verified, with the evidence;
-anything not re-run says so. Last update: 2026-10-19 (round 4: integration, Windows installer,
-user walkthrough).
+anything not re-run says so. Last update: 2026-10-23 (round 5: lab sandbox, 1.0.0 release
+candidate). Rounds 1–4 are recorded below as they were.
 
-**Verdict: V1 READY WITH EXPLICIT LIMITATIONS.** Every change is merged into `main`. The
-Windows installer was built from `main` and passed an automated install → launch → stop →
-upgrade → uninstall test (60 checks) and a user walkthrough on real offers. The limitations
-are listed under [Residual risks](#residual-risks). The main ones:
+**Verdict: 1.0.0 RELEASE CANDIDATE VERIFIED; release waits on the human review of #30.** The
+candidate installer, built from the integration of `main` with #30 and #33, passed the
+60-check acceptance test, an upgrade over a used install, an uninstall that kept the data,
+and a walkthrough on real offers (see [Round 5](#round-5-2026-10-23)). The limitations are
+listed under [Residual risks](#residual-risks). The main ones:
 
 - Real-world accuracy and ranking quality are not measured: no human-reviewed real labels,
   no graded relevance labels.
-- The lab agent's OS-level isolation (a separate Windows account) is not set up; under the
-  user's own account only the in-process guard and human approval protect production.
+- The lab agent is OS-isolated only when it runs in its sandbox (`python -m src.lab sandbox
+  run`, a Windows AppContainer, #30). Started any other way, only the in-process guard and
+  human approval protect production.
 - The installer is not code-signed (SmartScreen warning).
 - APEC refuses automated access (bot protection with a CAPTCHA); runs show it as failed.
+
+## Round 5 (2026-10-23)
+
+| PR | Change | State |
+|---|---|---|
+| #31 | the job page and sidebar render only `http(s)` links from job data | merged |
+| #32 | `follow-redirects`, `vite` and the installer's `certifi` advisories fixed | merged |
+| #34 | the build fails if a staged file contains the checkout, stage or profile path | merged |
+| #35 | a failed source's row says why (APEC: bot protection) | merged |
+| #36 | the run funnel shows scoring's real input | merged |
+| #37 | Stop takes about 5 s; a Start during a Stop waits, then starts | merged |
+| #30 | lab agent in a Windows AppContainer sandbox (`python -m src.lab sandbox grant\|run\|revoke`) | open, CI green, **awaiting the owner's review of the security boundary** |
+| #33 | version 1.0.0; download and SHA-256 steps | open, CI green, merges with #30 |
+
+**Integration tested:** `ec22da4` = `main` `064a72f` + #30 (`767ea2d`) + #33 (`8608d2b`).
+
+| What | Result |
+|---|---|
+| `pytest -m "not network"` on `ec22da4` | **5295 passed, 9 skipped, 0 failed** |
+| Frontend on `ec22da4` (`npm ci`, lint, `tsc -b`, vitest, build) | 0 lint errors; OK; **123 passed** (20 files); built |
+| `npm audit`; `pip-audit -r packaging/windows/requirements.txt` | 0 vulnerabilities; none known |
+| `ruff check src tests`; `mypy src` (advisory) | 31 findings (E402 30, F401 1); 1 error in `src/discovery/query_expansion.py`. Neither comes from this round; the baselines (29 E402, 0 mypy) predate #6 |
+| Hosted CI on `main` `064a72f`, #30 `767ea2d`, #33 `8608d2b` | Tests, Frontend, Lint, Secret scan, Dependency audit: all success |
+| Candidate installer | `FindYourJobWithAI-Setup-1.0.0.exe`, commit `ec22da4`, 209,616,935 bytes, SHA-256 `f5603b192c411c24b90d54ccc4aae43db13c182ad8e6d5267e4437e9627a93ee`, CPython 3.12.10; not published |
+| Stage scan | no `.env` (only `.env.example`), `*.local.*`, database, `data\`, token or key pattern; the build's own path check passed |
+| Upgrade over the used preview install (174 jobs, 2 runs, 2 feedback events), app running | exit 0; app stopped first; jobs, runs, feedback, `profile.local.yaml` (same SHA-256) and `data\lab` kept |
+| Relaunch from the desktop shortcut | healthy in 93 s, `127.0.0.1:8000` only, no run started |
+| Manual run | completed in 117 s: 2559 collected, 174 scored; France Travail and Indeed *skipped* with what to set; APEC *failed* with its reason (#35); funnel "Scoring 174 / 174" (#36) |
+| Second launch | same backend pid |
+| Start Menu Stop then Start at once (#37) | old backend gone after 6 s, new one healthy at 30 s, no run |
+| Lab sandbox on the installed copy | `sandbox grant --apply` 26 s; `isolation-check` inside: `os_enforced: true`, nothing writable, no secret readable, ports 8000/5173/5678 blocked. A probe inside could not read `.env` or `profile.local.yaml`, write `jobs.db`, `config\` or `src\`, reach the API or the internet; it could write `data\lab` and temp files. `approve` refused (exit 2). `revoke --apply` left 0 ACEs |
+| Lab outside the sandbox | `isolation-check`: `os_enforced: false`, exit 3, with the reasons; the Lab page says only the sandbox isolates |
+| Silent uninstall | exit 0; app files, shortcuts and registration removed; `data\`, `config\`, `logs\` kept |
+| `acceptance.ps1` on the candidate | **ACCEPTANCE PASSED, 60/60 checks** (clean install, shortcuts, launch, health, no scan at launch, stop, upgrade, uninstall with data kept) |
 
 Status words: **verified** (shown by tests or by running it), **implemented, not verified**,
 **partial**, **blocked**, **not implemented**.
@@ -163,7 +199,8 @@ paths fixed by #29.
 |---|---|---|
 | Weak evidence cannot be promoted; agents cannot approve | verified (round 3) | `insufficient_evidence` verdict; `approve` refused in an agent environment; `tests/test_lab_promotion_authority.py` |
 | Lab cannot silently alter production | verified | active strategy = `config/` after every step; promotion only through `python -m src.lab approve` (typed confirmation) |
-| OS-level isolation | **not enforced** | `python -m src.lab isolation-check` from the installed copy: `os_enforced: false`, exit 3. Cause: the agent runs under the user's own account. The dedicated account of ADR 0011 (`scripts/lab_isolation.ps1`) needs an administrator to create it, which is the owner's action. The Lab page and README say so |
+| OS-level isolation (round 5, #30) | verified in the sandbox | see [Round 5](#round-5-2026-10-23): `os_enforced: true` inside the AppContainer on the installed copy. Outside it, unchanged: |
+| OS-level isolation (round 4) | **not enforced** | `python -m src.lab isolation-check` from the installed copy: `os_enforced: false`, exit 3. Cause: the agent runs under the user's own account. The dedicated account of ADR 0011 (`scripts/lab_isolation.ps1`) needs an administrator to create it, which is the owner's action. The Lab page and README say so |
 
 ### G. Security
 
@@ -183,7 +220,11 @@ paths fixed by #29.
 
 - **Real-world accuracy and ranking quality are unmeasured.** All figures rest on 50 synthetic
   jobs (22 suitable).
-- **Lab isolation is in-process only** unless the owner sets up ADR 0011's separate account.
+- **Lab isolation needs the sandbox**: OS-enforced only when the agent runs through
+  `python -m src.lab sandbox run` (#30); nothing in the app starts it. An LLM CLI the agent
+  calls needs its own folders added with `--grant-read`.
+- **Dashboard header lag**: after a run completes, the header can show "Running…" for about
+  10–20 s more; it recovers on its own.
 - **Unsigned installer**: SmartScreen warns; users should check the published SHA-256.
 - **Bundled CPython 3.12.10** is the build machine's; rebuild with the latest 3.12 patch release
   for its security fixes.
@@ -202,8 +243,9 @@ paths fixed by #29.
 1. Decide whether to ship `apec` with `active: false` while it is blocked (needs updating the
    redundancy tripwire test).
 2. Review real labels before any real-world metric is reported.
-3. Optional: set up the lab agent's separate Windows account (`scripts/lab_isolation.ps1`).
-4. Optional: code-sign the installer; publish a GitHub release with the `.exe` and `.sha256`.
+3. Review and approve #30 (the AppContainer boundary), then merge #30 and #33; the `v1.0.0`
+   tag and GitHub Release follow from the build of the resulting `main`.
+4. Optional: code-sign the installer.
 
 ## How to test it yourself
 
