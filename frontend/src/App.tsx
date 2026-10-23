@@ -8,6 +8,7 @@ import Stats from './pages/Stats'
 import Review from './pages/Review'
 import Skills from './pages/Skills'
 import Lab from './pages/Lab'
+import DesignSystem from './pages/DesignSystem'
 import { Sidebar } from './components'
 
 export default function App() {
@@ -26,6 +27,7 @@ export default function App() {
           <Route path="/skills" element={<Skills />} />
           <Route path="/lab" element={<Lab />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/design" element={<DesignSystem />} />
         </Routes>
       </main>
     </div>
