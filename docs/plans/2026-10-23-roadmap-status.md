@@ -36,37 +36,38 @@ Until then, they are reported as *not met* rather than replaced by agent evidenc
 
 | Item | Tier | Status | Where / evidence |
 |---|---|---|---|
-| F0.1 baselines | R | ready | v1 figures measured in the plan (§A2) and in #43; to commit under `docs/baselines/` |
+| F0.1 baselines | R | PR #45 | `docs/baselines/v1.0.0.md`; full run duration not measured |
 | F0.2 personal labels | T | owner data exists | `real-v1` 250 labels (K2); the self-check must report on them |
-| F0.3 FT coverage benchmark | T | blocked | needs #44 merged, then 7 days of runs |
-| F1.1–F1.3 removals | R | PR #40 | CI green |
-| F1.4 APEC, WTTJ browser, crawl4ai | R | ready | tripwire test to update |
-| F2.1–F2.5 desktop | R | PR #42 (tray, autostart, stop, restart) | remaining: dynamic port + instance token, pywebview window (K4), toast categories, kill-and-resume test |
-| F3.1 ONNX | R | PR #43 | Spearman 1.000 on 1,000 jobs; installer 62.1 MB |
-| F4.1–F4.2 geo | R | PR #41 | resolver 100 % on 483 FT; remote extractor: agent review, owner labels pending |
-| F4.3 distance scoring | R | blocked | #41 |
+| F0.3 FT coverage benchmark | T | ready | #44 merged; needs 7 calendar days of runs |
+| F1.1–F1.3 removals | R | merged #40 | review fixes 6d951ab; F1.3 "Settings shows source health" still open (`source_health.py` has no consumer yet) |
+| F1.4 APEC, WTTJ browser, crawl4ai | R | in progress | worktree fyj-pub-rm2 |
+| F2.1–F2.5 desktop | R | merged #42 (tray, autostart, stop, restart); rest in progress | worktree fyj-pub-win: dynamic port + instance token, pywebview window (K4), notification categories, kill-and-resume |
+| F3.1 ONNX | R | done #43 | Spearman 1.000 on 1,000 jobs; installer 62.1 MB; fail-open follow-up PR #46 |
+| F4.1–F4.2 geo | R | merged #41 | resolver 100 % on 483 FT; remote extractor: agent review, owner labels pending |
+| F4.3 distance scoring | R | in progress | worktree fyj-pub-loc (2 PRs: matching, baseline re-record) |
 | F5.1–F5.4 profile v2, onboarding | R | blocked | F4.3 |
 | F5.5 CV import | T | blocked | F5.1 |
 | F6.1 source contract | R | ready | |
-| F6.2 FT web | R | PR #44 | bs4 declared (CI fix 701963c) |
+| F6.2 FT web | R | merged #44 | robots fail-closed + 5 review fixes (aea09d1); F0.3 coverage report pending |
 | F6.3–F6.6 | R | blocked | F6.1 (F6.6 also F4.1) |
-| F7.1 i18n skeleton | R | ready | with F10.1 |
+| F7.1 i18n skeleton | R | in progress | worktree fyj-pub-ds (stacked on F10.1) |
 | F7.2 EN+FR (R), ES/IT/DE beta (T) | R/T | blocked | pages rebuilt |
 | F7.3 posting language | T | ready | |
-| F8.1–F8.4 AI platform + analysis | R | ready (F8.1) | K3 |
+| F8.1–F8.4 AI platform + analysis | R | F8.1 in progress | worktree fyj-pub-ai1; K3 |
 | F8.5–F8.7 | T | blocked | F8.4 |
 | F9.1 Quality page | R | blocked | F10.1 |
 | F9.2–F9.3 | T | blocked | F9.1 |
-| F10.1 design system | R | ready | |
+| F10.1 design system | R | in progress | worktree fyj-pub-ds |
 | F10.2, F10.4 pages | R | blocked | F10.1, F7.1 |
 | F10.3 settings/insights/quality | T | blocked | F10.1 |
 | F11.1 slim installer | R | blocked | wave 4 |
 
 ## Next actions
 
-1. Merge wave 0 in order #39 → #40 → #41 → #43 → #42 → #44, re-running CI after each conflict fix.
-2. Start wave 1 in parallel worktrees (one branch and PR per item).
+1. Review and merge the in-flight PRs as they turn green: #45, #46, F8.1, F10.1/F7.1, F2 rest, F1.4, F4.3.
+2. Then F6.1 source contract (after F1.4), F5.1 profile v2 (after F4.3), F8.2/F8.3 model catalogue and benchmark (after F8.1), F0.3 coverage runs.
 
 ## Log
 
 - 2026-10-23: execution kickoff; owner decisions K1–K4 recorded; #44 CI failure (undeclared `beautifulsoup4`) fixed.
+- 2026-10-23: wave 0 reviewed and merged: #39, #41, #40 (after fixes), #43, #42 (after fixes: autostart refused outside the installed app, failed start reported), #44 (after fixes: robots.txt fails closed). Main 46c4f0f.
