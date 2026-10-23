@@ -12,8 +12,10 @@ listed in its own sitemaps), and nothing else:
 * **robots.txt is respected**: the rules are fetched at the start of every run and
   every URL is checked against them (``*`` wildcards included). The keyword search
   (``motsCles=``) and the pages that load an offer's full text (``t:ac=``) are
-  disallowed, so they are never requested.
-* **Polite**: one request at a time, ``rate_limit_delay`` (default 1 s) between
+  disallowed, so they are never requested. It fails closed: without a robots.txt
+  served with HTTP 200 (any other status, an empty body or a network error), no page
+  is requested. Sitemap URLs outside ``BASE`` are never followed.
+* **Polite**: one request at a time, ``rate_limit_delay`` (at least 1 s) between
   requests, at most ``max_pages`` listing pages per run (default 60).
 * **What a listing gives**: id, title, employer, place, contract, working time, an
   extract of the description (~200 characters) and the publication age. Each offer
@@ -48,6 +50,8 @@ BASE = "https://candidat.francetravail.fr"
 SITEMAP = f"{BASE}/rechercheoffre/sitemap/croisements-metiers-departements.xml"
 USER_AGENT = ("FindYourJobWithAI/2.0 (local job-search app; "
               "+https://github.com/ItackFPS/Find-Your-Job-With-AI-Public)")
+ROBOTS_AGENT = "FindYourJobWithAI"  # product token of USER_AGENT, matched in robots.txt groups
+MIN_RATE_LIMIT_DELAY = 1.0  # seconds between requests; a lower configured value is raised to it
 
 # France Travail occupation codes (sector + occupation, from its sector sitemap:
 # "Informatique et télécoms" is sector 28, "Audit, conseil" 6, sector 29 holds web,
@@ -82,10 +86,18 @@ _AGE_DAYS = re.compile(r"(\d+)\s+jour", re.I)
 # -- robots.txt ---------------------------------------------------------------------------
 
 
-def parse_robots(text: str, agent: str = "*") -> list[tuple[bool, re.Pattern[str]]]:
-    """(allow, pattern) rules of the ``User-agent: *`` group, ``*`` and ``$`` supported."""
-    rules: list[tuple[bool, re.Pattern[str]]] = []
-    in_group = False
+RobotsRule = tuple[bool, re.Pattern[str], int]  # (allow, pattern, length of the path as written)
+
+
+def parse_robots(text: str, agent: str = "*") -> list[RobotsRule]:
+    """Rules that apply to ``agent``, per RFC 9309; ``*`` and ``$`` supported.
+
+    Consecutive ``User-agent:`` lines open one group, which the following rules belong
+    to. Every group naming ``agent`` (case-insensitive) applies, merged; when none does,
+    the ``*`` groups apply.
+    """
+    groups: list[tuple[set[str], list[RobotsRule]]] = []
+    in_agent_lines = False
     for raw in text.splitlines():
         line = raw.split("#", 1)[0].strip()
         if ":" not in line:
@@ -93,20 +105,29 @@ def parse_robots(text: str, agent: str = "*") -> list[tuple[bool, re.Pattern[str
         key, value = (part.strip() for part in line.split(":", 1))
         key = key.lower()
         if key == "user-agent":
-            in_group = value == agent
-        elif in_group and key in ("allow", "disallow") and value:
-            regex = "".join(".*" if ch == "*" else ("$" if ch == "$" and i == len(value) - 1 else re.escape(ch))
-                            for i, ch in enumerate(value))
-            rules.append((key == "allow", re.compile(regex)))
-    return rules
+            if not in_agent_lines:
+                groups.append((set(), []))
+                in_agent_lines = True
+            groups[-1][0].add(value.lower())
+        elif key in ("allow", "disallow"):
+            in_agent_lines = False
+            if groups and value:
+                regex = "".join(".*" if ch == "*" else ("$" if ch == "$" and i == len(value) - 1 else re.escape(ch))
+                                for i, ch in enumerate(value))
+                groups[-1][1].append((key == "allow", re.compile(regex), len(value)))
+    wanted = agent.lower()
+    chosen = [rules for agents, rules in groups if wanted in agents]
+    if not chosen:
+        chosen = [rules for agents, rules in groups if "*" in agents]
+    return [rule for rules in chosen for rule in rules]
 
 
-def robots_allows(rules: list[tuple[bool, re.Pattern[str]]], path_and_query: str) -> bool:
-    """Longest matching rule wins (allow wins a tie); no matching rule means allowed."""
+def robots_allows(rules: list[RobotsRule], path_and_query: str) -> bool:
+    """Longest matching rule wins, measured on the path as written in robots.txt (allow
+    wins a tie); no matching rule means allowed."""
     best: tuple[int, bool] | None = None
-    for allow, pattern in rules:
+    for allow, pattern, length in rules:
         if pattern.match(path_and_query):
-            length = len(pattern.pattern)
             if best is None or length > best[0] or (length == best[0] and allow):
                 best = (length, allow)
     return True if best is None else best[1]
@@ -186,8 +207,10 @@ class FranceTravailWebCollector(BaseCollector):
 
     def __init__(self, config: dict[str, Any] | None = None) -> None:
         cfg = config or {}
+        # Never faster than one request per MIN_RATE_LIMIT_DELAY, whatever the config says.
         super().__init__(timeout=int(cfg.get("timeout", 30)), retries=int(cfg.get("retries", 2)),
-                         rate_limit_delay=float(cfg.get("rate_limit_delay", 1.0)))
+                         rate_limit_delay=max(MIN_RATE_LIMIT_DELAY,
+                                              float(cfg.get("rate_limit_delay", MIN_RATE_LIMIT_DELAY))))
         self.max_pages = int(cfg.get("max_pages", 60))
         self.target_domains = [d for d in cfg.get("target_domains") or [] if d in OCCUPATIONS]
         self.departments = [str(d).upper().zfill(2) for d in cfg.get("departments") or []]
@@ -211,11 +234,26 @@ class FranceTravailWebCollector(BaseCollector):
                           headers={"User-Agent": USER_AGENT, "Accept-Language": "fr-FR,fr;q=0.9"}) as client:
             self._client = client
             try:
-                rules = parse_robots(self._get(f"{BASE}/robots.txt").text)
-                published = self._published_pages()
+                robots = self._get(f"{BASE}/robots.txt")
+            except httpx.HTTPError as exc:
+                return CollectorResult(source_name="france-travail-web", jobs=[], errors=[
+                    f"France Travail is unreachable: {exc}"])
+            # Fail closed: crawl only with a robots.txt actually served (HTTP 200, non-empty).
+            # RFC 9309 makes 5xx/unreachable "disallow all"; it lets other 4xx mean "no
+            # robots.txt, allow all", but this source is read conservatively, so any answer
+            # other than a real robots.txt means no page is requested.
+            if robots.status_code != 200 or not robots.text.strip():
+                return CollectorResult(source_name="france-travail-web", jobs=[], errors=[
+                    f"France Travail robots.txt unavailable (HTTP {robots.status_code}"
+                    f"{', empty' if robots.status_code == 200 else ''}); not crawling"])
+            rules = parse_robots(robots.text, ROBOTS_AGENT)
+            try:
+                published, offsite = self._published_pages()
             except (httpx.HTTPError, RuntimeError) as exc:
                 return CollectorResult(source_name="france-travail-web", jobs=[], errors=[
                     f"France Travail is unreachable: {exc}"])
+            if offsite:
+                logger.warning("France Travail web: %d sitemap URLs outside %s skipped", offsite, BASE)
             pages = self._pages(published)
             for url, occupation in pages[: self.max_pages]:
                 path = url[len(BASE):]
@@ -238,20 +276,27 @@ class FranceTravailWebCollector(BaseCollector):
                             len(pages), self.max_pages)
             self._client = None
         return CollectorResult(source_name="france-travail-web", jobs=list(jobs.values()), errors=errors,
-                               metadata={"pages_planned": len(pages), "pages_read": min(len(pages), self.max_pages)})
+                               metadata={"pages_planned": len(pages), "pages_read": min(len(pages), self.max_pages),
+                                         "sitemap_offsite_skipped": offsite})
 
-    def _published_pages(self) -> list[tuple[str, str, str, str]]:
+    def _published_pages(self) -> tuple[list[tuple[str, str, str, str]], int]:
         """(url, occupation slug, occupation code, département) of every occupation x
-        département page France Travail lists in its sitemap. Only these are read:
-        it answers 410 Gone for combinations it does not publish."""
+        département page France Travail lists in its sitemap, and how many sitemap URLs
+        were skipped for not being on BASE. Only these pages are read: it answers 410
+        Gone for combinations it does not publish."""
         resp = self._get(SITEMAP)
         resp.raise_for_status()
         pages = []
-        for loc in re.findall(r"<loc>([^<]+)</loc>", resp.text):
-            m = _PAGE_IN_SITEMAP.search(loc.strip())
+        offsite = 0
+        for raw_loc in re.findall(r"<loc>([^<]+)</loc>", resp.text):
+            loc = raw_loc.strip()
+            if not loc.startswith(BASE + "/"):
+                offsite += 1
+                continue
+            m = _PAGE_IN_SITEMAP.search(loc)
             if m:
-                pages.append((loc.strip(), m.group(1), m.group(3).lower(), m.group(4).upper()))
-        return pages
+                pages.append((loc, m.group(1), m.group(3).lower(), m.group(4).upper()))
+        return pages, offsite
 
     def _pages(self, published: list[tuple[str, str, str, str]]) -> list[tuple[str, dict[str, Any]]]:
         """Pages to read, round-robin across départements so a page cap stays fair."""

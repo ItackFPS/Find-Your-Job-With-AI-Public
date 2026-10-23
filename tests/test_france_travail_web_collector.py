@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 
+from src.collectors import base as base_module
 from src.collectors import france_travail_web as ftw
 from src.collectors.france_travail_web import (
     OCCUPATIONS,
@@ -71,6 +72,14 @@ LISTING = """<ul>
 NOW = datetime(2026, 10, 23, 12, 0, tzinfo=UTC)
 
 
+@pytest.fixture(autouse=True)
+def _no_sleep(monkeypatch) -> list[float]:  # noqa: ANN001
+    """The collector waits at least 1 s between requests; tests record, not wait."""
+    slept: list[float] = []
+    monkeypatch.setattr(base_module.time, "sleep", slept.append)
+    return slept
+
+
 def test_robots_rules_with_wildcards() -> None:
     rules = parse_robots(ROBOTS)
     assert robots_allows(rules, "/offres/emploi/developpeur-web/var/s28m7d83")
@@ -118,10 +127,14 @@ class _Client:
         self.urls.append(url)
         req = httpx.Request("GET", url)
         if url.endswith("/robots.txt"):
-            return httpx.Response(200, text=ROBOTS, request=req)
+            return httpx.Response(self.robots_status, text=self.robots_text, request=req)
         if url.endswith(".xml"):
-            return httpx.Response(200, text=SITEMAP, request=req)
+            return httpx.Response(200, text=self.sitemap_text, request=req)
         return httpx.Response(200, text=LISTING, request=req)
+
+    robots_status = 200
+    robots_text = ROBOTS
+    sitemap_text = SITEMAP
 
 
 def test_collect_reads_only_pages_published_in_the_sitemap(monkeypatch) -> None:
@@ -198,6 +211,116 @@ def test_every_occupation_code_is_well_formed() -> None:
         assert codes, domain
         for code in codes:
             assert re.fullmatch(r"s\d+m\d+", code), (domain, code)
+
+
+@pytest.mark.parametrize("status,text", [
+    (500, ROBOTS), (503, ""), (403, ROBOTS), (404, ""), (301, ""), (200, ""), (200, "  \n"),
+])
+def test_robots_txt_not_served_means_nothing_is_crawled(monkeypatch, status, text) -> None:  # noqa: ANN001
+    """Fail closed: without a robots.txt served with HTTP 200, no other page is asked for."""
+    class _NoRobots(_Client):
+        robots_status = status
+        robots_text = text
+
+    monkeypatch.setattr(ftw.httpx, "Client", _NoRobots)
+    result = FranceTravailWebCollector({"target_domains": ["web_development"], "departments": ["83"]}).collect()
+    assert _NoRobots.last.urls == [f"{ftw.BASE}/robots.txt"]
+    assert result.jobs == [] and len(result.errors) == 1
+    assert "robots.txt" in result.errors[0] and f"HTTP {status}" in result.errors[0]
+
+
+def test_consecutive_user_agent_lines_form_one_group() -> None:
+    text = """User-agent: *
+User-agent: bingbot
+Disallow: /private
+
+User-agent: otherbot
+Disallow: /
+"""
+    rules = parse_robots(text)
+    assert not robots_allows(rules, "/private/x")
+    assert robots_allows(rules, "/public")
+    assert not robots_allows(parse_robots(text, "BingBot"), "/private")
+    assert not robots_allows(parse_robots(text, "otherbot"), "/public")
+
+
+def test_a_group_naming_this_crawler_replaces_the_star_group() -> None:
+    text = "User-agent: *\nDisallow: /a\n\nUser-agent: findyourjobwithai\nDisallow: /b\n"
+    rules = parse_robots(text, ftw.ROBOTS_AGENT)
+    assert robots_allows(rules, "/a") and not robots_allows(rules, "/b")
+
+
+def test_longest_match_uses_the_path_as_written() -> None:
+    # "/a.b.c" is 6 characters as written (its escaped regex, "/a\.b\.c", is 8);
+    # "/*/pag" is 6 too (regex 7): a tie, so allow wins.
+    rules = parse_robots("User-agent: *\nDisallow: /a.b.c\nAllow: /*/pag\n")
+    assert robots_allows(rules, "/a.b.c/page")
+    # "/*/page" (7 as written) is longer than "/a.b.c" (6), though both regexes are 8
+    rules = parse_robots("User-agent: *\nAllow: /a.b.c\nDisallow: /*/page\n")
+    assert not robots_allows(rules, "/a.b.c/page")
+    # a longer allow still beats a shorter disallow, and a longer disallow wins
+    assert robots_allows(parse_robots("User-agent: *\nDisallow: /a\nAllow: /a.b\n"), "/a.b")
+    assert not robots_allows(parse_robots("User-agent: *\nAllow: /a\nDisallow: /a.b\n"), "/a.b")
+
+
+def test_sitemap_urls_outside_the_site_are_not_followed(monkeypatch) -> None:
+    class _Offsite(_Client):
+        sitemap_text = SITEMAP.replace("</urlset>", """
+<url><loc>https://candidat.francetravail.fr.evil.example/offres/emploi/developpeur-web/var/s28m7d83</loc></url>
+<url><loc>http://candidat.francetravail.fr/offres/emploi/developpeur-web/var/s28m7d83</loc></url>
+<url><loc>https://elsewhere.example/offres/emploi/developpeur-web/var/s28m7d83</loc></url>
+</urlset>""")
+
+    monkeypatch.setattr(ftw.httpx, "Client", _Offsite)
+    result = FranceTravailWebCollector({"target_domains": ["web_development"], "departments": ["83"]}).collect()
+    listing_urls = _Offsite.last.urls[2:]
+    assert listing_urls and all(u.startswith(ftw.BASE + "/") for u in listing_urls)
+    assert result.metadata["sitemap_offsite_skipped"] == 3
+
+
+@pytest.mark.parametrize("configured,expected", [(0, 1.0), (0.2, 1.0), (-5, 1.0), (1.0, 1.0), (2.5, 2.5)])
+def test_rate_limit_is_never_below_one_second(configured, expected) -> None:  # noqa: ANN001
+    assert FranceTravailWebCollector({"rate_limit_delay": configured}).rate_limit_delay == expected
+    assert FranceTravailWebCollector({}).rate_limit_delay == 1.0
+
+
+def test_requests_are_spaced_by_the_rate_limit(monkeypatch, _no_sleep) -> None:  # noqa: ANN001
+    monkeypatch.setattr(ftw.httpx, "Client", _Client)
+    FranceTravailWebCollector({"target_domains": ["web_development"], "departments": ["83"],
+                               "rate_limit_delay": 0}).collect()
+    # every request after the first waited (the fake answers instantly), close to 1 s
+    assert len(_no_sleep) == len(_Client.last.urls) - 1
+    assert all(0.9 < s <= 1.0 for s in _no_sleep)
+
+
+_OCC = {"scheme": "france-travail", "slug": "developpeur-web", "code": "s28m7",
+        "target_domains": ["web_development"]}
+_TITLE_CONFIG = {"title_keywords": {"include": ["developpeur"], "description_include": ["developpeur"],
+                                    "exclude": [], "non_it_functions": []},
+                 "target_domains": ["web_development"]}
+
+
+def test_occupation_is_only_evidence_from_the_france_travail_web_source() -> None:
+    raw = {**parse_listing(LISTING, now=NOW)[0], "occupation": _OCC}
+    (job,) = normalize_jobs("some-other-board", [raw])
+    assert not matches_title_keywords(job, _TITLE_CONFIG)
+
+
+@pytest.mark.parametrize("occupation", [
+    None, "web_development", ["web_development"], 42,
+    {"target_domains": "web_development"}, {"target_domains": None}, {"target_domains": [None, 3]},
+    {"target_domains": {"web_development": True}}, {},
+])
+def test_malformed_occupation_is_ignored_never_raises(occupation) -> None:  # noqa: ANN001
+    raw = {**parse_listing(LISTING, now=NOW)[0], "occupation": occupation}
+    (job,) = normalize_jobs("france-travail-web", [raw])
+    assert not matches_title_keywords(job, _TITLE_CONFIG)
+
+
+def test_malformed_profile_domains_are_ignored() -> None:
+    raw = {**parse_listing(LISTING, now=NOW)[0], "occupation": _OCC}
+    (job,) = normalize_jobs("france-travail-web", [raw])
+    assert not matches_title_keywords(job, {**_TITLE_CONFIG, "target_domains": "web_development"})
 
 
 @pytest.mark.network
