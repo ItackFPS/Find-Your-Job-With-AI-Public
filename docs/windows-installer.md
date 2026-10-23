@@ -9,9 +9,12 @@ Running from a source checkout (`FindYourJob.cmd` in a clone, see the
 
 ## Install
 
-1. Run `FindYourJobWithAI-Setup-<version>.exe`. Windows SmartScreen may warn that the
-   publisher is unknown (the installer is not code-signed): **More info → Run anyway**,
-   after checking the file's SHA-256 against the `.sha256` file next to it.
+1. Download `FindYourJobWithAI-Setup-<version>.exe` and `….exe.sha256` from the
+   [latest release](https://github.com/ItackFPS/Find-Your-Job-With-AI-Public/releases/latest).
+   In PowerShell, `Get-FileHash .\FindYourJobWithAI-Setup-<version>.exe` must print the hash in
+   the `.sha256` file. Then run the `.exe`. Windows SmartScreen may warn that the
+   publisher is unknown (the installer is not code-signed): **More info → Run anyway**
+   once the hash matches.
 2. Keep or untick **Create a desktop shortcut**, then **Install**.
 3. Leave **Start Find Your Job With AI now** ticked to open it at the end.
 
