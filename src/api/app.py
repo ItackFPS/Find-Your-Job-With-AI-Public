@@ -188,6 +188,10 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
     scheduler.start()
     application.state.scheduler = scheduler
 
+    # -- Graceful stop for a launcher without a console (the tray app) -------
+    from src.api.stop_signal import start_stop_signal_watcher
+    stop_signal_event = start_stop_signal_watcher()
+
     # -- ESCO seed -----------------------------------------------------------
     # Auto-seed the ESCO skill database with bundled data if not yet populated.
     # This requires no network access — seed data is embedded in the codebase.
@@ -231,6 +235,8 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
         scheduler.stop()
         li_staging.close()
         hw_staging.close()
+        if stop_signal_event is not None:
+            stop_signal_event.close()
 
 
 app = FastAPI(
