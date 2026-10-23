@@ -4,11 +4,15 @@ The working record of where V1 stands. It states only what was verified, with th
 anything not re-run says so. Last update: 2026-10-23 (round 5: lab sandbox, 1.0.0 release
 candidate). Rounds 1–4 are recorded below as they were.
 
-**Verdict: 1.0.0 RELEASE CANDIDATE VERIFIED; release waits on the human review of #30.** The
-candidate installer, built from the integration of `main` with #30 and #33, passed the
-60-check acceptance test, an upgrade over a used install, an uninstall that kept the data,
-and a walkthrough on real offers (see [Round 5](#round-5-2026-10-23)). The limitations are
-listed under [Residual risks](#residual-risks). The main ones:
+**Verdict: V1.0.0 READY WITH EXPLICIT LIMITATIONS.** The owner reviewed and approved #30's
+sandbox boundary on 2026-10-23, after the six checks recorded on the PR. #30, #33 and this
+record are merged. The release candidate, built from the integration of `main` with #30 and #33,
+passed the 60-check acceptance test, an upgrade over a used install, an uninstall that kept the
+data, and a walkthrough on real offers (see [Round 5](#round-5-2026-10-23)). The `v1.0.0`
+installer is built from the `main` commit that contains this record; acceptance is run again on
+that exact file. Its size and SHA-256 are published with the GitHub Release, since the installer
+cannot contain its own checksum. The limitations are listed under
+[Residual risks](#residual-risks). The main ones:
 
 - Real-world accuracy and ranking quality are not measured: no human-reviewed real labels,
   no graded relevance labels.
@@ -28,10 +32,19 @@ listed under [Residual risks](#residual-risks). The main ones:
 | #35 | a failed source's row says why (APEC: bot protection) | merged |
 | #36 | the run funnel shows scoring's real input | merged |
 | #37 | Stop takes about 5 s; a Start during a Stop waits, then starts | merged |
-| #30 | lab agent in a Windows AppContainer sandbox (`python -m src.lab sandbox grant\|run\|revoke`) | open, CI green, **awaiting the owner's review of the security boundary** |
-| #33 | version 1.0.0; download and SHA-256 steps | open, CI green, merges with #30 |
+| #30 | lab agent in a Windows AppContainer sandbox (`python -m src.lab sandbox grant\|run\|revoke`) | merged after the owner's review; the review found that a revoke stopped at its first failing path (fixed, with a regression test) |
+| #33 | version 1.0.0; download and SHA-256 steps | merged |
+| #38 | this record; README limitations | merged |
 
-**Integration tested:** `ec22da4` = `main` `064a72f` + #30 (`767ea2d`) + #33 (`8608d2b`).
+**Integration tested:** `ec22da4` = `main` `064a72f` + #30 (`767ea2d`) + #33 (`8608d2b`). The
+review then added the revoke fix and one docs paragraph to #30; the lab tests (130 passed) and
+hosted CI were run again on them.
+
+**Security review of #30 (owner's checks, measured with real AppContainers):** OS-level
+capabilities and ACLs, not app checks; production write-protected and secrets unreadable from
+inside; no escape through child processes, inherited handles, junctions, hard links or symlinks
+(each refused from inside); `approve`/`rollback`/`deactivate` refused inside; revoke cleans up
+after an interrupted grant and is safe to repeat; only `sandbox run` is documented as isolating.
 
 | What | Result |
 |---|---|
@@ -243,9 +256,7 @@ paths fixed by #29.
 1. Decide whether to ship `apec` with `active: false` while it is blocked (needs updating the
    redundancy tripwire test).
 2. Review real labels before any real-world metric is reported.
-3. Review and approve #30 (the AppContainer boundary), then merge #30 and #33; the `v1.0.0`
-   tag and GitHub Release follow from the build of the resulting `main`.
-4. Optional: code-sign the installer.
+3. Optional: code-sign the installer.
 
 ## How to test it yourself
 
