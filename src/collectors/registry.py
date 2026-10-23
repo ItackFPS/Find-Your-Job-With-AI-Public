@@ -27,6 +27,7 @@ class CollectorRegistry:
         from src.collectors.bundesagentur import BundesagenturCollector
         from src.collectors.eures import EURESCollector
         from src.collectors.france_travail import FranceTravailCollector
+        from src.collectors.france_travail_web import FranceTravailWebCollector
         from src.collectors.greenhouse import GreenhouseCollector
         from src.collectors.hellowork import HelloWorkCollector
         from src.collectors.jobicy import JobicyCollector
@@ -53,6 +54,7 @@ class CollectorRegistry:
         # Registering 'rss' here allows sources.yaml to use type: rss directly.
         self._collectors["rss"] = RemoteCollector
         self._collectors["france_travail"] = FranceTravailCollector
+        self._collectors["france_travail_web"] = FranceTravailWebCollector
         self._collectors["remoteok"] = RemoteOKCollector
         self._collectors["jobicy"] = JobicyCollector
         self._collectors["workingnomads"] = WorkingNomadsCollector

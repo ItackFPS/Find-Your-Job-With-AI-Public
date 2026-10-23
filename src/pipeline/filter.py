@@ -251,6 +251,9 @@ def build_filter_config(profile: "JobSearchProfile", engine_cfg: dict[str, Any])
         "posted_within_days": profile.freshness_days,
         "salary_requirements": {},
         "experience_years": {"max_years": profile.experience.max_years},
+        # Read by the title check: a source's own occupation in one of these domains
+        # is role evidence (see matches_title_keywords, step 3b).
+        "target_domains": list(profile.target_domains),
     }
 
 
@@ -694,6 +697,14 @@ def matches_title_keywords(job: Job, config: dict[str, Any]) -> bool:
         non_it_pattern = _build_description_pattern(non_it_norm)
         if non_it_pattern and non_it_pattern.search(title_norm):
             return False
+
+    # 3b. The source's own occupation for this offer is one of the profile's
+    #     target domains (France Travail web: the occupation page it was listed
+    #     on). Role evidence when the description is only a short extract that
+    #     cannot name the role; exclusions and non-IT functions above still apply.
+    occupation = (job.raw_payload or {}).get("occupation") or {}
+    if set(occupation.get("target_domains") or []) & set(config.get("target_domains") or []):
+        return True
 
     # 4. Title match → accept immediately (IT keyword found in title).
     # Word-boundary guards prevent short abbreviations like "ia" (the "IA" skill)

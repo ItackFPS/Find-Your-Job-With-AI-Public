@@ -447,6 +447,12 @@ def run_pipeline(
                 merged_cfg["discovery_queries"] = all_discovery_queries[src_type]
             if src_type in all_partition_vocabularies:
                 merged_cfg["partition_vocabulary"] = all_partition_vocabularies[src_type]
+            if src_type == "france_travail_web" and early_profile is not None:
+                # What to read: the profile's domains and its departement locations.
+                merged_cfg.setdefault("target_domains", list(early_profile.target_domains))
+                merged_cfg.setdefault("departments", [
+                    p.value for p in early_profile.geography.location_preferences
+                    if p.type == "department" and p.status != "excluded"])
             # Registered collectors all take ``config=``; the abstract
             # BaseCollector.__init__ that type[BaseCollector] exposes does not.
             collector_factory = cast("Callable[..., BaseCollector]", collector_class)

@@ -22,6 +22,23 @@ sources:
     config:
       max_workers: 4  # parallel independent queries; pages within a query stay sequential
 
+  # France Travail without credentials (the API no longer accepts new subscribers):
+  # its public occupation x departement listing pages, robots.txt respected, ~1 request/s.
+  # Gives title, employer, place, contract and a ~200-character extract per offer, not
+  # the full text (France Travail's robots.txt disallows the pages that load it). The
+  # occupations come from the profile's target domains, the departements from its
+  # department locations (src/collectors/france_travail_web.py).
+  - name: france-travail-web
+    type: france_travail_web
+    domain: "candidat.francetravail.fr"
+    careers_url: "https://candidat.francetravail.fr/offres/emploi"
+    ats: null
+    board_identifier: null
+    active: true
+    config:
+      max_pages: 60
+      rate_limit_delay: 1.0
+
   - name: remoteok
     type: remoteok
     domain: "remoteok.com"
