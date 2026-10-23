@@ -69,9 +69,6 @@ from src.hellowork.scanner import HelloWorkScanner
 from src.hellowork.staging import HelloWorkStagingStorage
 from src.linkedin.scanner import LinkedInConfig, LinkedInScanner
 from src.linkedin.staging import LinkedInStagingStorage
-from src.notifications.discord_reconciler_worker import DiscordReconcilerWorker
-from src.notifications.engine import NotificationEngine
-from src.notifications.system_status_worker import SystemStatusWorker
 from src.scheduler.service import (
     HelloWorkHandler,
     LinkedInHandler,
@@ -114,16 +111,6 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
         logger.warning("Recovered %d stale pipeline run(s) — marked 'failed'.", recovered)
     rs.close()
     logger.info("Database initialised at %s", db_path)
-
-    # -- Discord channel health check (startup only) -------------------------
-    # Surfaces any enabled-but-unusable channel (webhook secret missing from
-    # this environment's .env) as a log warning so it's visible immediately
-    # instead of discovered later as "why didn't this channel ever send
-    # anything". Purely observational — never blocks/delays startup.
-    try:
-        application.state.notification_engine.log_unconfigured_channels()
-    except Exception as exc:  # noqa: BLE001 - health reporting must never block startup
-        logger.warning("Startup Discord channel health check failed: %s", exc)
 
     # -- LinkedIn staging init (always runs so recovery is always safe) ------
     li_staging = LinkedInStagingStorage(db_path=db_path)
@@ -201,24 +188,6 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
     scheduler.start()
     application.state.scheduler = scheduler
 
-    # -- Discord location-channel reconciliation (automatic, independent of
-    # Claude/MCP/any LLM — see src/notifications/discord_reconciler_worker.py
-    # for the reload/duplicate-start safety reasoning). No-ops harmlessly on
-    # every tick until DISCORD_BOT_TOKEN/DISCORD_GUILD_ID are configured.
-    discord_worker = DiscordReconcilerWorker(config_dir=config_dir)
-    discord_worker.start()
-    application.state.discord_reconciler_worker = discord_worker
-
-    # -- System status heartbeat (independent of the reconciler above — see
-    # src/notifications/system_status_worker.py's docstring for why this is
-    # a separate worker rather than a tick added onto the reconciler's).
-    # No-ops harmlessly whenever the "system-status" Discord channel isn't
-    # enabled/configured — same "safe to run always" property as the
-    # reconciler worker above.
-    system_status_worker = SystemStatusWorker(notification_engine=application.state.notification_engine)
-    system_status_worker.start()
-    application.state.system_status_worker = system_status_worker
-
     # -- ESCO seed -----------------------------------------------------------
     # Auto-seed the ESCO skill database with bundled data if not yet populated.
     # This requires no network access — seed data is embedded in the codebase.
@@ -260,8 +229,6 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
         # call finishing, which is already what the scanner was doing.
         scanner_shutdown_event.set()
         scheduler.stop()
-        discord_worker.stop()
-        system_status_worker.stop()
         li_staging.close()
         hw_staging.close()
 
@@ -338,13 +305,10 @@ app.state.config_dir = _CONFIG_DIR
 # tests/test_esco.py.
 app.state.esco_db_path = _ESCO_DB_PATH
 
-_notification_engine = NotificationEngine(db_path=_DB_PATH, config_dir=_CONFIG_DIR)
-app.state.notification_engine = _notification_engine
 app.state.progress_bus = ProgressBus()
 app.state.runner = PipelineRunner(
     db_path=_DB_PATH,
     config_dir=_CONFIG_DIR,
-    notification_engine=_notification_engine,
     progress_bus=app.state.progress_bus,
 )
 

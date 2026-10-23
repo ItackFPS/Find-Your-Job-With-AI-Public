@@ -54,7 +54,7 @@ the pipeline but disabled by default — do not assume either runs unless the
 task says AI is enabled.
 
 The Windows entry point `FindYourJob.cmd` runs `src/launcher` (`docs/windows-app.md`):
-process management only — start, health-check and stop the backend/n8n it owns. It holds
+process management only — start, health-check and stop the backend it owns. It holds
 no business logic, never touches `data/` or config, and never stops processes it did
 not start.
 
@@ -162,8 +162,8 @@ CI → self-review → ready → merge.** Setup, commands and per-area test list
 - Run `git status` before starting and before every commit. Do not overwrite unrelated
   user changes.
 - Stage explicit paths only — never `git add -A` / `git add .`. Never stage `data/`,
-  `.env`, logs, caches, or personal edits to `config/profile.yaml` /
-  `config/notifications.yaml` unless the task is about that file.
+  `.env`, logs, caches, or personal edits to `config/profile.yaml` unless the task is
+  about that file.
 - For issue-driven implementation tasks, committing, pushing the branch and opening/
   updating the PR are part of the task. For questions, audits or exploration, do not
   commit. Never merge a PR or create/close GitHub issues unless the user asks.
@@ -212,7 +212,7 @@ how the work splits into commits (and PRs, if more than one).
 ### 11.6 Commits
 
 - Conventional Commits: `type(scope): imperative summary` (≤72 chars). Scope = `src/`
-  package (`collectors`, `pipeline`, `requirements`, `scoring`, `notifications`, `api`,
+  package (`collectors`, `pipeline`, `requirements`, `scoring`, `api`,
   `storage`, …) or `frontend`, `ci`, `github`, `git`, `dev`. Body explains *why* when
   not obvious.
 - One coherent logical change per commit; the touched area's tests pass at every
@@ -319,7 +319,7 @@ only — the application does not depend on it.
   Never push to `main`; always a PR using `.github/pull_request_template.md`.
 - **Never modify**: `data/` (SQLite databases and their `-wal`/`-shm` files), `.env*`,
   `config/*.local.yaml`, `logs/`, `.cache/`, `.claude/`, and any local edits to
-  `config/profile.yaml` / `config/notifications.yaml`. Tests must use isolated
+  `config/profile.yaml`. Tests must use isolated
   temporary databases and must never read the personal profile
   (`tests/test_no_personal_profile_in_tests.py` enforces this).
 

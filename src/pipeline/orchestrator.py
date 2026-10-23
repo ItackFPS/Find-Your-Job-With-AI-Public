@@ -295,11 +295,8 @@ def run_pipeline(
         # =================================================================
         # PREFLIGHT (mandatory, runs once before any collection)
         # France Travail is a collection source: an active source that
-        # cannot authenticate blocks the run (status FAILED). n8n is
-        # downstream notification infrastructure: a reachability/webhook
-        # problem is recorded (status DEGRADED) but never blocks collection,
-        # filtering, scoring, or ranking. Either check is skipped entirely
-        # when that integration is inactive/disabled in its own config.
+        # cannot authenticate blocks the run (status FAILED). The check is
+        # skipped entirely when the source is inactive in sources.yaml.
         # =================================================================
         _t_preflight = time.perf_counter()
         preflight_result = run_preflight(config_dir)
@@ -1090,7 +1087,7 @@ def run_pipeline(
                 profile.to_semantic_info(),
                 embedding_service,
                 storage=storage,
-                model_name=semantic_config["embedding"]["model_name"],
+                model_name=embedding_service.cache_model_id,
             )
             jobs_only = [job for job, _ in scored_jobs]
 
@@ -1103,7 +1100,7 @@ def run_pipeline(
                 embedding_service,
                 enriched_texts=enriched_texts or None,
                 storage=storage,
-                model_name=semantic_config["embedding"]["model_name"],
+                model_name=embedding_service.cache_model_id,
                 timing=_sem_timing,
                 progress_callback=lambda p, _t: _sem_reporter(p),
             )

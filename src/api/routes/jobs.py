@@ -1,7 +1,6 @@
 """Jobs API routes.
 
 GET /api/jobs                   — list stored jobs with optional filters
-GET /api/jobs/digest/weekly     — top N jobs for a location + date window (weekly digest)
 GET /api/jobs/{id}              — single job detail
 GET /api/jobs/{id}/explanation  — why the job matched / was rejected
 """
@@ -10,13 +9,12 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 
-from src.api.auth import require_n8n_api_key
 from pydantic import BaseModel
 
 from src.api.schemas import ExplanationReason, ExplanationSignal, JobDetailOut, JobExplanationOut
@@ -194,36 +192,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
 
-class WeeklyDigestJobOut(BaseModel):
-    """One job entry in a weekly location digest.
-
-    ``rank`` is 1-based (1 = highest scoring).
-    ``score_100`` is final_score × 100 rounded to nearest integer.
-    The score is the stored individual personalized final score from the most
-    recent pipeline run — never recalculated by the API.
-    """
-
-    rank: int
-    job_id: str
-    title: str | None = None
-    company: str | None = None
-    location: str | None = None
-    remote: bool = False
-    work_mode: str | None = None
-    employment_type: str | None = None
-    skills: list[str] = []
-    source: str = ""
-    final_score: float = 0.0
-    score_100: int = 0
-    # Phase 5 (2026-09-10): canonical tier (score_to_tier), so the weekly
-    # email template reads this directly instead of keeping its own copy of
-    # the tier thresholds.
-    tier: str = "low_priority"
-    canonical_url: str | None = None
-    apply_url: str | None = None
-    discovered_at: datetime
-
-
 def _get_storages(request: Request) -> tuple[Storage, RunStorage]:
     s = Storage(db_path=request.app.state.db_path)
     s.init_db()
@@ -283,310 +251,6 @@ def _get_outcome_storage(request: Request) -> OutcomeEventStorage:
     os_ = OutcomeEventStorage(db_path=request.app.state.db_path)
     os_.init_db()
     return os_
-
-
-@router.get(
-    "/digest/weekly",
-    response_model=list[WeeklyDigestJobOut],
-    dependencies=[Depends(require_n8n_api_key)],
-)
-def get_weekly_digest(
-    request: Request,
-    country: str = Query(default="France", description="Country name (e.g. 'France')"),
-    department: str = Query(default="83", description="French INSEE department code (e.g. '83' for Var)"),
-    days: int = Query(default=7, ge=1, le=90, description="Look-back window in days (based on discovered_at)"),
-    limit: int = Query(default=10, ge=1, le=50, description="Maximum jobs to return"),
-) -> list[WeeklyDigestJobOut]:
-    """Top jobs by personalized score for a country + department, discovered in the last N days.
-
-    Uses ``discovered_at`` (when the job was last collected, ADR 0012 — not when it was
-    first stored) as the time-window boundary.  Filtering uses the canonical ``department`` column when
-    available (France Travail jobs) and falls back to ``extract_department_code()``
-    for all other sources — identical to the existing ``GET /api/jobs`` filter.
-
-    Scores are the stored individual ``final_score`` from each job's most recent
-    pipeline run.  No score recalculation occurs here.
-
-    Ordering: ``final_score DESC``, then ``discovered_at DESC`` for determinism
-    when scores are equal.
-
-    Returns fewer than ``limit`` entries (or an empty list) when not enough
-    matching jobs exist in the time window.
-    """
-    from src.pipeline.departments import extract_department_code
-
-    s, rs = _get_storages(request)
-    try:
-        cutoff = (datetime.now(UTC) - timedelta(days=days)).isoformat()
-        conn = s._get_conn()  # noqa: SLF001
-
-        # SQL: filter by country (JSON array contains) and time window.
-        # The country column stores JSON arrays like ["France"].
-        country_pattern = f'%"{country.lower()}"%'
-        rows = conn.execute(
-            """SELECT * FROM jobs
-               WHERE LOWER(countries) LIKE ?
-                 AND discovered_at >= ?
-                 AND status = 'active'
-               ORDER BY discovered_at DESC
-               LIMIT 2000""",
-            (country_pattern, cutoff),
-        ).fetchall()
-        candidates = [Job.from_dict(dict(r)) for r in rows]
-
-        # Python: filter by department using the same logic as GET /api/jobs.
-        # The `department` column is set by France Travail; other sources need
-        # extract_department_code() applied to the location string.
-        dept_jobs: list[Job] = []
-        for j in candidates:
-            if j.department == department:
-                dept_jobs.append(j)
-            elif j.department is None:
-                if extract_department_code(j.location or "", j.countries) == department:
-                    dept_jobs.append(j)
-
-        if not dept_jobs:
-            return []
-
-        # Batch-fetch the latest individual personalized score for each job.
-        scores_by_id = rs.get_latest_scores_for_jobs([j.id for j in dept_jobs])
-
-        # Sort: final_score DESC, discovered_at DESC (deterministic tiebreak).
-        def _sort_key(j: Job) -> tuple[float, float]:
-            score = float(scores_by_id.get(j.id, {}).get("final_score") or 0.0)
-            return (-score, -j.discovered_at.timestamp())
-
-        dept_jobs.sort(key=_sort_key)
-        top = dept_jobs[:limit]
-
-        from src.pipeline.scoring import score_to_tier
-
-        result: list[WeeklyDigestJobOut] = []
-        for rank, j in enumerate(top, 1):
-            score_row = scores_by_id.get(j.id, {})
-            final_score = round(float(score_row.get("final_score") or 0.0), 4)
-            score_100 = round(final_score * 100)
-            result.append(WeeklyDigestJobOut(
-                rank=rank,
-                job_id=j.id,
-                title=j.title,
-                company=j.company,
-                location=j.location,
-                remote=j.remote,
-                work_mode=j.work_mode,
-                employment_type=j.employment_type,
-                skills=(j.skills or [])[:8],
-                source=j.source,
-                final_score=final_score,
-                score_100=score_100,
-                tier=score_to_tier(score_100),
-                canonical_url=j.canonical_url,
-                apply_url=j.apply_url,
-                discovered_at=j.discovered_at,
-            ))
-        return result
-    finally:
-        s.close()
-        rs.close()
-
-
-class WeeklyDigestCombinedOut(BaseModel):
-    """Weekly digest from the latest completed run.
-
-    Location Priority feature (2026-09-10): with no ``department``/``remote``
-    filter, ``top_jobs`` is a single GLOBAL ranking by score across every
-    qualifying job in the run — the default, unfiltered shape. This is a
-    conscious contrast with Discord (real-time, per-configured-location,
-    top-10 each): the weekly email's default view is a broader "best overall
-    opportunities" discovery surface, independent of where the candidate's
-    real-time priorities are.
-
-    The optional ``department``/``remote`` query params (see
-    get_weekly_digest_combined) remain available for any caller that wants
-    to narrow ``top_jobs`` to one department or to remote-only — e.g. a
-    department-83-only or remote-only digest — without a separate endpoint
-    or a second ranking implementation. config/n8n_weekly_digest.json does
-    NOT use them: per the Location Priority feature above, it calls this
-    endpoint once with no department/remote filter, for the single global
-    Top 10. The prior ``var83``/``remote``/``var83_count``/``remote_count``
-    fields (a single call returning two hardcoded Var-83/remote sections at
-    once) remain removed.
-    """
-
-    run_id: str
-    run_started_at: datetime
-    run_completed_at: datetime
-    run_age_hours: float
-    top_jobs: list[WeeklyDigestJobOut]
-
-
-@router.get(
-    "/digest/weekly-combined",
-    response_model=WeeklyDigestCombinedOut,
-    dependencies=[Depends(require_n8n_api_key)],
-)
-def get_weekly_digest_combined(
-    request: Request,
-    top_limit: int = Query(default=50, ge=1, le=200, description="Max jobs in the top_jobs ranking"),
-    department: str | None = Query(
-        default=None,
-        description=(
-            "Optional French INSEE department code (e.g. '83') to narrow "
-            "top_jobs to that department's Top N. Omit for the global, "
-            "unfiltered ranking (default, unchanged behavior)."
-        ),
-    ),
-    remote: bool | None = Query(
-        default=None,
-        description=(
-            "Optional remote filter: true narrows top_jobs to remote-only "
-            "jobs, false to non-remote-only. Omit for no remote filter "
-            "(default, unchanged behavior)."
-        ),
-    ),
-) -> WeeklyDigestCombinedOut:
-    """Latest-run digest: a top-N ranking, race-condition safe, optionally
-    narrowed to one department and/or remote-only.
-
-    Uses the most recent COMPLETED pipeline run (status='completed').
-    Any currently-running or failed run is ignored, preventing partial data
-    from leaking into the digest.
-
-    Returns HTTP 503 with a diagnostic message when no completed run exists.
-    Scores are scoped to the selected run — not re-computed and not borrowed
-    from other runs. Ranking/tier-floor logic is never duplicated: department
-    matching reuses the exact same department-column-then-fallback pattern
-    GET /api/jobs/digest/weekly and GET /api/jobs already use; this endpoint
-    only adds a filter predicate, never a second scoring/ranking
-    implementation.
-    """
-    s, rs = _get_storages(request)
-    try:
-        run = rs.get_latest_completed_run()
-        if run is None:
-            raise HTTPException(
-                status_code=503,
-                detail={
-                    "error": "no_completed_run",
-                    "message": "No completed pipeline run found. Run the pipeline first.",
-                },
-            )
-
-        run_id: str = run["id"]
-        completed_at_str: str = run["completed_at"]
-        started_at_str: str = run["started_at"]
-        run_completed_at = datetime.fromisoformat(completed_at_str)
-        run_started_at = datetime.fromisoformat(started_at_str)
-        if run_completed_at.tzinfo is None:
-            run_completed_at = run_completed_at.replace(tzinfo=UTC)
-        if run_started_at.tzinfo is None:
-            run_started_at = run_started_at.replace(tzinfo=UTC)
-        run_age_hours = round(
-            (datetime.now(UTC) - run_completed_at).total_seconds() / 3600, 1
-        )
-
-        # Job IDs scored in this run, ordered final_score DESC.
-        job_ids = rs.get_job_ids_for_run(run_id)
-        if not job_ids:
-            return WeeklyDigestCombinedOut(
-                run_id=run_id,
-                run_started_at=run_started_at,
-                run_completed_at=run_completed_at,
-                run_age_hours=run_age_hours,
-                top_jobs=[],
-            )
-
-        # Fetch job details for all run jobs in one query.
-        conn = s._get_conn()  # noqa: SLF001
-        placeholders = ",".join("?" * len(job_ids))
-        rows = conn.execute(
-            f"SELECT * FROM jobs WHERE id IN ({placeholders}) AND status = 'active'",
-            job_ids,
-        ).fetchall()
-        all_jobs = [Job.from_dict(dict(r)) for r in rows]
-
-        # Restore score order (job_ids already sorted final_score DESC by RunStorage).
-        order = {jid: i for i, jid in enumerate(job_ids)}
-        all_jobs.sort(key=lambda j: order.get(j.id, len(job_ids)))
-
-        # Run-scoped scores — prevents a concurrent running-run's partial scores leaking.
-        scores_by_id = rs.get_scores_for_run(run_id, [j.id for j in all_jobs])
-
-        from src.pipeline.scoring import score_to_tier, tier_meets_minimum
-
-        # --- Top-N: the primary digest surface. By default (no
-        # department/remote param) this is NOT filtered/sectioned by
-        # profile.geography.location_preferences — "best overall
-        # opportunities this week", independent of the real-time Discord
-        # location channels. `all_jobs` is already final_score DESC
-        # (restored above from job_ids order); only the same "relevant"
-        # sanity floor Discord uses is applied here, never a location
-        # filter by default. Never padded below the floor — fewer than
-        # top_limit jobs are returned if fewer qualify.
-        qualifying_jobs = [
-            j for j in all_jobs
-            if tier_meets_minimum(
-                score_to_tier(round(float(scores_by_id.get(j.id, {}).get("final_score") or 0.0) * 100)),
-                "relevant",
-            )
-        ]
-
-        # Optional narrowing (2026-09-12): applied AFTER the tier-floor
-        # filter above, never as a second ranking pass — this only removes
-        # candidates, it never re-sorts or re-scores. Department matching
-        # mirrors GET /api/jobs/digest/weekly's own predicate exactly (same
-        # department-column-then-fallback pattern), so there is one place
-        # that decides "does this job belong to department X", not two.
-        if department is not None:
-            from src.pipeline.departments import extract_department_code
-
-            qualifying_jobs = [
-                j for j in qualifying_jobs
-                if j.department == department
-                or (
-                    j.department is None
-                    and extract_department_code(j.location or "", j.countries) == department
-                )
-            ]
-        if remote is not None:
-            qualifying_jobs = [j for j in qualifying_jobs if j.remote == remote]
-
-        def _build_section(jobs: list[Job], limit: int) -> list[WeeklyDigestJobOut]:
-            result: list[WeeklyDigestJobOut] = []
-            for rank, j in enumerate(jobs[:limit], 1):
-                score_row = scores_by_id.get(j.id, {})
-                final_score = round(float(score_row.get("final_score") or 0.0), 4)
-                score_100 = round(final_score * 100)
-                result.append(WeeklyDigestJobOut(
-                    rank=rank,
-                    job_id=j.id,
-                    title=j.title,
-                    company=j.company,
-                    location=j.location,
-                    remote=j.remote,
-                    work_mode=j.work_mode,
-                    employment_type=j.employment_type,
-                    skills=(j.skills or [])[:8],
-                    source=j.source,
-                    final_score=final_score,
-                    score_100=score_100,
-                    tier=score_to_tier(score_100),
-                    canonical_url=j.canonical_url,
-                    apply_url=j.apply_url,
-                    discovered_at=j.discovered_at,
-                ))
-            return result
-
-        return WeeklyDigestCombinedOut(
-            run_id=run_id,
-            run_started_at=run_started_at,
-            run_completed_at=run_completed_at,
-            run_age_hours=run_age_hours,
-            top_jobs=_build_section(qualifying_jobs, top_limit),
-        )
-    finally:
-        s.close()
-        rs.close()
 
 
 @router.get("", response_model=list[JobDetailOut])
@@ -811,10 +475,8 @@ def get_job_stats(request: Request) -> JobStatsOut:
 
 
 def compute_job_stats(s: Storage, rs: RunStorage) -> JobStatsOut:
-    """Real, DB-derived stats — shared by GET /api/jobs/stats and
-    NotificationEngine's #statistics Discord channel (see
-    src/notifications/engine.py's _update_job_statistics), so job-database
-    statistics are computed in exactly one place.
+    """Real, DB-derived stats for GET /api/jobs/stats, computed in exactly
+    one place.
 
     Skills/tools frequency, score-tier distribution and rejection reasons are
     scoped to the latest completed run (same scoping as GET /countries).
@@ -864,8 +526,7 @@ def compute_job_stats(s: Storage, rs: RunStorage) -> JobStatsOut:
     rejections: list[RejectionFacet] = []
     if latest_run_id:
         # Deferred: src.pipeline's package __init__ eagerly imports
-        # sentence-transformers/torch — see src/notifications/events.py's
-        # JobSummary.to_dict for the same concern.
+        # sentence-transformers/torch.
         from src.pipeline.scoring import score_to_tier
 
         score_rows = conn.execute(

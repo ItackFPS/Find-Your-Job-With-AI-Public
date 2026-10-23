@@ -34,7 +34,7 @@ SEMANTIC MATCHING  (local sentence embeddings)
     ↓
 PERSONALIZED RANKING  (feedback-driven adjustment; re-applies scoring gates)
     ↓
-OUTPUT  (Web UI dashboard / CLI / Discord / n8n)
+OUTPUT  (Web UI dashboard / CLI)
 ```
 
 The pipeline is implemented in `src/pipeline/orchestrator.py` and shared between the CLI
@@ -76,7 +76,7 @@ profile match, the LLM eligibility verdict, UNKNOWN density, evidence completene
 contradictions and answers `accept | review | reject` with an uncalibrated, agreement-based
 `decision_confidence` (never the LLM's own stated confidence). It starts in **shadow** mode
 (`config/disagreement.yaml`): recorded in the journal, nothing changes; `review` never removes a
-job from ranking or notifications. See [ADR 0010](adr/0010-disagreement-and-abstention.md).
+job from ranking. See [ADR 0010](adr/0010-disagreement-and-abstention.md).
 
 ## Feedback Journal
 
@@ -117,10 +117,7 @@ not counted).
 | Local AI enrichment (Phase 2) | `src/ai/pipeline.py` (`Phase2Pipeline`) | Analyzes only the top `PHASE2_MAX_CANDIDATES` (default 100) jobs by deterministic score via a local LLM; builds enriched text that feeds semantic matching. Only runs if `use_ai` is true; any failure is caught and logged, pipeline continues |
 | Semantic matching | `src/pipeline/semantic_matching.py` | Cosine similarity between job and profile embeddings (`paraphrase-multilingual-MiniLM-L12-v2`), with a persistent SQLite-backed cache |
 | Personalization | `src/personalization/engine.py` | Feedback-driven score nudges with a persistent bulk cache; `cap_personalization_at_gates()` re-applies the scoring stage's domain/seniority gates afterward so feedback cannot undo them |
-| CLI output | `src/notifications/cli.py` | Terminal summary of pipeline results and top-ranked jobs |
 | Web API | `src/api/app.py` | FastAPI application serving REST endpoints, background workers, and the built React frontend |
-| Discord notifications | `src/notifications/` | Optional routing of new/top jobs and pipeline events to Discord webhooks |
-| n8n integration | `config/n8n_weekly_digest.json`, `src/api/routes/jobs.py`, `src/api/auth.py` | Optional weekly email digest, triggered externally by n8n against dedicated, optionally-authenticated API endpoints |
 
 ## Collectors
 
@@ -221,7 +218,8 @@ hard gates:
 
 ## Embedding Layer (Phase 3)
 
-`src/embeddings/embedding.py` wraps `sentence-transformers` (in-memory LRU-ish cache,
+`src/embeddings/embedding.py` runs the model's pinned ONNX export with ONNX Runtime
+(`src/embeddings/onnx_encoder.py`, no PyTorch; in-memory LRU-ish cache,
 SHA-256 keyed). The default model is `paraphrase-multilingual-MiniLM-L12-v2`
 (384-dimensional, multilingual, CPU-ready, ~470 MB on first download). The *durable*
 cache lives in `Storage` (SQLite `job_embeddings` table, keyed by job id + model name +
@@ -278,47 +276,6 @@ completions API (LM Studio or Ollama) via `LocalLLMProvider`
 Both stages cache results keyed by job content hash + profile version
 (`src/ai/storage.py`), so repeated runs only pay the LLM cost for changed jobs.
 
-## Discord Notifications
-
-`config/notifications.yaml` defines four static channels (`pipeline`, `errors`,
-`statistics`, `system-status`), per-location channels, and per-location "Top 10"
-leaderboard channels. `src/notifications/discord.py`'s `DiscordProvider` resolves each
-channel's webhook URL with this precedence: channel-specific env var → constructor
-value → legacy `DISCORD_WEBHOOK_URL` fallback (static channels only — location channels
-never fall back, to avoid misrouting).
-
-`src/pipeline/location_match.py`'s `resolve_job_location()` maps a job to a location
-slug (e.g. `dept-83`) by matching its department/remote/country data against the
-profile's ordered `geography.location_preferences`. `src/notifications/top10_query.py`
-computes each location's top-10 leaderboard directly from the `jobs` table.
-
-Two background daemon threads, both started automatically by `src/api/app.py`:
-- `DiscordReconcilerWorker` — ticks every `DISCORD_RECONCILER_INTERVAL_SECONDS`
-  (default 300s), calling `src.discord_admin.service.run_reconciliation_pass()` to
-  create/adopt Discord channels and webhooks for the profile's current locations. Only
-  functional if `DISCORD_BOT_TOKEN`/`DISCORD_GUILD_ID` are set; otherwise no-ops safely.
-- `SystemStatusWorker` — ticks every `SYSTEM_STATUS_INTERVAL_SECONDS` (default 300s),
-  editing one standing message in `#system-status`.
-
-Duplicate sends are prevented by a partial unique index on
-`notification_history(provider, event_type, entity_id) WHERE status='sent'`.
-
-`src/discord_admin/` is a separate MCP server (the `mcp_admin` extra; never imported by
-the main backend) exposing the same reconciliation logic as read/administer tools for
-an agent session — `list_channels`, `list_webhooks`, `get_reconciliation_plan`,
-`reconcile_now`.
-
-## n8n Integration
-
-`config/n8n_weekly_digest.json` is an importable n8n workflow (cron: Monday 10:00
-Paris) implementing a weekly email digest, with its own idempotency guard via n8n
-workflow static data. It calls three API endpoints — `GET /api/jobs/digest/weekly`,
-`GET /api/jobs/digest/weekly-combined`, `GET /api/pipeline/runs/{run_id}/jobs/n8n` —
-each gated by `src/api/auth.py`'s `require_n8n_api_key`, a no-op unless
-`N8N_CALLER_API_KEY` is set (in which case it requires a matching `X-N8N-API-Key`
-header, compared in constant time). n8n itself runs externally; nothing in this repo's
-Docker Compose setup starts or manages an n8n instance.
-
 ## Web API and Frontend
 
 `src/api/app.py` is a FastAPI application that, at startup:
@@ -326,8 +283,7 @@ Docker Compose setup starts or manages an n8n instance.
 - Initializes/recovers the job and run databases (including stale "running" row
   recovery via PID + heartbeat).
 - Seeds the bundled ESCO dataset if the ESCO database is empty.
-- Starts the generic background scheduler, the Discord reconciler worker, and the
-  system-status worker.
+- Starts the generic background scheduler.
 - Exposes REST endpoints under `/api/` for jobs, pipeline control, profile, dashboard,
   ESCO, departments, the LinkedIn/HelloWork scanners, and the scheduler.
 - Serves the built React frontend as a SPA from `frontend/dist/` in production, if
@@ -350,7 +306,7 @@ styling uses plain CSS custom properties, not a CSS framework.
 A single SQLite database, `data/jobs.db` (WAL mode, `synchronous=NORMAL`,
 `busy_timeout=5000ms`), holds jobs (+ FTS5 index), pipeline run history, per-run job
 scores, rejection records, source checkpoints, embedding caches, personalization data,
-notification history, and the LinkedIn/HelloWork staging tables. `data/esco.db` holds
+notification history (kept, no longer written since the Discord/n8n removal), and the LinkedIn/HelloWork staging tables. `data/esco.db` holds
 the ESCO taxonomy separately. There is no versioned migration framework: schema
 evolution uses idempotent `ALTER TABLE ADD COLUMN` checks plus a small ledger of
 one-time named data migrations already applied. `src/storage/migrate.py` additionally
@@ -359,8 +315,8 @@ into the current stable-hash ID scheme.
 
 ## Configuration
 
-All user-tunable parameters live in `config/`. For `profile.yaml` and
-`notifications.yaml`, a gitignored `<name>.local.yaml` sibling replaces the tracked
+All user-tunable parameters live in `config/`. For `profile.yaml`, a
+gitignored `profile.local.yaml` sibling replaces the tracked
 default when present; readers resolve it at call time and the application writes only
 the local file (`src/config_files.py`).
 
@@ -372,8 +328,6 @@ the local file (`src/config_files.py`).
 | `config/scoring.yaml` | Score weights and gate thresholds |
 | `config/semantic_config.yaml` | Embedding model, similarity weight/threshold, normalization anchors |
 | `config/personalization.yaml` | Feedback weights, feature weights, adjustment bounds |
-| `config/notifications.yaml` | Discord channels, n8n toggle, routing rules |
 | `config/linkedin.yaml` | LinkedIn background scanner settings |
 | `config/schedules.yaml` | Background scheduler definitions |
 | `config/retention.yaml` | Pipeline-run history retention policy |
-| `config/n8n_weekly_digest.json` | Importable n8n workflow for the weekly digest |

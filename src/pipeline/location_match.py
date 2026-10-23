@@ -2,8 +2,7 @@
 
 Single source of truth for "does this job belong to one of the user's
 configured departments/remote preference, and at what priority" — scoring
-and Discord notification routing both call this instead of re-implementing
-department/remote matching themselves. See profile.geography.location_preferences
+calls this instead of re-implementing department/remote matching itself. See profile.geography.location_preferences
 (src/models/profile.py) for the preference list this resolves against.
 """
 
@@ -19,16 +18,13 @@ class LocationMatch:
     value: str
     status: str  # "preferred" | "acceptable" (an "excluded" match never produces a LocationMatch)
     priority: int  # index of the matched preference in the original location_preferences list
-    slug: str  # stable id for Discord channel mapping, e.g. "dept-83", "remote-remote_france"
+    slug: str  # stable id of the matched preference, e.g. "dept-83", "remote-remote_france"
     label: str | None = None  # optional display label carried through from the matched preference
 
 
 def slug_for(pref_type: str, value: str) -> str:
-    """Stable Discord-channel-mapping id for a preference type/value pair,
-    e.g. ("department", "83") -> "dept-83". Public so other modules (e.g.
-    src.notifications.discord_reconciliation) can derive the same slugs
-    for preferences that don't come from a job match, without duplicating
-    this logic.
+    """Stable id for a preference type/value pair,
+    e.g. ("department", "83") -> "dept-83".
     """
     if pref_type == "department":
         return f"dept-{value}"
@@ -76,9 +72,8 @@ def resolve_job_location(
        priority), or ``None`` when the job matches nothing, or matches only
        excluded preferences.
 
-    This function decides matching ONLY. It has no opinion on score values,
-    Discord destinations, or notification eligibility — those are decided by
-    each caller from the returned ``LocationMatch``.
+    This function decides matching ONLY. It has no opinion on score values —
+    those are decided by each caller from the returned ``LocationMatch``.
     """
     candidates: list[tuple[int, dict[str, Any]]] = []
     for idx, pref in enumerate(location_preferences or []):

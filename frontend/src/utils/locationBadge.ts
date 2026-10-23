@@ -3,7 +3,7 @@ import type { LocationPreference } from '../api/client'
 // Location Priority feature (2026-09-10): display-only location grouping.
 // Mirrors the fixed, rarely-changing constant PACA_NEIGHBOR_DEPARTMENTS in
 // src/pipeline/departments.py (used by location_fit scoring) — this label
-// never feeds back into scoring or Discord routing, it only groups an
+// never feeds back into scoring, it only groups an
 // already-resolved `department` for display. "preferred" here covers BOTH
 // LocationPreference statuses "preferred" and "acceptable" (a display
 // simplification only); "excluded" entries are never treated as preferred.

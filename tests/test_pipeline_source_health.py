@@ -1,4 +1,4 @@
-"""Phase NOW / I16 regression tests for src.notifications.source_health.
+"""Phase NOW / I16 regression tests for src.pipeline.source_health.
 
 Pure-function tests only — no DB, no Discord, no network. See
 tests/test_notification_engine.py for the wiring-level test proving
@@ -8,7 +8,7 @@ for a newly-detected anomaly.
 
 from __future__ import annotations
 
-from src.notifications.source_health import detect_source_yield_anomalies
+from src.pipeline.source_health import detect_source_yield_anomalies
 
 
 def _completed_run(by_source: dict) -> dict:
