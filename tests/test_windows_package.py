@@ -127,8 +127,8 @@ def test_bundled_python_is_isolated_from_the_users_environment():
 
 
 def test_bytecode_does_not_record_the_build_checkout(tmp_path):
-    assert "-f -j 0 --invalidation-mode checked-hash -s $Stage" in BUILD and "--no-compile" in BUILD
-    assert '"find_build_path.py"), $Stage, $RepoRoot) "build path check"' in BUILD
+    assert "-B -m compileall -q -f -j 0 --invalidation-mode checked-hash -s $Stage" in BUILD and "--no-compile" in BUILD
+    assert '"find_build_path.py"), $Stage, $RepoRoot, $Stage, $env:USERPROFILE) "build path check"' in BUILD
 
     sys.path.insert(0, str(PKG))
     try:
@@ -141,6 +141,13 @@ def test_bytecode_does_not_record_the_build_checkout(tmp_path):
     (tmp_path / "pkg").mkdir()
     (tmp_path / "pkg" / "m.pyc").write_bytes(b"\x00\x01d:/work/my checkout/build/stage/src/m.py\x00")
     assert find_build_path.main(["x", str(tmp_path), checkout]) == 1
+    # a timestamp .pyc written while compiling records the stage, under the builder's profile folder
+    profile, stage = r"C:\Users\builder", r"C:\Users\builder\AppData\Local\Temp\b\stage"
+    (tmp_path / "pkg" / "m.pyc").write_bytes(b"\x00" + stage.encode() + rb"\runtime\Lib\m.py")
+    assert find_build_path.main(["x", str(tmp_path), checkout]) == 0
+    assert find_build_path.main(["x", str(tmp_path), checkout, stage]) == 1
+    (tmp_path / "pkg" / "m.pyc").write_bytes(b"\x00" + profile.encode() + rb"\AppData\other\m.py")
+    assert find_build_path.main(["x", str(tmp_path), checkout, stage, profile]) == 1
 
 
 def test_build_ships_what_the_self_check_reads():

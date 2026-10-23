@@ -56,6 +56,15 @@ describe('PIPELINE_STAGES', () => {
     expect(stage.done(stats)).toBe(97)
   })
 
+  it('scoring counts what the eligibility gates passed on, not the hard filter output', () => {
+    const stage = findPipelineStage('score')!
+    const run = baseStats({ hard_filter_passed: 259, requirements_gate_passed: 174, llm_eligibility_passed: 174, scored: 174 })
+    expect(stage.input(run)).toBe(174)
+    expect(stage.done(run)).toBe(174)
+    // before the eligibility stage has reported, the requirements gate's survivors
+    expect(stage.input(baseStats({ hard_filter_passed: 259, requirements_gate_passed: 170 }))).toBe(170)
+  })
+
   it('every stage input/done accessor runs without throwing on minimal stats', () => {
     const stats = baseStats()
     for (const stage of PIPELINE_STAGES) {
