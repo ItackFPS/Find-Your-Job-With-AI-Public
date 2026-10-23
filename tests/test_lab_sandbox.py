@@ -30,7 +30,7 @@ SID = "S-1-15-2-1-2-3-4-5-6-7"
 def _tree(root: Path) -> Path:
     (root / "config").mkdir(parents=True)
     (root / "config" / "filters.yaml").write_text("a: 1\n")
-    (root / "config" / "profile.local.yaml").write_text("name: me\n")
+    (root / "config" / "notifications.local.yaml").write_text("name: me\n")
     (root / "data" / "lab").mkdir(parents=True)
     sqlite3.connect(root / "data" / "jobs.db").close()
     (root / ".env").write_text("SECRET=x\n")
@@ -53,7 +53,7 @@ def test_the_plan_never_grants_a_secret_and_lets_no_new_file_inherit_at_the_top(
     assert not any(c[2] == "/deny" for c in cmds)            # Windows ignores denies for AppContainer SIDs
     granted = _granted(cmds)
     assert granted[tmp_path.name] == "(CI)RX"                 # folder grant only: a new .env starts closed
-    assert ".env" not in granted and "profile.local.yaml" not in granted
+    assert ".env" not in granted and "notifications.local.yaml" not in granted
     assert granted[".env.example"] == "RX" and granted["README.md"] == "RX" and granted["filters.yaml"] == "RX"
     assert granted["src"] == "(OI)(CI)RX" and granted["data"] == "(OI)(CI)RX"
     assert "config" not in granted                            # reached through the root's folder grant only
@@ -141,7 +141,7 @@ attempt("write_config", lambda: open(j("config", "filters.yaml"), "a").close())
 attempt("plant_module", lambda: open(j("src", "evil.py"), "w").close())
 attempt("delete_jobs_db", lambda: os.remove(j("data", "jobs.db")))
 attempt("read_env", lambda: open(j(".env")).read())
-attempt("read_local", lambda: open(j("config", "profile.local.yaml")).read())
+attempt("read_local", lambda: open(j("config", "notifications.local.yaml")).read())
 attempt("read_env_created_later", lambda: open(j(".env.later")).read())
 attempt("write_lab", lambda: open(j("data", "lab", "lab.db"), "wb").close())
 attempt("loopback", lambda: socket.create_connection(("127.0.0.1", port), timeout=3).close())
