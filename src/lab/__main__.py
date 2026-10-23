@@ -23,6 +23,7 @@ import json
 import os
 import secrets
 import sqlite3
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -33,6 +34,7 @@ from src.evaluation.models import StrategyRef
 from src.lab.bundle import BundleError, create_bundle
 from src.lab.experiment import run_experiment
 from src.lab.guard import GuardViolation, guard_installed, install_write_guard, lab_writable_roots
+from src.lab import sandbox
 from src.lab.isolation import API_PORTS, RELAY_PORTS, check_isolation
 from src.lab.promotion import PromotionError, approve, current_pointer, deactivate, rollback
 from src.lab.store import LabStore
@@ -42,7 +44,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_STORE = "data/lab/strategies"
 ACTIVE = "active"
 _HUMAN = ("approve", "rollback", "deactivate")
-_UNGUARDED = (*_HUMAN, "isolation-check")
+_UNGUARDED = (*_HUMAN, "isolation-check", "sandbox")
 # set by automated agents' shells (Claude Code, Codex sandboxes) or by whoever launches one (FYJ_LAB_AGENT)
 AGENT_ENV_MARKERS = ("FYJ_LAB_AGENT", "CLAUDECODE", "CODEX_SANDBOX", "CODEX_SANDBOX_NETWORK_DISABLED")
 
@@ -51,6 +53,8 @@ def _not_a_present_human() -> str | None:
     """Why this process cannot stand for a human at a terminal, or ``None``. Procedural, not a boundary."""
     if guard_installed():
         return "this process runs under the lab write guard (the lab agent's context)"
+    if sandbox.in_app_container():
+        return "this process runs in the lab's AppContainer (the lab agent's sandbox)"
     markers = [m for m in AGENT_ENV_MARKERS if os.environ.get(m)]
     if markers:
         return f"automated-agent environment ({', '.join(markers)}): run it yourself, in your own terminal"
@@ -99,6 +103,41 @@ def _base_config(ns: argparse.Namespace) -> str:
               file=sys.stderr)
         return str(active.bundle_dir)
     return str(ns.config_dir)
+
+
+def _sandbox(ns: argparse.Namespace) -> int:
+    """``sandbox grant|revoke|run`` (``src/lab/sandbox.py``): the AppContainer boundary, no administrator."""
+    if not sandbox.supported():
+        print("error: the AppContainer sandbox exists on Windows only (see ADR 0011 for the account setup)",
+              file=sys.stderr)
+        return 2
+    lab_dir = (PROJECT_ROOT / ns.jobs_db).parent / "lab"
+    extra = [Path(p).resolve() for p in ns.grant_read]
+    try:
+        sid = sandbox.container_sid()
+        if ns.action in ("grant", "revoke"):
+            if ns.action == "grant" and ns.apply:
+                lab_dir.mkdir(parents=True, exist_ok=True)
+            plan = (sandbox.grant_plan if ns.action == "grant" else sandbox.revoke_plan)(PROJECT_ROOT, lab_dir, sid, extra)
+            for cmd in plan:
+                print(subprocess.list2cmdline(cmd))
+            if not ns.apply:
+                print(f"plan only ({len(plan)} commands for AppContainer {sandbox.DEFAULT_NAME}, SID {sid}): "
+                      "add --apply to change the ACLs", file=sys.stderr)
+                return 0
+            sandbox.apply(plan, keep_going=ns.action == "revoke")
+            print(f"{ns.action}: done", file=sys.stderr)
+            return 0
+        command = list(ns.command[1:] if ns.command[:1] == ["--"] else ns.command)
+        if not command:
+            print("error: sandbox run needs a command after '--'", file=sys.stderr)
+            return 2
+        if command[0] == "python":
+            command[0] = sys.executable
+        return sandbox.run(command, PROJECT_ROOT, internet=ns.internet)
+    except (sandbox.SandboxError, OSError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -163,6 +202,17 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--exec-paths-file", action="append", default=[],
                        help="file listing --exec-path places, one per line (Audit writes "
                             "data/isolation-exec-paths.txt: too many for one command line)")
+    s = sub.add_parser("sandbox", help="Windows AppContainer for the lab agent: grant / revoke its folders, run in it")
+    s.add_argument("action", choices=("grant", "revoke", "run"))
+    s.add_argument("--apply", action="store_true", help="grant/revoke: change the ACLs (default: print the plan)")
+    s.add_argument("--grant-read", action="append", default=[],
+                   help="grant/revoke: another folder the sandboxed command must read (e.g. an agent's install)")
+    s.add_argument("--internet", action="store_true",
+                   help="run: allow outbound internet (loopback stays blocked by the OS)")
+    # "*", not REMAINDER: REMAINDER swallowed "--apply" after the action, leaving grant a silent plan.
+    # The command comes after "--", so its own options never reach this parser.
+    s.add_argument("command", nargs="*",
+                   help="run: the command after '--'; a leading 'python' means this interpreter")
     m = sub.add_parser("memory", help="list the lab memory with current status and staleness")
     m.add_argument("--kind", default=None, choices=("evidence", "hypothesis", "observation", "conclusion"))
     m.add_argument("--dataset", default=None, help="mark items stale against this dataset (and --base-config)")
@@ -178,6 +228,8 @@ def main(argv: list[str] | None = None) -> int:
             except OSError as exc:            # fail closed: a list that cannot be read checks nothing
                 print(f"error: --exec-paths-file {listing}: {exc}", file=sys.stderr)
                 return 2
+    if ns.cmd == "sandbox":
+        return _sandbox(ns)
     if ns.cmd == "isolation-check":
         report = check_isolation(PROJECT_ROOT, ns.jobs_db, ns.config_dir, lab_dir=Path(ns.lab_db).parent,
                                  api_ports=api_ports, relay_ports=relay_ports, exec_paths=tuple(ns.exec_path))

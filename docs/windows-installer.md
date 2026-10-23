@@ -182,5 +182,7 @@ that audit on every pull request (`Dependency audit`), and
   patch release to pick up its security fixes.
 - Application files and user data share one folder; the uninstaller keeps the data, but
   "repair" means reinstalling over it.
-- The experiment lab's OS-level isolation (a separate Windows account, ADR 0011) is not
-  set up by the installer; see [ADR 0011](adr/0011-experiment-lab.md).
+- The installer does not set up the lab agent's sandbox. Nothing in the app starts a lab agent;
+  if you run one, use the AppContainer sandbox (from the install folder:
+  `runtime\python.exe -m src.lab sandbox grant --apply`, then `sandbox run -- python -m src.lab …`;
+  see [docs/development.md](development.md#sandboxed-lab-agent-windows-appcontainer-no-administrator)).

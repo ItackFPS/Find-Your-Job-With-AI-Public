@@ -461,7 +461,49 @@ is kept out of production state only by running it under an OS account that cann
 `config/`, the code, `data/benchmarks/` or credentials (ADR 0011, "Promotion authority"); check that
 account with `isolation-check`, and start the agent with `agent --require-isolation` to fail closed.
 
-#### Isolated lab agent (manual OS setup, not automated)
+#### Sandboxed lab agent (Windows AppContainer, no administrator)
+
+The simplest real boundary: run the agent in an AppContainer (`src/lab/sandbox.py`), the Windows
+sandbox Edge and Store apps run in. It needs no second account and no elevation. A process inside it
+can read only what was granted to the container and write only `data\lab\`. It cannot read `.env*` or
+`config\*.local.*`, cannot reach the network (`--internet` allows outbound internet), and the OS
+refuses its loopback connections, so neither the API nor a relay is reachable.
+
+**Only a command started with `sandbox run` is inside that boundary.** The same agent started any other
+way (a plain `python -m src.lab agent`, a scheduled task, an editor or an LLM tool) runs with all your
+rights, and only the in-process guard stands between it and production; `isolation-check` then reports
+`"os_enforced": false`.
+
+```powershell
+python -m src.lab sandbox grant              # plan: the icacls commands (they name the container only)
+python -m src.lab sandbox grant --apply      # apply; re-run after adding top-level files (they start closed)
+python -m src.lab sandbox run -- python -m src.lab --lab-db data/lab/lab.db isolation-check   # "os_enforced": true
+python -m src.lab sandbox run -- python -m src.lab --lab-db data/lab/lab.db agent tests/fixtures/evaluation/datasets/synthetic-ai-filter-50 --require-isolation
+python -m src.lab sandbox revoke --apply     # remove every ACE the grant added
+```
+
+- A leading `python` in `run` means the interpreter running the command. `grant` also gives it read
+  access to that interpreter's installation (`sys.prefix`, `sys.base_prefix`).
+- To confine another tool (an LLM CLI), grant its installation with `--grant-read <folder>` and run it
+  with `--internet`. Whatever it needs to write must be under `data\lab\` or in the container's own
+  folder (`%LOCALAPPDATA%\Packages\findyourjobwithai.lab\AC`, its `TEMP`/`HOME`).
+- The sandboxed command gets system environment variables only: no API keys or tokens.
+- `run` refuses to start from an elevated (administrator) window. The human commands
+  (`approve`/`rollback`/`deactivate`) refuse to run inside the container.
+- Measured on Windows 11 (`tests/test_lab_sandbox.py` starts a real container): writing `jobs.db`,
+  `config\`, `data\` or `src\`, reading `.env` (also one created after the grant), loopback to a
+  listening port and the internet are all refused. `isolation-check` run inside reports
+  `"os_enforced": true`. A deny ACE for the container is ignored by Windows, so secrets are kept
+  closed by never being granted.
+- It can read production data (`jobs.db`, `config\`), which replays need. It cannot write them.
+- `revoke` tries every path even when one fails, then lists the failures; re-running it is safe, and
+  it also cleans up after an interrupted `grant`. Pass it the same `--grant-read` folders as the grant,
+  or their ACEs stay. Uninstalling does not revoke: run `revoke --apply` first, or the kept `data\` and
+  `config\` keep ACEs naming the container (harmless while nothing runs in it).
+- Links do not widen the grant: inside the container, creating a junction or a hard link to a file it
+  cannot write is refused, and symlinks need a privilege it lacks (measured).
+
+#### Isolated lab agent (separate account, manual OS setup)
 
 Isolation is only established once `isolation-check` **run by you, in a window of the agent's account**,
 prints `"os_enforced": true`. Until then "only a human promotes" is procedural. Four things must hold,

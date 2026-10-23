@@ -263,9 +263,9 @@ export default function Lab() {
       <h1 style={{ marginBottom: '0.3rem' }}>Lab</h1>
       <p style={{ color: 'var(--color-muted)', marginTop: 0, fontSize: '0.9rem' }}>
         Benchmark runs and strategy experiments, read-only. Changes are tested here on frozen labelled datasets and only a
-        human approval (command line) can promote one. What the lab agent writes is untrusted input: unless it runs
-        under its own Windows account (ADR 0011, not set up by the installer), only an in-process guard keeps it away
-        from your data.
+        human approval (command line) can promote one. What the lab agent writes is untrusted input. Nothing here starts it: run
+        from its sandbox (<code>python -m src.lab sandbox run</code>, a Windows AppContainer) it cannot write your data
+        or read your credentials; started any other way, only an in-process guard keeps it away from your data.
       </p>
       <Card title="Self-check" subtitle="the current strategy replayed on frozen labelled jobs, compared with the recorded baseline"
         style={{ marginBottom: 'var(--space-4)' }}>
