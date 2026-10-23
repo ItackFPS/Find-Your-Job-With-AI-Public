@@ -31,8 +31,7 @@ no login.
   [Other ways to run it](#other-ways-to-run-it)
 - [Architecture](#architecture) · [Privacy and network behaviour](#privacy-and-network-behaviour) ·
   [Data and backups](#data-and-backups)
-- [Configuration](#configuration) · [Local AI](#local-ai) · [n8n weekly digest](#n8n-weekly-digest) ·
-  [Discord](#discord-notifications)
+- [Configuration](#configuration) · [Local AI](#local-ai)
 - [Development](#development) · [Security](#security) · [Limitations](#known-limitations)
 
 Deeper material: [technical reference](docs/reference.md) (pipeline stages, scoring,
@@ -55,15 +54,13 @@ feedback, evaluation, lab) · [ADRs](docs/adr/README.md) · [Windows app](docs/w
 | LinkedIn / HelloWork background scanners with pause/resume | ✅ manual in the shipped config (**Scan now**); an optional daily schedule |
 | Background scheduler (recurring scans/runs) | ✅ config-gated |
 | Feedback journal, disagreement/abstention review queue ([ADR 0009](docs/adr/0009-feedback-journal.md), [0010](docs/adr/0010-disagreement-and-abstention.md)) | ✅ |
-| Discord notifications (per-location channels, top-10 boards, status heartbeat) | ✅ opt-in (needs a bot/webhooks) |
-| n8n weekly e-mail digest | ✅ opt-in (needs your own n8n and SMTP) |
 | Local-LLM enrichment and LLM eligibility gate | ✅ implemented, **off by default** |
 | Evaluation harness (labelled datasets, metrics, comparisons; [ADR 0007](docs/adr/0007-evaluation-harness-outside-production-path.md)) | 🧪 developer tooling, outside the production path |
 | Experiment lab with human-approved promotion ([ADR 0011](docs/adr/0011-experiment-lab.md)) | 🧪 experimental; the lab agent is OS-isolated only when you run it in its sandbox (`python -m src.lab sandbox`, Windows AppContainer) |
 | Greenhouse, Lever, SmartRecruiters, WorkingNomads collectors | ⚙️ implemented, no source configured |
 | Welcome to the Jungle collector | ⚠️ implemented, disabled — blocked by the site's bot protection |
 | macOS / Linux | ⚠️ backend, CLI and tests run (CI is Linux); the launcher and startup scripts are Windows-only |
-| Docker | ⚠️ the image runs the CLI pipeline only, not the web UI or n8n |
+| Docker | ⚠️ the image runs the CLI pipeline only, not the web UI |
 | Windows installer: per-user, bundled Python, desktop + Start Menu shortcuts ([docs](docs/windows-installer.md)) | ✅ 1.0.0, not code-signed |
 
 ---
@@ -92,8 +89,7 @@ The rest of this section runs the app from a source checkout instead.
 | ~1.5 GB disk | — | Python packages (~300 MB, no PyTorch), the embedding model (~470 MB), your database |
 
 Optional: [LM Studio](https://lmstudio.ai) or [Ollama](https://ollama.com) for the AI
-stages, [n8n](https://n8n.io) for the e-mail digest, a Discord server for notifications.
-A GPU is not needed.
+stages. A GPU is not needed.
 
 ### Install
 
@@ -135,7 +131,7 @@ Then:
    `config/profile.local.yaml` (git-ignored). The tracked `config/profile.yaml` is only
    an example.
 2. **Secrets, only for what you use** — in `.env`: France Travail API credentials (the
-   one source that needs them), Discord bot token, n8n key. Everything is optional;
+   one source that needs them). Everything is optional;
    see [Configuration](#configuration). Without France Travail credentials each run
    skips that source and says so in the run's errors (status DEGRADED); credentials
    that are set but rejected stop the run until they are fixed. To silence the
@@ -151,7 +147,6 @@ running (for example the logon task) is reused and left running.
 ```bat
 FindYourJob.cmd status        :: what is running, who owns it
 FindYourJob.cmd stop          :: stop a running launcher from another window
-FindYourJob.cmd start --n8n   :: also start n8n for the weekly digest
 FindYourJob.cmd shortcut      :: add a Start menu shortcut
 FindYourJob.cmd --help
 ```
@@ -202,12 +197,9 @@ flowchart LR
         B --> DB[("SQLite<br/>data/jobs.db, data/esco.db")]
         B --> CFG["config/*.yaml<br/>+ *.local.yaml"]
         B -. "AI runs only" .-> LLM["LM Studio / Ollama<br/>(local, optional)"]
-        N["n8n (optional)"] -->|weekly digest API| B
     end
     B -->|collectors / scanners| Sites["Job sources"]
-    B -. "optional" .-> D["Discord"]
     B -. "first run" .-> HF["Hugging Face Hub<br/>(embedding model)"]
-    N -. "optional" .-> SMTP["Your SMTP server"]
 ```
 
 The pipeline (`src/pipeline/orchestrator.py`) is the same whether it runs from the CLI
@@ -216,7 +208,7 @@ The pipeline (`src/pipeline/orchestrator.py`) is the same whether it runs from t
 ```text
 discovery → collection → normalization → validation → deduplication → hard filtering
 → requirements gate (+ optional LLM eligibility gate) → deterministic scoring → storage
-→ (optional) local-LLM enrichment → semantic matching → personalization → dashboard / notifications
+→ (optional) local-LLM enrichment → semantic matching → personalization → dashboard
 ```
 
 The job's stored score is the deterministic score, saved right after scoring; semantic
@@ -233,8 +225,6 @@ enrich, never decide eligibility on their own
 | SQLite databases | yes | the backend (created and upgraded in place) |
 | Embedding model | yes | its ONNX export, downloaded from Hugging Face on first use |
 | LM Studio / Ollama | only for AI-enabled runs | you; the launcher only reports its state |
-| n8n | only for the e-mail digest | you, `FindYourJob.cmd --n8n`, or `scripts/install_n8n_startup.py` |
-| Discord | only for notifications | your server; the backend can create channels with a bot token |
 
 ---
 
@@ -248,8 +238,6 @@ the internet):
 | Job sources — France Travail API, RemoteOK, Jobicy, We Work Remotely, Indeed (its mobile app's API), EURES, APEC; LinkedIn (via `python-jobspy`) and HelloWork scanners | pipeline runs, scheduled scans | search queries built from your profile (keywords, locations); never your profile file, feedback or database |
 | Hugging Face Hub | first use of the embedding model; each later model load checks for updates unless `HF_HUB_OFFLINE=1` | model file requests (Hub telemetry is turned off) |
 | `PHASE2_LLM_ENDPOINT` (default `http://localhost:1234`); `--llm-endpoint` of the evaluation/lab tools | only AI-enabled runs, or those tools when you pass the flag | job text and profile summary. It is whatever you configure — keep it local; the launcher warns if it is not (its `status` check sends only a `GET /v1/models`) |
-| Discord API / webhooks | only with Discord configured | job titles, companies, links, scores, run statistics |
-| n8n webhook / API | only with n8n configured (`localhost` by default) | run summaries |
 | ESCO API (European Commission) | only when you run `scripts/setup_esco.py` | skill search terms |
 | PyPI, npm registry | only when you install or update | package downloads |
 
@@ -259,19 +247,14 @@ stages fail open to the deterministic result). An LLM endpoint that is not on th
 is refused, not used: the AI stages then run without AI and record why
 (`FYJ_ALLOW_REMOTE_LLM=1` opts into a server you control elsewhere, such as a GPU box on
 your network). The dashboard loads no external scripts
-or fonts. n8n, when started by the launcher or `scripts/Start_n8n.bat` (which the logon
-task runs), listens on `127.0.0.1` with its telemetry and update checks off; it is a
-separate product and still contacts n8n.io when you browse workflow templates in its
-editor, and your SMTP server to send the digest. Starting n8n any other way (`n8n start`,
-`npx n8n`, Docker) uses n8n's own defaults: all interfaces, telemetry on.
+or fonts.
 
 **Offline use.** Once the embedding model has been downloaded (first pipeline run) and
 `HF_HUB_OFFLINE=1` is set, everything that works on stored data runs without internet:
 the dashboard, job details and explanations, feedback, the review queue, the profile
 editor, evaluation replays, and AI stages against a local LLM. Collecting jobs needs the
 internet — a run without it finds no new jobs (each source fails on its own without
-stopping the run) — and so do Discord notifications, the n8n e-mail digest and
-`scripts/setup_esco.py`.
+stopping the run) — and so does `scripts/setup_esco.py`.
 
 **What stays local:** your profile (`config/profile.local.yaml`), feedback, decisions,
 embeddings and every collected job (`data/`), logs (`logs/`) and secrets (`.env`). All of
@@ -280,7 +263,7 @@ these are git-ignored.
 **Exposure:** the backend listens on `127.0.0.1` only and refuses foreign `Host` headers
 and cross-site writes, but it has **no login**: any program running on this computer can
 use it. Set `API_SAME_USER_ONLY=1` to serve only your Windows account's processes. Never
-expose port 8000 (or n8n's 5678) to a network. See [SECURITY.md](SECURITY.md).
+expose port 8000 to a network. See [SECURITY.md](SECURITY.md).
 
 ---
 
@@ -291,7 +274,7 @@ expose port 8000 (or n8n's 5678) to a network. See [SECURITY.md](SECURITY.md).
 | `data/jobs.db` (+ `-wal`, `-shm`) | jobs, runs, scores, decisions, feedback, caches, staging tables | yes — the one file that matters |
 | `data/esco.db` | ESCO skill taxonomy (re-creatable) | optional |
 | `data/benchmarks/`, `data/lab/`, `data/lab.db` | evaluation datasets and lab state, if you use them | if you use them |
-| `config/*.local.yaml`, `.env` | your profile, notification IDs, secrets | yes, privately |
+| `config/*.local.yaml`, `.env` | your profile, secrets | yes, privately |
 | `logs/` | application, launcher and scanner logs | no |
 | `%USERPROFILE%\.cache\huggingface` | the embedding model | no (re-downloadable) |
 
@@ -308,10 +291,9 @@ databases and fail if they touch `data/` or `config/`.
 
 All tunables are YAML files in `config/`; secrets are environment variables in `.env`.
 
-**Personal values never go in tracked files.** `config/profile.yaml` and
-`config/notifications.yaml` are neutral defaults; `config/profile.local.yaml` and
-`config/notifications.local.yaml` (git-ignored) replace them entirely when present. The
-Profile page and the Discord reconciler write the `.local.yaml` files for you.
+**Personal values never go in tracked files.** `config/profile.yaml` is a neutral
+default; `config/profile.local.yaml` (git-ignored) replaces it entirely when present. The
+Profile page writes it for you.
 
 | File | Purpose |
 |---|---|
@@ -319,10 +301,8 @@ Profile page and the Discord reconciler write the `.local.yaml` files for you.
 | `config/sources.yaml` | which collectors are active and their settings |
 | `config/filters.yaml` · `config/scoring.yaml` | hard filters; scoring weights and gates |
 | `config/semantic_config.yaml` · `config/personalization.yaml` | embedding model and blend weight; feedback adjustment bounds |
-| `config/notifications.yaml` | Discord channels, n8n toggle, routing rules |
 | `config/linkedin.yaml` · `config/schedules.yaml` | LinkedIn scanner; scheduler definitions |
 | `config/decisions.yaml` · `config/feedback.yaml` · `config/disagreement.yaml` · `config/retention.yaml` | decision journal, feedback, review-queue rules, history retention |
-| `config/n8n_weekly_digest.json` | importable n8n workflow |
 
 `scoring.yaml`, `filters.yaml`, `semantic_config.yaml` and `personalization.yaml` feed
 the strategy fingerprint used by the evaluation harness; changes to them are strategy
@@ -337,14 +317,10 @@ Copy `.env.example` to `.env`; every variable is optional.
 | `FRANCE_TRAVAIL_CLIENT_ID` / `FRANCE_TRAVAIL_CLIENT_SECRET` | the France Travail collector ([developer.francetravail.fr](https://developer.francetravail.fr), scope `o2dsoffre api_offresdemploiv2`) |
 | `INDEED_API_KEY` | the Indeed collector: the API key of Indeed's iOS app, not shipped here (python-jobspy ships one); without it Indeed is skipped |
 | `PHASE2_LLM_PROVIDER`, `PHASE2_LLM_ENDPOINT`, `PHASE2_LLM_MODEL_NAME`, … | local LLM, see [Local AI](#local-ai) |
-| `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID` | automatic Discord channel provisioning (bot permissions: View Channel, Manage Channels, Manage Webhooks) |
-| `DISCORD_*_WEBHOOK_URL` | Discord webhooks (normally created by the reconciler) |
-| `N8N_WEBHOOK_URL`, `N8N_CALLER_API_KEY` | n8n push notifications; optional shared secret on the n8n-facing endpoints |
 | `API_ALLOWED_HOSTS` | extra `Host` names the backend accepts (e.g. `host.docker.internal`) |
 | `API_SAME_USER_ONLY` | `1` serves only processes of the account running the backend |
 | `FYJ_PORT` | backend port used by the launcher (default 8000) |
 | `HF_HUB_OFFLINE` | `1` once the model is cached: no Hugging Face requests at all |
-| `N8N_API_KEY`, `N8N_HOST`, `N8N_PORT` | lets the backend check n8n's health (dashboard sidebar, status heartbeat) through n8n's own API |
 
 `AI_ENABLED`, `AI_MODEL`, `DATABASE_URL` and `LOG_LEVEL` in older `.env` files are
 legacy and not read by the code: the AI stages are switched on per run, the database
@@ -382,39 +358,6 @@ PHASE2_MAX_CANDIDATES=100             # only the top-N ranked jobs are analysed
 
 ---
 
-## n8n weekly digest
-
-n8n is used for one thing: a weekly e-mail digest. It is optional and runs separately
-(it is not bundled).
-
-1. Install n8n (`npm install -g n8n`) and start it: `FindYourJob.cmd start --n8n`,
-   `scripts\Start_n8n.bat`, or a logon task via `scripts\install_n8n_startup.py`. All
-   three keep it on `127.0.0.1` with telemetry off unless you set `N8N_LISTEN_ADDRESS`
-   or the telemetry variables yourself.
-2. Import `config/n8n_weekly_digest.json` (cron: Monday 10:00 Europe/Paris).
-3. In n8n, create an SMTP credential and the variables `DIGEST_TO_EMAIL` (your address),
-   optionally `DIGEST_FROM_EMAIL`, and `N8N_CALLER_API_KEY` if you set the same value in
-   `.env` (then the three digest endpoints require it in `X-N8N-API-Key`). Variables are
-   an n8n feature that depends on your n8n edition; if yours lacks it, set the values
-   directly in the workflow's nodes on your instance — never in the committed JSON.
-
-The workflow calls `GET /api/jobs/digest/weekly`, `/api/jobs/digest/weekly-combined` and
-`/api/pipeline/runs/{id}/jobs/n8n`, and guards against sending twice in one week.
-
----
-
-## Discord notifications
-
-Optional and silent when unconfigured. With `DISCORD_BOT_TOKEN` and `DISCORD_GUILD_ID`,
-the backend creates one channel per location in your profile, a "Top 10" board per
-location, and pipeline/errors/statistics/system-status channels, and records their IDs
-in `config/notifications.local.yaml`. Webhook URLs (secrets) stay in `.env`. Jobs are
-routed by location only, with no fallback channel
-([ADR 0006](docs/adr/0006-location-first-notification-routing.md)). Details in
-[docs/reference.md](docs/reference.md#discord-notifications).
-
----
-
 ## Development
 
 ```bash
@@ -447,7 +390,7 @@ issue for a security problem.
   synthetic benchmark; ranking quality is `not_measured` (no graded relevance labels).
 - The Windows installer is not code-signed: SmartScreen warns about an unknown publisher.
   Check the published SHA-256 before running it.
-- Single user, no login; never expose the backend or n8n to a network.
+- Single user, no login; never expose the backend to a network.
 - Windows is the supported desktop platform; the launcher and logon tasks are
   Windows-only.
 - Some collectors use unofficial endpoints or scraping (Indeed's mobile API, LinkedIn via

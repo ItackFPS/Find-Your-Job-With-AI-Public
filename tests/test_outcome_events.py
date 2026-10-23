@@ -143,7 +143,6 @@ class TestNoProductionCoupling:
             "src/pipeline/orchestrator.py",
             "src/requirements/gate.py",
             "src/personalization/engine.py",
-            "src/notifications/engine.py",
         ],
     )
     def test_module_never_imported_by_production_ranking_code(self, production_file: str) -> None:

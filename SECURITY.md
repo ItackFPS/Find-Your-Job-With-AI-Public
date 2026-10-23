@@ -24,9 +24,8 @@ Its security model, in short:
   login. It defends against *web pages* you visit (it refuses foreign `Host` headers —
   DNS rebinding — and cross-site write requests), not against other programs running on
   the same computer. `API_SAME_USER_ONLY=1` additionally refuses processes of other
-  Windows accounts. Exposing port 8000 (or n8n's 5678) to a network is unsupported.
-- **Secrets live in `.env` only** (France Travail credentials, Discord bot token and
-  webhooks, n8n key). They are never written to tracked files or logs by the
+  Windows accounts. Exposing port 8000 to a network is unsupported.
+- **Secrets live in `.env` only** (for example France Travail credentials). They are never written to tracked files or logs by the
   application; `.env`, `config/*.local.yaml`, `data/` and `logs/` are git-ignored.
 - **Collected job postings are untrusted input.** They are parsed, stored and rendered
   as text; the dashboard never renders posting HTML.
@@ -46,7 +45,7 @@ in the scripts, launcher or CI workflows.
 
 Out of scope: attacks that require running code as your own user account, exposing the
 backend to a network yourself, and the security of third-party services (job sites,
-Discord, n8n, LM Studio/Ollama) themselves.
+LM Studio/Ollama) themselves.
 
 ## If a secret was committed
 

@@ -1,7 +1,7 @@
 """Start, watch and stop the application's processes; report their state.
 
 Ownership rule: the launcher stops only what it started itself (children in its
-kill-on-close job). A backend or n8n that was already running — the Task Scheduler
+kill-on-close job). A backend that was already running — the Task Scheduler
 startup tasks, a terminal — is reused and reported as "external", never stopped.
 """
 
@@ -98,14 +98,6 @@ def status_lines(settings: Settings) -> list[tuple[Level, str, str]]:
     else:
         rows.append((Level.WARN, "dashboard", "not built"))
 
-    if core.probe_n8n(settings.n8n_port):
-        who = "started by the launcher" if _owned_alive(state, "n8n") else "managed outside the launcher"
-        rows.append((Level.OK, "n8n", f"running on port {settings.n8n_port} ({who})"))
-    elif core.find_n8n() is None:
-        rows.append((Level.INFO, "n8n", "not installed (optional: weekly e-mail digest)"))
-    else:
-        rows.append((Level.INFO, "n8n", "not running (optional: weekly e-mail digest; --n8n starts it)"))
-
     llm = settings.llm_endpoint
     where = "" if core.is_loopback_url(llm) else " -- NOT a local address"
     if core.probe_llm(llm):
@@ -181,12 +173,11 @@ def open_dashboard(url: str, window: str, out: Output) -> None:
 
 
 class Launcher:
-    def __init__(self, settings: Settings, out: Output, *, mode: str, with_n8n: bool,
+    def __init__(self, settings: Settings, out: Output, *, mode: str,
                  window: str, reload: bool = False) -> None:
         self.s = settings
         self.out = out
         self.mode = mode
-        self.with_n8n = with_n8n
         self.window = window
         self.reload = reload
         self.job: JobObject | None = None
@@ -245,8 +236,6 @@ class Launcher:
             return 1
         if not self._ensure_backend():
             return 1
-        if self.with_n8n:
-            self._ensure_n8n()
         if self.mode == "dev" and not self._start_vite():
             return 1
         self._report_llm()
@@ -278,7 +267,7 @@ class Launcher:
         return 0
 
     def shutdown(self) -> None:
-        # reverse start order: dev server and n8n before the backend they call
+        # reverse start order: the dev server before the backend it calls
         for name in reversed(list(self.children)):
             proc = self.children[name]
             if proc.poll() is not None:
@@ -372,25 +361,6 @@ class Launcher:
     def _reusing_backend(self) -> None:
         self.out(f"[ok] backend already running at {self.s.backend_url}; reusing it "
                  "(this window will not stop it)")
-
-    def _ensure_n8n(self) -> None:
-        port = self.s.n8n_port
-        if core.probe_n8n(port):
-            self.out(f"[ok] n8n already running on port {port}; reusing it (this window will not stop it)")
-            return
-        if core.port_in_use(port):
-            self.out(f"[!!] port {port} is in use but n8n does not answer there; not starting n8n.")
-            return
-        cmd = core.find_n8n()
-        if cmd is None:
-            self.out("[!!] n8n is not installed; the weekly digest stays off. "
-                     "Install it yourself (npm install -g n8n) if you want it.")
-            return
-        self.out(f"Starting n8n on http://{core.LOOPBACK}:{port} (local only) ...")
-        proc = self._spawn("n8n", cmd, cwd=self.s.root, port=port,
-                           env=core.n8n_env(_environ(), port))
-        if self._wait_until(lambda: core.probe_n8n(port), "n8n", proc, 120.0, fatal=False):
-            self.out("[ok] n8n ready")
 
     def _start_vite(self) -> bool:
         fe = core.frontend_state(self.s.root)

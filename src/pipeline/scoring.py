@@ -29,19 +29,11 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Single canonical implementation of the 0-100 score -> tier mapping. Every
 # Python consumer imports score_to_tier from here:
-#   - src/notifications/events.py  (Discord/n8n digest event tier field)
-#   - src/notifications/engine.py  (digest_jobs tier bucketing)
-#   - src/api/routes/pipeline.py   (n8n lightweight job listing)
 #   - src/api/routes/jobs.py       (score-tier facet counts)
 # One consumer runs in a DIFFERENT runtime and cannot import this module, so
 # it carries a deliberate, documented mirror instead — see the "SOURCE OF
 # TRUTH" comment there:
 #   - frontend/src/utils/scoreToTier.ts (display-only UI label)
-# config/n8n_weekly_digest.json's Format Digest node has no mirror at all —
-# it reads the `tier` field this module already computed, via the backend's
-# digest endpoints (src/api/routes/jobs.py). The previously-deleted
-# config/n8n_workflow.json DID carry a JS mirror (its "Prepare Digest Jobs"
-# node); that workflow and its mirror no longer exist.
 # Phase 4 (2026-09-10): fixed-reference calibration, NOT live per-run
 # percentiles. The previous thresholds (90/80/75/60) were arbitrary round
 # numbers chosen without reference to any real score distribution — after
@@ -109,8 +101,8 @@ _TIER_THRESHOLDS: tuple[tuple[int, str], ...] = (
 _DEFAULT_TIER = "low_priority"
 
 # Public alias for the rare external mirror that needs the raw
-# (threshold, tier) pairs themselves — not just score_to_tier()'s result —
-# e.g. src/notifications/discord.py's tier legend string. Never mutate this;
+# (threshold, tier) pairs themselves — not just score_to_tier()'s result.
+# Never mutate this;
 # it's the exact same tuple object as _TIER_THRESHOLDS above.
 TIER_THRESHOLDS = _TIER_THRESHOLDS
 
@@ -1278,9 +1270,7 @@ def _score_location_fit(
     "status": "preferred"}, ...]) the candidate configures on the Profile
     page, injected here as ``scoring.location_fit.location_preferences`` by
     orchestrator.py, and resolved via
-    ``src.pipeline.location_match.resolve_job_location`` — the same function
-    Discord routing uses, so scoring and notifications never disagree about
-    which preference a job matches. There is NO hardcoded department
+    ``src.pipeline.location_match.resolve_job_location``. There is NO hardcoded department
     default — an empty/unset profile list means no location gets this tier.
     List position is priority: the first (index 0) matching preference wins,
     each following one scoring slightly lower. This is a ranking preference

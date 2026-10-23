@@ -1,22 +1,15 @@
 """The tracked config defaults carry no one's personal setup.
 
 Personal values live in the git-ignored config/<name>.local.yaml files (see
-src/config_files.py); the reconciler and the Profile page write there. These
+src/config_files.py); the Profile page writes there. These
 checks catch a personal file committed over a default by mistake.
 """
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 CONFIG = Path(__file__).resolve().parents[1] / "config"
-
-
-def test_notifications_default_names_no_discord_server():
-    text = (CONFIG / "notifications.yaml").read_text(encoding="utf-8")
-    assert not re.search(r"\b\d{17,20}\b", text), "Discord snowflake IDs belong in notifications.local.yaml"
-    assert "discord.com/api/webhooks" not in text
 
 
 def test_profile_default_is_the_example():

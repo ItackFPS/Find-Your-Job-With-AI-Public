@@ -27,7 +27,6 @@ from src.storage.runs import RunStorage, load_retention_config
 if TYPE_CHECKING:
     from src.api.progress_stream import ProgressBus
     from src.api.staged_sources import StagedSourceAdapter
-    from src.notifications.engine import NotificationEngine
 
 logger = logging.getLogger(__name__)
 
@@ -39,14 +38,12 @@ class PipelineRunner:
         self,
         db_path: str = "data/jobs.db",
         config_dir: str = "config",
-        notification_engine: "NotificationEngine | None" = None,
         progress_bus: "ProgressBus | None" = None,
     ) -> None:
         self._db_path = db_path
         self._config_dir = config_dir
         self._lock = threading.Lock()
         self._current_run_id: str | None = None
-        self._notification_engine = notification_engine
         self._progress_bus = progress_bus
 
     # -- progress events --------------------------------------------------
@@ -227,15 +224,6 @@ class PipelineRunner:
                 rs.complete_run(run_id, final_stats)
                 self._publish_event(run_id, "pipeline.completed", "completed", final_stats)
 
-            # Notifications: detect new jobs and dispatch to enabled providers.
-            # This is best-effort: any failure here must not affect pipeline status.
-            if self._notification_engine is not None:
-                try:
-                    new_jobs = self._detect_new_jobs(rs, run_id, result)
-                    self._notification_engine.notify_pipeline_completed(result, new_jobs)
-                except Exception as exc:
-                    logger.warning("Notification dispatch failed (non-fatal): %s", exc)
-
             # Pipeline-history retention (Phase LATER / I13) — pipeline
             # lifecycle is the natural, smallest hook: no new scheduler/worker
             # needed. Runs after every pipeline execution (success or
@@ -285,58 +273,3 @@ class PipelineRunner:
                 rs.close()
             except Exception:
                 pass
-
-    def _detect_new_jobs(
-        self,
-        rs: RunStorage,
-        run_id: str,
-        result: Any,
-    ) -> list[dict[str, Any]]:
-        """Return jobs scored in this run that were not scored in the previous run.
-
-        Compares the current run's job_scores with the previous completed run's
-        job_scores.  On the very first run ever, all scored jobs are returned.
-        Results are sorted by final_score descending (best matches first).
-        """
-        from src.storage.sqlite import Storage as JobStorage
-
-        prev_run = rs.get_previous_completed_run(run_id)
-        if prev_run is None:
-            prev_job_ids: set[str] = set()
-        else:
-            prev_job_ids = set(rs.get_job_ids_for_run(prev_run["id"]))
-
-        # scored_jobs on the result are already sorted by final_score (desc)
-        new_scored = [r for r in result.scored_jobs if r.job_id not in prev_job_ids]
-        if not new_scored:
-            return []
-
-        job_storage = JobStorage(db_path=self._db_path)
-        job_storage.init_db()
-        try:
-            capped = new_scored[:50]  # cap to avoid excessive DB reads
-            jobs_by_id = job_storage.get_jobs_by_ids([sr.job_id for sr in capped])
-            new_jobs_out: list[dict[str, Any]] = []
-            for sr in capped:
-                job = jobs_by_id.get(sr.job_id)
-                if job is None:
-                    continue
-                new_jobs_out.append({
-                    "job_id": sr.job_id,
-                    "title": sr.job_title,
-                    "company": sr.job_company,
-                    "location": job.location,
-                    "department": job.department,
-                    "countries": list(job.countries or []),
-                    "remote": job.remote,
-                    "work_mode": job.work_mode,
-                    "employment_type": job.employment_type,
-                    "skills": list(job.skills or []),
-                    "final_score": sr.final_score,
-                    "canonical_url": job.canonical_url,
-                    "apply_url": job.apply_url,
-                    "job_source": sr.job_source,
-                })
-            return new_jobs_out
-        finally:
-            job_storage.close()

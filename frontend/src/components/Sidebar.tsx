@@ -1,7 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { getNotificationStatus } from '../api/client'
-import { httpUrl } from '../utils'
+import { getHealth } from '../api/client'
 
 const NAV_ITEMS: { to: string; label: string; icon: React.ReactNode; end?: boolean }[] = [
   {
@@ -99,16 +98,14 @@ function StatusRow({ label, connected }: { label: string; connected: boolean | u
 }
 
 export function Sidebar() {
-  const { data: notifStatus, isError } = useQuery({
-    queryKey: ['notification-status'],
-    queryFn: getNotificationStatus,
+  const { data: health, isError } = useQuery({
+    queryKey: ['backend-health'],
+    queryFn: getHealth,
     refetchInterval: 30000,
     retry: false,
   })
 
-  const backendConnected = isError ? false : notifStatus !== undefined ? true : undefined
-  const n8nReachable = notifStatus?.providers?.n8n?.reachable
-  const discordServerUrl = httpUrl(notifStatus?.discord_server_url)
+  const backendConnected = isError ? false : health !== undefined ? true : undefined
 
   return (
     <div style={{
@@ -153,37 +150,7 @@ export function Sidebar() {
       </nav>
 
       <div style={{ padding: '0.75rem', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-        {discordServerUrl && <a
-          href={discordServerUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 'var(--space-2)',
-            padding: '0.5rem 0.75rem',
-            borderRadius: 'var(--radius-md)',
-            textDecoration: 'none',
-            color: 'var(--color-muted)',
-            fontSize: 'var(--font-size-sm)',
-            border: '1px solid var(--color-border)',
-          }}
-        >
-          <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-            <svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M3 8.5c0-3 2.4-5 6-5s6 2 6 5-2 5-5 5H6l-3 2.5V8.5Z" strokeLinejoin="round" />
-            </svg>
-            Discord
-          </span>
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4">
-            <path d="M4.5 2.5h5v5" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M9.3 2.7 2.5 9.5" strokeLinecap="round" />
-          </svg>
-        </a>}
-
         <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: '0.6rem 0.75rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-          <StatusRow label={n8nReachable ? 'n8n running' : 'n8n offline'} connected={n8nReachable} />
           <StatusRow label={backendConnected ? 'Backend connected' : 'Backend offline'} connected={backendConnected} />
         </div>
       </div>

@@ -295,11 +295,8 @@ def run_pipeline(
         # =================================================================
         # PREFLIGHT (mandatory, runs once before any collection)
         # France Travail is a collection source: an active source that
-        # cannot authenticate blocks the run (status FAILED). n8n is
-        # downstream notification infrastructure: a reachability/webhook
-        # problem is recorded (status DEGRADED) but never blocks collection,
-        # filtering, scoring, or ranking. Either check is skipped entirely
-        # when that integration is inactive/disabled in its own config.
+        # cannot authenticate blocks the run (status FAILED). The check is
+        # skipped entirely when the source is inactive in sources.yaml.
         # =================================================================
         _t_preflight = time.perf_counter()
         preflight_result = run_preflight(config_dir)

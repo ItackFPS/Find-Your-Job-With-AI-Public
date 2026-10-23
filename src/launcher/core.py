@@ -10,7 +10,6 @@ component      role                                        launcher
 =============  ==========================================  ==========================
 backend        FastAPI API + built dashboard (required)    starts it, or reuses ours
 dashboard      ``frontend/dist`` served by the backend     builds it when stale
-n8n            weekly e-mail digest (optional, external)   starts it only with --n8n
 local LLM      LM Studio / Ollama, only for --ai runs      never starts it; reports
 =============  ==========================================  ==========================
 """
@@ -35,7 +34,6 @@ APP_TITLE = "Find Your Job With AI"
 LOOPBACK = "127.0.0.1"
 
 DEFAULT_BACKEND_PORT = 8000
-DEFAULT_N8N_PORT = 5678
 DEFAULT_VITE_PORT = 5173
 DEFAULT_LLM_ENDPOINT = "http://localhost:1234"
 
@@ -49,15 +47,6 @@ REQUIRED_MODULES = {
     "dotenv": "python-dotenv",
     "onnxruntime": "onnxruntime",
     "tokenizers": "tokenizers",
-}
-
-# Environment for an n8n the launcher starts. setdefault semantics: a value the user
-# already set (shell or .env) always wins. n8n listens on every interface and sends
-# anonymous telemetry by default; neither fits a local-first app.
-N8N_DEFAULT_ENV = {
-    "N8N_LISTEN_ADDRESS": LOOPBACK,
-    "N8N_DIAGNOSTICS_ENABLED": "false",
-    "N8N_VERSION_NOTIFICATIONS_ENABLED": "false",
 }
 
 
@@ -92,7 +81,6 @@ def _port(value: str | None, default: int) -> int:
 class Settings:
     root: Path
     backend_port: int = DEFAULT_BACKEND_PORT
-    n8n_port: int = DEFAULT_N8N_PORT
     vite_port: int = DEFAULT_VITE_PORT
     llm_endpoint: str = DEFAULT_LLM_ENDPOINT
     startup_timeout_s: float = 180.0
@@ -105,7 +93,6 @@ class Settings:
         return cls(
             root=root,
             backend_port=backend_port or _port(env.get("FYJ_PORT"), DEFAULT_BACKEND_PORT),
-            n8n_port=_port(env.get("N8N_PORT"), DEFAULT_N8N_PORT),
             vite_port=_port(env.get("FYJ_VITE_PORT"), DEFAULT_VITE_PORT),
             llm_endpoint=(env.get("PHASE2_LLM_ENDPOINT") or DEFAULT_LLM_ENDPOINT).rstrip("/"),
         )
@@ -200,11 +187,6 @@ def backend_pid(port: int, timeout_s: float = 2.0) -> int | None:
         return None
     pid = data.get("pid")
     return pid if isinstance(pid, int) else None
-
-
-def probe_n8n(port: int, timeout_s: float = 2.0) -> bool:
-    result = http_get(f"http://{LOOPBACK}:{port}/healthz", timeout_s)
-    return result is not None and result[0] == 200
 
 
 def probe_llm(endpoint: str, timeout_s: float = 2.0) -> bool:
@@ -365,34 +347,6 @@ def frontend_build_command(root: Path, node: str) -> list[str]:
 def vite_dev_command(root: Path, node: str, port: int) -> list[str]:
     vite = root / "frontend" / "node_modules" / "vite" / "bin" / "vite.js"
     return [node, str(vite), "--host", LOOPBACK, "--port", str(port), "--strictPort"]
-
-
-def find_n8n(environ: Mapping[str, str] | None = None) -> list[str] | None:
-    """Command that runs ``n8n start``, preferring node + the package's bin script (as the
-    startup task does) over the ``n8n.cmd`` shim; None if n8n is not installed."""
-    env = os.environ if environ is None else environ
-    node = shutil.which("node")
-    shim: str | None = None
-    appdata = env.get("APPDATA")
-    if appdata and (Path(appdata) / "npm" / "n8n.cmd").is_file():
-        shim = str(Path(appdata) / "npm" / "n8n.cmd")
-    shim = shim or shutil.which("n8n")
-    if shim is None:
-        return None
-    script = Path(shim).parent / "node_modules" / "n8n" / "bin" / "n8n"
-    if node and script.is_file():
-        return [node, str(script), "start"]
-    if shim.lower().endswith((".cmd", ".bat")):
-        return [env.get("ComSpec", "cmd.exe"), "/d", "/c", shim, "start"]
-    return [shim, "start"]
-
-
-def n8n_env(base: Mapping[str, str], port: int) -> dict[str, str]:
-    env = dict(base)
-    env.setdefault("N8N_PORT", str(port))
-    for key, value in N8N_DEFAULT_ENV.items():
-        env.setdefault(key, value)
-    return env
 
 
 # -- state -----------------------------------------------------------------------------------

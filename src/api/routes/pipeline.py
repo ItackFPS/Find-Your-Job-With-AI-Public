@@ -4,7 +4,6 @@ POST /api/pipeline/run                    — trigger a background run
 GET  /api/pipeline/runs                   — list recent runs
 GET  /api/pipeline/runs/{id}              — run status + stats
 GET  /api/pipeline/runs/{id}/jobs         — job scores for a specific run
-GET  /api/pipeline/runs/{id}/jobs/n8n     — lightweight job listing for n8n (score_100 + tier)
 GET  /api/pipeline/events                 — SSE stream of live run progress (observational only)
 """
 
@@ -12,16 +11,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Body, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
-from src.api.auth import require_n8n_api_key
-from pydantic import BaseModel
 
 from src.api.runner import PipelineRunner
 from src.api.schemas import (
@@ -206,43 +202,6 @@ async def stream_pipeline_events(request: Request) -> StreamingResponse:
     )
 
 
-@router.get("/notifications")
-def get_notification_history(
-    request: Request,
-    limit: int = Query(default=50, ge=1, le=200),
-) -> list[dict]:
-    """Return recent notification history (sent/failed records)."""
-    engine = getattr(request.app.state, "notification_engine", None)
-    if engine is None:
-        return []
-    history: list[dict] = engine.get_history(limit=limit)
-    return history
-
-
-@router.get("/notifications/status")
-def get_notification_status(request: Request) -> dict:
-    """Return provider enabled/configured status and recent counts."""
-    engine = getattr(request.app.state, "notification_engine", None)
-    if engine is None:
-        status: dict = {"enabled": False, "providers": {}, "counts": {}}
-    else:
-        status = engine.get_provider_status()
-    status["discord_server_url"] = discord_server_url()
-    return status
-
-
-def discord_server_url() -> str | None:
-    """Link to the user's own Discord server, built from DISCORD_GUILD_ID.
-
-    None when unset or not a numeric guild ID, so the UI shows no link rather
-    than a hard-coded server (the frontend used to embed the owner's).
-    """
-    guild_id = os.environ.get("DISCORD_GUILD_ID", "").strip()
-    if not guild_id.isdigit():
-        return None
-    return f"https://discord.com/channels/{guild_id}"
-
-
 @router.get("/runs/{run_id}/jobs", response_model=list[JobOut])
 def get_run_jobs(
     run_id: str,
@@ -261,121 +220,6 @@ def get_run_jobs(
             if job is None:
                 continue
             result.append(_job_to_out(job, sr))
-        return result
-    finally:
-        rs.close()
-        job_storage.close()
-
-
-# ---------------------------------------------------------------------------
-# n8n lightweight endpoint
-# ---------------------------------------------------------------------------
-
-class N8nJobOut(BaseModel):
-    """Lightweight job response optimised for n8n automation workflows.
-
-    ``score_100`` is final_score * 100 rounded to the nearest integer.
-    ``tier`` classifies the job for routing (Phase 4, 2026-09-10
-    fixed-reference calibration — see src/pipeline/scoring.py's
-    _TIER_THRESHOLDS for the calibration methodology):
-        exceptional  — score_100 >= 80  → immediate Discord notification
-        excellent    — score_100 >= 72  → priority Discord notification
-        strong       — score_100 >= 65  → normal notification / digest
-        relevant     — score_100 >= 60  → daily/periodic digest
-        low_priority — score_100  < 60  → analytics only, no notification
-    """
-
-    job_id: str
-    title: str | None = None
-    company: str | None = None
-    location: str | None = None
-    countries: list[str] = []
-    remote: bool = False
-    work_mode: str | None = None
-    employment_type: str | None = None
-    skills: list[str] = []
-    source: str = ""
-    final_score: float = 0.0
-    score_100: int = 0
-    tier: str = "low_priority"
-    canonical_url: str | None = None
-    apply_url: str | None = None
-    published_at: datetime | None = None
-
-
-@router.get(
-    "/runs/{run_id}/jobs/n8n",
-    response_model=list[N8nJobOut],
-    dependencies=[Depends(require_n8n_api_key)],
-)
-def get_run_jobs_n8n(
-    run_id: str,
-    request: Request,
-    limit: int = Query(default=500, ge=1, le=1000),
-    offset: int = Query(default=0, ge=0),
-) -> list[N8nJobOut]:
-    """Lightweight paginated job listing for n8n automation.
-
-    Returns all jobs scored in a run, sorted by final_score descending.
-    Each item includes ``score_100`` (0-100 integer) and ``tier`` so that
-    n8n can route without recalculating scores.
-
-    Paginate with ``limit`` / ``offset``.  When the returned array is shorter
-    than ``limit``, there are no more pages.
-
-    Intended workflow:
-        1. Receive ``pipeline.completed`` webhook (contains run_id + all_jobs_count).
-        2. Loop: GET /api/pipeline/runs/{run_id}/jobs/n8n?limit=500&offset=N
-        3. Route jobs by ``tier``.
-        4. Stop when page length < limit.
-    """
-    rs = _get_run_storage(request)
-    job_storage = _get_job_storage(request)
-    try:
-        run = rs.get_run(run_id)
-        if run is None:
-            raise HTTPException(status_code=404, detail="Run not found")
-
-        score_rows = rs.get_jobs_for_run(run_id, limit=limit, offset=offset)
-        if not score_rows:
-            return []
-
-        # Batch-fetch job details to avoid N individual DB reads.
-        job_ids = [sr["job_id"] for sr in score_rows]
-        from src.api.routes.jobs import _get_jobs_filtered
-        # Deferred: src.pipeline's package __init__ eagerly imports
-        # sentence-transformers/torch — see src/notifications/events.py's
-        # JobSummary.to_dict for the same concern.
-        from src.pipeline.scoring import score_to_tier
-        jobs_list = _get_jobs_filtered(job_storage, job_ids=job_ids)
-        jobs_by_id = {j.id: j for j in jobs_list}
-
-        result: list[N8nJobOut] = []
-        for sr in score_rows:
-            jid = sr["job_id"]
-            job = jobs_by_id.get(jid)
-            if job is None:
-                continue
-            final_score = round(float(sr.get("final_score") or 0.0), 4)
-            score_100 = round(final_score * 100)
-            result.append(N8nJobOut(
-                job_id=jid,
-                title=job.title,
-                company=job.company,
-                location=job.location,
-                countries=job.countries or [],
-                remote=job.remote,
-                work_mode=job.work_mode,
-                employment_type=job.employment_type,
-                skills=(job.skills or [])[:5],
-                source=job.source,
-                final_score=final_score,
-                score_100=score_100,
-                tier=score_to_tier(score_100),
-                canonical_url=job.canonical_url,
-                apply_url=job.apply_url,
-                published_at=job.published_at,
-            ))
         return result
     finally:
         rs.close()
