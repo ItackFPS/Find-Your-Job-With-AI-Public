@@ -1071,51 +1071,60 @@ def run_pipeline(
         _t_semantic = time.perf_counter()
         if profile is not None:
             logger.info("Phase 3: Running semantic matching...")
-            embedding_service = EmbeddingService(
-                model_name=semantic_config["embedding"]["model_name"],
-                cache_max_entries=semantic_config["embedding"]["cache_max_entries"],
-                device=semantic_config["embedding"].get("device", "auto"),
-            )
+            try:
+                embedding_service = EmbeddingService(
+                    model_name=semantic_config["embedding"]["model_name"],
+                    cache_max_entries=semantic_config["embedding"]["cache_max_entries"],
+                    device=semantic_config["embedding"].get("device", "auto"),
+                )
 
-            profile_embedding = build_profile_embedding(
-                profile.to_semantic_info(),
-                embedding_service,
-                storage=storage,
-                model_name=embedding_service.cache_model_id,
-            )
-            jobs_only = [job for job, _ in scored_jobs]
+                profile_embedding = build_profile_embedding(
+                    profile.to_semantic_info(),
+                    embedding_service,
+                    storage=storage,
+                    model_name=embedding_service.cache_model_id,
+                )
+                jobs_only = [job for job, _ in scored_jobs]
 
-            _sem_timing: dict = {}
-            _sem_reporter = _stage_reporter(progress_callback, stats, "semantic", len(jobs_only))
-            semantic_results, _ = apply_semantic_matching(
-                jobs_only,
-                profile_embedding,
-                semantic_config,
-                embedding_service,
-                enriched_texts=enriched_texts or None,
-                storage=storage,
-                model_name=embedding_service.cache_model_id,
-                timing=_sem_timing,
-                progress_callback=lambda p, _t: _sem_reporter(p),
-            )
+                _sem_timing: dict = {}
+                _sem_reporter = _stage_reporter(progress_callback, stats, "semantic", len(jobs_only))
+                semantic_results, _ = apply_semantic_matching(
+                    jobs_only,
+                    profile_embedding,
+                    semantic_config,
+                    embedding_service,
+                    enriched_texts=enriched_texts or None,
+                    storage=storage,
+                    model_name=embedding_service.cache_model_id,
+                    timing=_sem_timing,
+                    progress_callback=lambda p, _t: _sem_reporter(p),
+                )
 
-            from src.pipeline.semantic_matching import normalize_semantic_score
+                from src.pipeline.semantic_matching import normalize_semantic_score
 
-            sem_scores_by_job = {
-                job.id: normalize_semantic_score(score, semantic_config)
-                for job, score in semantic_results
-            }
-            recorder.observe_semantic(sem_scores_by_job)
-            final_ranked = integrate_semantic_into_ranking(
-                scored_jobs, semantic_results, semantic_config
-            )
-            stats.semantically_matched = len(semantic_results)
-            stats.embedding_cache_hits = int(_sem_timing.get("embed_cache_hits", 0))
-            stats.embedding_cache_misses = int(_sem_timing.get("embed_cache_misses", 0))
-            for k, v in _sem_timing.items():
-                if isinstance(v, float):
-                    stats.stage_times[f"sem.{k}"] = v
-            logger.info("Phase 3: complete")
+                sem_scores_by_job = {
+                    job.id: normalize_semantic_score(score, semantic_config)
+                    for job, score in semantic_results
+                }
+                recorder.observe_semantic(sem_scores_by_job)
+                final_ranked = integrate_semantic_into_ranking(
+                    scored_jobs, semantic_results, semantic_config
+                )
+                stats.semantically_matched = len(semantic_results)
+                stats.embedding_cache_hits = int(_sem_timing.get("embed_cache_hits", 0))
+                stats.embedding_cache_misses = int(_sem_timing.get("embed_cache_misses", 0))
+                for k, v in _sem_timing.items():
+                    if isinstance(v, float):
+                        stats.stage_times[f"sem.{k}"] = v
+                logger.info("Phase 3: complete")
+            except Exception as exc:  # noqa: BLE001 - semantic matching only refines the ranking
+                # The deterministic scores are already stored: keep their order rather than
+                # failing the run (e.g. the embedding model cannot be downloaded or loaded).
+                logger.exception("Phase 3: semantic matching failed; keeping the deterministic ranking")
+                sem_scores_by_job = {}
+                final_ranked = scored_jobs
+                stats.semantically_matched = 0
+                stats.errors.append(f"Semantic matching skipped: {type(exc).__name__}: {exc}")
         else:
             logger.warning("Profile not loaded — skipping semantic matching")
 
