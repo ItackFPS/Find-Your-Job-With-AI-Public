@@ -108,8 +108,10 @@ class TestNoRedundantCollectorWasAdded:
         # every other already-existing type. Adding a name here later means
         # a new collector was introduced and this test should be updated
         # deliberately, not accidentally.
+        # france_travail_web (2.0 plan F6.2): France Travail without credentials,
+        # since its API no longer accepts new subscribers.
         expected_types = {
-            "france_travail", "remoteok", "jobicy", "bundesagentur",
+            "france_travail", "france_travail_web", "remoteok", "jobicy", "bundesagentur",
             "arbetsformedlingen", "apec", "eures", "hellowork", "wttj",
             "indeed", "weworkremotely",
         }
