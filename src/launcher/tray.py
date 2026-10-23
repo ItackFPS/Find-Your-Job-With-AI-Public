@@ -20,7 +20,9 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import threading
+import traceback
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -76,8 +78,10 @@ class RunWatcher:
 class TrayApp:
     def __init__(self, launcher: Launcher, autostart: Autostart,
                  pystray: Any = None, image_loader: Callable[[Path], Any] | None = None,
-                 watcher: RunWatcher | None = None) -> None:
+                 watcher: RunWatcher | None = None,
+                 alert: Callable[[str], None] | None = None) -> None:
         self.launcher = launcher
+        self._alert = alert or _message_box
         self.autostart = autostart
         self._pystray = pystray
         self._load_image = image_loader
@@ -133,6 +137,15 @@ class TrayApp:
     def _work(self) -> None:
         try:
             self.exit_code = self.launcher.run(on_ready=self._on_ready)
+        except Exception:  # noqa: BLE001 - pythonw has no stderr: log it, never lose it
+            self.exit_code = 1
+            self.launcher.out("The app stopped on an unexpected error:\n" + traceback.format_exc())
+        try:
+            if self.exit_code != 0 and not self._ready.is_set():
+                # A start that failed (prerequisites, port taken, build): without a
+                # console the icon would just vanish, so say so before it does.
+                self._alert("Find Your Job With AI could not start. The reason is in "
+                            f"{self.launcher.s.logs_dir}.")
         finally:
             self._done.set()
             if self.icon is not None:
@@ -182,3 +195,15 @@ class TrayApp:
         self.launcher.request_stop()
         self._done.wait(self.launcher.graceful_stop_s + 30)
         return self.exit_code
+
+
+def _message_box(message: str) -> None:
+    """A blocking Windows message box (the tray icon is about to disappear)."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.user32.MessageBoxW(None, message, core.APP_TITLE, 0x10 | 0x40000)  # error, topmost
+    except Exception:  # noqa: BLE001 - best effort; the log has the reason
+        pass

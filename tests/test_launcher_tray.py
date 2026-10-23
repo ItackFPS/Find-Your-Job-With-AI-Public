@@ -62,12 +62,27 @@ def test_autostart_never_removes_another_installations_value(tmp_path: Path) -> 
 def test_autostart_cli(tmp_path: Path, monkeypatch, capsys) -> None:
     from src.launcher.__main__ import cmd_autostart
 
+    (tmp_path / "runtime").mkdir()
+    (tmp_path / "runtime" / "pythonw.exe").write_bytes(b"")
     reg = _Registry()
     auto = reg.autostart(tmp_path)
     monkeypatch.setattr(sys, "platform", "win32")
     assert cmd_autostart(auto, "on", run.Output(None)) == 0
     assert "Start with Windows: on" in capsys.readouterr().out
     assert cmd_autostart(auto, "off", run.Output(None)) == 0 and reg.value is None
+
+
+def test_autostart_refused_outside_the_installed_app(tmp_path: Path, monkeypatch, capsys) -> None:
+    # Windows starts the Run value from a folder of its choosing: a source checkout's
+    # venv cannot import src there, and pythonw would fail without a word.
+    from src.launcher.__main__ import cmd_autostart
+
+    reg = _Registry()
+    auto = reg.autostart(tmp_path)  # no runtime\pythonw.exe: a source checkout
+    monkeypatch.setattr(sys, "platform", "win32")
+    assert not auto.supported
+    assert cmd_autostart(auto, "on", run.Output(None)) == 2
+    assert "installed Windows app" in capsys.readouterr().out and reg.value is None
 
 
 # -- run notifications -------------------------------------------------------------------------
@@ -179,6 +194,60 @@ def test_tray_quit_stops_the_launcher_and_the_icon(tmp_path: Path) -> None:
     _item(app, "Quit").action()
     t.join(15)
     assert not t.is_alive() and launcher.stop.is_set() and app.code == 0  # type: ignore[attr-defined]
+
+
+class _FailingLauncher(_FakeLauncher):
+    def __init__(self, tmp_path: Path, error: Exception | None = None) -> None:
+        super().__init__(tmp_path)
+        self.error = error
+        self.lines: list[str] = []
+        self.out = self.lines.append  # type: ignore[assignment]
+
+    def run(self, on_ready) -> int:  # noqa: ANN001
+        if self.error is not None:
+            raise self.error
+        return 1  # e.g. the port is taken: never ready
+
+
+def _run_failing(tmp_path: Path, launcher: _FakeLauncher) -> tuple[TrayApp, list[str]]:
+    alerts: list[str] = []
+    app = TrayApp(launcher, _Registry().autostart(tmp_path), pystray=_fake_pystray(),  # type: ignore[arg-type]
+                  image_loader=lambda _p: object(), watcher=RunWatcher("x", fetch=lambda _u: None),
+                  alert=alerts.append)
+    t = threading.Thread(target=lambda: setattr(app, "code", app.run()))
+    t.start()
+    t.join(15)
+    assert not t.is_alive()
+    return app, alerts
+
+
+def test_a_failed_start_is_reported_not_silent(tmp_path: Path) -> None:
+    app, alerts = _run_failing(tmp_path, _FailingLauncher(tmp_path))
+    assert app.code == 1 and len(alerts) == 1 and "could not start" in alerts[0]  # type: ignore[attr-defined]
+
+
+def test_an_unexpected_error_is_logged_and_reported(tmp_path: Path) -> None:
+    launcher = _FailingLauncher(tmp_path, RuntimeError("boom"))
+    app, alerts = _run_failing(tmp_path, launcher)
+    assert app.code == 1 and len(alerts) == 1  # type: ignore[attr-defined]
+    assert any("RuntimeError: boom" in line for line in launcher.lines)
+
+
+def test_quit_after_ready_shows_no_alert(tmp_path: Path) -> None:
+    alerts: list[str] = []
+    launcher = _FakeLauncher(tmp_path)
+    app = TrayApp(launcher, _Registry().autostart(tmp_path), pystray=_fake_pystray(),  # type: ignore[arg-type]
+                  image_loader=lambda _p: object(), watcher=RunWatcher("x", fetch=lambda _u: None),
+                  alert=alerts.append)
+    t = threading.Thread(target=app.run)
+    t.start()
+    deadline = time.monotonic() + 10
+    while not app._ready.is_set():
+        assert time.monotonic() < deadline
+        time.sleep(0.05)
+    launcher.request_stop()
+    t.join(15)
+    assert not t.is_alive() and alerts == []
 
 
 def test_first_run_hint_is_shown_once(tmp_path: Path) -> None:

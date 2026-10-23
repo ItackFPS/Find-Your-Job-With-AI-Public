@@ -40,7 +40,17 @@ class Autostart:
 
     @property
     def supported(self) -> bool:
-        return sys.platform == "win32"
+        return sys.platform == "win32" and self.installed
+
+    @property
+    def installed(self) -> bool:
+        """Only the installed app can start at sign-in.
+
+        Windows runs the Run value from a working folder of its choosing; the
+        installed runtime finds ``src`` through its ``._pth`` file, a source
+        checkout's venv would not (and pythonw would fail silently).
+        """
+        return (self.root / "runtime" / "pythonw.exe").is_file()
 
     def enabled(self) -> bool:
         """True only when the value starts *this* installation (another copy's is not ours)."""

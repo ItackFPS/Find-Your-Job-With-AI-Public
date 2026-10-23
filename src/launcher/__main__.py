@@ -87,7 +87,8 @@ def main(argv: list[str] | None = None) -> int:
 
 def cmd_autostart(autostart: Autostart, action: str, out: Output) -> int:
     if not autostart.supported:
-        out("Start with Windows is only available on Windows.")
+        out("Start with Windows is only available in the installed Windows app."
+            if sys.platform == "win32" else "Start with Windows is only available on Windows.")
         return 2
     if action == "on":
         autostart.enable()
