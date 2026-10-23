@@ -62,7 +62,8 @@ export const PIPELINE_STAGES: PipelineStageDef[] = [
   },
   {
     key: 'score', label: 'Scoring', activityLabel: 'Scoring jobs', unit: 'jobs',
-    input: s => s.hard_filter_passed, done: s => s.scored,
+    // what scoring receives: the jobs both eligibility gates passed on
+    input: s => s.llm_eligibility_passed ?? s.requirements_gate_passed, done: s => s.scored,
   },
   {
     key: 'phase2', label: 'AI Understanding', activityLabel: 'Understanding jobs (AI)', unit: 'jobs',

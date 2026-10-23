@@ -91,7 +91,7 @@ class SourceStats(BaseModel):
     errors: int = 0
     # completed | partial | failed | skipped (absent on runs recorded before it existed)
     status: str | None = None
-    # why a skipped source was left out and what to set up
+    # why a source was skipped (and what to set up), failed or only partly collected
     reason: str | None = None
 
 

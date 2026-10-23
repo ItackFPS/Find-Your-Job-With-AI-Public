@@ -344,7 +344,10 @@ def prerequisite_checks(root: Path) -> list[Check]:
 
 
 def backend_command(python: str, port: int, reload: bool = False) -> list[str]:
-    cmd = [python, "-m", "uvicorn", "src.api.app:app", "--host", LOOPBACK, "--port", str(port)]
+    # an open dashboard keeps its live-events stream open, and uvicorn otherwise waits for it until
+    # the launcher kills the backend (run.GRACEFUL_STOP_S): close it after 5 s instead
+    cmd = [python, "-m", "uvicorn", "src.api.app:app", "--host", LOOPBACK, "--port", str(port),
+           "--timeout-graceful-shutdown", "5"]
     if reload:
         cmd.append("--reload")
     return cmd

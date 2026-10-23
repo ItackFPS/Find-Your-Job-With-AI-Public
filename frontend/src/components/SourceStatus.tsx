@@ -2,7 +2,8 @@ import { StatusBadge } from './StatusBadge'
 
 // One source's collection outcome in a run: completed, partial (errors but jobs came
 // back), failed, or skipped (left out before collecting, e.g. no credentials), with
-// the reason a skipped source gives. Runs recorded before the status existed show "-".
+// the reason it gives (a skip, a failure, the first error of a partial run). Runs recorded
+// before the status existed show "-".
 export function SourceStatus({ status, reason }: { status?: string | null; reason?: string | null }) {
   if (!status) return <span style={{ color: 'var(--color-muted)' }}>-</span>
   return (

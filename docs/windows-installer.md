@@ -69,7 +69,8 @@ see the README's [Local AI](../README.md#local-ai) section to opt in to a local 
   abandoned: the next start marks it *failed* (stale), and you run it again. SQLite keeps
   everything already written.
 - **Restart:** the same shortcut again. Launching while the app already runs only opens the
-  dashboard again; it never starts a second backend.
+  dashboard again; it never starts a second backend. Launching while it is still stopping
+  waits until it has stopped, then starts it.
 - If port 8000 is taken by another program, the console says so. Set another port: add
   `FYJ_PORT=8010` to `.env`.
 

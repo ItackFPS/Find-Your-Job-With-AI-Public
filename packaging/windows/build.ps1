@@ -209,12 +209,14 @@ $Info = [ordered]@{
 # files stay valid whatever timestamps the installer gives the sources.
 Step "Precompiling bytecode"
 # -s: record paths relative to the stage, not this machine's checkout (Python reports the real
-# location at run time anyway).
-& $RuntimePython -m compileall -q -f -j 0 --invalidation-mode checked-hash -s $Stage (Join-Path $Runtime "Lib") (Join-Path $Stage "src") | Out-Null
+# location at run time anyway). -B: a module imported while compiling must not leave a timestamp
+# .pyc that records the full stage path (seen: _compression, written by the parallel workers).
+& $RuntimePython -B -m compileall -q -f -j 0 --invalidation-mode checked-hash -s $Stage (Join-Path $Runtime "Lib") (Join-Path $Stage "src") | Out-Null
 if ($LASTEXITCODE -ne 0) { Write-Host "note: some files did not compile (unused test or template files in packages); they run from source" -ForegroundColor Yellow }
 
-Step "Checking that no staged file names this checkout"
-Invoke-Checked $BasePython @((Join-Path $PSScriptRoot "find_build_path.py"), $Stage, $RepoRoot) "build path check"
+# The checkout, the stage and the builder's profile folder each name the build machine or its user.
+Step "Checking that no staged file names this checkout, the stage or your profile folder"
+Invoke-Checked $BasePython @((Join-Path $PSScriptRoot "find_build_path.py"), $Stage, $RepoRoot, $Stage, $env:USERPROFILE) "build path check"
 
 if ($StageOnly) {
     Write-Host "Stage ready (not compiled): $Stage" -ForegroundColor Green
