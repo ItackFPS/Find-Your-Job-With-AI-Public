@@ -441,6 +441,10 @@ issue for a security problem.
 
 ## Known limitations
 
+- Accuracy on real offers is not measured. Every published figure comes from a 50-job
+  synthetic benchmark; ranking quality is `not_measured` (no graded relevance labels).
+- The Windows installer is not code-signed: SmartScreen warns about an unknown publisher.
+  Check the published SHA-256 before running it.
 - Single user, no login; never expose the backend or n8n to a network.
 - Windows is the supported desktop platform; the launcher and logon tasks are
   Windows-only.
