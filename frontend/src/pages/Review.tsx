@@ -23,7 +23,7 @@ const pill = (active: boolean): CSSProperties => ({
   borderRadius: 'var(--radius-pill)',
   padding: '0.25rem 0.75rem',
   fontSize: '0.8rem',
-  background: active ? 'var(--color-accent)22' : 'transparent',
+  background: active ? 'color-mix(in srgb, var(--color-accent) 13%, transparent)' : 'transparent',
   color: active ? 'var(--color-accent)' : 'var(--color-muted)',
   cursor: 'pointer',
 })

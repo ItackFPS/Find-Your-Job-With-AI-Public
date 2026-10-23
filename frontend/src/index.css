@@ -1,71 +1,53 @@
-:root {
-  /* Base palette (existing — unchanged, still referenced directly across pages) */
-  --color-bg: #0f1117;
-  --color-surface: #1a1d27;
-  --color-border: #2d3148;
-  --color-text: #e2e8f0;
-  --color-muted: #8892b0;
-  --color-accent: #7c6ef5;
-  --color-accent-dim: #3d3780;
-  --color-green: #4ade80;
-  --color-red: #f87171;
-  --color-yellow: #fbbf24;
-  --color-blue: #60a5fa;
-
-  /* Design-system tokens (additive) — semantic aliases + an elevated surface
-     step for nested cards/panels (e.g. RunDetailPanel, ScanDetailPanel). */
-  --color-surface-elevated: #232735;
-  --color-text-secondary: var(--color-muted);
-  --color-success: var(--color-green);
-  --color-warning: var(--color-yellow);
-  --color-error: var(--color-red);
-  --color-info: var(--color-blue);
-
-  /* Radius scale */
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 10px;
-  --radius-pill: 999px;
-
-  /* Spacing scale */
-  --space-1: 0.25rem;
-  --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --space-5: 1.25rem;
-  --space-6: 1.5rem;
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.25);
-
-  /* Typography scale */
-  --font-size-xs: 0.75rem;
-  --font-size-sm: 0.82rem;
-  --font-size-base: 0.9rem;
-  --font-size-lg: 1.05rem;
-  --font-size-xl: 1.4rem;
-  --font-weight-normal: 400;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
-  --font-weight-bold: 700;
-}
+@import './styles/tokens.css';
 
 body {
   background-color: var(--color-bg);
   color: var(--color-text);
-  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: var(--font-family-base);
   margin: 0;
 }
 
-/* Links without their own style (e.g. job titles on the Review page) would otherwise get the
-   browser's default dark blue, unreadable on the dark background. */
+/* A subtree rendered in an explicit theme (e.g. the /design page's side-by-side previews)
+   paints its own background so its tokens are seen on the right surface. */
+[data-theme] {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
+
+/* Links without their own style (e.g. job titles on the Review page). */
 a {
-  color: var(--color-blue);
+  color: var(--color-link);
+}
+
+/* Visible keyboard focus everywhere (WCAG 2.4.7 / 2.4.13). Mouse clicks do not show it. */
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* Native form controls follow the theme instead of the browser's default light chrome. */
+input,
+select,
+textarea {
+  color: var(--color-text);
+  background-color: var(--color-bg);
 }
 
 /* Shared indeterminate progress animation (ProgressBar component) */
 @keyframes fyj-indeterminate {
   0% { left: -30%; }
   100% { left: 100%; }
+}
+
+/* Respect the system "reduce motion" setting: this also overrides the inline transitions
+   and animations components set (an !important author rule beats a normal inline one). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

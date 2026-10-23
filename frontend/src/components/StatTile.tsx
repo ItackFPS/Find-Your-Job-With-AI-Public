@@ -47,7 +47,7 @@ export function StatTile({ label, value, secondaryText, icon, tone = 'default', 
             }}
           />
         ) : (
-          <div style={{ fontSize: '1.65rem', fontWeight: 'var(--font-weight-bold)', color: TONE_COLORS[tone] }}>
+          <div style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 'var(--font-weight-bold)', color: TONE_COLORS[tone] }}>
             {typeof value === 'number' ? value.toLocaleString() : (value ?? '–')}
           </div>
         )}

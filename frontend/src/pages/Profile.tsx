@@ -63,7 +63,7 @@ const sectionDivider: React.CSSProperties = {
 type TagTone = 'language' | 'default'
 
 const TAG_TONE_STYLES: Record<TagTone, { border: string }> = {
-  language: { border: 'var(--color-info)66' },
+  language: { border: 'color-mix(in srgb, var(--color-info) 40%, transparent)' },
   default: { border: 'var(--color-border)' },
 }
 
@@ -84,7 +84,7 @@ function mergeFieldStyle(focused: boolean): React.CSSProperties {
     gap: '0.5rem',
     alignItems: 'center',
     minHeight: '48px',
-    boxShadow: focused ? '0 0 0 3px var(--color-accent)22' : undefined,
+    boxShadow: focused ? '0 0 0 3px color-mix(in srgb, var(--color-accent) 13%, transparent)' : undefined,
     transition: 'border-color 0.15s, box-shadow 0.15s',
     position: 'relative',
   }
@@ -126,7 +126,7 @@ const dropdownStyle: React.CSSProperties = {
   background: 'var(--color-surface)',
   border: '1px solid var(--color-border)',
   borderRadius: '9px',
-  boxShadow: '0 8px 20px rgba(0,0,0,0.35)',
+  boxShadow: 'var(--shadow-lg)',
   zIndex: 100,
   overflow: 'hidden',
 }
@@ -314,7 +314,7 @@ function AutocompleteTagList({ state, onChange, lang = 'en' }: AutocompleteTagLi
           return (
             <span key={keyword} style={{
               background: 'var(--color-surface-elevated)',
-              border: `1px solid ${isEsco ? 'var(--color-accent)66' : 'var(--color-border)'}`,
+              border: `1px solid ${isEsco ? 'color-mix(in srgb, var(--color-accent) 40%, transparent)' : 'var(--color-border)'}`,
               borderRadius: '7px',
               padding: '0.35rem 0.45rem 0.35rem 0.8rem',
               fontSize: '0.86rem',
@@ -327,7 +327,7 @@ function AutocompleteTagList({ state, onChange, lang = 'en' }: AutocompleteTagLi
                 <span title="Matched to ESCO taxonomy" style={{
                   fontSize: '0.68rem',
                   background: 'var(--color-accent)',
-                  color: '#fff',
+                  color: 'var(--color-on-accent)',
                   borderRadius: '10px',
                   padding: '0.05rem 0.35rem',
                   fontWeight: 700,
@@ -360,7 +360,7 @@ function AutocompleteTagList({ state, onChange, lang = 'en' }: AutocompleteTagLi
                   padding: '0.6rem 0.85rem',
                   cursor: 'pointer',
                   background: i === activeIndex ? 'var(--color-accent)' : 'transparent',
-                  color: i === activeIndex ? '#fff' : 'var(--color-text)',
+                  color: i === activeIndex ? 'var(--color-on-accent)' : 'var(--color-text)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -373,7 +373,7 @@ function AutocompleteTagList({ state, onChange, lang = 'en' }: AutocompleteTagLi
                   {s.keyword !== s.label && (
                     <span style={{
                       fontSize: '0.78rem',
-                      color: i === activeIndex ? 'rgba(255,255,255,0.75)' : 'var(--color-muted)',
+                      color: i === activeIndex ? 'color-mix(in srgb, var(--color-on-accent) 80%, transparent)' : 'var(--color-muted)',
                       marginLeft: '0.45rem',
                     }}>
                       {s.label}
@@ -383,8 +383,8 @@ function AutocompleteTagList({ state, onChange, lang = 'en' }: AutocompleteTagLi
                 {s.is_esco && (
                   <span style={{
                     fontSize: '0.68rem',
-                    background: i === activeIndex ? 'rgba(255,255,255,0.25)' : 'var(--color-accent)',
-                    color: '#fff',
+                    background: i === activeIndex ? 'color-mix(in srgb, var(--color-on-accent) 25%, transparent)' : 'var(--color-accent)',
+                    color: 'var(--color-on-accent)',
                     borderRadius: '10px',
                     padding: '0.05rem 0.4rem',
                     fontWeight: 700,
@@ -556,7 +556,7 @@ function DomainPicker({ values, onChange }: { values: string[]; onChange: (v: st
         {values.map(v => (
           <span key={v} style={{
             background: 'var(--color-surface-elevated)',
-            border: `1px solid ${DOMAIN_LABELS[v] ? 'var(--color-accent)66' : 'var(--color-border)'}`,
+            border: `1px solid ${DOMAIN_LABELS[v] ? 'color-mix(in srgb, var(--color-accent) 40%, transparent)' : 'var(--color-border)'}`,
             borderRadius: '7px',
             padding: '0.35rem 0.45rem 0.35rem 0.8rem',
             fontSize: '0.86rem',
@@ -590,7 +590,7 @@ function DomainPicker({ values, onChange }: { values: string[]; onChange: (v: st
                   padding: '0.6rem 0.85rem',
                   cursor: 'pointer',
                   background: i === activeIndex ? 'var(--color-accent)' : 'transparent',
-                  color: i === activeIndex ? '#fff' : 'var(--color-text)',
+                  color: i === activeIndex ? 'var(--color-on-accent)' : 'var(--color-text)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -602,8 +602,8 @@ function DomainPicker({ values, onChange }: { values: string[]; onChange: (v: st
                 {s.badge && (
                   <span style={{
                     fontSize: '0.68rem',
-                    background: i === activeIndex ? 'rgba(255,255,255,0.25)' : (s.badge === 'Curated' ? 'var(--color-info)' : 'var(--color-accent)'),
-                    color: '#fff',
+                    background: i === activeIndex ? 'color-mix(in srgb, var(--color-on-accent) 25%, transparent)' : (s.badge === 'Curated' ? 'var(--color-info)' : 'var(--color-accent)'),
+                    color: 'var(--color-on-accent)',
                     borderRadius: '10px',
                     padding: '0.05rem 0.4rem',
                     fontWeight: 700,
@@ -821,7 +821,7 @@ function LocationPreferencesEditor({ values, onChange }: {
                   padding: '0.6rem 0.85rem',
                   cursor: 'pointer',
                   background: i === activeIndex ? 'var(--color-accent)' : 'transparent',
-                  color: i === activeIndex ? '#fff' : 'var(--color-text)',
+                  color: i === activeIndex ? 'var(--color-on-accent)' : 'var(--color-text)',
                   fontSize: '0.88rem',
                 }}
               >
@@ -879,7 +879,7 @@ function CheckboxGroup({ options, values, onChange }: { options: string[]; value
             borderRadius: '20px',
             padding: '0.4rem 1.05rem',
             fontSize: '0.87rem',
-            color: values.includes(opt) ? '#fff' : 'var(--color-muted)',
+            color: values.includes(opt) ? 'var(--color-on-accent)' : 'var(--color-muted)',
             cursor: 'pointer',
             transition: 'all 0.15s',
           }}
@@ -912,7 +912,7 @@ function SegmentedControl<T extends string>({ options, value, onChange }: {
             borderRadius: '16px',
             padding: '0.42rem 1.05rem',
             fontSize: '0.86rem',
-            color: value === opt.value ? '#fff' : 'var(--color-muted)',
+            color: value === opt.value ? 'var(--color-on-accent)' : 'var(--color-muted)',
             cursor: 'pointer',
             fontWeight: value === opt.value ? 600 : 400,
             transition: 'all 0.15s',
@@ -995,7 +995,7 @@ export default function ProfilePage() {
             disabled={isPending}
             style={{
               background: isPending ? 'var(--color-border)' : 'var(--color-accent)',
-              color: '#fff',
+              color: 'var(--color-on-accent)',
               border: 'none',
               borderRadius: '7px',
               padding: '0.45rem 1.1rem',

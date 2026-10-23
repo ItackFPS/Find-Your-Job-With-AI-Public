@@ -153,7 +153,7 @@ function LiveRun({ runId }: { runId: string }) {
       )}
 
       {run.status === 'failed' && run.error && (
-        <div style={{ marginTop: 'var(--space-4)', padding: '0.75rem', background: 'var(--color-bg)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-error)44', color: 'var(--color-error)', fontSize: '0.83rem', fontFamily: 'monospace' }}>
+        <div style={{ marginTop: 'var(--space-4)', padding: '0.75rem', background: 'var(--color-bg)', borderRadius: 'var(--radius-md)', border: '1px solid color-mix(in srgb, var(--color-error) 27%, transparent)', color: 'var(--color-error)', fontSize: '0.83rem', fontFamily: 'monospace' }}>
           {run.error}
         </div>
       )}
@@ -213,7 +213,7 @@ function RunDetailPanel({ run }: { run: PipelineRun }) {
 
       {/* Run-level error */}
       {run.status === 'failed' && run.error && (
-        <div style={{ marginTop: 'var(--space-3)', padding: '0.6rem 0.75rem', background: 'var(--color-surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-error)44', color: 'var(--color-error)', fontSize: '0.8rem', fontFamily: 'monospace' }}>
+        <div style={{ marginTop: 'var(--space-3)', padding: '0.6rem 0.75rem', background: 'var(--color-surface)', borderRadius: 'var(--radius-sm)', border: '1px solid color-mix(in srgb, var(--color-error) 27%, transparent)', color: 'var(--color-error)', fontSize: '0.8rem', fontFamily: 'monospace' }}>
           {run.error}
         </div>
       )}
@@ -251,7 +251,7 @@ function HistoryRow({ started, id, right, status, selected, onToggle, detail }: 
           paddingLeft: selected ? '0.5rem' : undefined,
           transition: 'background 0.1s',
         }}
-        onMouseEnter={e => { if (!selected) (e.currentTarget as HTMLDivElement).style.background = 'var(--color-bg)22' }}
+        onMouseEnter={e => { if (!selected) (e.currentTarget as HTMLDivElement).style.background = 'color-mix(in srgb, var(--color-bg) 13%, transparent)' }}
         onMouseLeave={e => { if (!selected) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
       >
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -363,7 +363,7 @@ function ScanDetailPanel({ scan }: { scan: LinkedInScanRun }) {
         </div>
       )}
       {scan.status === 'failed' && scan.error && (
-        <div style={{ marginTop: scan.stats ? 'var(--space-3)' : 0, padding: '0.6rem 0.75rem', background: 'var(--color-surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-error)44', color: 'var(--color-error)', fontSize: '0.8rem', fontFamily: 'monospace' }}>
+        <div style={{ marginTop: scan.stats ? 'var(--space-3)' : 0, padding: '0.6rem 0.75rem', background: 'var(--color-surface)', borderRadius: 'var(--radius-sm)', border: '1px solid color-mix(in srgb, var(--color-error) 27%, transparent)', color: 'var(--color-error)', fontSize: '0.8rem', fontFamily: 'monospace' }}>
           {scan.error}
         </div>
       )}
@@ -491,7 +491,7 @@ function HelloWorkScanDetailPanel({ scan }: { scan: HelloWorkScanRun }) {
         </div>
       )}
       {scan.status === 'failed' && scan.error && (
-        <div style={{ marginTop: 'var(--space-3)', padding: '0.6rem 0.75rem', background: 'var(--color-surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-error)44', color: 'var(--color-error)', fontSize: '0.8rem', fontFamily: 'monospace' }}>
+        <div style={{ marginTop: 'var(--space-3)', padding: '0.6rem 0.75rem', background: 'var(--color-surface)', borderRadius: 'var(--radius-sm)', border: '1px solid color-mix(in srgb, var(--color-error) 27%, transparent)', color: 'var(--color-error)', fontSize: '0.8rem', fontFamily: 'monospace' }}>
           {scan.error}
         </div>
       )}

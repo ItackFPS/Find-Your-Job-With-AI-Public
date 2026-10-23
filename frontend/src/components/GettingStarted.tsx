@@ -12,7 +12,7 @@ const NEEDS_CREDENTIALS = [
 ]
 
 const item = { marginBottom: 'var(--space-3)', lineHeight: 1.5 }
-const code = { fontFamily: 'monospace', fontSize: 'var(--font-size-sm)' }
+const code = { fontFamily: 'var(--font-family-mono)', fontSize: 'var(--font-size-sm)' }
 
 export function GettingStarted() {
   return (

@@ -4,11 +4,11 @@ export type ChipTone = 'default' | 'accent' | 'success' | 'warning' | 'error' | 
 
 const TONE_STYLES: Record<ChipTone, { bg: string; color: string; border: string }> = {
   default: { bg: 'var(--color-bg)', color: 'var(--color-muted)', border: 'var(--color-border)' },
-  accent: { bg: 'var(--color-accent)22', color: 'var(--color-accent)', border: 'var(--color-accent)44' },
-  success: { bg: 'var(--color-success)22', color: 'var(--color-success)', border: 'var(--color-success)44' },
-  warning: { bg: 'var(--color-warning)22', color: 'var(--color-warning)', border: 'var(--color-warning)44' },
-  error: { bg: 'var(--color-error)22', color: 'var(--color-error)', border: 'var(--color-error)44' },
-  info: { bg: 'var(--color-info)22', color: 'var(--color-info)', border: 'var(--color-info)44' },
+  accent: { bg: 'color-mix(in srgb, var(--color-accent) 13%, transparent)', color: 'var(--color-accent)', border: 'color-mix(in srgb, var(--color-accent) 27%, transparent)' },
+  success: { bg: 'color-mix(in srgb, var(--color-success) 13%, transparent)', color: 'var(--color-success)', border: 'color-mix(in srgb, var(--color-success) 27%, transparent)' },
+  warning: { bg: 'color-mix(in srgb, var(--color-warning) 13%, transparent)', color: 'var(--color-warning)', border: 'color-mix(in srgb, var(--color-warning) 27%, transparent)' },
+  error: { bg: 'color-mix(in srgb, var(--color-error) 13%, transparent)', color: 'var(--color-error)', border: 'color-mix(in srgb, var(--color-error) 27%, transparent)' },
+  info: { bg: 'color-mix(in srgb, var(--color-info) 13%, transparent)', color: 'var(--color-info)', border: 'color-mix(in srgb, var(--color-info) 27%, transparent)' },
 }
 
 export interface ChipProps {

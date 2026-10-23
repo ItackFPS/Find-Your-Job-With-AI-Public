@@ -71,7 +71,7 @@ export function DataTable<T>({ columns, rows, rowKey, loading = false, emptyMess
                     : undefined
                 }
                 style={{
-                  borderBottom: '1px solid var(--color-border)33',
+                  borderBottom: '1px solid color-mix(in srgb, var(--color-border) 20%, transparent)',
                   cursor: clickable ? 'pointer' : undefined,
                 }}
               >
