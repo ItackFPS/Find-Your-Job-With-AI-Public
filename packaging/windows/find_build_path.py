@@ -1,4 +1,4 @@
-"""Fail when any staged file contains the build machine's checkout path.
+"""Fail when any staged file contains a path of the build machine (checkout, stage, profile).
 
     python find_build_path.py <stage dir> <path that must not appear> [...]
 
