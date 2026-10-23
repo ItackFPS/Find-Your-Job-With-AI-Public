@@ -218,7 +218,8 @@ hard gates:
 
 ## Embedding Layer (Phase 3)
 
-`src/embeddings/embedding.py` wraps `sentence-transformers` (in-memory LRU-ish cache,
+`src/embeddings/embedding.py` runs the model's pinned ONNX export with ONNX Runtime
+(`src/embeddings/onnx_encoder.py`, no PyTorch; in-memory LRU-ish cache,
 SHA-256 keyed). The default model is `paraphrase-multilingual-MiniLM-L12-v2`
 (384-dimensional, multilingual, CPU-ready, ~470 MB on first download). The *durable*
 cache lives in `Storage` (SQLite `job_embeddings` table, keyed by job id + model name +

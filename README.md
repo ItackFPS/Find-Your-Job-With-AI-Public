@@ -86,7 +86,7 @@ The rest of this section runs the app from a source checkout instead.
 | Python | 3.12 (the version CI tests) | backend and pipeline |
 | Node.js | 22 LTS (20.19+ works) | building the dashboard once, and after updates |
 | Git | any | getting and updating the code |
-| ~3 GB disk | — | Python packages (PyTorch), the embedding model (~470 MB), your database |
+| ~1.5 GB disk | — | Python packages (~300 MB, no PyTorch), the embedding model (~470 MB), your database |
 
 Optional: [LM Studio](https://lmstudio.ai) or [Ollama](https://ollama.com) for the AI
 stages. A GPU is not needed.
@@ -223,7 +223,7 @@ enrich, never decide eligibility on their own
 |---|---|---|
 | Backend + dashboard | yes | the launcher, a logon task (`scripts/install_startup.py`), or you |
 | SQLite databases | yes | the backend (created and upgraded in place) |
-| Embedding model | yes | downloaded by sentence-transformers on first use |
+| Embedding model | yes | its ONNX export, downloaded from Hugging Face on first use |
 | LM Studio / Ollama | only for AI-enabled runs | you; the launcher only reports its state |
 
 ---

@@ -357,7 +357,6 @@ its running checks (`concurrency`); jobs have timeouts; third-party actions are
 pinned to a commit SHA (with the tag in a comment — update both together); every
 workflow has read-only `contents` permission, uses `pull_request` (never
 `pull_request_target`), so pull requests from forks get no secrets and no write token.
-CI installs CPU-only torch to avoid downloading CUDA wheels.
 
 ### Run the CI checks locally
 

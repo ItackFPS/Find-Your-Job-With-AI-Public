@@ -1081,7 +1081,7 @@ def run_pipeline(
                 profile.to_semantic_info(),
                 embedding_service,
                 storage=storage,
-                model_name=semantic_config["embedding"]["model_name"],
+                model_name=embedding_service.cache_model_id,
             )
             jobs_only = [job for job, _ in scored_jobs]
 
@@ -1094,7 +1094,7 @@ def run_pipeline(
                 embedding_service,
                 enriched_texts=enriched_texts or None,
                 storage=storage,
-                model_name=semantic_config["embedding"]["model_name"],
+                model_name=embedding_service.cache_model_id,
                 timing=_sem_timing,
                 progress_callback=lambda p, _t: _sem_reporter(p),
             )
