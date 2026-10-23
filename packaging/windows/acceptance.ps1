@@ -24,7 +24,7 @@
     Uses port 8765 by default so a development backend on 8000 is not disturbed.
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File packaging\windows\acceptance.ps1 -Installer dist\windows\FindYourJobWithAI-Setup-1.0.0rc1.exe
+    powershell -ExecutionPolicy Bypass -File packaging\windows\acceptance.ps1 -Installer dist\windows\FindYourJobWithAI-Setup-1.0.0.exe
 #>
 [CmdletBinding()]
 param(

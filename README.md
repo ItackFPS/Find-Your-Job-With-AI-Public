@@ -64,14 +64,16 @@ feedback, evaluation, lab) · [ADRs](docs/adr/README.md) · [Windows app](docs/w
 | Welcome to the Jungle collector | ⚠️ implemented, disabled — blocked by the site's bot protection |
 | macOS / Linux | ⚠️ backend, CLI and tests run (CI is Linux); the launcher and startup scripts are Windows-only |
 | Docker | ⚠️ the image runs the CLI pipeline only, not the web UI or n8n |
-| Windows installer: per-user, bundled Python, desktop + Start Menu shortcuts ([docs](docs/windows-installer.md)) | ✅ new — release candidate, not code-signed |
+| Windows installer: per-user, bundled Python, desktop + Start Menu shortcuts ([docs](docs/windows-installer.md)) | ✅ 1.0.0, not code-signed |
 
 ---
 
 ## Quick start (Windows)
 
-**Easiest: the installer.** Run `FindYourJobWithAI-Setup-<version>.exe`, then double-click
-**Find Your Job With AI** on the desktop. No Python, Node.js or Git needed, no administrator
+**Easiest: the installer.** Download `FindYourJobWithAI-Setup-<version>.exe` and its `.sha256`
+from the [latest release](https://github.com/ItackFPS/Find-Your-Job-With-AI-Public/releases/latest),
+check the hash (`Get-FileHash .\FindYourJobWithAI-Setup-<version>.exe` in PowerShell), run it,
+then double-click **Find Your Job With AI** on the desktop. No Python, Node.js or Git needed, no administrator
 rights; nothing is collected until you start a run. Install, first run, sources and
 credentials, stopping, logs, upgrades and uninstalling: [docs/windows-installer.md](docs/windows-installer.md).
 To build the installer yourself: `powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1`
