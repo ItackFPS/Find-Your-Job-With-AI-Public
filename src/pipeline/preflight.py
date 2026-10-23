@@ -4,15 +4,11 @@ Runs once at the very start of every pipeline run (see
 ``src.pipeline.orchestrator.run_pipeline``), before any collector executes.
 Checks:
 
-  1. France Travail — credentials present, then a real OAuth2 token fetch
+  France Travail — credentials present, then a real OAuth2 token fetch
      via the existing collector's token logic (no second OAuth client).
-  2. n8n — webhook notification server reachable, and the configured
-     webhook path actually registered (best-effort; see ``_probe_webhook``).
 
-Each check is mandatory only when that integration is actually enabled in
-its own configuration file (``sources.yaml`` for France Travail,
-``notifications.yaml`` / ``N8N_WEBHOOK_URL`` for n8n) — a disabled/inactive
-integration is skipped rather than failing the run.
+The check is mandatory only when France Travail is active in ``sources.yaml``;
+an inactive source is skipped rather than failing the run.
 
 France Travail with no credentials at all (a fresh install) is not a broken
 connection but one that was never set up: the run goes ahead DEGRADED without
@@ -31,15 +27,12 @@ import logging
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
 
 import httpx
 
 logger = logging.getLogger(__name__)
 
 _BANNER_WIDTH = 36
-_HEALTHZ_TIMEOUT = 5.0
-_WEBHOOK_PROBE_TIMEOUT = 5.0
 
 
 @dataclass
@@ -52,18 +45,8 @@ class FranceTravailPreflight:
 
 
 @dataclass
-class N8nPreflight:
-    enabled: bool
-    server: str        # REACHABLE | UNREACHABLE | SKIPPED
-    webhook: str        # AVAILABLE | UNAVAILABLE | SKIPPED
-    status: str        # READY | CONFIG_MISSING | CONNECTION_FAILED | WEBHOOK_UNAVAILABLE | SKIPPED
-    detail: str | None = None
-
-
-@dataclass
 class PreflightResult:
     france_travail: FranceTravailPreflight
-    n8n: N8nPreflight
     status: str            # READY | DEGRADED | FAILED
     ready: bool             # True whenever collection may proceed (FAILED is the only blocker)
     report_lines: list[str] = field(default_factory=list)
@@ -79,7 +62,6 @@ class PreflightResult:
             "status": self.status,
             "ready": self.ready,
             "france_travail": asdict(self.france_travail),
-            "n8n": asdict(self.n8n),
             "skipped_source_types": list(self.skipped_source_types),
             "skip_reasons": dict(self.skip_reasons),
             "report_text": "\n".join(self.report_lines),
@@ -90,7 +72,7 @@ _READY_LIKE = frozenset({"READY", "SKIPPED"})
 
 
 def run_preflight(config_dir: str = "config") -> PreflightResult:
-    """Check France Travail and n8n connectivity/auth before collection starts.
+    """Check France Travail connectivity/auth before collection starts.
 
     France Travail is a collection source: an active source whose credentials
     cannot authenticate blocks the run entirely (status FAILED) — a partial
@@ -98,23 +80,16 @@ def run_preflight(config_dir: str = "config") -> PreflightResult:
     active source with no credentials set was never configured: it is skipped
     for this run, visibly (status DEGRADED), so a fresh install can still
     collect from the sources that need no account.
-
-    n8n is downstream notification infrastructure: a reachability or webhook
-    problem is reported (status DEGRADED) but never blocks collection,
-    filtering, scoring, or ranking. A temporary n8n outage should not cost
-    an otherwise successful job scan.
     """
     ft = _check_france_travail(config_dir)
-    n8n = _check_n8n(config_dir)
     indeed_missing = _indeed_key_missing(config_dir)
 
     ft_unconfigured = ft.status == "CONFIG_MISSING"
     ft_ok = ft.status in _READY_LIKE or ft_unconfigured
-    n8n_ok = n8n.status in _READY_LIKE
 
     if not ft_ok:
         status = "FAILED"
-    elif ft_unconfigured or indeed_missing or not n8n_ok:
+    elif ft_unconfigured or indeed_missing:
         status = "DEGRADED"
     else:
         status = "READY"
@@ -134,11 +109,9 @@ def run_preflight(config_dir: str = "config") -> PreflightResult:
         degraded_errors.append(f"France Travail skipped for this run: {ft.detail}")
     if indeed_missing:
         degraded_errors.append(f"Indeed skipped for this run: {_INDEED_MISSING}")
-    if not n8n_ok and n8n.detail:
-        degraded_errors.append(f"n8n: {n8n.detail}")
 
     result = PreflightResult(
-        france_travail=ft, n8n=n8n, status=status, ready=ft_ok,
+        france_travail=ft, status=status, ready=ft_ok,
         errors=errors, degraded_errors=degraded_errors,
         skipped_source_types=list(skip_reasons), skip_reasons=skip_reasons,
     )
@@ -242,126 +215,6 @@ def _merge_collector_config(source_config: dict[str, Any]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# n8n
-# ---------------------------------------------------------------------------
-
-def _check_n8n(config_dir: str) -> N8nPreflight:
-    """n8n reachability + webhook-registration check.
-
-    Reused (not duplicated) by src.notifications.engine's system-status
-    payload builder via the ``check_n8n_reachability`` alias below — the
-    "is n8n reachable" question is the same question in both places, so
-    there is exactly one implementation of it.
-    """
-    from src.notifications.config import load_notification_config
-    from src.notifications.n8n import N8nProvider
-
-    notif_cfg = load_notification_config(config_dir)
-    if not notif_cfg.n8n.enabled:
-        return N8nPreflight(
-            enabled=False, server="SKIPPED", webhook="SKIPPED", status="SKIPPED",
-            detail="n8n notifications disabled in notifications.yaml — check skipped",
-        )
-
-    provider = N8nProvider(notif_cfg.n8n.webhook_url)
-    webhook_url = provider._webhook_url  # resolved with N8N_WEBHOOK_URL env precedence
-    if not webhook_url:
-        return N8nPreflight(
-            enabled=True, server="SKIPPED", webhook="SKIPPED", status="CONFIG_MISSING",
-            detail=(
-                "n8n is enabled but no webhook URL is configured "
-                "(set N8N_WEBHOOK_URL or notifications.yaml n8n.webhook_url)"
-            ),
-        )
-
-    parsed = urlsplit(webhook_url)
-    if not parsed.scheme or not parsed.netloc:
-        return N8nPreflight(
-            enabled=True, server="SKIPPED", webhook="SKIPPED", status="CONFIG_MISSING",
-            detail=f"n8n webhook URL is not a valid absolute URL: {webhook_url!r}",
-        )
-    base_url = f"{parsed.scheme}://{parsed.netloc}"
-
-    try:
-        httpx.get(f"{base_url}/healthz", timeout=_HEALTHZ_TIMEOUT)
-    except httpx.HTTPError as exc:
-        return N8nPreflight(
-            enabled=True, server="UNREACHABLE", webhook="SKIPPED",
-            status="CONNECTION_FAILED",
-            detail=f"n8n server unreachable at {base_url}: {exc}",
-        )
-
-    try:
-        probe_resp = httpx.get(webhook_url, timeout=_WEBHOOK_PROBE_TIMEOUT)
-    except httpx.HTTPError as exc:
-        return N8nPreflight(
-            enabled=True, server="REACHABLE", webhook="UNAVAILABLE",
-            status="WEBHOOK_UNAVAILABLE",
-            detail=f"n8n webhook probe failed at {webhook_url}: {exc}",
-        )
-
-    if _probe_indicates_registered(probe_resp):
-        return N8nPreflight(enabled=True, server="REACHABLE", webhook="AVAILABLE", status="READY")
-
-    if probe_resp.status_code in (401, 403):
-        return N8nPreflight(
-            enabled=True, server="REACHABLE", webhook="UNAVAILABLE",
-            status="WEBHOOK_UNAVAILABLE",
-            detail=(
-                f"n8n rejected the webhook probe at {webhook_url} as "
-                f"unauthorized (HTTP {probe_resp.status_code}: "
-                f"{probe_resp.text[:200]!r}). This is an authentication/"
-                "credential problem, not a missing workflow — check the "
-                "webhook's auth configuration in n8n."
-            ),
-        )
-
-    return N8nPreflight(
-        enabled=True, server="REACHABLE", webhook="UNAVAILABLE",
-        status="WEBHOOK_UNAVAILABLE",
-        detail=(
-            f"Webhook not registered at {webhook_url} "
-            f"(HTTP {probe_resp.status_code}: {probe_resp.text[:200]!r}). "
-            "Activate the n8n workflow that listens on this path."
-        ),
-    )
-
-
-# Public alias: the system-status worker (src/notifications/engine.py's
-# build_system_status_payload) reuses this exact check rather than
-# re-implementing n8n reachability a second time. `_check_n8n` stays the
-# name used internally by run_preflight() and its existing tests.
-check_n8n_reachability = _check_n8n
-
-
-def _probe_indicates_registered(resp: httpx.Response) -> bool:
-    """Best-effort read of an n8n webhook probe response.
-
-    The probe is a GET, while the real trigger is a POST — so a 404 is
-    expected either way. n8n distinguishes the two cases in its error
-    message: a path with no matching workflow says just "is not registered",
-    while a path that exists but rejects the HTTP method used names the
-    method it does accept (e.g. "...is not registered for GET requests. Did
-    you mean to make a POST request?"). We treat the latter as "registered".
-
-    This is inherently a heuristic tied to n8n's message wording and may not
-    hold across every n8n version — a false negative here only means the
-    preflight is stricter than necessary, never that a broken webhook is
-    reported as healthy.
-    """
-    if resp.status_code < 400:
-        return True
-    if resp.status_code != 404:
-        return False
-    try:
-        message = str(resp.json().get("message", ""))
-    except Exception:
-        message = resp.text
-    lowered = message.lower()
-    return "did you mean" in lowered or "not registered for" in lowered
-
-
-# ---------------------------------------------------------------------------
 # Report formatting
 # ---------------------------------------------------------------------------
 
@@ -397,24 +250,6 @@ def _format_report(result: PreflightResult) -> list[str]:
             )
     if "indeed" in result.skip_reasons:
         lines.append(f"○ Indeed skipped: {result.skip_reasons['indeed']}")
-
-    n8n = result.n8n
-    if n8n.status == "SKIPPED":
-        lines.append(f"○ n8n: {n8n.detail}")
-    else:
-        lines.append(
-            f"{'✓' if n8n.server == 'REACHABLE' else '✗'} "
-            f"n8n server {'reachable' if n8n.server == 'REACHABLE' else 'unreachable'}"
-        )
-        if n8n.server == "REACHABLE":
-            lines.append(
-                f"{'✓' if n8n.webhook == 'AVAILABLE' else '✗'} "
-                f"pipeline webhook {'registered' if n8n.webhook == 'AVAILABLE' else 'not registered'}"
-            )
-        if n8n.status != "READY" and n8n.detail:
-            lines.append(f"  → {n8n.detail}")
-        if n8n.status not in _READY_LIKE:
-            lines.append("  → Notifications will be unavailable for this run.")
 
     lines.append("")
     lines.append(f"Preflight: {result.status}")

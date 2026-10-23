@@ -6,7 +6,7 @@ name: Tests
 # never run in CI (see pyproject.toml's marker registration).
 #
 # Reproduce locally (docs/development.md, "Run the CI checks locally"):
-#   pip install -e ".[dev,mcp_admin]"
+#   pip install -e ".[dev]"
 #   pytest -m "not network"
 #   mypy src
 on:
@@ -44,7 +44,7 @@ jobs:
         run: pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Install dependencies
-        run: pip install -e ".[dev,mcp_admin]" "mypy==2.3.0"
+        run: pip install -e ".[dev]" "mypy==2.3.0"
         # Excludes the optional "linkedin" extra (python-jobspy), which keeps
         # this install small. Tests that need it (pandas-backed LinkedIn
         # record-building) skip themselves here when pandas isn't installed

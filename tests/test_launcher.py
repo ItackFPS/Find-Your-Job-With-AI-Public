@@ -73,16 +73,18 @@ def server():
 
 
 def test_settings_precedence(tmp_path):
-    (tmp_path / ".env").write_text("FYJ_PORT=8100\nN8N_PORT=5700\nPHASE2_LLM_ENDPOINT=http://localhost:11434/\n",
+    (tmp_path / ".env").write_text("FYJ_PORT=8100\nPHASE2_LLM_ENDPOINT=http://localhost:11434/\n",
                                    encoding="utf-8")
-    s = Settings.load(tmp_path, environ={"N8N_PORT": "5800"})
-    assert (s.backend_port, s.n8n_port, s.llm_endpoint) == (8100, 5800, "http://localhost:11434")
+    s = Settings.load(tmp_path, environ={})
+    assert (s.backend_port, s.llm_endpoint) == (8100, "http://localhost:11434")
+    assert Settings.load(tmp_path, environ={"FYJ_PORT": "8200"}).backend_port == 8200
     assert Settings.load(tmp_path, environ={}, backend_port=9000).backend_port == 9000
 
 
 def test_settings_bad_port_falls_back(tmp_path):
-    s = Settings.load(tmp_path, environ={"FYJ_PORT": "eighty", "N8N_PORT": "70000"})
-    assert (s.backend_port, s.n8n_port) == (core.DEFAULT_BACKEND_PORT, core.DEFAULT_N8N_PORT)
+    for bad in ("eighty", "70000"):
+        s = Settings.load(tmp_path, environ={"FYJ_PORT": bad})
+        assert s.backend_port == core.DEFAULT_BACKEND_PORT
 
 
 def test_stop_event_name_is_per_checkout(tmp_path):
@@ -124,10 +126,9 @@ def test_probe_backend_foreign(server):
     assert core.probe_backend(s.port) is Backend.FOREIGN
 
 
-def test_probe_llm_and_n8n(server):
-    s = server({"/v1/models": (200, b'{"data": []}'), "/healthz": (200, b'{"status": "ok"}')})
+def test_probe_llm(server):
+    s = server({"/v1/models": (200, b'{"data": []}')})
     assert core.probe_llm(f"http://127.0.0.1:{s.port}/")
-    assert core.probe_n8n(s.port)
     assert not core.probe_llm(f"http://127.0.0.1:{free_port()}", timeout_s=0.5)
 
 
@@ -194,32 +195,6 @@ def test_backend_stops_within_the_launchers_grace_period():
     assert float(cmd[cmd.index("--timeout-graceful-shutdown") + 1]) < run.GRACEFUL_STOP_S
 
 
-def test_n8n_env_is_local_and_user_values_win():
-    env = core.n8n_env({}, 5678)
-    assert env["N8N_LISTEN_ADDRESS"] == "127.0.0.1"
-    assert env["N8N_DIAGNOSTICS_ENABLED"] == "false"
-    assert env["N8N_PORT"] == "5678"
-    assert core.n8n_env({"N8N_LISTEN_ADDRESS": "0.0.0.0"}, 5678)["N8N_LISTEN_ADDRESS"] == "0.0.0.0"
-
-
-def test_find_n8n_prefers_node_and_bin_script(tmp_path, monkeypatch):
-    npm = tmp_path / "npm"
-    (npm / "node_modules" / "n8n" / "bin").mkdir(parents=True)
-    (npm / "n8n.cmd").write_text("", encoding="utf-8")
-    monkeypatch.setattr(core.shutil, "which", lambda name: "C:\\node\\node.exe" if name == "node" else None)
-    # without the package's bin script, the .cmd shim runs through cmd.exe
-    cmd = core.find_n8n({"APPDATA": str(tmp_path), "ComSpec": "cmd.exe"})
-    assert cmd == ["cmd.exe", "/d", "/c", str(npm / "n8n.cmd"), "start"]
-    (npm / "node_modules" / "n8n" / "bin" / "n8n").write_text("", encoding="utf-8")
-    cmd = core.find_n8n({"APPDATA": str(tmp_path)})
-    assert cmd == ["C:\\node\\node.exe", str(npm / "node_modules" / "n8n" / "bin" / "n8n"), "start"]
-
-
-def test_find_n8n_absent(tmp_path, monkeypatch):
-    monkeypatch.setattr(core.shutil, "which", lambda _name: None)
-    assert core.find_n8n({"APPDATA": str(tmp_path)}) is None
-
-
 def test_state_roundtrip_and_corrupt_file(tmp_path):
     path = tmp_path / "state.json"
     st = core.State(launcher_pid=1, launcher_created=2, mode="start",
@@ -241,8 +216,8 @@ def test_rotate_log_keeps_one_generation(tmp_path):
 def test_cli_defaults_to_start():
     from src.launcher.__main__ import parse
 
-    args = parse(["--n8n", "--port", "8100"])
-    assert (args.command, args.n8n, args.port) == ("start", True, 8100)
+    args = parse(["--port", "8100"])
+    assert (args.command, args.port) == ("start", 8100)
     assert parse(["status"]).command == "status"
 
 
@@ -365,9 +340,9 @@ def _launcher(tmp_path: Path, port: int, monkeypatch) -> run.Launcher:
                         lambda python, p, reload=False: [python, str(script), str(p)])
     monkeypatch.setattr(core, "prerequisite_checks", lambda root: [])
     monkeypatch.setattr(run.Launcher, "_ensure_frontend", lambda self: True)
-    settings = Settings(root=tmp_path, backend_port=port, n8n_port=free_port(),
+    settings = Settings(root=tmp_path, backend_port=port,
                         llm_endpoint=f"http://127.0.0.1:{free_port()}", startup_timeout_s=60)
-    launcher = run.Launcher(settings, run.Output(None), mode="start", with_n8n=False, window="none")
+    launcher = run.Launcher(settings, run.Output(None), mode="start", window="none")
     launcher.graceful_stop_s = 5
     return launcher
 
@@ -465,10 +440,10 @@ def test_stop_command_stops_a_running_launcher(tmp_path, monkeypatch):
 
 
 def test_status_lists_every_component(tmp_path):
-    settings = Settings(root=tmp_path, backend_port=free_port(), n8n_port=free_port(),
+    settings = Settings(root=tmp_path, backend_port=free_port(),
                         llm_endpoint="http://192.168.0.2:1")
     rows = {name: text for _level, name, text in run.status_lines(settings)}
-    assert set(rows) >= {"backend", "dashboard", "n8n", "local LLM"}
+    assert set(rows) >= {"backend", "dashboard", "local LLM"}
     assert rows["backend"] == "not running"
     assert "NOT a local address" in rows["local LLM"]
 

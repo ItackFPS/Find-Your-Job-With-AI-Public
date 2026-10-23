@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "discord-admin": {
-      "command": "python",
-      "args": ["-m", "src.discord_admin.mcp_server"]
-    }
-  }
-}

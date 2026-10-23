@@ -31,7 +31,7 @@ git clone https://github.com/ItackFPS/Find-Your-Job-With-AI-Public.git
 cd Find-Your-Job-With-AI-Public
 python -m venv .venv            # Python 3.12
 source .venv/bin/activate       # Windows: .venv\Scripts\activate
-pip install -e ".[dev,mcp_admin]"
+pip install -e ".[dev]"
 git config core.hooksPath .githooks   # blocks direct pushes to main
 cd frontend && npm ci
 ```

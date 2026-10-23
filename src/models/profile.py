@@ -55,8 +55,7 @@ class GeographyPreferences(BaseModel):
     # Ordered list of department/remote preferences — the SOLE source of
     # truth for location_fit scoring's priority tiers (see
     # src/pipeline/scoring.py::_score_location_fit, fed via
-    # src/pipeline/location_match.py) and for Discord/notification location
-    # routing (src/notifications/engine.py). A ranking preference only: a
+    # src/pipeline/location_match.py). A ranking preference only: a
     # job outside this list is never rejected for it, and remains fully
     # eligible/rankable on every other factor. Empty by default — no
     # location is preferred until the user configures one on the Profile

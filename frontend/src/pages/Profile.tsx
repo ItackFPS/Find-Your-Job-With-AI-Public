@@ -638,8 +638,7 @@ function DomainPicker({ values, onChange }: { values: string[]; onChange: (v: st
 // LocationPreferencesEditor — ordered department/remote priority list
 //
 // Backs profile.geography.location_preferences: the SOLE source of truth
-// for location_fit scoring's priority tiers (src/pipeline/scoring.py) and
-// for Discord notification channel routing (src/notifications/engine.py) —
+// for location_fit scoring's priority tiers (src/pipeline/scoring.py) —
 // a RANKING preference, never a hard filter, except for an explicit
 // "Excluded" entry which vetoes only that one location (see
 // src/pipeline/location_match.py). List order IS priority — there is no
@@ -1065,12 +1064,11 @@ export default function ProfilePage() {
           </span>
           <div style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginBottom: '0.5rem' }}>
             Departments and/or remote work you'd especially like, ordered by priority (drag with
-            ↑/↓ — position #1 is your strongest preference). This drives job ranking, Discord
-            notifications (one channel per location, top matches only), and the weekly email.
-            "Acceptable" ranks lower than "Preferred"; "Excluded" is the only setting that removes
-            a location from notifications — everything else stays a ranking signal, never a hard
-            filter, so jobs outside this list (including other departments and remote) remain
-            fully eligible and can still rank highly on domain, skills, and other factors.
+            ↑/↓ — position #1 is your strongest preference). This drives job ranking.
+            "Acceptable" ranks lower than "Preferred"; "Excluded" stops a location from earning
+            a priority boost. None of these is a hard filter: jobs outside this list (including
+            other departments and remote) remain fully eligible and can still rank highly on
+            domain, skills, and other factors.
           </div>
           <LocationPreferencesEditor
             values={profile.geography.location_preferences}

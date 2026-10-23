@@ -22,8 +22,8 @@ export interface LocationPreference {
 export interface Geography {
   preferred_countries: string[]
   allowed_regions: string[]
-  // The SOLE source of truth for location_fit scoring's priority tiers and
-  // for Discord notification routing — a ranking preference, never a hard
+  // The SOLE source of truth for location_fit scoring's priority tiers —
+  // a ranking preference, never a hard
   // filter. Empty by default; no location is preferred until the user adds
   // one on the Profile page.
   location_preferences: LocationPreference[]
@@ -172,7 +172,7 @@ export interface ScoreBreakdown {
   final_score: number | null
   factors: Record<string, number>
   run_id: string | null
-  // Phase 5: same canonical tier every notification channel already uses
+  // Phase 5: the canonical tier
   // (src.pipeline.scoring.score_to_tier) — never recomputed on the frontend.
   score_100: number | null
   tier: string | null
@@ -307,27 +307,15 @@ export interface JobStats {
 export const getJobStats = (): Promise<JobStats> =>
   api.get<JobStats>('/jobs/stats').then(r => r.data)
 
-// ---- Notification provider status (sidebar footer) -------------------------
+// ---- Backend health (sidebar footer) -------------------------------------
 
-export interface NotificationProviderStatus {
-  enabled: boolean
-  configured: boolean
-  last_sent: string | null
-  // n8n only: actual server reachability right now (via n8n's own REST API),
-  // independent of `configured` (which only means a push-webhook URL is set).
-  reachable?: boolean
+export interface Health {
+  status: string
+  version?: string
 }
 
-export interface NotificationStatus {
-  enabled: boolean
-  providers: Record<string, NotificationProviderStatus>
-  counts: Record<string, number>
-  // Built from DISCORD_GUILD_ID on the backend; null when it is not set.
-  discord_server_url?: string | null
-}
-
-export const getNotificationStatus = (): Promise<NotificationStatus> =>
-  api.get<NotificationStatus>('/pipeline/notifications/status').then(r => r.data)
+export const getHealth = (): Promise<Health> =>
+  api.get<Health>('/health').then(r => r.data)
 
 export const getDashboard = () => api.get<Dashboard>('/dashboard').then(r => r.data)
 

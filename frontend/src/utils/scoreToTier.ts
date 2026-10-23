@@ -2,10 +2,9 @@ export type ScoreTier = 'exceptional' | 'excellent' | 'strong' | 'relevant' | 'l
 
 /**
  * Display-only mirror of the backend's tier thresholds
- * (`score_to_tier` in src/pipeline/scoring.py, kept in sync there with
- * src/api/routes/pipeline.py and the n8n workflow). This is never a second
+ * (`score_to_tier` in src/pipeline/scoring.py). This is never a second
  * implementation of scoring — it exists purely so the UI can label a
- * score_100 value the same way notifications already do.
+ * score_100 value the same way the backend does.
  *
  * Phase 4 (2026-09-10): fixed-reference calibration, derived once from a
  * 4-run/30,271-job real historical sample (see the full calibration

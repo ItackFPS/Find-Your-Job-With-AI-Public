@@ -1,11 +1,9 @@
 """Boundary tests for the canonical score_to_tier() (src/pipeline/scoring.py).
 
 This is the single Python implementation of the 0-100 score -> tier mapping
-that src/notifications/events.py, src/notifications/engine.py,
-src/api/routes/pipeline.py, and src/api/routes/jobs.py all import — see the
-"Score -> tier classification" comment in scoring.py for the full consumer
-list, including the two other-runtime mirrors (n8n workflow, frontend) that
-cannot import this module and therefore carry a documented copy instead.
+that src/api/routes/jobs.py imports — see the "Score -> tier classification"
+comment in scoring.py for the consumer list, including the frontend mirror
+that cannot import this module and therefore carries a documented copy.
 """
 
 from __future__ import annotations
