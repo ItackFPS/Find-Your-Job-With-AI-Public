@@ -116,7 +116,7 @@ def _sandbox(ns: argparse.Namespace) -> int:
     try:
         sid = sandbox.container_sid()
         if ns.action in ("grant", "revoke"):
-            if ns.action == "grant":
+            if ns.action == "grant" and ns.apply:
                 lab_dir.mkdir(parents=True, exist_ok=True)
             plan = (sandbox.grant_plan if ns.action == "grant" else sandbox.revoke_plan)(PROJECT_ROOT, lab_dir, sid, extra)
             for cmd in plan:

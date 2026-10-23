@@ -68,6 +68,18 @@ def test_revoke_removes_the_container_from_everything_grant_touched(tmp_path):
     assert {c[1] for c in revoke} == grant and all(c[2:] == ["/remove", f"*{SID}"] for c in revoke)
 
 
+@pytest.mark.skipif(not sandbox.supported(), reason="Windows AppContainer")
+def test_the_grant_plan_changes_nothing(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(lab_cli, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(sandbox, "container_sid", lambda: SID)
+    applied: list[object] = []
+    monkeypatch.setattr(sandbox, "apply", applied.append)
+    (tmp_path / "data").mkdir()
+    assert lab_cli.main(["sandbox", "grant"]) == 0
+    assert applied == [] and not (tmp_path / "data" / "lab").exists()
+    assert "--apply" in capsys.readouterr().err
+
+
 def test_the_sandboxed_environment_carries_no_credentials(tmp_path):
     env = sandbox.sandbox_env(tmp_path, {"PATH": "p", "SystemRoot": r"C:\Windows", "INDEED_API_KEY": "k",
                                          "FRANCE_TRAVAIL_CLIENT_SECRET": "s", "GITHUB_TOKEN": "t"})
