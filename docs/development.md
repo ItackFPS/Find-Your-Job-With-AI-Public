@@ -469,6 +469,11 @@ can read only what was granted to the container and write only `data\lab\`. It c
 `config\*.local.*`, cannot reach the network (`--internet` allows outbound internet), and the OS
 refuses its loopback connections, so neither the API nor a relay is reachable.
 
+**Only a command started with `sandbox run` is inside that boundary.** The same agent started any other
+way (a plain `python -m src.lab agent`, a scheduled task, an editor or an LLM tool) runs with all your
+rights, and only the in-process guard stands between it and production; `isolation-check` then reports
+`"os_enforced": false`.
+
 ```powershell
 python -m src.lab sandbox grant              # plan: the icacls commands (they name the container only)
 python -m src.lab sandbox grant --apply      # apply; re-run after adding top-level files (they start closed)
@@ -491,6 +496,12 @@ python -m src.lab sandbox revoke --apply     # remove every ACE the grant added
   `"os_enforced": true`. A deny ACE for the container is ignored by Windows, so secrets are kept
   closed by never being granted.
 - It can read production data (`jobs.db`, `config\`), which replays need. It cannot write them.
+- `revoke` tries every path even when one fails, then lists the failures; re-running it is safe, and
+  it also cleans up after an interrupted `grant`. Pass it the same `--grant-read` folders as the grant,
+  or their ACEs stay. Uninstalling does not revoke: run `revoke --apply` first, or the kept `data\` and
+  `config\` keep ACEs naming the container (harmless while nothing runs in it).
+- Links do not widen the grant: inside the container, creating a junction or a hard link to a file it
+  cannot write is refused, and symlinks need a privilege it lacks (measured).
 
 #### Isolated lab agent (separate account, manual OS setup)
 
