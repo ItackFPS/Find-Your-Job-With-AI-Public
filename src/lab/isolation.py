@@ -28,6 +28,11 @@ File permissions are not the whole boundary, so the full check also probes:
   one this account can write, or create, runs its code as the human, which defeats everything above;
 * membership of Administrators (enabled or UAC-filtered): such an account can rewrite any ACL.
 
+Inside the lab's AppContainer (``src/lab/sandbox.py``) the same probes run, with two readings that
+only the container makes true: the OS refuses its loopback connections (no administrator has exempted
+it), so a port that does not answer is ``blocked``, not unverified; and only an *enabled*
+Administrators membership counts, because the container's token keeps that group deny-only.
+
 Each network probe is one ``GET /`` to loopback.
 """
 
@@ -39,6 +44,8 @@ import secrets
 import socket
 from pathlib import Path
 from typing import Any
+
+from src.lab.sandbox import in_app_container
 
 PROBE_SUFFIX = ".isolation-probe"
 API_PORTS = (8000,)
@@ -125,11 +132,22 @@ def probe_port(port: int, timeout: float = 3.0) -> str:
 
 def check_network(api_ports: tuple[int, ...] = API_PORTS,
                   relay_ports: tuple[int, ...] = RELAY_PORTS) -> tuple[dict[str, str], list[str]]:
-    """The probe result per port, and the problems they show (none when the API refuses this account)."""
+    """The probe result per port, and the problems they show (none when the API refuses this account, or
+    when this process is in an AppContainer that the OS keeps off loopback)."""
     results: dict[str, str] = {}
     problems: list[str] = []
+    contained = in_app_container()
+
+    def probe(port: int) -> str:
+        state = probe_port(port)
+        # an AppContainer's loopback connections are refused by the OS (connect fails or times out):
+        # whatever listens there now or later is out of its reach unless an administrator exempts it
+        return "blocked" if contained and state in ("not_listening", "unverified") else state
+
     for port in api_ports:
-        results[str(port)] = state = probe_port(port)
+        results[str(port)] = state = probe(port)
+        if state == "blocked":
+            continue
         if state == "reachable":
             problems.append(f"API port {port} serves this account: it can make the API write production state "
                             "(start the API with API_SAME_USER_ONLY=1)")
@@ -137,8 +155,8 @@ def check_network(api_ports: tuple[int, ...] = API_PORTS,
             problems.append(f"API port {port}: {state.replace('_', ' ')} - cannot verify that the API refuses "
                             "this account (start it with API_SAME_USER_ONLY=1, then re-check)")
     for port in relay_ports:
-        results[str(port)] = state = probe_port(port)
-        if state not in ("not_listening", "refused"):
+        results[str(port)] = state = probe(port)
+        if state not in ("not_listening", "refused", "blocked"):
             problems.append(f"relay port {port} ({state.replace('_', ' ')}): a service answers this account and "
                             "may forward to the API as another account - stop it while the agent runs")
     return results, problems
@@ -220,6 +238,8 @@ def in_administrators() -> bool:
     """Whether this account belongs to BUILTIN\\Administrators, elevated or not (Windows; False elsewhere)."""
     if os.name != "nt":
         return False
+    if in_app_container():
+        return _admin_enabled()
     import subprocess
 
     try:
@@ -228,6 +248,26 @@ def in_administrators() -> bool:
     except (OSError, subprocess.SubprocessError):
         return True                                            # cannot tell: fail closed
     return '"S-1-5-32-544"' in out
+
+
+def _admin_enabled() -> bool:
+    """Whether Administrators is an ENABLED group of this process's token (an AppContainer token keeps it
+    deny-only, which grants nothing). Fails closed."""
+    import ctypes
+    from ctypes import wintypes
+
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)  # type: ignore[attr-defined]
+    advapi32.CreateWellKnownSid.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p,
+                                            ctypes.POINTER(wintypes.DWORD)]
+    advapi32.CheckTokenMembership.argtypes = [wintypes.HANDLE, ctypes.c_void_p, ctypes.POINTER(wintypes.BOOL)]
+    sid = ctypes.create_string_buffer(68)                   # SECURITY_MAX_SID_SIZE
+    size = wintypes.DWORD(len(sid))
+    member = wintypes.BOOL(True)
+    if not advapi32.CreateWellKnownSid(26, None, sid, ctypes.byref(size)):        # WinBuiltinAdministratorsSid
+        return True
+    if not advapi32.CheckTokenMembership(None, sid, ctypes.byref(member)):
+        return True
+    return bool(member.value)
 
 
 def protected_targets(root: Path, jobs_db: Path, config_dir: Path) -> list[tuple[str, Path]]:
