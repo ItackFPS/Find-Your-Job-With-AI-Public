@@ -167,8 +167,8 @@ export const activeStrategy: ActiveStrategy = {
 
 export const selfCheck: SelfCheckResponse = { latest: null, unreadable: 0, history: [] }
 
-// `satisfies` (not a type annotation): gitleaks' linkedin-client-id rule reads
-// "linkedInX: LinkedInStatus" as a client id.
+// `satisfies` rather than a type annotation: the annotated form trips a gitleaks rule
+// (see .gitleaksignore).
 export const linkedInScan = {
   id: 'li-1', started_at: EARLIER, completed_at: NOW, status: 'completed', jobs_found: 40, jobs_new: 12, error: null,
   stats: null,

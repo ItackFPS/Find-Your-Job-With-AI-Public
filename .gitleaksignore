@@ -1,5 +1,8 @@
 # Gitleaks false positives, by fingerprint (commit:file:rule:line). Keep each one explained.
 
-# linkedin-client-id matched the test fixture line "export const linkedInStatus: LinkedInStatus = {"
-# (a TypeScript type name, not a credential); the fixture no longer uses that form.
+# linkedin-client-id: the rule reads a TypeScript type annotation in the test API fixtures
+# (a variable named after LinkedIn followed by its 14-letter type name) as a client id. No
+# credential is involved; the fixtures now use `satisfies` so new commits do not match.
 d2e5b4272607ac77fbe9de0fb20a07a76778fcbf:frontend/src/test/apiFixtures.ts:linkedin-client-id:175
+36b5b80194f58d14ac334238f46ff442539b0faf:frontend/src/test/apiFixtures.ts:linkedin-client-id:171
+36b5b80194f58d14ac334238f46ff442539b0faf:.gitleaksignore:linkedin-client-id:3
