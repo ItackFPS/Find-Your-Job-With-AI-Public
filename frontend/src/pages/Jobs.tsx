@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { listJobs, getAllDepartments, getJobCountries, getProfile, type Job, type CountryFacet, type LocationPreference } from '../api/client'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Chip, EmptyState, LoadingState, Ring } from '../components'
 import { daysAgo, getSourceBadge, locationBadge } from '../utils'
 
@@ -13,15 +14,17 @@ import { daysAgo, getSourceBadge, locationBadge } from '../utils'
 const TIER_ORDER = ['exceptional', 'excellent', 'strong', 'relevant', 'low_priority'] as const
 type Tier = typeof TIER_ORDER[number]
 
-const TIER_META: Record<Tier, { label: string; color: string }> = {
-  exceptional: { label: 'Exceptional', color: 'var(--color-accent)' },
-  excellent: { label: 'Excellent', color: 'var(--color-info)' },
-  strong: { label: 'Strong', color: '#5b9ee8' },
-  relevant: { label: 'Relevant', color: 'var(--color-warning)' },
-  low_priority: { label: 'Low priority', color: 'var(--color-muted)' },
+// Labels come from the translations (tiers.<tier>).
+const TIER_META: Record<Tier, { color: string }> = {
+  exceptional: { color: 'var(--color-accent)' },
+  excellent: { color: 'var(--color-info)' },
+  strong: { color: 'var(--color-tier-strong)' },
+  relevant: { color: 'var(--color-warning)' },
+  low_priority: { color: 'var(--color-muted)' },
 }
 
 function TierBadge({ tier }: { tier: string | null }) {
+  const { t } = useTranslation()
   const meta = tier && tier in TIER_META ? TIER_META[tier as Tier] : null
   if (!meta) return null
   return (
@@ -33,7 +36,7 @@ function TierBadge({ tier }: { tier: string | null }) {
         whiteSpace: 'nowrap',
       }}
     >
-      {meta.label}
+      {t(`tiers.${tier}`)}
     </span>
   )
 }
@@ -42,7 +45,7 @@ const LOCATION_KIND_COLOR: Record<string, string> = {
   preferred: 'var(--color-accent)',
   paca: 'var(--color-info)',
   'france-remote': 'var(--color-success)',
-  'international-remote': '#5b9ee8',
+  'international-remote': 'var(--color-tier-strong)',
   other: 'var(--color-muted)',
 }
 
@@ -167,6 +170,7 @@ function JobCard({ job, targetSkills, locationPreferences, departmentNames }: {
 }) {
   const finalScore = job.score?.final_score ?? null
   const tier = job.score?.tier ?? null
+  const { t } = useTranslation()
   const age = daysAgo(job.published_at)
 
   return (
@@ -181,7 +185,7 @@ function JobCard({ job, targetSkills, locationPreferences, departmentNames }: {
           <SourceAvatar source={job.source} />
           <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 'var(--font-weight-semibold)', fontSize: '0.95rem', marginBottom: '0.2rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {job.title || '(no title)'}
+              {job.title || t('jobs.noTitle')}
             </div>
             <div style={{ fontSize: '0.82rem', color: 'var(--color-muted)', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
               <span>{[job.company].filter(Boolean).join(' · ')}</span>
@@ -200,7 +204,7 @@ function JobCard({ job, targetSkills, locationPreferences, departmentNames }: {
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
         <div style={{ fontSize: '0.75rem', color: 'var(--color-muted)' }}>
-          {job.source}{age !== null ? ` · ${age}d ago` : ''}
+          {job.source}{age !== null ? t('jobs.daysAgo', { days: age }) : ''}
         </div>
       </div>
     </Link>
@@ -219,6 +223,7 @@ const PAGE = 50
 const DEFAULT_MIN_TIER = 'relevant'
 
 export default function Jobs() {
+  const { t } = useTranslation()
   const [country, setCountry] = useState('')
   const [department, setDepartment] = useState('')   // e.g. "83" for Var
   const [remote, setRemote] = useState<boolean | undefined>(undefined)
@@ -294,14 +299,14 @@ export default function Jobs() {
 
   return (
     <div>
-      <h1 style={{ margin: '0 0 1.25rem', fontSize: 'var(--font-size-xl)', fontWeight: 'var(--font-weight-bold)' }}>Jobs</h1>
+      <h1 style={{ margin: '0 0 1.25rem', fontSize: 'var(--font-size-xl)', fontWeight: 'var(--font-weight-bold)' }}>{t('jobs.title')}</h1>
 
       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.25rem', alignItems: 'center' }}>
         {/* Full-text search — fires as you type (250 ms debounce, min 2 chars) */}
         <input
           value={inputQ}
           onChange={e => setInputQ(e.target.value)}
-          placeholder="Search jobs…"
+          placeholder={t('jobs.search')}
           style={{ ...filterStyle, flex: 1, minWidth: '200px' }}
         />
 
@@ -316,11 +321,11 @@ export default function Jobs() {
           style={{ ...filterStyle, width: '200px' }}
         >
           <option value="">
-            {totalJobCount !== null ? `All countries (${totalJobCount})` : 'All countries'}
+            {totalJobCount !== null ? t('jobs.allCountriesCount', { count: totalJobCount }) : t('jobs.allCountries')}
           </option>
           {countryFacets.map(f => (
             <option key={f.name} value={f.name}>
-              {f.name === '_worldwide' ? `Worldwide / Remote (${f.count})` : `${f.name} (${f.count})`}
+              {f.name === '_worldwide' ? t('jobs.worldwide', { count: f.count }) : t('jobs.countryCount', { name: f.name, count: f.count })}
             </option>
           ))}
         </select>
@@ -330,7 +335,7 @@ export default function Jobs() {
           value={department}
           onChange={e => { setDepartment(e.target.value); setOffset(0) }}
           disabled={!isFrance}
-          title={isFrance ? 'Filter by French department' : 'Set Country to France to filter by department'}
+          title={isFrance ? t('jobs.departmentTitle') : t('jobs.departmentDisabledTitle')}
           style={{
             ...filterStyle,
             width: '180px',
@@ -338,7 +343,7 @@ export default function Jobs() {
             cursor: isFrance ? 'pointer' : 'not-allowed',
           }}
         >
-          <option value="">All departments</option>
+          <option value="">{t('jobs.allDepartments')}</option>
           {(allDepartments ?? []).map(dept => (
             <option key={dept.code} value={dept.code}>
               {dept.name} ({dept.code})
@@ -356,9 +361,9 @@ export default function Jobs() {
           }}
           style={filterStyle}
         >
-          <option value="">All modes</option>
-          <option value="true">Remote only</option>
-          <option value="false">On-site only</option>
+          <option value="">{t('jobs.allModes')}</option>
+          <option value="true">{t('jobs.remoteOnly')}</option>
+          <option value="false">{t('jobs.onsiteOnly')}</option>
         </select>
 
         {/* Min tier — dashboard visibility floor. Default hides low_priority;
@@ -366,14 +371,10 @@ export default function Jobs() {
         <select
           value={minTier}
           onChange={e => { setMinTier(e.target.value); setOffset(0) }}
-          title="Minimum tier to show (jobs below this stay stored — pick 'All tiers' to see everything)"
+          title={t('jobs.minTierTitle')}
           style={filterStyle}
         >
-          <option value="exceptional">Exceptional only</option>
-          <option value="excellent">Excellent and above</option>
-          <option value="strong">Strong and above</option>
-          <option value="relevant">Relevant and above (default)</option>
-          <option value="low_priority">All tiers</option>
+          {TIER_ORDER.map(tier => <option key={tier} value={tier}>{t(`jobs.minTier.${tier}`)}</option>)}
         </select>
 
         {hasActiveFilter && (
@@ -389,16 +390,16 @@ export default function Jobs() {
             }}
             style={{ ...filterStyle, cursor: 'pointer', color: 'var(--color-muted)' }}
           >
-            Clear
+            {t('jobs.clear')}
           </button>
         )}
       </div>
 
       {isLoading && <LoadingState compact />}
-      {error && <div style={{ color: 'var(--color-error)' }}>Failed to load jobs.</div>}
+      {error && <div style={{ color: 'var(--color-error)' }}>{t('jobs.loadError')}</div>}
 
       {jobs && jobs.length === 0 && (
-        <EmptyState message="No jobs found. Try adjusting your filters or running the pipeline." />
+        <EmptyState message={t('jobs.empty')} />
       )}
 
       {jobs && jobs.map(job => (
@@ -426,7 +427,7 @@ export default function Jobs() {
               fontSize: '0.85rem',
             }}
           >
-            ← Prev
+            {t('jobs.prev')}
           </button>
           <span style={{ lineHeight: '2rem', fontSize: '0.82rem', color: 'var(--color-muted)' }}>
             {offset + 1}–{offset + (jobs?.length || 0)}
@@ -444,7 +445,7 @@ export default function Jobs() {
               fontSize: '0.85rem',
             }}
           >
-            Next →
+            {t('jobs.next')}
           </button>
         </div>
       )}

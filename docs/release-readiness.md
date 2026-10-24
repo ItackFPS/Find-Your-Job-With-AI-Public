@@ -70,7 +70,7 @@ Issue and pull-request numbers in code comments and documentation (for example
 |---|---|
 | Project licence | MIT ([LICENSE](../LICENSE)) |
 | Frontend runtime dependencies | all MIT |
-| Python runtime dependencies | mostly MIT, BSD or Apache-2.0, plus MPL-2.0 (`certifi`, part of `tqdm`), PSF-2.0 and ISC — all installed unmodified from PyPI, none vendored; optional `python-jobspy` (MIT), `crawl4ai` (Apache-2.0), `mcp` (MIT). The embedding model (`paraphrase-multilingual-MiniLM-L12-v2`, Apache-2.0) is downloaded on first use, not bundled |
+| Python runtime dependencies | mostly MIT, BSD or Apache-2.0, plus MPL-2.0 (`certifi`, part of `tqdm`), PSF-2.0 and ISC — all installed unmodified from PyPI, none vendored; optional `python-jobspy` (MIT), `mcp` (MIT). The embedding model (`paraphrase-multilingual-MiniLM-L12-v2`, Apache-2.0) is downloaded on first use, not bundled |
 | Frontend | `npm audit`: 0 vulnerabilities (runtime and development) |
 | Python advisories (`pip-audit`, fresh install) | 0 known vulnerabilities in the 94 packages a fresh `pip install -e ".[dev,mcp_admin,linkedin]"` resolves (2026-10-18: transformers 5.20.1, sentence-transformers 6.1.0, python-jobspy 1.3.0, markdownify 1.2.3, …). Versions are ranges, not pins |
 | Older environments | an environment installed earlier can still hold `transformers` ≤ 5.9 (three advisories: LightGlue model loading, custom generation code, `save_pretrained` paths — none reachable here: nothing imports `transformers` directly or calls `generate`/`save_pretrained`, and the one model loads with `trust_remote_code=False`) or `markdownify` < 0.14.1 (one low advisory). `pip install -U -e .` updates them |

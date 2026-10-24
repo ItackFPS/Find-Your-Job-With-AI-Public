@@ -49,6 +49,7 @@ configure_logging()
 from src.api.origin_guard import LocalHostGuardMiddleware, OriginGuardMiddleware
 from src.api.peer_guard import SameUserPeerGuardMiddleware, enabled_from_env as same_user_only
 from src.api.routes import (
+    ai,
     dashboard,
     decisions,
     departments,
@@ -337,6 +338,7 @@ app.include_router(hellowork.router)
 app.include_router(scheduler_routes.router)
 app.include_router(skills.router)
 app.include_router(lab.router)
+app.include_router(ai.router)
 
 # Must match src/launcher/core.py APP_ID: the launcher recognises this backend by it.
 APP_ID = "find-your-job-with-ai"

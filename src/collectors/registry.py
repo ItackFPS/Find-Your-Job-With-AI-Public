@@ -12,6 +12,17 @@ from src.collectors.base import BaseCollector
 
 logger = logging.getLogger(__name__)
 
+# Source types that shipped in 1.x and were removed in 2.0. A config written
+# for 1.x may still list them; the pipeline skips such a source with this
+# reason instead of reporting it as failed. Offers they collected stay stored.
+_REMOVE_HINT = "delete this source from sources.yaml"
+REMOVED_SOURCE_TYPES: dict[str, str] = {
+    "apec": "APEC was removed in 2.0 (its bot protection blocks every "
+    f"request); {_REMOVE_HINT}",
+    "wttj": "Welcome to the Jungle was removed in 2.0 (its firewall blocks "
+    f"every request); {_REMOVE_HINT}",
+}
+
 
 class CollectorRegistry:
     """Central registry for all job collectors."""
@@ -22,7 +33,6 @@ class CollectorRegistry:
 
     def _register_default_collectors(self) -> None:
         """Register built-in collector implementations."""
-        from src.collectors.apec import APECCollector
         from src.collectors.arbetsformedlingen import ArbetsformedlingenCollector
         from src.collectors.bundesagentur import BundesagenturCollector
         from src.collectors.eures import EURESCollector
@@ -37,7 +47,6 @@ class CollectorRegistry:
         from src.collectors.smartrecruiters import SmartRecruitersCollector
         from src.collectors.workingnomads import WorkingNomadsCollector
         from src.collectors.weworkremotely import WeWorkRemotelyCollector
-        from src.collectors.wttj import WTTJCollector
 
         # greenhouse/lever/smartrecruiters/workingnomads below are real,
         # working, verified collectors kept registered even though no
@@ -61,8 +70,6 @@ class CollectorRegistry:
         self._collectors["bundesagentur"] = BundesagenturCollector
         self._collectors["arbetsformedlingen"] = ArbetsformedlingenCollector
         self._collectors["smartrecruiters"] = SmartRecruitersCollector
-        # APEC: httpx-based (no browser needed; uses the public JSON search API).
-        self._collectors["apec"] = APECCollector
         # EURES: httpx-based (no browser needed; uses the public POST search API).
         self._collectors["eures"] = EURESCollector
         # We Work Remotely: RSS + HTML category-page discovery.
@@ -70,11 +77,6 @@ class CollectorRegistry:
         # Indeed: httpx-based GraphQL API (no browser needed).
         from src.collectors.indeed import IndeedCollector
         self._collectors["indeed"] = IndeedCollector
-        # Browser-based collectors (require crawl4ai optional dependency).
-        # These classes have no top-level crawl4ai import — the registry always
-        # loads successfully.  The ImportError surfaces at collect() time if
-        # crawl4ai is not installed, and the orchestrator catches it cleanly.
-        self._collectors["wttj"] = WTTJCollector
         # HelloWork: httpx-based, discovers via domain/metier listing pages and
         # extracts via schema.org/JobPosting JSON-LD (no API, no browser needed).
         self._collectors["hellowork"] = HelloWorkCollector

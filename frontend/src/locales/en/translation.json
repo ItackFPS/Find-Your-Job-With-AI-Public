@@ -1,0 +1,848 @@
+{
+  "common": {
+    "loading": "Loading…",
+    "noData": "No data",
+    "tryAgain": "Try again",
+    "moreInformation": "More information"
+  },
+  "status": {
+    "completed": "Completed",
+    "failed": "Failed",
+    "running": "Running",
+    "pausing": "Pausing",
+    "paused": "Paused",
+    "interrupted": "Interrupted",
+    "partial": "Partial",
+    "skipped": "Skipped",
+    "idle": "Idle"
+  },
+  "pipelineStages": {
+    "collect": {
+      "label": "Collection",
+      "activity": "Collecting jobs"
+    },
+    "validate": {
+      "label": "Validation",
+      "activity": "Validating jobs"
+    },
+    "deduplicate": {
+      "label": "Deduplication",
+      "activity": "Deduplicating jobs"
+    },
+    "filter": {
+      "label": "Hard Filter",
+      "activity": "Applying hard filters"
+    },
+    "requirements_gate": {
+      "label": "Requirements Gate",
+      "activity": "Checking requirements"
+    },
+    "llm_eligibility": {
+      "label": "AI Eligibility Check",
+      "activity": "Checking eligibility (AI)"
+    },
+    "score": {
+      "label": "Scoring",
+      "activity": "Scoring jobs"
+    },
+    "phase2": {
+      "label": "AI Understanding",
+      "activity": "Understanding jobs (AI)"
+    },
+    "semantic": {
+      "label": "Semantic Pre-Ranking",
+      "activity": "Semantic matching"
+    },
+    "personalize": {
+      "label": "Personalized Ranking",
+      "activity": "Personalizing ranking"
+    },
+    "preflight": {
+      "activity": "Preparing run"
+    },
+    "working": "Working",
+    "units": {
+      "sources": "sources",
+      "jobs": "jobs"
+    }
+  },
+  "pipelineEvents": {
+    "started": "Pipeline started",
+    "completed": "Pipeline completed",
+    "failed": "Pipeline failed",
+    "failedWithError": "Pipeline failed — {error}",
+    "reconnected": "Reconnected — {stage}",
+    "stageCount": "{stage} — {count, number} jobs"
+  },
+  "scanner": {
+    "starting": "Starting…",
+    "pause": "Pause",
+    "pausing": "Pausing…",
+    "resume": "Resume",
+    "resuming": "Resuming…",
+    "scanNow": "Scan now",
+    "progress": {
+      "query": "Query {query} / {total}",
+      "page": " · page {page}",
+      "pages": " · ~{done} / {total} pages",
+      "metierPages": "{count, plural, one {# metier page done} other {# metier pages done}}"
+    }
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "jobsInDb": "{count, number} jobs in DB",
+    "pipelineRunning": "⟳ Pipeline running…",
+    "ai": {
+      "label": "AI Understanding",
+      "description": "Deeper matching · slower run"
+    },
+    "run": {
+      "start": "Run pipeline",
+      "starting": "Starting…",
+      "running": "Running…"
+    },
+    "noRuns": "No pipeline runs yet. <run>Run the pipeline</run> to see results here.",
+    "browseMatched": "Browse {count, number} matched jobs →",
+    "backendError": "Could not reach the backend. Start the app again with its <app>Find Your Job With AI</app> shortcut (or <cmd/>); if it does not start, its window shows why, and the details are in <log/> in the application folder.",
+    "liveRun": "Live run",
+    "latestRun": "Latest run",
+    "tiles": {
+      "collected": "Collected",
+      "validated": "Validated",
+      "deduplicated": "Deduplicated",
+      "filtered": "Filtered",
+      "scored": "Scored",
+      "matched": "Matched",
+      "errors": "Errors"
+    },
+    "sections": {
+      "stages": "PIPELINE STAGES",
+      "bySource": "BY SOURCE",
+      "bySourceLive": "BY SOURCE (live)",
+      "byCountry": "BY COUNTRY",
+      "activity": "ACTIVITY",
+      "errors": "ERRORS"
+    },
+    "moreErrors": "…and {count, number} more",
+    "connection": {
+      "connecting": "Connecting…",
+      "live": "● Live",
+      "reconnecting": "● Reconnecting…",
+      "offline": "● Offline"
+    },
+    "funnel": {
+      "working": "working…",
+      "liveCount": "{processed, number} / {total, number} {unit}"
+    },
+    "sourceTable": {
+      "source": "Source",
+      "collected": "Collected",
+      "accepted": "Accepted",
+      "rejected": "Rejected",
+      "errors": "Errors",
+      "status": "Status"
+    },
+    "scanner": {
+      "linkedin": "LinkedIn scan",
+      "hellowork": "HelloWork scan",
+      "searching": "Searching queries…",
+      "pausingNextPage": "Pausing at the next page…",
+      "etaUnknown": "Time remaining: not enough data yet",
+      "etaRemaining": "~{eta} remaining (estimated)",
+      "finishing": "Finishing up…",
+      "slow": "Taking longer than usual…",
+      "paused": "Paused",
+      "interrupted": "Interrupted — resumes from checkpoint",
+      "percentDone": " · ~{percent}% done",
+      "foundNew": "{found, number} found · {new, number} new",
+      "lastAttempt": "Last attempt {date}",
+      "noScans": "No scans yet."
+    }
+  },
+  "app": {
+    "name": "Find Your Job",
+    "nav": {
+      "dashboard": "Dashboard",
+      "jobs": "Jobs",
+      "review": "Review",
+      "profile": "Profile",
+      "stats": "Stats",
+      "skills": "Skills",
+      "lab": "Lab",
+      "pipeline": "Pipeline",
+      "label": "Main"
+    },
+    "backend": {
+      "connected": "Backend connected",
+      "offline": "Backend offline"
+    },
+    "theme": {
+      "label": "Theme",
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "language": {
+      "label": "Language",
+      "en": "English",
+      "fr": "Français",
+      "en-XA": "Pseudo (dev)"
+    }
+  },
+  "components": {
+    "dataTable": {
+      "empty": "No data."
+    },
+    "statTile": {
+      "loading": "Loading {label}"
+    },
+    "toast": {
+      "dismiss": "Dismiss notification",
+      "region": "Notifications"
+    },
+    "gettingStarted": {
+      "title": "Getting started",
+      "intro": "Nothing is collected until you ask: opening the app starts no scan and no run.",
+      "profile": "Fill in your <profile>Profile</profile>: target roles, skills, locations and languages. Searches are built from it.",
+      "sources": "Sources that need no account: {noAccount} (collected by <b>Run pipeline</b>), and {scanners} (<b>Scan now</b> on their cards below).",
+      "and": " and ",
+      "optional": "Optional sources, skipped until you add their credentials:",
+      "envFile": "Copy <example/> to <env/> in the application folder, fill in only those lines, then restart the app.",
+      "run": "Press <b>Run pipeline</b>. The first run downloads the local embedding model (about 470 MB) once. Local AI is off; no job data is sent to a cloud AI service.",
+      "envVarsJoin": " and "
+    }
+  },
+  "tiers": {
+    "exceptional": "Exceptional",
+    "excellent": "Excellent",
+    "strong": "Strong",
+    "relevant": "Relevant",
+    "low_priority": "Low priority"
+  },
+  "location": {
+    "franceRemote": "France · Remote",
+    "internationalRemote": "International · Remote",
+    "unknown": "Unknown location"
+  },
+  "jobs": {
+    "title": "Jobs",
+    "noTitle": "(no title)",
+    "daysAgo": " · {days, number}d ago",
+    "search": "Search jobs…",
+    "allCountries": "All countries",
+    "allCountriesCount": "All countries ({count, number})",
+    "worldwide": "Worldwide / Remote ({count, number})",
+    "countryCount": "{name} ({count, number})",
+    "departmentTitle": "Filter by French department",
+    "departmentDisabledTitle": "Set Country to France to filter by department",
+    "allDepartments": "All departments",
+    "allModes": "All modes",
+    "remoteOnly": "Remote only",
+    "onsiteOnly": "On-site only",
+    "minTierTitle": "Minimum tier to show (jobs below this stay stored — pick “All tiers” to see everything)",
+    "minTier": {
+      "exceptional": "Exceptional only",
+      "excellent": "Excellent and above",
+      "strong": "Strong and above",
+      "relevant": "Relevant and above (default)",
+      "low_priority": "All tiers"
+    },
+    "clear": "Clear",
+    "loadError": "Failed to load jobs.",
+    "empty": "No jobs found. Try adjusting your filters or running the pipeline.",
+    "prev": "← Prev",
+    "next": "Next →"
+  },
+  "jobDetail": {
+    "overallMatch": "Overall match",
+    "scoreOutOf": "{score}/100",
+    "factors": {
+      "title": "Match factors",
+      "location_fit": "Location",
+      "domain_relevance": "Domain",
+      "skills_match": "Skills",
+      "seniority_match": "Seniority",
+      "experience_fit": "Experience"
+    },
+    "personalization": {
+      "title": "Personalization",
+      "none": "No personalization applied yet. Feedback you give on a job is recorded to evaluate and improve the matching.",
+      "points": "{value} pts",
+      "feedbackCount": " ({count, number} feedback)",
+      "signals": {
+        "company": "Company",
+        "skill": "Skill",
+        "title_keyword": "Title keyword",
+        "remote": "Remote work"
+      }
+    },
+    "explanation": {
+      "whyRejected": "Why was this rejected?",
+      "whyThisJob": "Why this job?",
+      "rejected": "Rejected",
+      "accepted": "Accepted",
+      "positive": "Positive matches",
+      "concerns": "Things to check",
+      "rejections": "Rejection reasons",
+      "unknown": "Unable to determine the reason."
+    },
+    "applicationStatus": {
+      "title": "APPLICATION STATUS",
+      "current": "Current: {status}",
+      "none": "No status",
+      "to_apply": "To Apply",
+      "applied": "Applied",
+      "waiting": "Waiting",
+      "interview": "Interview",
+      "accepted": "Accepted",
+      "rejected": "Rejected",
+      "denied": "Denied",
+      "withdrawn": "Withdrawn"
+    },
+    "feedback": {
+      "title": "Your feedback",
+      "types": {
+        "interested": "Interested",
+        "not_interested": "Not interested",
+        "ranking_feedback": "Mis-ranked",
+        "unsure": "Not sure"
+      },
+      "reasons": {
+        "too_far": "Too far",
+        "too_senior": "Too senior",
+        "insufficient_skills": "Insufficient skills",
+        "off_domain": "Off-domain",
+        "salary": "Salary",
+        "contract_type": "Contract type",
+        "interesting_despite_low_score": "Interesting despite low score",
+        "mis_ranked": "Mis-ranked",
+        "other": "Other"
+      },
+      "why": "Why? (optional)",
+      "noteLabel": "Feedback note",
+      "notePlaceholder": "Add a note (optional)",
+      "save": "Save feedback",
+      "saveError": "Could not save your feedback. Please try again.",
+      "localOnly": "Recorded locally to evaluate and improve matching — it does not change your ranking yet.",
+      "last": "Last: {type}",
+      "lastReasons": " — {reasons}",
+      "unavailable": "Feedback is currently unavailable."
+    },
+    "decision": {
+      "title": "Decision record",
+      "confidence": "Decision confidence {value}",
+      "notCalibrated": " (agreement-based, not calibrated)",
+      "flagged": "Flagged for review",
+      "wouldFlag": "Would be flagged for review (shadow mode)",
+      "staysVisible": "The job stays ranked and visible.",
+      "staysRejected": "The job remains rejected; this only queues it for a human look.",
+      "supporting": "SUPPORTING ({count, number})",
+      "against": "AGAINST ({count, number})",
+      "unknown": "UNKNOWN ({count, number})",
+      "conflicts": "CONFLICTS ({count, number})",
+      "ids": "Decision {decision} · run {run}"
+    },
+    "header": {
+      "noTitle": "(no title)",
+      "daysAgo": " · {days, number}d ago",
+      "remote": "Remote",
+      "salary": "Salary: {range} {currency}",
+      "viewOriginal": "View original offer →"
+    },
+    "description": "Description",
+    "notFound": "Job not found.",
+    "backToJobs": "← Back to jobs",
+    "breadcrumb": "← Jobs"
+  },
+  "rejectionReasons": {
+    "location": "Location",
+    "remote": "Remote",
+    "work_mode": "Work mode",
+    "seniority": "Seniority",
+    "published_age": "Published age",
+    "salary": "Salary",
+    "title_keywords": "Title keywords",
+    "education": "Education",
+    "experience": "Experience",
+    "principal_skill": "Principal skill",
+    "mandatory_skill": "Mandatory skill",
+    "mandatory_secondary_skill": "Mandatory secondary skill"
+  },
+  "stats": {
+    "title": "Stats",
+    "subtitle": "What the market is asking for, across {count, number} collected jobs",
+    "notEnoughData": "Not enough data yet.",
+    "noDataYet": "No data yet",
+    "noDataYetDot": "No data yet.",
+    "mentions": "{count, number} jobs mention it",
+    "countPercent": "{count, number} ({percent}%)",
+    "latestRun": "Latest completed run",
+    "tierRanges": {
+      "exceptional": "Exceptional (≥80)",
+      "excellent": "Excellent (72–79)",
+      "strong": "Strong (65–71)",
+      "relevant": "Relevant (60–64)",
+      "low_priority": "Low priority (<60)"
+    },
+    "scoreDistribution": "Match score distribution",
+    "noScoredRun": "No scored run yet.",
+    "rejections": "Why jobs get rejected",
+    "noRejections": "No rejection data yet.",
+    "titleCategories": "Job title categories",
+    "titleCategoriesSubtitle": "Real titles from the latest run, grouped by the pipeline’s own configured search queries",
+    "apiError": "Could not reach API. Is the backend running?",
+    "topSkill": "Most requested skill",
+    "topSkillCaps": "MOST REQUESTED SKILL",
+    "topTool": "Most requested tool",
+    "topToolCaps": "MOST REQUESTED TOOL",
+    "topSkills": "Top skills in demand",
+    "topTools": "Top tools & platforms"
+  },
+  "review": {
+    "title": "Review",
+    "intro": "Decisions the system was not sure about — signals disagree, evidence is missing, or your own feedback contradicts them — plus a few rule-backed rejections picked for audit, so a wrong rule cannot hide good jobs silently. Your answer is recorded as feedback; it does not change rankings or rejections by itself.",
+    "filters": {
+      "all": "All",
+      "rejected": "Rejected",
+      "accepted": "Accepted"
+    },
+    "toReview": "{count, number} to review",
+    "saveError": "Could not save your answer. Please try again.",
+    "unavailable": "The review queue is unavailable.",
+    "empty": "Nothing to review.",
+    "postingUnavailable": "The posting text is no longer available.",
+    "rejectedAt": "Rejected at {stage}",
+    "accepted": "Accepted",
+    "auditSample": "Audit sample",
+    "auditSampleTitle": "Picked among rule-backed rejections so a wrong rule cannot hide good jobs silently",
+    "confidence": "confidence {value}",
+    "confidenceTitle": "Agreement between signals — not calibrated",
+    "auditExplanation": "Rejected by rule <b>{rule}</b> ({count, plural, one {# job} other {# jobs}} rejected by it in that run). Does this job look suitable to you anyway? Your answer is recorded as evidence; it changes nothing by itself.",
+    "answers": {
+      "interested": "I want this job",
+      "not_interested": "Not for me",
+      "unsure": "Not sure"
+    },
+    "why": "Why?",
+    "posting": "Posting"
+  },
+  "skills": {
+    "title": "Skills",
+    "intro": "Which technologies the jobs you are a fit for ask for, how they go together, and what your profile is missing — counted from the postings the pipeline kept.",
+    "days": "{count, number} days",
+    "relevantOf": "{relevant, number} relevant of {total, number} tagged jobs",
+    "unavailable": "The skill graph is unavailable.",
+    "empty": "No tagged jobs in this window yet.",
+    "opportunities": "Development opportunities",
+    "relevantDefinition": "Relevant = {definition}",
+    "noGaps": "No skill is asked for often enough among relevant jobs that your profile lacks.",
+    "market": "What the market asks for",
+    "limits": "Limits of this view",
+    "shareOfRelevant": "{percent}% of relevant jobs",
+    "examples": "e.g. {titles}",
+    "yours": "yours",
+    "counts": "{relevant, number} relevant / {total, number} total",
+    "oftenAskedWith": "OFTEN ASKED WITH {skill}",
+    "selectSkill": "SELECT A SKILL TO SEE RELATED SKILLS",
+    "noPairing": "No frequent pairing yet.",
+    "pairJobs": " — {count, plural, one {# job} other {# jobs}}"
+  },
+  "lab": {
+    "title": "Lab",
+    "intro": "Benchmark runs and strategy experiments, read-only. Changes are tested here on frozen labelled datasets and only a human approval (command line) can promote one. What the lab agent writes is untrusted input. Nothing here starts it: run from its sandbox (<cmd/>, a Windows AppContainer) it cannot write your data or read your credentials; started any other way, only an in-process guard keeps it away from your data.",
+    "verdicts": {
+      "improvement": "improvement",
+      "regression": "regression",
+      "inconclusive": "inconclusive",
+      "insufficient_evidence": "insufficient evidence"
+    },
+    "nextAction": {
+      "submit_for_human_approval": {
+        "label": "next: your review",
+        "title": "Worth a human decision: python -m src.lab approve (typed confirmation)"
+      },
+      "reject": {
+        "label": "next: discard",
+        "title": "The candidate did worse or broke a guardrail"
+      },
+      "investigate": {
+        "label": "next: investigate",
+        "title": "Not enough evidence either way: more labelled jobs or another hypothesis"
+      },
+      "approved": {
+        "label": "approved by a human",
+        "title": "Promoted through the human approval command"
+      }
+    },
+    "status": {
+      "pass": {
+        "label": "pass",
+        "text": "Same decisions as the recorded baseline, and no suitable job rejected."
+      },
+      "changed": {
+        "label": "changed",
+        "text": "Some decisions differ from the recorded baseline without breaking a labelled job: review them before refreshing the baseline."
+      },
+      "regression": {
+        "label": "regression",
+        "text": "A job the baseline decided correctly is now decided wrongly."
+      },
+      "baseline_mismatch": {
+        "label": "baseline mismatch",
+        "text": "The baseline was recorded on other data: nothing could be compared."
+      },
+      "safety_violation": {
+        "label": "safety violation",
+        "text": "A job labelled suitable was rejected, or a rejection has no recorded reason."
+      }
+    },
+    "answers": {
+      "interested": "interested",
+      "not_interested": "not interested",
+      "unsure": "unsure",
+      "ranking_feedback": "ranking feedback"
+    },
+    "feedback": {
+      "notMeasured": "Feedback: not measured ({why}).",
+      "coverage": "Jobs with an answer: {answered} of {decided} decided ({percent})",
+      "latestAnswers": " · latest answers: {answers}",
+      "answerCount": "{count} {answer}",
+      "disagreements": "Answer disagrees with the decision: {rejectedInterested} rejected but interested · {acceptedNotInterested} accepted but not interested",
+      "evidence": "Decisions with recorded evidence: {percent}",
+      "signalsNotLabels": "Your answers are signals, not verified labels: a disagreement is a job to review, not proof of an error."
+    },
+    "selfCheck": {
+      "title": "Self-check",
+      "subtitle": "the current strategy replayed on frozen labelled jobs, compared with the recorded baseline",
+      "none": "No self-check recorded yet. Run it from the Start Menu (Find Your Job With AI self-check), or from a source checkout: python -m src.evaluation self-check",
+      "computed": "{date} · computed from decisions and labels ({generator}), no AI",
+      "datasetMeta": "({kind}, {jobs} jobs, {suitable} labelled suitable)",
+      "suitableRejected": "Suitable jobs rejected:",
+      "metrics": " · unsuitable jobs let through: {fp} · precision {precision} · recall {recall}",
+      "reasonCoverage": " · rejections with a stated reason: {percent}",
+      "flips": "Since the baseline: {fixed} fixed · {broken} broken · {unjudged} unlabelled or borderline",
+      "noBaseline": "No baseline is recorded for this dataset.",
+      "ranking": "Ranking quality: not measured — {why}.",
+      "feedbackHeading": "YOUR FEEDBACK (SIGNALS, NOT LABELS)",
+      "nextHeading": "WHAT TO DO NEXT",
+      "recommendationKind": {
+        "action": "action",
+        "suggestion": "suggestion"
+      },
+      "actionTitle": "Follows from a measured result",
+      "suggestionTitle": "A suggestion to test in the lab, not a result",
+      "earlier": "Earlier: {history}",
+      "unavailable": "The self-check is unavailable."
+    },
+    "runs": {
+      "title": "Evaluation runs",
+      "subtitle": "python -m src.evaluation run … — metrics on labelled jobs",
+      "confusion": "tp {tp} · fp {fp} · fn {fn} · tn {tn}",
+      "columns": {
+        "when": "When",
+        "dataset": "Dataset",
+        "strategy": "Strategy",
+        "labelled": "Labelled",
+        "confusion": "Confusion",
+        "precision": "Precision",
+        "recall": "Recall",
+        "unsafe": "Unsafe rejection"
+      },
+      "unreadable": "{count, plural, one {# unreadable file skipped} other {# unreadable files skipped}}",
+      "unavailable": "Runs are unavailable.",
+      "empty": "No evaluation run recorded yet."
+    },
+    "experiments": {
+      "title": "Experiments",
+      "subtitle": "baseline vs candidate on the same frozen dataset",
+      "eligible": "eligible for human approval",
+      "eligibleTitle": "A human may approve it; nothing is promoted automatically",
+      "independent": "independently supported",
+      "independentTitle": "The independent human labels alone support the improvement",
+      "exploratory": "exploratory only — not independently validated",
+      "exploratoryTitle": "Worth investigating only: the independent human labels alone do not support it",
+      "approved": "approved",
+      "deltas": "fixed {fixed} · broken {broken} · Δprecision {precision} · Δrecall {recall} · Δunsafe rejection {unsafe} · Δfp {fp} · Δfn {fn}",
+      "unavailable": "Experiments are unavailable.",
+      "empty": "No experiment yet."
+    },
+    "memory": {
+      "title": "Agent memory",
+      "empty": "The lab agent has not recorded anything yet.",
+      "unavailable": "The agent memory is unavailable.",
+      "recommendations": "RECOMMENDATIONS FOR YOUR REVIEW ({count, number})",
+      "refuted": "REFUTED HYPOTHESES ({count, number})",
+      "evidence": "EVIDENCE ({count, number})"
+    },
+    "active": {
+      "title": "Active strategy",
+      "unavailable": "The active strategy is unavailable.",
+      "pointer": "Pointer {pointer} → bundle {bundle} ({action}{by})",
+      "by": " by {name}",
+      "none": "No strategy has been promoted: the pipeline runs on <code>config/</code>.",
+      "pipelineBundle": "pipeline: approved bundle ({status})",
+      "pipelineConfig": "pipeline: config/ ({status})",
+      "exploratory": "approved on exploratory evidence — not independently validated",
+      "exploratoryTitle": "Approved with an explicit acknowledgement that the independent human labels alone do not support it",
+      "unrecorded": "approval evidence not recorded",
+      "unrecordedTitle": "This approval predates recorded approval evidence"
+    }
+  },
+  "pipeline": {
+    "title": "Pipeline",
+    "drop": "−{percent}% · {label}",
+    "funnel": {
+      "collected": "Collected",
+      "validated": "Validated",
+      "deduplicated": "Deduplicated",
+      "input": "Input",
+      "passed": "Passed",
+      "scored": "Scored",
+      "semantic": "Semantic matched",
+      "personalized": "Personalized",
+      "hardFilterGroup": "HARD FILTER (keywords, location, seniority, work mode…)",
+      "hardFilterDrop": "hard filter",
+      "requirementsGroup": "REQUIREMENTS GATE (education, skills)",
+      "requirementsDrop": "education & skills gate",
+      "eligibilityGroup": "AI ELIGIBILITY CHECK (implicit education/seniority — optional)",
+      "eligibilityDrop": "AI eligibility check"
+    },
+    "sources": "SOURCES",
+    "sourceTable": {
+      "source": "Source",
+      "collected": "Collected",
+      "accepted": "Accepted",
+      "errors": "Errors",
+      "status": "Status"
+    },
+    "live": {
+      "connecting": "Connecting…",
+      "running": "⟳ Running…",
+      "complete": "Run complete",
+      "failed": "Run failed",
+      "stage": "Stage: {stage}",
+      "phase2Stage": "phase2 (AI enrichment)",
+      "aiProgress": "AI enrichment: {done, number}/{total, number} analyzed",
+      "aiFailed": " ({count, number} failed)",
+      "aiPercent": " — {percent}%",
+      "aiElapsed": " — {seconds}s elapsed",
+      "aiEnabled": "✓ AI (Phase 2) enabled"
+    },
+    "duration": "Duration: {duration}",
+    "started": "Started: {date}",
+    "ended": "Ended: {date}",
+    "aiBadge": "✓ AI (Phase 2)",
+    "browseResults": "Browse results →",
+    "collectorErrors": "Collector errors ({count, number})",
+    "ranked": "{count, number} ranked",
+    "foundNew": "{found, number} found, {new, number} new",
+    "queryTable": {
+      "query": "Query",
+      "pages": "Pages",
+      "raw": "Raw",
+      "unique": "Unique",
+      "filtered": "Filtered",
+      "known": "Known",
+      "staged": "Staged",
+      "endedBy": "Ended by",
+      "failedRetried": "failed (retried next scan)"
+    },
+    "scanStats": {
+      "raw": "Raw collected",
+      "unique": "Unique",
+      "filteredOut": "Filtered out",
+      "known": "Already known",
+      "staged": "Staged (new)",
+      "failedQueries": "Failed queries",
+      "queries": "QUERIES",
+      "jobsFound": "Jobs found",
+      "newStaged": "New (staged)",
+      "metierPages": "Metier pages queried",
+      "collectorErrors": "Collector errors",
+      "collectionTime": "Collection time"
+    },
+    "linkedinHistory": "LINKEDIN SCAN HISTORY",
+    "helloworkHistory": "HELLOWORK SCAN HISTORY",
+    "history": "HISTORY",
+    "noScans": "No scans yet.",
+    "noRuns": "No runs yet."
+  },
+  "profile": {
+    "title": "Profile",
+    "loadError": "Could not load profile.",
+    "saved": "Saved!",
+    "saveFailed": "Save failed.",
+    "save": "Save profile",
+    "saving": "Saving…",
+    "remove": "Remove {item}",
+    "addPlaceholder": "Add and press Enter…",
+    "skills": {
+      "escoTitle": "Matched to ESCO taxonomy",
+      "placeholder": "Search ESCO skills, or press Enter to add custom…",
+      "addCustom": "Press Enter to add “{value}” as a custom skill"
+    },
+    "domains": {
+      "labels": {
+        "software_development": "Software Development",
+        "web_development": "Web Development",
+        "qa_testing": "QA & Testing",
+        "automation": "Automation",
+        "data": "Data & AI",
+        "it_support": "IT Support",
+        "systems": "Systems",
+        "networking": "Networking",
+        "cybersecurity": "Cybersecurity",
+        "devops": "DevOps",
+        "cloud": "Cloud",
+        "sales": "Sales",
+        "cleaning": "Cleaning",
+        "healthcare": "Healthcare",
+        "accounting": "Accounting & Finance",
+        "legal": "Legal",
+        "trades": "Skilled Trades",
+        "manual_labor": "Manual Labor & Warehouse",
+        "hospitality": "Hospitality",
+        "logistics": "Logistics & Transport",
+        "recruitment": "HR & Recruitment",
+        "procurement": "Procurement",
+        "marketing": "Marketing"
+      },
+      "curated": "Curated",
+      "placeholder": "Search any domain or occupation (e.g. software development, seller, cleaner)…",
+      "addCustomHint": "No match? Press Enter to add “{value}” as a custom domain",
+      "noMatch": "No match for “{value}” — press Enter to add it as a custom domain."
+    },
+    "location": {
+      "status": {
+        "preferred": "Preferred",
+        "acceptable": "Acceptable",
+        "excluded": "Excluded"
+      },
+      "remoteFrance": "Remote France",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "placeholder": "Search a department to add (e.g. 83 or Var)…",
+      "noMatch": "No department matches “{value}”.",
+      "remoteAdded": "🌍 Remote France added",
+      "addRemote": "🌍 Add Remote France"
+    },
+    "sections": {
+      "targets": "Target domains & skills",
+      "targetsSubtitle": "What the pipeline searches for and matches jobs against",
+      "geography": "Geography",
+      "work": "Work preferences",
+      "experience": "Experience",
+      "education": "Education"
+    },
+    "fields": {
+      "targetDomains": "Target domains",
+      "focusDomain": "Focus on domain",
+      "focusSkills": "Focus on skills",
+      "targetSkills": "Target skills",
+      "languages": "Languages",
+      "languagesPlaceholder": "Add a language and press Enter…",
+      "countries": "Preferred countries",
+      "countriesPlaceholder": "Add a country and press Enter…",
+      "remoteScope": "Remote scope",
+      "remoteScopeHint": "How far outside your preferred countries a remote job may be based",
+      "sameCountry": "Same country only",
+      "europe": "Europe",
+      "home": "Home",
+      "homeNotSet": "Not set: location ranking uses your location priorities below",
+      "homeDepartmentCentre": "centre of the département; pick your town to refine it",
+      "homePlaceholder": "Type your town or postcode…",
+      "maxDistance": "Maximum distance: {km} km",
+      "maxDistanceHint": "Estimated by road from home. Closer jobs rank higher; jobs further away rank lower but stay visible.",
+      "strictDistance": "Strict: hide on-site jobs beyond this distance",
+      "remoteAccepted": "Remote jobs I accept",
+      "remotePolicy": {
+        "remote_france": "Remote from France",
+        "remote_eu": "Remote from the EU",
+        "remote_worldwide": "Remote worldwide",
+        "hybrid": "Hybrid beyond my distance"
+      },
+      "locationHomeNote": "Used for ranking only while no home is set; once a home is set, distance and the remote choices above replace this list.",
+      "locationPriorities": "Location priorities",
+      "locationHint": "Departments and/or remote work you’d especially like, ordered by priority (drag with ↑/↓ — position #1 is your strongest preference). This drives job ranking. “Acceptable” ranks lower than “Preferred”; “Excluded” stops a location from earning a priority boost. None of these is a hard filter: jobs outside this list (including other departments and remote) remain fully eligible and can still rank highly on domain, skills, and other factors.",
+      "workModes": "Work modes",
+      "contractTypes": "Contract types",
+      "freshness": "Freshness (days)",
+      "preferredLevels": "Preferred levels",
+      "excludedSeniority": "Excluded seniority keywords",
+      "maxYears": "Max years of experience (optional)",
+      "noLimit": "No limit",
+      "maxEducation": "Maximum education level (Bac+N)"
+    },
+    "options": {
+      "remote": "remote",
+      "hybrid": "hybrid",
+      "on-site": "on-site",
+      "full-time": "full-time",
+      "part-time": "part-time",
+      "internship": "internship",
+      "freelance": "freelance",
+      "junior": "junior",
+      "mid": "mid",
+      "senior": "senior",
+      "lead": "lead"
+    }
+  },
+  "design": {
+    "title": "Design system",
+    "intro": "Tokens live in <tokens/>. Contrast is checked by <test/>.",
+    "light": "Light theme",
+    "dark": "Dark theme",
+    "sections": {
+      "colour": "Colour",
+      "contrast": "Text contrast on surface",
+      "type": "Type scale",
+      "spacing": "Spacing",
+      "radius": "Radius and shadow",
+      "buttons": "Buttons",
+      "chips": "Chips and status",
+      "controls": "Controls",
+      "stepper": "Stepper",
+      "cards": "Cards and tiles",
+      "states": "Empty, loading and error states",
+      "toasts": "Toasts"
+    },
+    "aa": "AA",
+    "belowAa": "below AA",
+    "ratio": "{ratio}:1 {verdict}",
+    "sample": "The quick brown fox",
+    "buttons": {
+      "primary": "Primary",
+      "secondary": "Secondary",
+      "ghost": "Ghost",
+      "danger": "Danger",
+      "disabled": "Disabled"
+    },
+    "switch": "A switch",
+    "switchDescription": "With a description",
+    "progress": "Progress",
+    "indeterminate": "Indeterminate",
+    "steps": {
+      "label": "Example steps",
+      "about": "About me",
+      "experience": "Experience",
+      "wishes": "What I want",
+      "where": "Where"
+    },
+    "back": "Back",
+    "next": "Next",
+    "card": {
+      "title": "Card title",
+      "subtitle": "Subtitle",
+      "action": "Action",
+      "jobs": "Jobs",
+      "matches": "Matches",
+      "loading": "Loading"
+    },
+    "empty": "Nothing here yet.",
+    "emptyAction": "Do the first thing",
+    "error": "Could not load the jobs.",
+    "errorDetails": "The local server did not answer.",
+    "retrying": "Retrying…",
+    "toast": "A {tone} message."
+  }
+}

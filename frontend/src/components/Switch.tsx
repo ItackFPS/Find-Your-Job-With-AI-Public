@@ -25,7 +25,7 @@ export function Switch({ checked, onChange, disabled = false, label, description
     flex: 'none',
     cursor: disabled ? 'not-allowed' : 'pointer',
     opacity: disabled ? 0.5 : 1,
-    transition: 'background 0.15s',
+    transition: 'background var(--motion-duration-fast) var(--motion-ease)',
   }
 
   const knob: CSSProperties = {
@@ -36,7 +36,7 @@ export function Switch({ checked, onChange, disabled = false, label, description
     height: '15px',
     borderRadius: '50%',
     background: checked ? 'var(--color-accent)' : 'var(--color-muted)',
-    transition: 'left 0.15s, background 0.15s',
+    transition: 'left var(--motion-duration-fast) var(--motion-ease), background var(--motion-duration-fast) var(--motion-ease)',
   }
 
   const control = (
