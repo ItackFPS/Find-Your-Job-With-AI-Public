@@ -19,7 +19,29 @@ export interface LocationPreference {
   label?: string | null
 }
 
+// Distance model (F4.3, src/pipeline/location_distance.py): where the user lives.
+export interface HomePlace {
+  name: string
+  insee: string | null
+  lat: number
+  lon: number
+  department: string | null
+  precision: 'commune' | 'department'
+}
+
+export interface RemotePolicy {
+  remote_france: boolean
+  remote_eu: boolean
+  remote_worldwide: boolean
+  hybrid: boolean
+}
+
 export interface Geography {
+  home: HomePlace | null
+  max_distance_km: number
+  // The only hard location exclusion: on-site, beyond max_distance_km, and this ticked.
+  strict_distance: boolean
+  remote_policy: RemotePolicy
   preferred_countries: string[]
   allowed_regions: string[]
   // The SOLE source of truth for location_fit scoring's priority tiers —
@@ -279,6 +301,19 @@ export const getAllDepartments = (): Promise<FrenchDepartment[]> =>
 
 export const searchFrenchDepartments = (q: string, limit = 8): Promise<FrenchDepartment[]> =>
   api.get<FrenchDepartment[]>('/departments', { params: { q, limit } }).then(r => r.data)
+
+export interface PlaceSuggestion {
+  name: string
+  insee: string
+  department: string | null
+  department_name: string | null
+  lat: number
+  lon: number
+}
+
+// Offline commune autocomplete (bundled table; nothing leaves the machine).
+export const searchPlaces = (q: string, limit = 8): Promise<PlaceSuggestion[]> =>
+  api.get<PlaceSuggestion[]>('/geo/places', { params: { q, limit } }).then(r => r.data)
 
 export interface CountryFacet { name: string; count: number }
 export interface CountriesResponse { total: number; facets: CountryFacet[] }

@@ -2,8 +2,9 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getProfile, updateProfile, searchEscoSkills, searchEscoOccupations,
-  getAllDepartments,
+  getAllDepartments, searchPlaces,
   type Profile, type EscoEntry, type EscoSuggestion, type FrenchDepartment, type LocationPreference,
+  type HomePlace, type PlaceSuggestion, type RemotePolicy,
 } from '../api/client'
 import { Card, LoadingState, Switch } from '../components'
 
@@ -862,6 +863,72 @@ function LocationPreferencesEditor({ values, onChange }: {
 // CheckboxGroup
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// HomePicker — offline commune autocomplete for profile.geography.home
+// ---------------------------------------------------------------------------
+
+function HomePicker({ value, onChange }: { value: HomePlace | null; onChange: (v: HomePlace) => void }) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<PlaceSuggestion[]>([])
+  const searchable = query.trim().length >= 2
+  const shown = searchable ? results : []
+  useEffect(() => {
+    if (!searchable) return
+    let cancelled = false
+    const t = setTimeout(() => {
+      searchPlaces(query.trim()).then(r => { if (!cancelled) setResults(r) }).catch(() => { if (!cancelled) setResults([]) })
+    }, 200)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [query, searchable])
+  const pick = (p: PlaceSuggestion) => {
+    onChange({ name: p.name, insee: p.insee, lat: p.lat, lon: p.lon, department: p.department, precision: 'commune' })
+    setQuery('')
+    setResults([])
+  }
+  return (
+    <div>
+      <div style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+        {value
+          ? <>{value.name}{value.department ? ` (${value.department})` : ''}
+              {value.precision === 'department' && (
+                <span style={{ color: 'var(--color-muted)' }}> — centre of the département; pick your town to refine it</span>
+              )}</>
+          : <span style={{ color: 'var(--color-muted)' }}>Not set: location ranking uses your location priorities below</span>}
+      </div>
+      <input
+        style={inputStyle}
+        value={query}
+        onChange={e => setQuery(e.target.value)}
+        placeholder="Type your town or postcode…"
+        aria-label="Home town"
+      />
+      {shown.length > 0 && (
+        <div role="listbox" style={{ border: '1px solid var(--color-border)', borderRadius: '7px', marginTop: '0.3rem' }}>
+          {shown.map(p => (
+            <button
+              key={p.insee}
+              role="option"
+              aria-selected={false}
+              onClick={() => pick(p)}
+              style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none',
+                       padding: '0.4rem 0.8rem', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.87rem' }}
+            >
+              {p.name} <span style={{ color: 'var(--color-muted)' }}>{p.department_name ?? p.department}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const REMOTE_POLICY_LABELS: [keyof RemotePolicy, string][] = [
+  ['remote_france', 'Remote from France'],
+  ['remote_eu', 'Remote from the EU'],
+  ['remote_worldwide', 'Remote worldwide'],
+  ['hybrid', 'Hybrid beyond my distance'],
+]
+
 function CheckboxGroup({ options, values, onChange }: { options: string[]; values: string[]; onChange: (v: string[]) => void }) {
   const toggle = (opt: string) => {
     if (values.includes(opt)) onChange(values.filter(x => x !== opt))
@@ -1059,11 +1126,55 @@ export default function ProfilePage() {
         </div>
 
         <div style={fieldGroup}>
+          <span style={label}>Home</span>
+          <HomePicker value={profile.geography.home} onChange={v => setGeo('home', v)} />
+        </div>
+
+        <div style={fieldGroup}>
+          <span style={label}>Maximum distance: {profile.geography.max_distance_km} km</span>
+          <div style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginBottom: '0.5rem' }}>
+            Estimated by road from home. Closer jobs rank higher; jobs further away rank lower but stay visible.
+          </div>
+          <input
+            type="range" min={5} max={300} step={5}
+            value={profile.geography.max_distance_km}
+            onChange={e => setGeo('max_distance_km', Number(e.target.value))}
+            aria-label="Maximum distance in km"
+            style={{ width: '100%' }}
+          />
+          <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.87rem', marginTop: '0.5rem' }}>
+            <input
+              type="checkbox"
+              checked={profile.geography.strict_distance}
+              onChange={e => setGeo('strict_distance', e.target.checked)}
+            />
+            Strict: hide on-site jobs beyond this distance
+          </label>
+        </div>
+
+        <div style={fieldGroup}>
+          <span style={label}>Remote jobs I accept</span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.9rem' }}>
+            {REMOTE_POLICY_LABELS.map(([key, text]) => (
+              <label key={key} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', fontSize: '0.87rem' }}>
+                <input
+                  type="checkbox"
+                  checked={profile.geography.remote_policy[key]}
+                  onChange={e => setGeo('remote_policy', { ...profile.geography.remote_policy, [key]: e.target.checked })}
+                />
+                {text}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div style={fieldGroup}>
           <span style={label}>
             Location priorities<CountBadge count={profile.geography.location_preferences.length} />
           </span>
           <div style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginBottom: '0.5rem' }}>
-            Departments and/or remote work you'd especially like, ordered by priority (drag with
+            Used for ranking only while no home is set (once a home is set, distance and the remote
+            choices above replace this list). Departments and/or remote work you'd especially like, ordered by priority (drag with
             ↑/↓ — position #1 is your strongest preference). This drives job ranking.
             "Acceptable" ranks lower than "Preferred"; "Excluded" stops a location from earning
             a priority boost. None of these is a hard filter: jobs outside this list (including
