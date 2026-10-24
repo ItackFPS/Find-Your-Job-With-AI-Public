@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button } from './Button'
 
 export interface ErrorStateProps {
@@ -15,7 +16,8 @@ export interface ErrorStateProps {
  * Error block with a recovery action (§C13): every failed load offers a way forward
  * instead of a dead end. Announced to assistive technology as an alert.
  */
-export function ErrorState({ message, details, onRetry, retryLabel = 'Try again' }: ErrorStateProps) {
+export function ErrorState({ message, details, onRetry, retryLabel }: ErrorStateProps) {
+  const { t } = useTranslation()
   return (
     <div
       role="alert"
@@ -33,7 +35,7 @@ export function ErrorState({ message, details, onRetry, retryLabel = 'Try again'
       )}
       {onRetry && (
         <div style={{ marginTop: 'var(--space-3)' }}>
-          <Button variant="secondary" onClick={onRetry}>{retryLabel}</Button>
+          <Button variant="secondary" onClick={onRetry}>{retryLabel ?? t('common.tryAgain')}</Button>
         </div>
       )}
     </div>

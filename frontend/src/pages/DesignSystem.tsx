@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import {
   AppLogo, Button, Card, Chip, EmptyState, ErrorState, LoadingState, ProgressBar, StatTile, StatusBadge,
   Stepper, Switch, useToast,
@@ -17,12 +18,7 @@ const COLOUR_TOKENS = [
 const TEXT_TOKENS = ['text', 'muted', 'accent', 'link', 'success', 'warning', 'danger', 'info', 'tier-strong']
 const TYPE_SCALE = ['xs', 'sm', 'base', 'md', 'lg', 'xl', '2xl']
 const SPACING = ['1', '2', '3', '4', '5', '6', '8', '10', '12']
-const STEPS = [
-  { key: 'about', label: 'About me' },
-  { key: 'experience', label: 'Experience' },
-  { key: 'wishes', label: 'What I want' },
-  { key: 'where', label: 'Where' },
-]
+const STEP_KEYS = ['about', 'experience', 'wishes', 'where'] as const
 
 const sectionTitle = {
   fontSize: 'var(--font-size-xs)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--color-muted)',
@@ -30,6 +26,7 @@ const sectionTitle = {
 }
 
 function ContrastTable({ panel }: { panel: HTMLElement | null }) {
+  const { t } = useTranslation()
   const rows = useMemo(() => {
     if (!panel) return []
     const style = getComputedStyle(panel)
@@ -49,7 +46,7 @@ function ContrastTable({ panel }: { panel: HTMLElement | null }) {
           <tr key={r.token}>
             <td style={{ padding: '0.15rem 0.75rem', color: `var(--color-${r.token})` }}>{r.token}</td>
             <td style={{ padding: '0.15rem 0.75rem', fontVariantNumeric: 'tabular-nums' }}>
-              {r.ratio.toFixed(2)}:1 {r.ratio >= 4.5 ? 'AA' : 'below AA'}
+              {t('design.ratio', { ratio: r.ratio.toFixed(2), verdict: r.ratio >= 4.5 ? t('design.aa') : t('design.belowAa') })}
             </td>
           </tr>
         ))}
@@ -61,15 +58,17 @@ function ContrastTable({ panel }: { panel: HTMLElement | null }) {
 function ThemePanel({ theme }: { theme: ResolvedTheme }) {
   // A callback ref: the contrast table reads this panel's computed tokens once it exists.
   const [panel, setPanel] = useState<HTMLDivElement | null>(null)
+  const { t } = useTranslation()
+  const STEPS = STEP_KEYS.map(key => ({ key, label: t(`design.steps.${key}`) }))
   const [checked, setChecked] = useState(true)
   const [step, setStep] = useState(1)
   const toast = useToast()
 
   return (
     <div ref={setPanel} data-theme={theme} style={{ flex: '1 1 420px', minWidth: 0, padding: 'var(--space-6)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
-      <h2 style={{ marginTop: 0, fontSize: 'var(--font-size-xl)' }}>{theme === 'light' ? 'Light theme' : 'Dark theme'}</h2>
+      <h2 style={{ marginTop: 0, fontSize: 'var(--font-size-xl)' }}>{theme === 'light' ? t('design.light') : t('design.dark')}</h2>
 
-      <div style={sectionTitle}>Colour</div>
+      <div style={sectionTitle}>{t('design.sections.colour')}</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 'var(--space-2)' }}>
         {COLOUR_TOKENS.map(name => (
           <div key={name} style={{ fontSize: 'var(--font-size-xs)' }}>
@@ -79,17 +78,17 @@ function ThemePanel({ theme }: { theme: ResolvedTheme }) {
         ))}
       </div>
 
-      <div style={sectionTitle}>Text contrast on surface</div>
+      <div style={sectionTitle}>{t('design.sections.contrast')}</div>
       <ContrastTable panel={panel} />
 
-      <div style={sectionTitle}>Type scale</div>
+      <div style={sectionTitle}>{t('design.sections.type')}</div>
       {TYPE_SCALE.map(size => (
         <div key={size} style={{ fontSize: `var(--font-size-${size})`, lineHeight: 'var(--line-height-tight)', marginBottom: 'var(--space-1)' }}>
-          {size} · The quick brown fox
+          <code>{size}</code> · {t('design.sample')}
         </div>
       ))}
 
-      <div style={sectionTitle}>Spacing</div>
+      <div style={sectionTitle}>{t('design.sections.spacing')}</div>
       {SPACING.map(n => (
         <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--font-size-xs)' }}>
           <code style={{ width: '5rem' }}>--space-{n}</code>
@@ -97,70 +96,70 @@ function ThemePanel({ theme }: { theme: ResolvedTheme }) {
         </div>
       ))}
 
-      <div style={sectionTitle}>Radius and shadow</div>
+      <div style={sectionTitle}>{t('design.sections.radius')}</div>
       <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
         {['sm', 'md', 'lg'].map(r => (
-          <div key={r} style={{ width: 72, height: 48, background: 'var(--color-surface)', borderRadius: `var(--radius-${r})`, boxShadow: `var(--shadow-${r})`, border: '1px solid var(--color-border)', fontSize: 'var(--font-size-xs)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div key={r} style={{ width: 72, height: 48, background: 'var(--color-surface)', borderRadius: `var(--radius-${r})`, boxShadow: `var(--shadow-${r})`, border: '1px solid var(--color-border)', fontSize: 'var(--font-size-xs)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} translate="no">
             {r}
           </div>
         ))}
       </div>
 
-      <div style={sectionTitle}>Buttons</div>
+      <div style={sectionTitle}>{t('design.sections.buttons')}</div>
       <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-        <Button variant="primary">Primary</Button>
-        <Button variant="secondary">Secondary</Button>
-        <Button variant="ghost">Ghost</Button>
-        <Button variant="danger">Danger</Button>
-        <Button variant="primary" disabled>Disabled</Button>
+        <Button variant="primary">{t('design.buttons.primary')}</Button>
+        <Button variant="secondary">{t('design.buttons.secondary')}</Button>
+        <Button variant="ghost">{t('design.buttons.ghost')}</Button>
+        <Button variant="danger">{t('design.buttons.danger')}</Button>
+        <Button variant="primary" disabled>{t('design.buttons.disabled')}</Button>
       </div>
 
-      <div style={sectionTitle}>Chips and status</div>
+      <div style={sectionTitle}>{t('design.sections.chips')}</div>
       <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', alignItems: 'center' }}>
-        {(['default', 'accent', 'success', 'warning', 'error', 'info'] as const).map(tone => <Chip key={tone} tone={tone}>{tone}</Chip>)}
+        {(['default', 'accent', 'success', 'warning', 'error', 'info'] as const).map(tone => <Chip key={tone} tone={tone}><span translate="no">{tone}</span></Chip>)}
       </div>
       <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', marginTop: 'var(--space-2)' }}>
         {['completed', 'running', 'failed', 'paused', 'skipped', 'unknown'].map(s => <StatusBadge key={s} status={s} />)}
       </div>
 
-      <div style={sectionTitle}>Controls</div>
-      <Switch checked={checked} onChange={setChecked} label="A switch" description="With a description" />
+      <div style={sectionTitle}>{t('design.sections.controls')}</div>
+      <Switch checked={checked} onChange={setChecked} label={t('design.switch')} description={t('design.switchDescription')} />
       <div style={{ marginTop: 'var(--space-3)' }}>
-        <ProgressBar value={62} label="Progress" rightLabel="62%" />
+        <ProgressBar value={62} label={t('design.progress')} rightLabel="62%" />
       </div>
       <div style={{ marginTop: 'var(--space-3)' }}>
-        <ProgressBar indeterminate label="Indeterminate" tone="success" />
+        <ProgressBar indeterminate label={t('design.indeterminate')} tone="success" />
       </div>
 
-      <div style={sectionTitle}>Stepper</div>
-      <Stepper steps={STEPS} current={step} label="Example steps" />
+      <div style={sectionTitle}>{t('design.sections.stepper')}</div>
+      <Stepper steps={STEPS} current={step} label={t('design.steps.label')} />
       <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-        <Button variant="ghost" onClick={() => setStep(s => Math.max(0, s - 1))}>Back</Button>
-        <Button variant="ghost" onClick={() => setStep(s => Math.min(STEPS.length - 1, s + 1))}>Next</Button>
+        <Button variant="ghost" onClick={() => setStep(s => Math.max(0, s - 1))}>{t('design.back')}</Button>
+        <Button variant="ghost" onClick={() => setStep(s => Math.min(STEPS.length - 1, s + 1))}>{t('design.next')}</Button>
       </div>
 
-      <div style={sectionTitle}>Cards and tiles</div>
-      <Card title="Card title" subtitle="Subtitle" actions={<Chip tone="accent">Action</Chip>}>
+      <div style={sectionTitle}>{t('design.sections.cards')}</div>
+      <Card title={t('design.card.title')} subtitle={t('design.card.subtitle')} actions={<Chip tone="accent">{t('design.card.action')}</Chip>}>
         <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-          <StatTile label="Jobs" value={1234} />
-          <StatTile label="Matches" value={42} tone="success" />
-          <StatTile label="Loading" value={null} loading />
+          <StatTile label={t('design.card.jobs')} value={1234} />
+          <StatTile label={t('design.card.matches')} value={42} tone="success" />
+          <StatTile label={t('design.card.loading')} value={null} loading />
         </div>
       </Card>
 
-      <div style={sectionTitle}>Empty, loading and error states</div>
+      <div style={sectionTitle}>{t('design.sections.states')}</div>
       <Card compact>
-        <EmptyState message="Nothing here yet." action={<Button variant="primary">Do the first thing</Button>} />
+        <EmptyState message={t('design.empty')} action={<Button variant="primary">{t('design.emptyAction')}</Button>} />
       </Card>
       <div style={{ marginTop: 'var(--space-2)' }}>
-        <LoadingState message="Loading…" />
+        <LoadingState />
       </div>
-      <ErrorState message="Could not load the jobs." details="The local server did not answer." onRetry={() => toast.show({ message: 'Retrying…' })} />
+      <ErrorState message={t('design.error')} details={t('design.errorDetails')} onRetry={() => toast.show({ message: t('design.retrying') })} />
 
-      <div style={sectionTitle}>Toasts</div>
+      <div style={sectionTitle}>{t('design.sections.toasts')}</div>
       <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
         {(['info', 'success', 'warning', 'danger'] as const).map(tone => (
-          <Button key={tone} variant="secondary" onClick={() => toast.show({ tone, message: `A ${tone} message.` })}>
+          <Button key={tone} translate="no" variant="secondary" onClick={() => toast.show({ tone, message: t('design.toast', { tone }) })}>
             {tone}
           </Button>
         ))}
@@ -170,13 +169,17 @@ function ThemePanel({ theme }: { theme: ResolvedTheme }) {
 }
 
 export default function DesignSystem() {
+  const { t } = useTranslation()
   return (
     <div>
       <h1 style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', fontSize: 'var(--font-size-xl)', marginTop: 0 }}>
-        <AppLogo size={32} /> Design system
+        <AppLogo size={32} /> {t('design.title')}
       </h1>
       <p style={{ color: 'var(--color-muted)', marginTop: 0 }}>
-        Tokens live in <code>src/styles/tokens.css</code>. Contrast is checked by <code>src/theme/__tests__/contrast.test.ts</code>.
+        <Trans
+          i18nKey="design.intro"
+          components={{ tokens: <code>src/styles/tokens.css</code>, test: <code>src/theme/__tests__/contrast.test.ts</code> }}
+        />
       </p>
       <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <ThemePanel theme="light" />

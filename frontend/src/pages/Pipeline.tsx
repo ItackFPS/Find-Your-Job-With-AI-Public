@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getRun, listRuns, getLinkedInStatus, listLinkedInScans, getHelloWorkStatus, listHelloWorkScans, type PipelineRun, type RunStats, type LinkedInScanRun, type LinkedInScanStats, type HelloWorkScanRun, type HelloWorkScanStats } from '../api/client'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
+import i18n from '../i18n'
 import { Card, StatusBadge, SourceStatus, FunnelChart, DataTable, EmptyState, LoadingState, type DataTableColumn, type FunnelRow } from '../components'
 import { findPipelineStage } from '../config/pipelineStages'
 import { formatDuration, formatElapsedBetween, formatDateTime } from '../utils'
@@ -12,7 +15,7 @@ import { formatDuration, formatElapsedBetween, formatDateTime } from '../utils'
 function dropNote(from: number | undefined, to: number | undefined, label: string): string | undefined {
   if (typeof from !== 'number' || typeof to !== 'number' || from <= 0 || to > from) return undefined
   const dropPct = Math.round((1 - to / from) * 100)
-  return dropPct > 0 ? `−${dropPct}% · ${label}` : undefined
+  return dropPct > 0 ? i18n.t('pipeline.drop', { percent: dropPct, label }) : undefined
 }
 
 // Sourced from the same canonical stage definitions Dashboard.tsx uses
@@ -24,7 +27,7 @@ const HARD_FILTER_STAGE = findPipelineStage('filter')!
 const REQUIREMENTS_GATE_STAGE = findPipelineStage('requirements_gate')!
 const LLM_ELIGIBILITY_STAGE = findPipelineStage('llm_eligibility')!
 
-function pipelineFunnelRows(s: RunStats): FunnelRow[] {
+function pipelineFunnelRows(s: RunStats, t: TFunction): FunnelRow[] {
   const base = s.collected || 1
   // The hard filter (keyword/location/seniority/work-mode/etc., src/pipeline/filter.py),
   // the requirements gate (education/skills, src/requirements/gate.py), and the
@@ -38,32 +41,33 @@ function pipelineFunnelRows(s: RunStats): FunnelRow[] {
   const elInput = LLM_ELIGIBILITY_STAGE.input(s)
   const elPassed = LLM_ELIGIBILITY_STAGE.done(s)
   return [
-    { key: 'collected', label: 'Collected', value: s.collected, max: base },
-    { key: 'validated', label: 'Validated', value: s.validated, max: base },
-    { key: 'deduplicated', label: 'Deduplicated', value: s.deduplicated, max: base },
-    { key: 'hf-input', label: 'Input', value: hfInput, max: base, groupLabel: 'HARD FILTER (keywords, location, seniority, work mode…)' },
+    { key: 'collected', label: t('pipeline.funnel.collected'), value: s.collected, max: base },
+    { key: 'validated', label: t('pipeline.funnel.validated'), value: s.validated, max: base },
+    { key: 'deduplicated', label: t('pipeline.funnel.deduplicated'), value: s.deduplicated, max: base },
+    { key: 'hf-input', label: t('pipeline.funnel.input'), value: hfInput, max: base, groupLabel: t('pipeline.funnel.hardFilterGroup') },
     {
-      key: 'hf-passed', label: 'Passed', value: hfPassed, max: base,
-      note: dropNote(hfInput, hfPassed, 'hard filter'),
+      key: 'hf-passed', label: t('pipeline.funnel.passed'), value: hfPassed, max: base,
+      note: dropNote(hfInput, hfPassed, t('pipeline.funnel.hardFilterDrop')),
     },
-    { key: 'rg-input', label: 'Input', value: rgInput, max: base, groupLabel: 'REQUIREMENTS GATE (education, skills)' },
+    { key: 'rg-input', label: t('pipeline.funnel.input'), value: rgInput, max: base, groupLabel: t('pipeline.funnel.requirementsGroup') },
     {
-      key: 'rg-passed', label: 'Passed', value: rgPassed, max: base,
-      note: dropNote(rgInput, rgPassed, 'education & skills gate'),
+      key: 'rg-passed', label: t('pipeline.funnel.passed'), value: rgPassed, max: base,
+      note: dropNote(rgInput, rgPassed, t('pipeline.funnel.requirementsDrop')),
     },
-    { key: 'el-input', label: 'Input', value: elInput, max: base, groupLabel: 'AI ELIGIBILITY CHECK (implicit education/seniority — optional)' },
+    { key: 'el-input', label: t('pipeline.funnel.input'), value: elInput, max: base, groupLabel: t('pipeline.funnel.eligibilityGroup') },
     {
-      key: 'el-passed', label: 'Passed', value: elPassed, max: base,
-      note: dropNote(elInput, elPassed, 'AI eligibility check'),
+      key: 'el-passed', label: t('pipeline.funnel.passed'), value: elPassed, max: base,
+      note: dropNote(elInput, elPassed, t('pipeline.funnel.eligibilityDrop')),
     },
-    { key: 'scored', label: 'Scored', value: s.scored, max: base },
-    { key: 'semantic', label: 'Semantic matched', value: s.semantically_matched, max: base },
-    { key: 'personalized', label: 'Personalized', value: s.personalized, max: base },
+    { key: 'scored', label: t('pipeline.funnel.scored'), value: s.scored, max: base },
+    { key: 'semantic', label: t('pipeline.funnel.semantic'), value: s.semantically_matched, max: base },
+    { key: 'personalized', label: t('pipeline.funnel.personalized'), value: s.personalized, max: base },
   ]
 }
 
 function FunnelRows({ s }: { s: RunStats }) {
-  return <FunnelChart rows={pipelineFunnelRows(s)} labelWidth="170px" />
+  const { t } = useTranslation()
+  return <FunnelChart rows={pipelineFunnelRows(s, t)} labelWidth="170px" />
 }
 
 interface SourceRow {
@@ -75,29 +79,31 @@ interface SourceRow {
   reason?: string | null
 }
 
-const SOURCE_COLUMNS: DataTableColumn<SourceRow>[] = [
-  { key: 'name', header: 'Source', render: r => <span style={{ fontFamily: 'monospace', fontSize: 'var(--font-size-sm)' }}>{r.name}</span> },
-  { key: 'collected', header: 'Collected', align: 'right', render: r => r.collected },
-  { key: 'accepted', header: 'Accepted', align: 'right', render: r => r.accepted },
-  { key: 'errors', header: 'Errors', align: 'right', render: r => <span style={{ color: r.errors > 0 ? 'var(--color-error)' : 'inherit' }}>{r.errors}</span> },
-  { key: 'status', header: 'Status', render: r => <SourceStatus status={r.status} reason={r.reason} /> },
+const sourceColumns = (t: TFunction): DataTableColumn<SourceRow>[] => [
+  { key: 'name', header: t('pipeline.sourceTable.source'), render: r => <span style={{ fontFamily: 'monospace', fontSize: 'var(--font-size-sm)' }}>{r.name}</span> },
+  { key: 'collected', header: t('pipeline.sourceTable.collected'), align: 'right', render: r => r.collected },
+  { key: 'accepted', header: t('pipeline.sourceTable.accepted'), align: 'right', render: r => r.accepted },
+  { key: 'errors', header: t('pipeline.sourceTable.errors'), align: 'right', render: r => <span style={{ color: r.errors > 0 ? 'var(--color-error)' : 'inherit' }}>{r.errors}</span> },
+  { key: 'status', header: t('pipeline.sourceTable.status'), render: r => <SourceStatus status={r.status} reason={r.reason} /> },
 ]
 
 function SourcesTable({ bySource }: { bySource: RunStats['by_source'] }) {
+  const { t } = useTranslation()
   const entries = Object.entries(bySource)
   if (entries.length === 0) return null
   const rows: SourceRow[] = entries.map(([name, st]) => ({ name, ...st }))
   return (
     <div style={{ marginTop: 'var(--space-4)' }}>
       <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--color-muted)', letterSpacing: '0.06em', marginBottom: 'var(--space-2)' }}>
-        SOURCES
+        {t('pipeline.sources')}
       </div>
-      <DataTable columns={SOURCE_COLUMNS} rows={rows} rowKey={r => r.name} />
+      <DataTable columns={sourceColumns(t)} rows={rows} rowKey={r => r.name} />
     </div>
   )
 }
 
 function LiveRun({ runId }: { runId: string }) {
+  const { t } = useTranslation()
   const { data: run } = useQuery({
     queryKey: ['run', runId],
     queryFn: () => getRun(runId),
@@ -108,37 +114,37 @@ function LiveRun({ runId }: { runId: string }) {
     },
   })
 
-  if (!run) return <LoadingState message="Connecting…" />
+  if (!run) return <LoadingState message={t('pipeline.live.connecting')} />
 
   const s = run.stats
 
   return (
     <Card
       style={{ marginBottom: 'var(--space-4)' }}
-      title={run.status === 'running' ? '⟳ Running…' : run.status === 'completed' ? 'Run complete' : 'Run failed'}
+      title={run.status === 'running' ? t('pipeline.live.running') : run.status === 'completed' ? t('pipeline.live.complete') : t('pipeline.live.failed')}
       subtitle={<span style={{ fontFamily: 'monospace' }}>{runId}</span>}
       actions={<StatusBadge status={run.status} />}
     >
       {run.status === 'running' && s.current_stage && (
         <div style={{ marginBottom: '0.4rem', fontSize: 'var(--font-size-sm)', color: 'var(--color-warning)' }}>
-          Stage: {s.current_stage === 'phase2' ? 'phase2 (AI enrichment)' : s.current_stage}
+          {t('pipeline.live.stage', { stage: s.current_stage === 'phase2' ? t('pipeline.live.phase2Stage') : s.current_stage })}
         </div>
       )}
 
       {run.status === 'running' && s.current_stage === 'phase2' && s.phase2 && (
         <div style={{ marginBottom: 'var(--space-4)', fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>
-          AI enrichment: {s.phase2.completed ?? 0}/{s.phase2.total ?? 0} analyzed
+          {t('pipeline.live.aiProgress', { done: s.phase2.completed ?? 0, total: s.phase2.total ?? 0 })}
           {typeof s.phase2.failed === 'number' && s.phase2.failed > 0 && (
-            <span style={{ color: 'var(--color-error)' }}> ({s.phase2.failed} failed)</span>
+            <span style={{ color: 'var(--color-error)' }}>{t('pipeline.live.aiFailed', { count: s.phase2.failed })}</span>
           )}
-          {typeof s.phase2.percent === 'number' && ` — ${s.phase2.percent.toFixed(0)}%`}
-          {typeof s.phase2.elapsed_seconds === 'number' && ` — ${s.phase2.elapsed_seconds.toFixed(0)}s elapsed`}
+          {typeof s.phase2.percent === 'number' && t('pipeline.live.aiPercent', { percent: s.phase2.percent.toFixed(0) })}
+          {typeof s.phase2.elapsed_seconds === 'number' && t('pipeline.live.aiElapsed', { seconds: s.phase2.elapsed_seconds.toFixed(0) })}
         </div>
       )}
 
       {s.use_ai && (
         <div style={{ marginBottom: 'var(--space-4)', fontSize: 'var(--font-size-xs)', color: 'var(--color-accent)' }}>
-          ✓ AI (Phase 2) enabled
+          {t('pipeline.live.aiEnabled')}
         </div>
       )}
 
@@ -148,7 +154,7 @@ function LiveRun({ runId }: { runId: string }) {
 
       {s.duration_seconds > 0 && (
         <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)', marginTop: 'var(--space-3)' }}>
-          Duration: {formatDuration(s.duration_seconds)}
+          {t('pipeline.duration', { duration: formatDuration(s.duration_seconds) })}
         </div>
       )}
 
@@ -161,14 +167,14 @@ function LiveRun({ runId }: { runId: string }) {
       {run.status === 'completed' && (
         <div style={{ marginTop: 'var(--space-4)', textAlign: 'right' }}>
           <Link to="/jobs" style={{ color: 'var(--color-accent)', fontSize: '0.88rem' }}>
-            Browse results →
+            {t('pipeline.browseResults')}
           </Link>
         </div>
       )}
 
       {s.errors.length > 0 && (
         <div style={{ marginTop: 'var(--space-3)' }}>
-          <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-error)', marginBottom: '0.25rem', fontWeight: 'var(--font-weight-semibold)' }}>Collector errors ({s.errors.length})</div>
+          <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-error)', marginBottom: '0.25rem', fontWeight: 'var(--font-weight-semibold)' }}>{t('pipeline.collectorErrors', { count: s.errors.length })}</div>
           {s.errors.slice(0, 5).map((e, i) => (
             <div key={i} style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-muted)', marginBottom: '0.2rem' }}>• {e}</div>
           ))}
@@ -179,6 +185,7 @@ function LiveRun({ runId }: { runId: string }) {
 }
 
 function RunDetailPanel({ run }: { run: PipelineRun }) {
+  const { t } = useTranslation()
   const s = run.stats
   const started = formatDateTime(run.started_at)
   const ended = run.completed_at ? formatDateTime(run.completed_at) : null
@@ -187,10 +194,10 @@ function RunDetailPanel({ run }: { run: PipelineRun }) {
     <Card elevated style={{ padding: '1rem 1.25rem', margin: '0.25rem 0 0.5rem' }}>
       {/* Timing */}
       <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)', marginBottom: 'var(--space-4)', display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap', alignItems: 'center' }}>
-        <span>Started: {started}</span>
-        {ended && <span>Ended: {ended}</span>}
-        {s.duration_seconds > 0 && <span>Duration: {formatDuration(s.duration_seconds)}</span>}
-        {s.use_ai && <span style={{ color: 'var(--color-accent)' }}>✓ AI (Phase 2)</span>}
+        <span>{t('pipeline.started', { date: started })}</span>
+        {ended && <span>{t('pipeline.ended', { date: ended })}</span>}
+        {s.duration_seconds > 0 && <span>{t('pipeline.duration', { duration: formatDuration(s.duration_seconds) })}</span>}
+        {s.use_ai && <span style={{ color: 'var(--color-accent)' }}>{t('pipeline.aiBadge')}</span>}
       </div>
 
       {/* Funnel */}
@@ -203,7 +210,7 @@ function RunDetailPanel({ run }: { run: PipelineRun }) {
       {s.errors.length > 0 && (
         <div style={{ marginTop: 'var(--space-4)' }}>
           <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-error)', fontWeight: 'var(--font-weight-semibold)', marginBottom: '0.3rem' }}>
-            Collector errors ({s.errors.length})
+            {t('pipeline.collectorErrors', { count: s.errors.length })}
           </div>
           {s.errors.map((e, i) => (
             <div key={i} style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-muted)', marginBottom: '0.2rem' }}>• {e}</div>
@@ -221,7 +228,7 @@ function RunDetailPanel({ run }: { run: PipelineRun }) {
       {run.status === 'completed' && (
         <div style={{ marginTop: 'var(--space-3)', textAlign: 'right' }}>
           <Link to="/jobs" style={{ color: 'var(--color-accent)', fontSize: '0.83rem' }}>
-            Browse results →
+            {t('pipeline.browseResults')}
           </Link>
         </div>
       )}
@@ -268,6 +275,7 @@ function HistoryRow({ started, id, right, status, selected, onToggle, detail }: 
 }
 
 function RunHistoryRow({ run, selected, onToggle }: { run: PipelineRun; selected: boolean; onToggle: () => void }) {
+  const { t } = useTranslation()
   return (
     <HistoryRow
       started={formatDateTime(run.started_at)}
@@ -278,7 +286,7 @@ function RunHistoryRow({ run, selected, onToggle }: { run: PipelineRun; selected
       right={
         <>
           <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>{formatDuration(run.stats.duration_seconds)}</span>
-          <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>{run.stats.personalized} ranked</span>
+          <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>{t('pipeline.ranked', { count: run.stats.personalized })}</span>
         </>
       }
       detail={<RunDetailPanel run={run} />}
@@ -288,44 +296,45 @@ function RunHistoryRow({ run, selected, onToggle }: { run: PipelineRun; selected
 
 type QueryRow = LinkedInScanStats['queries'][number]
 
-const QUERY_COLUMNS: DataTableColumn<QueryRow>[] = [
-  { key: 'search_term', header: 'Query', render: r => <span style={{ fontFamily: 'monospace', fontSize: '0.76rem', display: 'inline-block', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.search_term}>{r.search_term}</span> },
-  { key: 'pages_fetched', header: 'Pages', align: 'right', render: r => r.pages_fetched },
-  { key: 'jobs_raw', header: 'Raw', align: 'right', render: r => r.jobs_raw },
-  { key: 'jobs_unique', header: 'Unique', align: 'right', render: r => r.jobs_unique },
-  { key: 'jobs_filtered_out', header: 'Filtered', align: 'right', render: r => r.jobs_filtered_out },
-  { key: 'jobs_already_known', header: 'Known', align: 'right', render: r => r.jobs_already_known },
-  { key: 'jobs_staged', header: 'Staged', align: 'right', render: r => (
+const queryColumns = (t: TFunction): DataTableColumn<QueryRow>[] => [
+  { key: 'search_term', header: t('pipeline.queryTable.query'), render: r => <span style={{ fontFamily: 'monospace', fontSize: '0.76rem', display: 'inline-block', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.search_term}>{r.search_term}</span> },
+  { key: 'pages_fetched', header: t('pipeline.queryTable.pages'), align: 'right', render: r => r.pages_fetched },
+  { key: 'jobs_raw', header: t('pipeline.queryTable.raw'), align: 'right', render: r => r.jobs_raw },
+  { key: 'jobs_unique', header: t('pipeline.queryTable.unique'), align: 'right', render: r => r.jobs_unique },
+  { key: 'jobs_filtered_out', header: t('pipeline.queryTable.filtered'), align: 'right', render: r => r.jobs_filtered_out },
+  { key: 'jobs_already_known', header: t('pipeline.queryTable.known'), align: 'right', render: r => r.jobs_already_known },
+  { key: 'jobs_staged', header: t('pipeline.queryTable.staged'), align: 'right', render: r => (
     <span style={{ fontWeight: r.jobs_staged > 0 ? 'var(--font-weight-semibold)' : 'var(--font-weight-normal)', color: r.jobs_staged > 0 ? 'var(--color-success)' : 'inherit' }}>{r.jobs_staged}</span>
   ) },
-  { key: 'stopped_by', header: 'Ended by', render: r => (
-    <span style={{ color: r.stopped_by === 'error' ? 'var(--color-error)' : 'inherit' }}>{r.stopped_by === 'error' ? 'failed (retried next scan)' : (r.stopped_by ?? '–').replace('_', ' ')}</span>
+  { key: 'stopped_by', header: t('pipeline.queryTable.endedBy'), render: r => (
+    <span style={{ color: r.stopped_by === 'error' ? 'var(--color-error)' : 'inherit' }}>{r.stopped_by === 'error' ? t('pipeline.queryTable.failedRetried') : (r.stopped_by ?? '–').replace('_', ' ')}</span>
   ) },
 ]
 
 function ScanStatsPanel({ stats }: { stats: LinkedInScanStats }) {
+  const { t, i18n } = useTranslation()
   return (
     <div style={{ marginTop: 'var(--space-4)' }}>
       <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', marginBottom: 'var(--space-4)' }}>
         {[
-          { label: 'Raw collected', value: stats.total_raw },
-          { label: 'Unique', value: stats.total_unique },
-          { label: 'Filtered out', value: stats.total_filtered_out },
-          { label: 'Already known', value: stats.total_already_known },
-          { label: 'Staged (new)', value: stats.total_staged },
+          { label: t('pipeline.scanStats.raw'), value: stats.total_raw },
+          { label: t('pipeline.scanStats.unique'), value: stats.total_unique },
+          { label: t('pipeline.scanStats.filteredOut'), value: stats.total_filtered_out },
+          { label: t('pipeline.scanStats.known'), value: stats.total_already_known },
+          { label: t('pipeline.scanStats.staged'), value: stats.total_staged },
           // A failed query (rate limited, blocked, network error) is retried by the next scan.
-          { label: 'Failed queries', value: stats.queries_failed ?? 0, alert: (stats.queries_failed ?? 0) > 0 },
+          { label: t('pipeline.scanStats.failedQueries'), value: stats.queries_failed ?? 0, alert: (stats.queries_failed ?? 0) > 0 },
         ].map(({ label, value, alert }) => (
           <div key={label}>
             <div style={{ fontSize: '0.73rem', color: 'var(--color-muted)', marginBottom: '0.1rem' }}>{label}</div>
-            <div style={{ fontWeight: 'var(--font-weight-bold)', fontSize: '1rem', color: alert ? 'var(--color-error)' : 'inherit' }}>{value.toLocaleString()}</div>
+            <div style={{ fontWeight: 'var(--font-weight-bold)', fontSize: '1rem', color: alert ? 'var(--color-error)' : 'inherit' }}>{value.toLocaleString(i18n.language)}</div>
           </div>
         ))}
       </div>
       {stats.queries.length > 0 && (
         <div>
-          <div style={{ fontSize: '0.78rem', fontWeight: 'var(--font-weight-semibold)', color: 'var(--color-muted)', letterSpacing: '0.06em', marginBottom: 'var(--space-2)' }}>QUERIES</div>
-          <DataTable columns={QUERY_COLUMNS} rows={stats.queries} rowKey={r => r.search_term} />
+          <div style={{ fontSize: '0.78rem', fontWeight: 'var(--font-weight-semibold)', color: 'var(--color-muted)', letterSpacing: '0.06em', marginBottom: 'var(--space-2)' }}>{t('pipeline.scanStats.queries')}</div>
+          <DataTable columns={queryColumns(t)} rows={stats.queries} rowKey={r => r.search_term} />
         </div>
       )}
     </div>
@@ -333,6 +342,7 @@ function ScanStatsPanel({ stats }: { stats: LinkedInScanStats }) {
 }
 
 function ScanDetailPanel({ scan }: { scan: LinkedInScanRun }) {
+  const { t } = useTranslation()
   const started = formatDateTime(scan.started_at)
   const ended = scan.completed_at ? formatDateTime(scan.completed_at) : null
   const dur = formatElapsedBetween(scan.started_at, scan.completed_at)
@@ -340,18 +350,18 @@ function ScanDetailPanel({ scan }: { scan: LinkedInScanRun }) {
   return (
     <Card elevated style={{ padding: '1rem 1.25rem', margin: '0.25rem 0 0.5rem' }}>
       <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)', marginBottom: 'var(--space-3)', display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
-        <span>Started: {started}</span>
-        {ended && <span>Ended: {ended}</span>}
-        {scan.completed_at && <span>Duration: {dur}</span>}
+        <span>{t('pipeline.started', { date: started })}</span>
+        {ended && <span>{t('pipeline.ended', { date: ended })}</span>}
+        {scan.completed_at && <span>{t('pipeline.duration', { duration: dur })}</span>}
       </div>
       {scan.status === 'completed' && !scan.stats && (
         <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--color-muted)', marginBottom: '0.15rem' }}>Jobs found</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--color-muted)', marginBottom: '0.15rem' }}>{t('pipeline.scanStats.jobsFound')}</div>
             <div style={{ fontWeight: 'var(--font-weight-bold)', fontSize: '1.1rem' }}>{scan.jobs_found}</div>
           </div>
           <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--color-muted)', marginBottom: '0.15rem' }}>New (staged)</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--color-muted)', marginBottom: '0.15rem' }}>{t('pipeline.scanStats.newStaged')}</div>
             <div style={{ fontWeight: 'var(--font-weight-bold)', fontSize: '1.1rem', color: scan.jobs_new > 0 ? 'var(--color-success)' : 'inherit' }}>{scan.jobs_new}</div>
           </div>
         </div>
@@ -372,6 +382,7 @@ function ScanDetailPanel({ scan }: { scan: LinkedInScanRun }) {
 }
 
 function ScanHistoryRow({ scan, selected, onToggle }: { scan: LinkedInScanRun; selected: boolean; onToggle: () => void }) {
+  const { t } = useTranslation()
   return (
     <HistoryRow
       started={formatDateTime(scan.started_at)}
@@ -383,7 +394,7 @@ function ScanHistoryRow({ scan, selected, onToggle }: { scan: LinkedInScanRun; s
         scan.status === 'completed'
           ? <>
               <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>{formatElapsedBetween(scan.started_at, scan.completed_at)}</span>
-              <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>{scan.jobs_found} found, {scan.jobs_new} new</span>
+              <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>{t('pipeline.foundNew', { found: scan.jobs_found, new: scan.jobs_new })}</span>
             </>
           : <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>{formatElapsedBetween(scan.started_at, scan.completed_at)}</span>
       }
@@ -393,6 +404,7 @@ function ScanHistoryRow({ scan, selected, onToggle }: { scan: LinkedInScanRun; s
 }
 
 function LinkedInScanHistory() {
+  const { t } = useTranslation()
   const [selectedScanId, setSelectedScanId] = useState<string | null>(null)
 
   const { data: status } = useQuery({
@@ -416,12 +428,12 @@ function LinkedInScanHistory() {
   return (
     <>
       <h2 style={{ fontSize: '1rem', fontWeight: 'var(--font-weight-semibold)', margin: '1.5rem 0 0.5rem', color: 'var(--color-muted)' }}>
-        LINKEDIN SCAN HISTORY
+        {t('pipeline.linkedinHistory')}
       </h2>
       {isLoading ? (
         <LoadingState compact />
       ) : !scans || scans.length === 0 ? (
-        <EmptyState message="No scans yet." />
+        <EmptyState message={t('pipeline.noScans')} />
       ) : (
         <Card style={{ padding: '0 1.25rem' }}>
           {scans.map(s => (
@@ -439,12 +451,13 @@ function LinkedInScanHistory() {
 }
 
 function HelloWorkScanStatsPanel({ stats }: { stats: HelloWorkScanStats }) {
+  const { t } = useTranslation()
   return (
     <div style={{ marginTop: 'var(--space-4)', display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
       {[
-        { label: 'Metier pages queried', value: stats.metier_slugs_queried },
-        { label: 'Collector errors', value: stats.collector_errors },
-        { label: 'Collection time', value: stats.collection_duration_seconds != null ? `${Math.round(stats.collection_duration_seconds)}s` : null },
+        { label: t('pipeline.scanStats.metierPages'), value: stats.metier_slugs_queried },
+        { label: t('pipeline.scanStats.collectorErrors'), value: stats.collector_errors },
+        { label: t('pipeline.scanStats.collectionTime'), value: stats.collection_duration_seconds != null ? `${Math.round(stats.collection_duration_seconds)}s` : null },
       ].map(({ label, value }) => (
         <div key={label}>
           <div style={{ fontSize: '0.73rem', color: 'var(--color-muted)', marginBottom: '0.1rem' }}>{label}</div>
@@ -461,6 +474,7 @@ function HelloWorkScanStatsPanel({ stats }: { stats: HelloWorkScanStats }) {
 }
 
 function HelloWorkScanDetailPanel({ scan }: { scan: HelloWorkScanRun }) {
+  const { t } = useTranslation()
   const started = formatDateTime(scan.started_at)
   const ended = scan.completed_at ? formatDateTime(scan.completed_at) : null
   const dur = formatElapsedBetween(scan.started_at, scan.completed_at)
@@ -468,18 +482,18 @@ function HelloWorkScanDetailPanel({ scan }: { scan: HelloWorkScanRun }) {
   return (
     <Card elevated style={{ padding: '1rem 1.25rem', margin: '0.25rem 0 0.5rem' }}>
       <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)', marginBottom: 'var(--space-3)', display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
-        <span>Started: {started}</span>
-        {ended && <span>Ended: {ended}</span>}
-        {scan.completed_at && <span>Duration: {dur}</span>}
+        <span>{t('pipeline.started', { date: started })}</span>
+        {ended && <span>{t('pipeline.ended', { date: ended })}</span>}
+        {scan.completed_at && <span>{t('pipeline.duration', { duration: dur })}</span>}
       </div>
       {scan.status === 'completed' && (
         <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--color-muted)', marginBottom: '0.15rem' }}>Jobs found</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--color-muted)', marginBottom: '0.15rem' }}>{t('pipeline.scanStats.jobsFound')}</div>
             <div style={{ fontWeight: 'var(--font-weight-bold)', fontSize: '1.1rem' }}>{scan.jobs_found}</div>
           </div>
           <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--color-muted)', marginBottom: '0.15rem' }}>New (staged)</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--color-muted)', marginBottom: '0.15rem' }}>{t('pipeline.scanStats.newStaged')}</div>
             <div style={{ fontWeight: 'var(--font-weight-bold)', fontSize: '1.1rem', color: scan.jobs_new > 0 ? 'var(--color-success)' : 'inherit' }}>{scan.jobs_new}</div>
           </div>
         </div>
@@ -500,6 +514,7 @@ function HelloWorkScanDetailPanel({ scan }: { scan: HelloWorkScanRun }) {
 }
 
 function HelloWorkScanHistoryRow({ scan, selected, onToggle }: { scan: HelloWorkScanRun; selected: boolean; onToggle: () => void }) {
+  const { t } = useTranslation()
   return (
     <HistoryRow
       started={formatDateTime(scan.started_at)}
@@ -511,7 +526,7 @@ function HelloWorkScanHistoryRow({ scan, selected, onToggle }: { scan: HelloWork
         <>
           <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>{formatElapsedBetween(scan.started_at, scan.completed_at)}</span>
           {scan.status === 'completed' && (
-            <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>{scan.jobs_found} found, {scan.jobs_new} new</span>
+            <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>{t('pipeline.foundNew', { found: scan.jobs_found, new: scan.jobs_new })}</span>
           )}
         </>
       }
@@ -521,6 +536,7 @@ function HelloWorkScanHistoryRow({ scan, selected, onToggle }: { scan: HelloWork
 }
 
 function HelloWorkScanHistory() {
+  const { t } = useTranslation()
   const [selectedScanId, setSelectedScanId] = useState<string | null>(null)
 
   const { data: status } = useQuery({
@@ -544,12 +560,12 @@ function HelloWorkScanHistory() {
   return (
     <>
       <h2 style={{ fontSize: '1rem', fontWeight: 'var(--font-weight-semibold)', margin: '1.5rem 0 0.5rem', color: 'var(--color-muted)' }}>
-        HELLOWORK SCAN HISTORY
+        {t('pipeline.helloworkHistory')}
       </h2>
       {isLoading ? (
         <LoadingState compact />
       ) : !scans || scans.length === 0 ? (
-        <EmptyState message="No scans yet." />
+        <EmptyState message={t('pipeline.noScans')} />
       ) : (
         <Card style={{ padding: '0 1.25rem' }}>
           {scans.map(s => (
@@ -567,6 +583,7 @@ function HelloWorkScanHistory() {
 }
 
 export default function Pipeline() {
+  const { t } = useTranslation()
   const [activeRunId, setActiveRunId] = useState<string | null>(null)
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
 
@@ -592,18 +609,18 @@ export default function Pipeline() {
 
   return (
     <div>
-      <h1 style={{ margin: '0 0 var(--space-6)', fontSize: 'var(--font-size-xl)', fontWeight: 'var(--font-weight-bold)' }}>Pipeline</h1>
+      <h1 style={{ margin: '0 0 var(--space-6)', fontSize: 'var(--font-size-xl)', fontWeight: 'var(--font-weight-bold)' }}>{t('pipeline.title')}</h1>
 
       {activeRunId && <LiveRun key={activeRunId} runId={activeRunId} />}
 
       <h2 style={{ fontSize: '1rem', fontWeight: 'var(--font-weight-semibold)', margin: '1.5rem 0 0.5rem', color: 'var(--color-muted)' }}>
-        HISTORY
+        {t('pipeline.history')}
       </h2>
 
       {runsLoading ? (
         <LoadingState compact />
       ) : !runs || runs.length === 0 ? (
-        <EmptyState message="No runs yet." />
+        <EmptyState message={t('pipeline.noRuns')} />
       ) : (
         <Card style={{ padding: '0 1.25rem' }}>
           {runs.map(r => (

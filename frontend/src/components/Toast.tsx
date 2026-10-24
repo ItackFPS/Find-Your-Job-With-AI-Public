@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button } from './Button'
 import { ToastContext, type ToastOptions } from './toastContext'
 
@@ -28,11 +29,12 @@ function ToastView({ toast, dismiss, dismissLabel }: { toast: ToastItem; dismiss
  * Owns the toast list and renders the toast region: a polite live region in the bottom
  * right corner. Danger toasts are announced assertively and stay until dismissed.
  */
-export function ToastProvider({ children, dismissLabel = 'Dismiss notification', regionLabel = 'Notifications' }: {
+export function ToastProvider({ children, dismissLabel, regionLabel }: {
   children: ReactNode
   dismissLabel?: string
   regionLabel?: string
 }) {
+  const { t } = useTranslation()
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const nextId = useRef(1)
 
@@ -49,9 +51,9 @@ export function ToastProvider({ children, dismissLabel = 'Dismiss notification',
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <section className="fyj-toast-region" aria-label={regionLabel}>
-        {toasts.map(t => (
-          <ToastView key={t.id} toast={t} dismissLabel={dismissLabel} dismiss={dismiss} />
+      <section className="fyj-toast-region" aria-label={regionLabel ?? t('components.toast.region')}>
+        {toasts.map(item => (
+          <ToastView key={item.id} toast={item} dismissLabel={dismissLabel ?? t('components.toast.dismiss')} dismiss={dismiss} />
         ))}
       </section>
     </ToastContext.Provider>
