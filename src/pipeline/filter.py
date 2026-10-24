@@ -850,14 +850,19 @@ def filter_expected(code: str, config: dict[str, Any]) -> str | None:
 
 
 def _distance_expected(config: dict[str, Any], code: str) -> str | None:
+    """Structured (JSON) like every other ``expected``: the profile settings the check compares to."""
+    import json as _json
+
     cfg = config.get("location_distance")
     if not cfg:
         return None
     if code == "distance":
-        strict = "strict: on-site beyond it is excluded" if cfg.get("strict_distance") else "not strict"
-        return f"home {cfg['home']['name']}, max {cfg['max_distance_km']} km ({strict})"
-    accepted = [k for k, v in (cfg.get("remote_policy") or {}).items() if v]
-    return f"remote accepted: {', '.join(accepted) or 'none'}; explicit restriction to another area is excluded"
+        part: dict[str, Any] = {"home": cfg["home"]["name"], "max_distance_km": cfg["max_distance_km"],
+                                "strict_distance": bool(cfg.get("strict_distance"))}
+    else:
+        part = {"remote_accepted": [k for k, v in (cfg.get("remote_policy") or {}).items() if v],
+                "excluded": "explicit restriction to another area"}
+    return _json.dumps(part, ensure_ascii=False)
 
 
 def filter_observed(code: str, job: Job, config: dict[str, Any] | None = None) -> str | None:

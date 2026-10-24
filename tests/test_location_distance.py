@@ -180,7 +180,9 @@ def test_filter_evidence_names_the_place_and_distance():
     items = ev.filter_failure_items(_job(location="69 - Lyon"), cfg, "distance", all_failing=False)
     assert items[0].dimension == "location" and items[0].source.rule_id == "filter.distance"
     assert "Lyon" in items[0].observed and "km by road" in items[0].observed
-    assert "max 60 km" in items[0].expected
+    import json
+    assert json.loads(items[0].expected) == {"home": "Toulon", "max_distance_km": 60, "strict_distance": True}
+    assert json.loads(ev.expected_cache(cfg)["remote_policy"])["remote_accepted"] == ["remote_france", "hybrid"]
     passed = {i.source.rule_id: i for i in ev.filter_pass_items(_job(location="83 - Hyères"), cfg)}
     assert passed["filter.distance"].state == "satisfied"
     assert "filter.remote_policy" not in passed               # on-site offer: the remote policy does not apply
