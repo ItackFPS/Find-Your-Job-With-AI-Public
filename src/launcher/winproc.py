@@ -378,6 +378,16 @@ class StopEvent:
         finally:
             _k32.CloseHandle(handle)
 
+    def exists(self) -> bool:
+        """True while another process owns the event (it is neither created nor set here)."""
+        if not IS_WINDOWS:
+            return False
+        handle = _k32.OpenEventW(_SYNCHRONIZE, False, self.name)
+        if not handle:
+            return False
+        _k32.CloseHandle(handle)
+        return True
+
     def owner_stopping(self) -> bool:
         """True while another launcher owns the event and a stop has been requested of it."""
         if not IS_WINDOWS:

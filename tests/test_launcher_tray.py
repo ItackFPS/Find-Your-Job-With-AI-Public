@@ -158,10 +158,15 @@ def _item(app: TrayApp, text: str):  # noqa: ANN202
 class _FakeLauncher:
     def __init__(self, tmp_path: Path) -> None:
         self.s = SimpleNamespace(root=tmp_path, logs_dir=tmp_path / "logs", backend_url="http://127.0.0.1:1")
+        self.backend_url: str | None = None
         self.out = run.Output(None)
         self.graceful_stop_s = 1
         self.stop = threading.Event()
         self.notify = None
+        self.windows = 0
+
+    def open_window(self) -> None:
+        self.windows += 1
 
     def request_stop(self) -> None:
         self.stop.set()
@@ -261,20 +266,37 @@ def test_first_run_hint_is_shown_once(tmp_path: Path) -> None:
     assert app.icon.notes == []
 
 
-def test_open_waits_for_a_backend_that_answered_with_our_token(tmp_path: Path, monkeypatch) -> None:
-    launcher = _FakeLauncher(tmp_path)
-    launcher.backend_url = None  # type: ignore[attr-defined]  # not verified yet
-    opened: list[str] = []
-    monkeypatch.setattr("src.launcher.tray.open_dashboard", lambda url, *_a: opened.append(url))
+def test_open_waits_for_a_backend_that_answered_with_our_token(tmp_path: Path) -> None:
+    launcher = _FakeLauncher(tmp_path)                        # backend_url None: not verified yet
     app = TrayApp(launcher, _Registry().autostart(tmp_path), pystray=_fake_pystray(),  # type: ignore[arg-type]
                   image_loader=lambda _p: object(), watcher=RunWatcher(lambda: None, fetch=lambda _u: None))
     app.icon = _FakeIcon("", None, "", None)
     app.open_dashboard()
-    assert opened == [] and "still starting" in app.icon.notes[0]
+    assert launcher.windows == 0 and "still starting" in app.icon.notes[0]
     assert app.watcher.poll() is None                         # nothing is fetched from an unknown port
-    launcher.backend_url = "http://127.0.0.1:51234"  # type: ignore[attr-defined]
-    app.open_dashboard()
-    assert opened == ["http://127.0.0.1:51234"]
+    launcher.backend_url = "http://127.0.0.1:51234"
+    app.open_dashboard()                                      # opens, or focuses, the app window
+    assert launcher.windows == 1
+
+
+def test_tray_pauses_and_resumes_the_scans(tmp_path: Path, monkeypatch) -> None:
+    launcher = _FakeLauncher(tmp_path)
+    launcher.backend_url = "http://127.0.0.1:51234"
+    posted: list[str] = []
+    monkeypatch.setattr("src.launcher.core.http_post", lambda url, timeout_s=10.0: posted.append(url) or (200, b"{}"))
+    app = TrayApp(launcher, _Registry().autostart(tmp_path), pystray=_fake_pystray(),  # type: ignore[arg-type]
+                  image_loader=lambda _p: object(), watcher=RunWatcher(lambda: None, fetch=lambda _u: None))
+    app.icon = _FakeIcon("", None, "", app.menu())
+    pause, resume = _item(app, "Pause scans"), _item(app, "Resume scans")
+    assert pause.kw["visible"](pause) and not resume.kw["visible"](resume)
+    pause.action()
+    assert posted == ["http://127.0.0.1:51234/api/scheduler/pause"] and app.scans_paused
+    assert not pause.kw["visible"](pause) and resume.kw["visible"](resume)
+    resume.action()
+    assert posted[-1].endswith("/api/scheduler/resume") and not app.scans_paused
+    monkeypatch.setattr("src.launcher.core.http_post", lambda url, timeout_s=10.0: (503, b""))
+    pause.action()
+    assert not app.scans_paused and "Could not pause" in app.icon.notes[-1]
 
 
 # -- backend restart (real processes, as in test_launcher) ----------------------------------------------

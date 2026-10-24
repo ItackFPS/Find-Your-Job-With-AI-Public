@@ -6,8 +6,14 @@ sources changed, starts the backend, opens the dashboard, and stops everything i
 started when you press **Ctrl+C** or close its window.
 
 The window is the application's control panel: it shows each component's state and
-where the logs are. The dashboard opens in a chrome-less app window when Microsoft Edge
-or Google Chrome is installed, otherwise in your default browser.
+where the logs are. The dashboard opens in the app's own window (pywebview on Microsoft
+Edge WebView2, built into Windows 11), titled and iconed as the app. That window is a
+separate process: closing it ends only the window, while the backend, its scheduler and
+running scans continue (the tray icon's **Open** focuses or reopens it, **Pause scans** /
+**Resume scans** stop and restart scheduled and running scans at their next checkpoint,
+**Quit** stops everything). The window loads nothing until the backend has returned this
+instance's token. Without pywebview or the WebView2 runtime it falls back to a chrome-less
+Edge/Chrome window, then to your default browser.
 
 ## What runs, and who manages it
 

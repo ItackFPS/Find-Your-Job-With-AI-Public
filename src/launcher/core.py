@@ -172,6 +172,20 @@ def http_get(url: str, timeout_s: float = 2.0, max_bytes: int = 65536) -> tuple[
         return None
 
 
+def http_post(url: str, timeout_s: float = 10.0) -> tuple[int, bytes] | None:
+    """POST with no body to a loopback URL: (status, body) or None. No Origin header (the API's
+    origin guard lets such local clients through); never goes through a proxy."""
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    request = urllib.request.Request(url, data=b"", method="POST", headers={"Accept": "application/json"})
+    try:
+        with opener.open(request, timeout=timeout_s) as resp:
+            return resp.status, resp.read(65536)
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read(65536) if exc.fp else b""
+    except (OSError, ValueError):
+        return None
+
+
 class Backend(enum.Enum):
     FREE = "free"          # nothing listening: the launcher may start one
     OURS = "ours"          # this application answers on the port (with our token, when one is given)

@@ -162,8 +162,11 @@ $RuntimePython = Join-Path $Runtime "python.exe"
 Step "Installing the runtime dependencies (packaging/windows/requirements.txt)"
 $Requirements = Join-Path $Export "packaging\windows\requirements.txt"
 Invoke-Checked $RuntimePython @("-m", "ensurepip", "--default-pip") "ensurepip"
+# Wheels only, with one exception: proxy_tools (MIT, one pure-Python module, a pywebview dependency)
+# is published as a source archive only, so its pinned version is built here.
 Invoke-Checked $RuntimePython @("-m", "pip", "install", "--disable-pip-version-check", "--no-warn-script-location",
-                                "--only-binary=:all:", "--no-compile", "-r", $Requirements) "pip install"
+                                "--only-binary=:all:", "--no-binary=proxy_tools", "--no-compile",
+                                "-r", $Requirements) "pip install"
 Invoke-Checked $RuntimePython @("-m", "pip", "check") "pip check"
 # The installed app never installs packages: drop the installer tools (and their advisories).
 Invoke-Checked $RuntimePython @("-m", "pip", "uninstall", "--disable-pip-version-check", "-y", "pip") "removing pip"

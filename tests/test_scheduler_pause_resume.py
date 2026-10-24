@@ -539,3 +539,59 @@ def test_retry_policy_unchanged_when_the_failed_label_is_persisted(tmp_path):
 
     assert _linkedin_statuses(db_path) == [("failed", "scheduled"), ("failed", "scheduled")]
     staging.close()
+
+
+# -- "Pause scans" for the whole scheduler (the tray menu; update plan F2.2) -------------------------
+
+
+class _RunningHandler(_PausableHandler):
+    def __init__(self) -> None:
+        super().__init__()
+        self.running = False
+        self.pause_requests = 0
+
+    def is_running(self) -> bool:
+        return self.running
+
+    def request_pause(self) -> bool:
+        self.pause_requests += 1
+        return True
+
+
+def test_pause_all_stops_dispatching_and_pauses_running_scans_until_resumed(tmp_path):
+    clock = _Clock(_DAY.replace(hour=8))
+    handler = _RunningHandler()
+    service, db = _service(tmp_path, handler, clock)
+    handler.running = True
+    assert service.pause_all() == ["src"] and handler.pause_requests == 1
+    assert service.paused and service.get_status()["paused"] is True
+    handler.running = False
+    for minutes in (1, 60, 24 * 60):                     # including the next UTC day
+        clock.now = _DAY.replace(hour=8) + timedelta(minutes=minutes)
+        _tick(service)
+    assert handler.calls == 0 and _executions(db) == []
+
+    handler.paused = True                                # the scan stopped at its checkpoint
+    assert service.resume_all() == ["src"]               # resumed through its schedule
+    service.join_dispatches(timeout=5)
+    assert not service.paused and handler.calls == 1
+    assert [e["trigger"] for e in _executions(db)] == ["resume"]
+
+
+def test_scheduler_pause_routes(tmp_path):
+    from fastapi.testclient import TestClient
+
+    from src.api.app import app
+
+    clock = _Clock(_DAY.replace(hour=8))
+    service, _db = _service(tmp_path, _RunningHandler(), clock)
+    previous = getattr(app.state, "scheduler", None)
+    app.state.scheduler = service
+    try:
+        client = TestClient(app)
+        assert client.post("/api/scheduler/pause").json() == {"paused": True, "pausing": []}
+        assert client.get("/api/scheduler/status").json()["paused"] is True
+        assert client.post("/api/scheduler/resume").json() == {"paused": False, "resumed": []}
+        assert client.get("/api/scheduler/status").json()["paused"] is False
+    finally:
+        app.state.scheduler = previous

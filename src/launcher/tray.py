@@ -5,10 +5,11 @@ the same :class:`~src.launcher.run.Launcher`, same ownership rules, same stop
 event — but the launcher runs in a worker thread while a tray icon owns the main
 thread. So:
 
-* closing the dashboard window closes only the window: the backend, its scheduler
-  and any LinkedIn/HelloWork scan keep running;
-* the tray menu reopens the dashboard, toggles "Start with Windows", opens the logs,
-  and **Quit** stops everything the app started (scans stop at their next checkpoint);
+* closing the dashboard window closes only the window process (src/launcher/window.py):
+  the backend, its scheduler and any LinkedIn/HelloWork scan keep running;
+* the tray menu opens (or focuses) the window, pauses and resumes the scans, toggles
+  "Start with Windows", opens the logs, and **Quit** stops everything the app started
+  (scans stop at their next checkpoint);
 * a backend that crashes is restarted once, and the user is told;
 * a Windows notification says when a search finishes.
 
@@ -29,7 +30,7 @@ from typing import Any
 
 from src.launcher import core
 from src.launcher.autostart import Autostart
-from src.launcher.run import Launcher, open_dashboard
+from src.launcher.run import Launcher
 
 RUN_POLL_S = 30.0
 HINT_MARKER = ".tray-hint-shown"
@@ -92,6 +93,7 @@ class TrayApp:
         self.watcher = watcher or RunWatcher(lambda: launcher.backend_url)
         self.icon: Any = None
         self.exit_code = 0
+        self.scans_paused = False  # the scheduler's "Pause scans" state, as last seen
         self._ready = threading.Event()
         self._done = threading.Event()
         launcher.notify = self.notify
@@ -103,7 +105,37 @@ class TrayApp:
         if url is None:  # not answering with our token (yet): never open anything else
             self.notify("Find Your Job With AI is still starting; try again in a moment.")
             return
-        open_dashboard(url, "app", self.launcher.out)
+        self.launcher.open_window()
+
+    def pause_scans(self, *_args: object) -> None:
+        self._scheduler("pause", "Scans paused: running searches stop at their next checkpoint; "
+                                 "none starts until you resume.")
+
+    def resume_scans(self, *_args: object) -> None:
+        self._scheduler("resume", "Scans resumed.")
+
+    def _scheduler(self, action: str, done: str) -> None:
+        url = self.launcher.backend_url
+        if url is None:
+            self.notify("Find Your Job With AI is still starting; try again in a moment.")
+            return
+        result = core.http_post(f"{url}/api/scheduler/{action}")
+        if result is None or result[0] != 200:
+            self.notify(f"Could not {action} the scans. See the logs folder.")
+            return
+        self.scans_paused = action == "pause"
+        self.notify(done)
+        if self.icon is not None and hasattr(self.icon, "update_menu"):
+            self.icon.update_menu()
+
+    def _read_paused(self) -> None:
+        url = self.launcher.backend_url
+        result = core.http_get(f"{url}/api/scheduler/status", timeout_s=5.0) if url else None
+        if result is not None and result[0] == 200:
+            try:
+                self.scans_paused = bool(json.loads(result[1]).get("paused"))
+            except (ValueError, AttributeError):
+                pass
 
     def toggle_autostart(self, *_args: object) -> None:
         if self.autostart.enabled():
@@ -134,6 +166,8 @@ class TrayApp:
         item = ps.MenuItem
         return ps.Menu(
             item("Open Find Your Job With AI", self.open_dashboard, default=True),
+            item("Pause scans", self.pause_scans, visible=lambda _i: not self.scans_paused),
+            item("Resume scans", self.resume_scans, visible=lambda _i: self.scans_paused),
             ps.Menu.SEPARATOR,
             item("Start with Windows", self.toggle_autostart,
                  checked=lambda _i: self.autostart.enabled(), visible=self.autostart.supported),
@@ -161,6 +195,7 @@ class TrayApp:
 
     def _on_ready(self) -> None:
         self._ready.set()
+        self._read_paused()
         marker = self.launcher.s.logs_dir / HINT_MARKER
         if not marker.exists():
             self.notify("Find Your Job With AI keeps running here, in the notification area, so "
