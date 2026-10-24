@@ -168,7 +168,7 @@
       "profile": "Profile",
       "stats": "Stats",
       "skills": "Skills",
-      "lab": "Lab",
+      "quality": "Quality",
       "pipeline": "Pipeline",
       "label": "Main"
     },
@@ -586,6 +586,158 @@
       "exploratoryTitle": "Approved with an explicit acknowledgement that the independent human labels alone do not support it",
       "unrecorded": "approval evidence not recorded",
       "unrecordedTitle": "This approval predates recorded approval evidence"
+    }
+  },
+  "quality": {
+    "title": "Quality",
+    "intro": "Is matching safe, and is it getting better or worse? Run a check from here: no terminal needed.",
+    "checkedAt": "Checked {date}",
+    "health": {
+      "title": "Health",
+      "subtitle": "The latest check, in plain words",
+      "empty": "No health check has been run yet. It takes a few seconds.",
+      "error": "The health summary could not be loaded.",
+      "latestEvaluation": "Latest evaluation"
+    },
+    "status": {
+      "pass": {
+        "label": "Healthy",
+        "text": "Nothing moved the wrong way since the recorded baseline."
+      },
+      "measured": {
+        "label": "Measured",
+        "text": "Measured on the built-in benchmark."
+      },
+      "changed": {
+        "label": "Changed",
+        "text": "Some decisions changed since the recorded baseline: review them."
+      },
+      "regression": {
+        "label": "Worse",
+        "text": "Some offers that were handled correctly before are now handled wrongly."
+      },
+      "baseline_mismatch": {
+        "label": "Cannot compare",
+        "text": "The recorded baseline was made on other data, so nothing can be compared."
+      },
+      "safety_violation": {
+        "label": "Unsafe",
+        "text": "Suitable offers are being rejected: this must be fixed before relying on the results."
+      }
+    },
+    "sentences": {
+      "safe": "Matching is safe: 0 suitable offers rejected on the benchmark.",
+      "unsafe": "{count, plural, one {# suitable offer was rejected on the benchmark.} other {# suitable offers were rejected on the benchmark.}}",
+      "precision": "Of the offers it kept, {precision, number, percent} were really suitable ({falsePositives, plural, one {# unsuitable offer kept} other {# unsuitable offers kept}}).",
+      "recall": "It kept {recall, number, percent} of the suitable offers.",
+      "noReason": "{count, plural, one {# rejection records no reason and cannot be checked.} other {# rejections record no reason and cannot be checked.}}",
+      "flips": "Since the baseline: {fixed} decisions fixed, {broken} broken.",
+      "rankingNotMeasured": "Ranking quality is not measured yet: the benchmark only says whether an offer is suitable, not how good it is."
+    },
+    "flags": {
+      "synthetic_benchmark": "The benchmark offers are written by hand, not real postings: this says nothing about accuracy on real offers.",
+      "few_suitable_labels": "{count, plural, one {Only # suitable offer} other {Only # suitable offers}} in this test set: not enough evidence yet for firm conclusions.",
+      "labels_not_independent": "Some answers in this test set were not given independently by a person: read the numbers with care.",
+      "review_insufficient_evidence": "Not enough evidence yet to judge whether “needs your judgement” catches the right offers.",
+      "baseline_missing": "No baseline is recorded yet, so changes cannot be detected.",
+      "baseline_mismatch": "The baseline was recorded on other data."
+    },
+    "feedback": {
+      "measured": "You gave feedback on {answered} of {decided} decided offers ({coverage, number, percent}); {contradictions, plural, one {# answer disagrees} other {# answers disagree}} with the app’s decision. Feedback is a signal, not a verified label.",
+      "unavailable": "Feedback coverage is not available yet: no decisions are recorded."
+    },
+    "actions": {
+      "title": "Run a check",
+      "subtitle": "Runs in the background: you can leave this page.",
+      "runSelfCheck": "Run health check",
+      "runEvaluation": "Run evaluation",
+      "running": {
+        "self_check": "Health check running…",
+        "evaluation": "Evaluation running…"
+      },
+      "progressLabel": "Progress",
+      "cancel": "Cancel",
+      "cancelling": "Cancelling…",
+      "note": "Both use the built-in benchmark and never change your settings or offers. One check runs at a time."
+    },
+    "phases": {
+      "starting": "Starting",
+      "running": "Replaying the benchmark",
+      "summarising": "Summarising"
+    },
+    "kinds": {
+      "self_check": "Health check",
+      "evaluation": "Evaluation"
+    },
+    "jobStatus": {
+      "running": "Running",
+      "completed": "Done",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
+    "history": {
+      "title": "Past checks",
+      "empty": "No check has been run from here yet.",
+      "error": "Past checks could not be loaded.",
+      "columns": {
+        "when": "When",
+        "what": "What",
+        "status": "Status",
+        "result": "Result"
+      },
+      "result": "{unsafe} suitable rejected · precision {precision, number, percent} · recall {recall, number, percent}"
+    },
+    "runs": {
+      "title": "Runs",
+      "subtitle": "Recent searches",
+      "funnelLink": "See the full funnel",
+      "empty": "No search has run yet.",
+      "error": "Recent searches could not be loaded.",
+      "columns": {
+        "when": "When",
+        "status": "Status",
+        "result": "Result"
+      },
+      "result": "{found} found, {kept} kept"
+    },
+    "errors": {
+      "busy": "Another check is already running: wait for it to finish or cancel it.",
+      "tool_failed": "The check could not run. Details are in the backend log.",
+      "no_report": "The check finished without writing a report.",
+      "unreadable_report": "The report could not be read.",
+      "timeout": "The check took too long and was stopped.",
+      "unexpected": "Something went wrong during the check.",
+      "interrupted": "The app was closed while this check was running.",
+      "startFailed": "The check could not be started. Is the backend running?",
+      "cancelFailed": "The check could not be cancelled."
+    },
+    "toast": {
+      "done": {
+        "self_check": "Health check finished.",
+        "evaluation": "Evaluation finished."
+      },
+      "cancelled": "Check cancelled."
+    },
+    "promotion": {
+      "title": "Promoting a strategy",
+      "why": "Changing the strategy the app uses is done only from a terminal, by you. This keeps one guarantee: nothing on this page, and no automated agent, can approve a change on your behalf.",
+      "noneWaiting": "No experiment is waiting for approval. When one is, its exact command appears here.",
+      "exploratory": "This experiment rests on exploratory evidence only: the command will ask you to acknowledge that explicitly.",
+      "copy": "Copy command",
+      "copied": "Command copied.",
+      "copyFailed": "Could not copy: select the command and copy it by hand.",
+      "how": "Open a terminal in the app folder, paste the command, fill in your name and reason, then type the confirmation code it shows.",
+      "error": "Experiments could not be loaded.",
+      "placeholders": {
+        "experiment": "experiment-id",
+        "dataset": "dataset-folder",
+        "name": "your name",
+        "reason": "why"
+      }
+    },
+    "advanced": {
+      "label": "Advanced: show the full lab",
+      "description": "Evaluation runs, experiments and the lab’s notes. Lab text is shown as plain text only."
     }
   },
   "pipeline": {
