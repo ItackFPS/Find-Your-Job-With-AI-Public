@@ -79,19 +79,31 @@ def status_lines(settings: Settings) -> list[tuple[Level, str, str]]:
         state = None  # left over from a launcher that was killed: its children died with it
     rows: list[tuple[Level, str, str]] = []
 
-    backend = core.probe_backend(settings.backend_port)
-    owned = _owned_alive(state, "backend")
-    if backend is Backend.OURS:
-        who = (f"started by the launcher, pid {owned.pid}" if owned else
-               "started outside the launcher, e.g. by the FindYourJobWithAI_Backend startup task")
-        rows.append((Level.OK, "backend", f"running at {settings.backend_url} ({who})"))
-    elif backend is Backend.STARTING:
-        rows.append((Level.INFO, "backend", f"port {settings.backend_port} open, not answering yet"))
-    elif backend is Backend.FOREIGN:
-        rows.append((Level.ERROR, "backend",
-                     f"port {settings.backend_port} is used by another program"))
-    else:
+    instance = core.Instance.load(settings.instance_file)
+    if instance is not None and not process_alive(instance.pid, instance.created):
+        rows.append((Level.INFO, "instance",
+                     f"stale lock left by pid {instance.pid} (it is recovered at the next start)"))
+        instance = None
+    port = settings.backend_port if settings.fixed_port else (instance.port if instance else 0)
+    if not port:
         rows.append((Level.INFO, "backend", "not running"))
+    else:
+        url = f"http://{core.LOOPBACK}:{port}"
+        backend = core.probe_backend(port, token=instance.instance_token if instance else None)
+        owned = _owned_alive(state, "backend")
+        if backend is Backend.OURS:
+            who = (f"started by the launcher, pid {owned.pid}" if owned else
+                   "started outside the launcher, e.g. by the FindYourJobWithAI_Backend startup task")
+            rows.append((Level.OK, "backend", f"running at {url} ({who})"))
+        elif backend is Backend.STARTING:
+            rows.append((Level.INFO, "backend", f"port {port} open, not answering yet"))
+        elif backend is Backend.OTHER:
+            rows.append((Level.ERROR, "backend", f"port {port} answers as another copy of this app, "
+                         "not the instance this folder started: not connecting to it"))
+        elif backend is Backend.FOREIGN:
+            rows.append((Level.ERROR, "backend", f"port {port} is used by another program"))
+        else:
+            rows.append((Level.INFO, "backend", "not running"))
 
     fe = core.frontend_state(settings.root)
     if fe.built:
@@ -124,7 +136,7 @@ def cmd_stop(settings: Settings, out: Output, timeout_s: float = 60.0) -> int:
     event = StopEvent(settings.stop_event_name)
     if not event.signal_existing():
         out("No launcher is running for this folder; nothing to stop.")
-        if core.probe_backend(settings.backend_port) is Backend.OURS:
+        if settings.fixed_port and core.probe_backend(settings.backend_port) is Backend.OURS:
             out("The backend is running, but it was not started by the launcher (for example the")
             out("FindYourJobWithAI_Backend startup task). The launcher never stops processes it")
             out("did not start: use Task Scheduler, or scripts\\uninstall_startup.py to remove the task.")
@@ -199,12 +211,63 @@ class Launcher:
         self.state = core.State(launcher_pid=os.getpid(),
                                 launcher_created=process_creation_time(os.getpid()),
                                 mode=mode)
+        # This instance's token (never printed) and its backend's live port, once it answers.
+        self.token = core.new_instance_token()
+        self.port: int | None = None
+        self.instance: core.Instance | None = None  # the running instance a second launch found
+        self._lock_written = False
+
+    @property
+    def backend_url(self) -> str | None:
+        """The verified backend's URL: ours once it answered with our token, or the running
+        instance's (a second launch). None while there is none."""
+        if self.port is not None:
+            return f"http://{core.LOOPBACK}:{self.port}"
+        return self.instance.url if self.instance is not None else None
 
     # ---- lifecycle
 
     def request_stop(self) -> None:
         """Stop everything this launcher started (thread-safe; the tray's Quit)."""
         self.stop_requested = True
+
+    def _open_running_instance(self) -> int:
+        """A second launch: open the running instance's window, once its backend has proved
+        (by returning the token from the lock file) that it is that instance."""
+        deadline = time.monotonic() + self.s.startup_timeout_s
+        reason = ""
+        while not self.stop_requested:
+            instance = core.Instance.load(self.s.instance_file)
+            if instance is not None and process_alive(instance.pid, instance.created):
+                verdict = core.probe_backend(instance.port, token=instance.instance_token)
+                if verdict is Backend.OURS:
+                    self.instance = instance
+                    self.out("The app is already running; opening the dashboard.")
+                    open_dashboard(instance.url, self.window, self.out)
+                    return 0
+                if verdict in (Backend.OTHER, Backend.FOREIGN):
+                    reason = (f"port {instance.port} does not answer as the running instance "
+                              f"({verdict.value}); not connecting to it")
+                    break
+                reason = "its backend is not answering yet"
+            else:
+                reason = "it has not finished starting"  # no lock yet, or its owner just exited
+            if time.monotonic() > deadline:
+                break
+            time.sleep(0.5)
+        self.out(f"[XX] The app is already running, but {reason}. Try again in a moment, or run "
+                 "'FindYourJob.cmd status'.")
+        return 1
+
+    def _recover_stale_lock(self) -> None:
+        """We own the single-instance event, so a lock left on disk belongs to a launcher that
+        died without cleaning up (its backend died with it: kill-on-close job)."""
+        stale = core.Instance.load(self.s.instance_file)
+        if stale is None and not self.s.instance_file.exists():
+            return
+        who = f"pid {stale.pid}" if stale else "an unreadable lock"
+        self.out(f"Recovered a stale instance lock ({who}).")
+        core.Instance.remove(self.s)
 
     def run(self, on_ready: Callable[[], None] | None = None) -> int:
         out = self.out
@@ -219,9 +282,7 @@ class Launcher:
             return 2
         if not self.event.create():
             if not self.event.owner_stopping():
-                out("The app is already running (another launcher window owns it); opening the dashboard.")
-                open_dashboard(self._dashboard_url(), self.window, out)
-                return 0
+                return self._open_running_instance()
             # Stop, then Start at once: opening the dashboard now would show a backend about to exit
             out("The app is still stopping; starting it again once it has stopped ...")
             deadline = time.monotonic() + STOPPING_WAIT_S
@@ -232,6 +293,7 @@ class Launcher:
                 time.sleep(0.5)
         if self.handle_signals:
             self._install_signal_handlers()
+        self._recover_stale_lock()
         self.state.save(self.s.state_file)
         self.job = JobObject()
         try:
@@ -313,6 +375,10 @@ class Launcher:
             self.s.state_file.unlink()
         except OSError:
             pass
+        if self._lock_written:  # the lock is ours only once our backend answered
+            core.Instance.remove(self.s)
+            self._lock_written = False
+        self.port = None
         self.event.close()
         self._restore_signal_handlers()
 
@@ -348,44 +414,71 @@ class Launcher:
         return False
 
     def _ensure_backend(self) -> bool:
-        port = self.s.backend_port
-        state = core.probe_backend(port)
+        """Start our backend and wait until it answers with this instance's token.
+
+        Nothing that does not return the token is ever connected to: on a fixed port, a
+        backend already there (another copy of the app, or one started outside this
+        launcher) is refused like any other program. A dynamic port is picked free just
+        before uvicorn binds it; if another program takes it in between, another is tried."""
+        self.port = None
+        attempts = 1 if self.s.fixed_port else 3
+        for _attempt in range(attempts):
+            port = self.s.backend_port if self.s.fixed_port else core.free_port()
+            if self.s.fixed_port and not self._fixed_port_free(port):
+                return False
+            url = f"http://{core.LOOPBACK}:{port}"
+            self.out(f"Starting the backend on {url} ...")
+            cmd = core.backend_command(sys.executable, port, reload=self.reload)
+            env = _environ()
+            env[core.INSTANCE_TOKEN_ENV] = self.token
+            proc = self._spawn("backend", cmd, cwd=self.s.root, port=port, env=env)
+            # Only our child knows the token, so the answer proves it is ours.
+            port_taken = lambda: not self.s.fixed_port and core.port_in_use(port)  # noqa: E731
+            ok = self._wait_until(lambda: core.probe_backend(port, token=self.token) is Backend.OURS,
+                                  "backend", proc, self.s.startup_timeout_s, exit_explained=port_taken)
+            if ok and proc.poll() is None:
+                self._write_instance(port)  # before self.port: whoever sees the port finds the lock
+                self.port = port
+                self.out("[ok] backend ready")
+                return True
+            if proc.poll() is not None and port_taken() and not self.stop_requested:
+                self.state.components.pop("backend", None)
+                self.state.save(self.s.state_file)
+                self.out(f"     port {port} was taken by another program meanwhile; trying another")
+                continue
+            return False
+        self.out("[XX] could not find a free port for the backend.")
+        return False
+
+    def _fixed_port_free(self, port: int) -> bool:
+        state = core.probe_backend(port, token=self.token)
         deadline = time.monotonic() + STARTING_GRACE_S
         while state is Backend.STARTING and time.monotonic() < deadline:
             time.sleep(0.5)  # a server that has just bound the port answers soon
-            state = core.probe_backend(port)
-        if state is Backend.OURS:
-            self._reusing_backend()
+            state = core.probe_backend(port, token=self.token)
+        if state is Backend.FREE:
             return True
-        if state is not Backend.FREE:
+        if state is Backend.OTHER:
+            self.out(f"[XX] port {port} is used by another copy of {core.APP_TITLE} that this "
+                     "launcher did not start (another install, a terminal, or the startup task); "
+                     "not connecting to it.")
+        else:
             self.out(f"[XX] port {port} is already used by another program.")
-            self.out(f"     fix: stop that program, or choose another port: FindYourJob.cmd --port {port + 1}")
-            return False
-        self.out(f"Starting the backend on {self.s.backend_url} ...")
-        cmd = core.backend_command(sys.executable, port, reload=self.reload)
-        proc = self._spawn("backend", cmd, cwd=self.s.root, port=port)
-        # uvicorn binds the port only after the app's startup: a backend started at the
-        # same moment elsewhere (the logon task) can win the port, and ours then exits.
-        # Ready means OUR child answers (same pid), not merely "the app answers".
-        lost_race = lambda: core.probe_backend(port) is Backend.OURS  # noqa: E731
-        ok = self._wait_until(lambda: core.backend_pid(port) in self._owned_pids(proc), "backend",
-                              proc, self.s.startup_timeout_s, exit_explained=lost_race)
-        if ok and proc.poll() is None:
-            self.out("[ok] backend ready")
-            return True
-        if proc.poll() is not None and lost_race():
-            self.state.components.pop("backend", None)
-            self.state.save(self.s.state_file)
-            self._reusing_backend()
-            return True
+        self.out("     fix: stop that program, or choose another port: "
+                 f"FindYourJob.cmd --port {port + 1} (or remove FYJ_PORT to pick a free one)")
         return False
 
-    def _owned_pids(self, proc: subprocess.Popen[bytes]) -> set[int]:
-        return (self.job.pids() if self.job is not None else set()) | {proc.pid}
-
-    def _reusing_backend(self) -> None:
-        self.out(f"[ok] backend already running at {self.s.backend_url}; reusing it "
-                 "(this window will not stop it)")
+    def _write_instance(self, port: int) -> None:
+        answer = core.health(port) or {}
+        instance = core.Instance(pid=self.state.launcher_pid, created=self.state.launcher_created,
+                                 port=port, instance_token=self.token,
+                                 install_path=str(self.s.root),
+                                 version=str(answer.get("version", "")))
+        try:
+            self._lock_written = True
+            instance.save(self.s)
+        except OSError as exc:  # a second launch then cannot find us: say so, keep running
+            self.out(f"[!!] could not write the instance lock {self.s.instance_file}: {exc}")
 
     def _start_vite(self) -> bool:
         fe = core.frontend_state(self.s.root)
@@ -398,7 +491,7 @@ class Launcher:
             self.out(f"[XX] port {port} (dev server) is already in use.")
             return False
         env = _environ()
-        env["FYJ_API_URL"] = self.s.backend_url
+        env["FYJ_API_URL"] = self.backend_url or self.s.backend_url
         self.out(f"Starting the dashboard dev server on http://{core.LOOPBACK}:{port} ...")
         proc = self._spawn("vite", core.vite_dev_command(self.s.root, fe.node, port),
                            cwd=self.s.root / "frontend", port=port, env=env)
@@ -415,7 +508,7 @@ class Launcher:
     def _dashboard_url(self) -> str:
         if self.mode == "dev":
             return f"http://{core.LOOPBACK}:{self.s.vite_port}"
-        return self.s.backend_url
+        return self.backend_url or self.s.backend_url
 
     def _log(self, name: str) -> Path:
         return self.s.logs_dir / f"{name}.log"

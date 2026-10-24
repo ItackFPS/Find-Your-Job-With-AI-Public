@@ -140,9 +140,10 @@ Then:
 ### Run
 
 Double-click **`FindYourJob.cmd`**. It checks the installation, rebuilds the dashboard
-if needed, starts the backend on `127.0.0.1:8000` and opens the dashboard. Press
-**Ctrl+C** or close the window to stop everything it started; a backend that was already
-running (for example the logon task) is reused and left running.
+if needed, starts the backend on `127.0.0.1` at a free port and opens the dashboard. Press
+**Ctrl+C** or close the window to stop everything it started. A second launch opens the
+running instance; a backend the launcher did not start (for example the logon task) is never
+connected to: it does not know this instance's token.
 
 ```bat
 FindYourJob.cmd status        :: what is running, who owns it
@@ -319,7 +320,7 @@ Copy `.env.example` to `.env`; every variable is optional.
 | `PHASE2_LLM_PROVIDER`, `PHASE2_LLM_ENDPOINT`, `PHASE2_LLM_MODEL_NAME`, … | local LLM, see [Local AI](#local-ai) |
 | `API_ALLOWED_HOSTS` | extra `Host` names the backend accepts (e.g. `host.docker.internal`) |
 | `API_SAME_USER_ONLY` | `1` serves only processes of the account running the backend |
-| `FYJ_PORT` | backend port used by the launcher (default 8000) |
+| `FYJ_PORT` | fixed backend port for the launcher (default: a free port chosen at each start; `dev` mode: 8000) |
 | `HF_HUB_OFFLINE` | `1` once the model is cached: no Hugging Face requests at all |
 
 `AI_ENABLED`, `AI_MODEL`, `DATABASE_URL` and `LOG_LEVEL` in older `.env` files are

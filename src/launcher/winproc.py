@@ -239,6 +239,103 @@ def process_alive(pid: int, created: int | None) -> bool:
     return now is not None and (created is None or now == created)
 
 
+if IS_WINDOWS:
+    _advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)  # type: ignore[attr-defined,unused-ignore]
+    _TOKEN_QUERY = 0x0008
+    _TOKEN_USER = 1
+    _SE_FILE_OBJECT = 1
+    _DACL_SECURITY_INFORMATION = 0x00000004
+    _PROTECTED_DACL_SECURITY_INFORMATION = 0x80000000
+    _k32.GetCurrentProcess.restype = wintypes.HANDLE
+    _k32.LocalFree.argtypes = [ctypes.c_void_p]
+    _advapi32.OpenProcessToken.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE)]
+    _advapi32.GetTokenInformation.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p,
+                                              wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
+    _advapi32.ConvertSidToStringSidW.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p)]
+    _advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW.argtypes = [
+        wintypes.LPCWSTR, wintypes.DWORD, ctypes.POINTER(ctypes.c_void_p), ctypes.c_void_p]
+    _advapi32.GetSecurityDescriptorDacl.argtypes = [ctypes.c_void_p, ctypes.POINTER(wintypes.BOOL),
+                                                    ctypes.POINTER(ctypes.c_void_p),
+                                                    ctypes.POINTER(wintypes.BOOL)]
+    _advapi32.SetNamedSecurityInfoW.argtypes = [wintypes.LPCWSTR, ctypes.c_int, wintypes.DWORD,
+                                                ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
+                                                ctypes.c_void_p]
+    _advapi32.SetNamedSecurityInfoW.restype = wintypes.DWORD
+
+
+def current_user_sid() -> str | None:
+    """The SID string of the account running this process (Windows), else None."""
+    if not IS_WINDOWS:
+        return None
+    token = wintypes.HANDLE()
+    if not _advapi32.OpenProcessToken(_k32.GetCurrentProcess(), _TOKEN_QUERY, ctypes.byref(token)):
+        return None
+    try:
+        needed = wintypes.DWORD(0)
+        _advapi32.GetTokenInformation(token, _TOKEN_USER, None, 0, ctypes.byref(needed))
+        buf = ctypes.create_string_buffer(needed.value)
+        if not needed.value or not _advapi32.GetTokenInformation(token, _TOKEN_USER, buf, needed,
+                                                                 ctypes.byref(needed)):
+            return None
+        sid = ctypes.cast(buf, ctypes.POINTER(ctypes.c_void_p))[0]  # TOKEN_USER.User.Sid
+        text = ctypes.c_void_p()
+        if not _advapi32.ConvertSidToStringSidW(sid, ctypes.byref(text)) or not text.value:
+            return None
+        try:
+            return ctypes.wstring_at(text.value)
+        finally:
+            _k32.LocalFree(text)
+    finally:
+        _k32.CloseHandle(token)
+
+
+def _restrict_to_current_user(path: Path) -> None:
+    """Replace the file's DACL with a protected one: this account and SYSTEM only."""
+    sid = current_user_sid()
+    if sid is None:
+        raise OSError("cannot read the current account's SID")
+    sd = ctypes.c_void_p()
+    if not _advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            f"D:P(A;;FA;;;{sid})(A;;FA;;;SY)", 1, ctypes.byref(sd), None):
+        raise _winerror("ConvertStringSecurityDescriptorToSecurityDescriptorW")
+    try:
+        present, defaulted, dacl = wintypes.BOOL(), wintypes.BOOL(), ctypes.c_void_p()
+        if not _advapi32.GetSecurityDescriptorDacl(sd, ctypes.byref(present), ctypes.byref(dacl),
+                                                   ctypes.byref(defaulted)):
+            raise _winerror("GetSecurityDescriptorDacl")
+        rc = _advapi32.SetNamedSecurityInfoW(
+            str(path), _SE_FILE_OBJECT,
+            _DACL_SECURITY_INFORMATION | _PROTECTED_DACL_SECURITY_INFORMATION, None, None, dacl, None)
+        if rc != 0:
+            raise ctypes.WinError(rc)  # type: ignore[attr-defined,unused-ignore]
+    finally:
+        _k32.LocalFree(sd)
+
+
+def write_private_text(path: Path, text: str) -> None:
+    """Atomically write ``text`` to a file only this OS account can read (and SYSTEM, on Windows).
+
+    The temporary file is restricted *before* anything is written to it, and the rename keeps its
+    DACL, so the content is never readable by another account, not even for a moment."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        tmp.unlink()
+    except OSError:
+        pass
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o600)
+    try:
+        if IS_WINDOWS:
+            _restrict_to_current_user(tmp)
+        os.write(fd, text.encode("utf-8"))
+    except BaseException:
+        os.close(fd)
+        tmp.unlink(missing_ok=True)
+        raise
+    os.close(fd)
+    os.replace(tmp, path)
+
+
 class StopEvent:
     """Named, session-local event: owned by the running launcher, set by ``stop``."""
 
