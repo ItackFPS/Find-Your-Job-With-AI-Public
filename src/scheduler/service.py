@@ -229,6 +229,9 @@ class SchedulerService:
         # In memory on purpose: a restart of the app resumes its schedule (a paused scan itself stays
         # paused across restarts, as before, until it is resumed).
         self._paused = threading.Event()
+        # The scans "Pause scans" itself paused: "Resume scans" resumes these only, never a source
+        # the user had paused on its own before (that one stays paused until resumed on its card).
+        self._paused_by_pause_all: set[str] = set()
 
     def _open_storage(self) -> SchedulerStorage:
         return SchedulerStorage(self._db_path, clock=self._now)
@@ -281,16 +284,18 @@ class SchedulerService:
             pause = getattr(handler, "request_pause", None)
             if callable(pause) and handler.is_running() and pause():
                 asked.append(source_id)
+                self._paused_by_pause_all.add(source_id)
         logger.info("Scheduler: paused (scans asked to pause: %s).", ", ".join(asked) or "none")
         return asked
 
     def resume_all(self) -> list[str]:
-        """Dispatch scheduled runs again and resume every user-paused source through its
-        schedule (from its checkpoint). Returns the sources resumed."""
+        """Dispatch scheduled runs again and resume, through its schedule (from its checkpoint),
+        every scan that ``pause_all`` paused. Returns the sources resumed."""
         self._paused.clear()
+        ours, self._paused_by_pause_all = self._paused_by_pause_all, set()
         resumed = []
         for source_id, handler in self._handlers.items():
-            if not _flag(handler, "is_paused"):
+            if source_id not in ours or not _flag(handler, "is_paused"):
                 continue
             try:
                 if self.resume_source(source_id) is not None:
