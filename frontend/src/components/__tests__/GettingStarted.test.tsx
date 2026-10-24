@@ -15,7 +15,8 @@ describe('GettingStarted', () => {
 
   it('names the credentials each optional source needs', () => {
     renderGuide()
-    expect(screen.getByText('FRANCE_TRAVAIL_CLIENT_ID and FRANCE_TRAVAIL_CLIENT_SECRET')).toBeInTheDocument()
+    expect(screen.getByText('FRANCE_TRAVAIL_CLIENT_ID')).toBeInTheDocument()
+    expect(screen.getByText('FRANCE_TRAVAIL_CLIENT_SECRET')).toBeInTheDocument()
     expect(screen.getByText('INDEED_API_KEY')).toBeInTheDocument()
   })
 

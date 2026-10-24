@@ -8,6 +8,8 @@ import {
   type RunStats, type SourceStats, type ScanState, type LinkedInScanProgress, type HelloWorkScanProgress,
 } from '../api/client'
 import { Link } from 'react-router-dom'
+import { Trans, useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { Card, StatTile, StatusBadge, SourceStatus, Chip, ProgressBar, EmptyState, LoadingState, DataTable, Switch, GettingStarted, type DataTableColumn } from '../components'
 import { PIPELINE_STAGES, type PipelineStageDef } from '../config/pipelineStages'
 import { usePipelineEvents, stageLabel, type ConnectionState, type ActivityEntry } from '../hooks/usePipelineEvents'
@@ -73,6 +75,7 @@ export function ScannerStatusCard({ name, queryKey, triggerFn, pauseFn, resumeFn
   status: ScannerStatus | undefined
   avgDurationSeconds: number | null
 }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   // Set when Scan now / Resume is accepted; cleared only once the backend
   // confirms the start (see startHoldEnded in utils/scannerControl.ts).
@@ -136,18 +139,18 @@ export function ScannerStatusCard({ name, queryKey, triggerFn, pauseFn, resumeFn
     // Backend work-based estimate (LinkedIn): continues from the checkpoint
     // after a restart; no ETA is shown rather than a guess (issue #86).
     const etaLabel = work.etaSeconds === null
-      ? control.state === 'pausing' ? 'Pausing at the next page…' : 'Time remaining: not enough data yet'
-      : work.etaSeconds > 5 ? `~${formatEta(work.etaSeconds)} remaining (estimated)` : 'Finishing up…'
+      ? control.state === 'pausing' ? t('dashboard.scanner.pausingNextPage') : t('dashboard.scanner.etaUnknown')
+      : work.etaSeconds > 5 ? t('dashboard.scanner.etaRemaining', { eta: formatEta(work.etaSeconds) }) : t('dashboard.scanner.finishing')
     estimate = { pct: work.percent, etaLabel }
   } else if (status.is_scanning && scan?.started_at && avgDurationSeconds) {
     const elapsed = (now - new Date(scan.started_at).getTime()) / 1000
     const pct = Math.max(1, Math.min(97, Math.round((elapsed / avgDurationSeconds) * 100)))
     const remaining = avgDurationSeconds - elapsed
     const etaLabel = remaining > 5
-      ? `~${formatEta(remaining)} remaining (estimated)`
+      ? t('dashboard.scanner.etaRemaining', { eta: formatEta(remaining) })
       : elapsed > avgDurationSeconds * 1.3
-        ? 'Taking longer than usual…'
-        : 'Finishing up…'
+        ? t('dashboard.scanner.slow')
+        : t('dashboard.scanner.finishing')
     estimate = { pct, etaLabel }
   }
 
@@ -178,11 +181,11 @@ export function ScannerStatusCard({ name, queryKey, triggerFn, pauseFn, resumeFn
         <div>
           {estimate ? (
             <>
-              <ProgressBar value={estimate.pct} tone="accent" label="Searching queries…" rightLabel={`~${estimate.pct}%`} />
+              <ProgressBar value={estimate.pct} tone="accent" label={t('dashboard.scanner.searching')} rightLabel={`~${estimate.pct}%`} />
               <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-muted)', marginTop: '0.3rem' }}>{estimate.etaLabel}</div>
             </>
           ) : (
-            <ProgressBar indeterminate tone="accent" label="Searching queries…" />
+            <ProgressBar indeterminate tone="accent" label={t('dashboard.scanner.searching')} />
           )}
           {progressLabel && (
             <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-muted)', marginTop: '0.3rem' }}>{progressLabel}</div>
@@ -190,24 +193,25 @@ export function ScannerStatusCard({ name, queryKey, triggerFn, pauseFn, resumeFn
         </div>
       ) : control.state === 'paused' || control.state === 'interrupted' ? (
         <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>
-          {control.state === 'paused' ? 'Paused' : 'Interrupted — resumes from checkpoint'}
-          {work ? ` · ~${work.percent}% done` : ''}
+          {control.state === 'paused' ? t('dashboard.scanner.paused') : t('dashboard.scanner.interrupted')}
+          {work ? t('dashboard.scanner.percentDone', { percent: work.percent }) : ''}
           {progressLabel ? ` · ${progressLabel}` : ''}
         </div>
       ) : scan ? (
         <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>
           {scan.status === 'completed'
-            ? `${scan.jobs_found.toLocaleString()} found · ${scan.jobs_new.toLocaleString()} new`
-            : `Last attempt ${formatDateTime(scan.started_at)}`}
+            ? t('dashboard.scanner.foundNew', { found: scan.jobs_found, new: scan.jobs_new })
+            : t('dashboard.scanner.lastAttempt', { date: formatDateTime(scan.started_at) })}
         </div>
       ) : (
-        <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>No scans yet.</div>
+        <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>{t('dashboard.scanner.noScans')}</div>
       )}
     </Card>
   )
 }
 
 function ScannerStatusRow() {
+  const { t } = useTranslation()
   const { data: liStatus } = useQuery({ queryKey: ['linkedin-status'], queryFn: getLinkedInStatus, refetchInterval: 5000 })
   const { data: hwStatus } = useQuery({ queryKey: ['hellowork-status'], queryFn: getHelloWorkStatus, refetchInterval: 5000 })
   const { data: liScans } = useQuery({ queryKey: ['linkedin-scans'], queryFn: () => listLinkedInScans(20), enabled: liStatus?.enabled === true })
@@ -218,8 +222,8 @@ function ScannerStatusRow() {
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
-      <ScannerStatusCard name="LinkedIn scan" queryKey="linkedin-status" triggerFn={triggerLinkedInScan} pauseFn={pauseLinkedInScan} resumeFn={resumeLinkedInScan} status={liStatus} avgDurationSeconds={averageDurationSeconds(liScans)} />
-      <ScannerStatusCard name="HelloWork scan" queryKey="hellowork-status" triggerFn={triggerHelloWorkScan} pauseFn={pauseHelloWorkScan} resumeFn={resumeHelloWorkScan} status={hwStatus} avgDurationSeconds={averageDurationSeconds(hwScans)} />
+      <ScannerStatusCard name={t('dashboard.scanner.linkedin')} queryKey="linkedin-status" triggerFn={triggerLinkedInScan} pauseFn={pauseLinkedInScan} resumeFn={resumeLinkedInScan} status={liStatus} avgDurationSeconds={averageDurationSeconds(liScans)} />
+      <ScannerStatusCard name={t('dashboard.scanner.hellowork')} queryKey="hellowork-status" triggerFn={triggerHelloWorkScan} pauseFn={pauseHelloWorkScan} resumeFn={resumeHelloWorkScan} status={hwStatus} avgDurationSeconds={averageDurationSeconds(hwScans)} />
     </div>
   )
 }
@@ -233,26 +237,28 @@ interface SourceRow {
   reason?: string | null
 }
 
-const SOURCE_COLUMNS: DataTableColumn<SourceRow>[] = [
-  { key: 'name', header: 'Source', render: r => <span style={{ fontWeight: 'var(--font-weight-medium)' }}>{r.name}</span> },
-  { key: 'collected', header: 'Collected', align: 'right', render: r => <span style={{ color: 'var(--color-muted)' }}>{r.collected}</span> },
-  { key: 'accepted', header: 'Accepted', align: 'right', render: r => <span style={{ color: 'var(--color-success)' }}>{r.accepted}</span> },
-  { key: 'rejected', header: 'Rejected', align: 'right', render: r => <span style={{ color: 'var(--color-muted)' }}>{r.collected - r.accepted}</span> },
-  { key: 'errors', header: 'Errors', align: 'right', render: r => <span style={{ color: r.errors > 0 ? 'var(--color-error)' : 'var(--color-muted)' }}>{r.errors}</span> },
-  { key: 'status', header: 'Status', render: r => <SourceStatus status={r.status} reason={r.reason} /> },
+const sourceColumns = (t: TFunction): DataTableColumn<SourceRow>[] => [
+  { key: 'name', header: t('dashboard.sourceTable.source'), render: r => <span style={{ fontWeight: 'var(--font-weight-medium)' }}>{r.name}</span> },
+  { key: 'collected', header: t('dashboard.sourceTable.collected'), align: 'right', render: r => <span style={{ color: 'var(--color-muted)' }}>{r.collected}</span> },
+  { key: 'accepted', header: t('dashboard.sourceTable.accepted'), align: 'right', render: r => <span style={{ color: 'var(--color-success)' }}>{r.accepted}</span> },
+  { key: 'rejected', header: t('dashboard.sourceTable.rejected'), align: 'right', render: r => <span style={{ color: 'var(--color-muted)' }}>{r.collected - r.accepted}</span> },
+  { key: 'errors', header: t('dashboard.sourceTable.errors'), align: 'right', render: r => <span style={{ color: r.errors > 0 ? 'var(--color-error)' : 'var(--color-muted)' }}>{r.errors}</span> },
+  { key: 'status', header: t('dashboard.sourceTable.status'), render: r => <SourceStatus status={r.status} reason={r.reason} /> },
 ]
 
 function BySourceTable({ bySource }: { bySource: Record<string, SourceStats> }) {
+  const { t } = useTranslation()
   const rows: SourceRow[] = Object.entries(bySource)
     .map(([name, s]) => ({ name, ...s }))
     .sort((a, b) => b.collected - a.collected)
   if (rows.length === 0) return null
-  return <DataTable columns={SOURCE_COLUMNS} rows={rows} rowKey={r => r.name} />
+  return <DataTable columns={sourceColumns(t)} rows={rows} rowKey={r => r.name} />
 }
 
 function CountryList({ byCountry }: { byCountry: Record<string, number> }) {
+  const { t } = useTranslation()
   const sorted = Object.entries(byCountry).sort((a, b) => b[1] - a[1]).slice(0, 10)
-  if (sorted.length === 0) return <span style={{ color: 'var(--color-muted)', fontSize: 'var(--font-size-sm)' }}>No data</span>
+  if (sorted.length === 0) return <span style={{ color: 'var(--color-muted)', fontSize: 'var(--font-size-sm)' }}>{t('common.noData')}</span>
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
       {sorted.map(([c, n]) => (
@@ -289,12 +295,13 @@ interface CurrentRun {
 }
 
 function CurrentRunCard({ run, activity, isLive }: { run: CurrentRun; activity: ActivityEntry[]; isLive: boolean }) {
+  const { t } = useTranslation()
   const s = run.stats
 
   return (
     <Card
       style={{ marginBottom: 'var(--space-5)', borderColor: run.status === 'running' ? 'var(--color-accent)' : 'var(--color-border)' }}
-      title={isLive ? 'Live run' : 'Latest run'}
+      title={isLive ? t('dashboard.liveRun') : t('dashboard.latestRun')}
       subtitle={!isLive && run.startedAt ? `${new Date(run.startedAt).toLocaleString()} · ${formatDuration(s.duration_seconds)}` : undefined}
       actions={
         <>
@@ -319,45 +326,45 @@ function CurrentRunCard({ run, activity, isLive }: { run: CurrentRun; activity: 
       )}
 
       <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', marginBottom: 'var(--space-5)' }}>
-        <StatTile label="Collected" value={s.collected} />
-        <StatTile label="Validated" value={s.validated} />
-        <StatTile label="Deduplicated" value={s.deduplicated} />
-        <StatTile label="Filtered" value={s.filtered} />
-        <StatTile label="Scored" value={s.scored} />
-        <StatTile label="Matched" value={s.personalized} tone="success" />
-        {s.errors.length > 0 && <StatTile label="Errors" value={s.errors.length} tone="error" />}
+        <StatTile label={t('dashboard.tiles.collected')} value={s.collected} />
+        <StatTile label={t('dashboard.tiles.validated')} value={s.validated} />
+        <StatTile label={t('dashboard.tiles.deduplicated')} value={s.deduplicated} />
+        <StatTile label={t('dashboard.tiles.filtered')} value={s.filtered} />
+        <StatTile label={t('dashboard.tiles.scored')} value={s.scored} />
+        <StatTile label={t('dashboard.tiles.matched')} value={s.personalized} tone="success" />
+        {s.errors.length > 0 && <StatTile label={t('dashboard.tiles.errors')} value={s.errors.length} tone="error" />}
       </div>
 
-      <SectionLabel>PIPELINE STAGES</SectionLabel>
+      <SectionLabel>{t('dashboard.sections.stages')}</SectionLabel>
       <StageFunnelLive stats={s} currentStage={run.stage} runStatus={run.status} />
 
       {Object.keys(s.by_source).length > 0 && (
         <div style={{ marginTop: 'var(--space-5)' }}>
-          <SectionLabel>BY SOURCE{run.stage === 'collect' ? ' (live)' : ''}</SectionLabel>
+          <SectionLabel>{run.stage === 'collect' ? t('dashboard.sections.bySourceLive') : t('dashboard.sections.bySource')}</SectionLabel>
           <BySourceTable bySource={s.by_source} />
         </div>
       )}
 
       {Object.keys(s.by_country).length > 0 && (
         <div style={{ marginTop: 'var(--space-5)' }}>
-          <SectionLabel>BY COUNTRY</SectionLabel>
+          <SectionLabel>{t('dashboard.sections.byCountry')}</SectionLabel>
           <CountryList byCountry={s.by_country} />
         </div>
       )}
 
       {activity.length > 0 && (
         <div style={{ marginTop: 'var(--space-5)' }}>
-          <SectionLabel>ACTIVITY</SectionLabel>
+          <SectionLabel>{t('dashboard.sections.activity')}</SectionLabel>
           <ActivityLog entries={activity} />
         </div>
       )}
 
       {s.errors.length > 0 && (
         <div style={{ marginTop: 'var(--space-5)' }}>
-          <SectionLabel color="var(--color-error)">ERRORS</SectionLabel>
+          <SectionLabel color="var(--color-error)">{t('dashboard.sections.errors')}</SectionLabel>
           <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>
             {s.errors.slice(0, 5).map((e, i) => <div key={i} style={{ marginBottom: '0.25rem' }}>• {e}</div>)}
-            {s.errors.length > 5 && <div>…and {s.errors.length - 5} more</div>}
+            {s.errors.length > 5 && <div>{t('dashboard.moreErrors', { count: s.errors.length - 5 })}</div>}
           </div>
         </div>
       )}
@@ -366,11 +373,12 @@ function CurrentRunCard({ run, activity, isLive }: { run: CurrentRun; activity: 
 }
 
 function ConnectionBadge({ connection }: { connection: ConnectionState }) {
+  const { t } = useTranslation()
   const meta: Record<ConnectionState, { label: string; color: string }> = {
-    connecting: { label: 'Connecting…', color: 'var(--color-muted)' },
-    live: { label: '● Live', color: 'var(--color-success)' },
-    reconnecting: { label: '● Reconnecting…', color: 'var(--color-warning)' },
-    offline: { label: '● Offline', color: 'var(--color-error)' },
+    connecting: { label: t('dashboard.connection.connecting'), color: 'var(--color-muted)' },
+    live: { label: t('dashboard.connection.live'), color: 'var(--color-success)' },
+    reconnecting: { label: t('dashboard.connection.reconnecting'), color: 'var(--color-warning)' },
+    offline: { label: t('dashboard.connection.offline'), color: 'var(--color-error)' },
   }
   const m = meta[connection]
   return <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 'var(--font-weight-semibold)', color: m.color }}>{m.label}</span>
@@ -405,6 +413,7 @@ function StageProgress({ stage, stats }: { stage: string; stats: RunStats }) {
 // ---------------------------------------------------------------------------
 
 function StageFunnelRow({ def, status, stats }: { def: PipelineStageDef; status: 'done' | 'running' | 'pending'; stats: RunStats }) {
+  const { t } = useTranslation()
   const input = def.input(stats)
   const done = def.done(stats)
   const live = stats.stage_progress
@@ -412,13 +421,13 @@ function StageFunnelRow({ def, status, stats }: { def: PipelineStageDef; status:
 
   let rightLabel: string
   if (liveMatch) {
-    rightLabel = `${(live!.processed ?? 0).toLocaleString()} / ${live!.total!.toLocaleString()} ${def.unit}`
+    rightLabel = t('dashboard.funnel.liveCount', { processed: live!.processed ?? 0, total: live!.total!, unit: def.unit })
   } else if (status === 'done') {
     rightLabel = typeof done === 'number'
       ? (typeof input === 'number' ? `${done.toLocaleString()} / ${input.toLocaleString()}` : done.toLocaleString())
       : '–'
   } else if (status === 'running') {
-    rightLabel = 'working…'
+    rightLabel = t('dashboard.funnel.working')
   } else {
     rightLabel = '–'
   }
@@ -477,6 +486,7 @@ function ActivityLog({ entries }: { entries: ActivityEntry[] }) {
 }
 
 export default function Dashboard() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard'],
@@ -499,9 +509,10 @@ export default function Dashboard() {
   if (error) {
     return (
       <div style={{ color: 'var(--color-error)', padding: '2rem', lineHeight: 1.6 }}>
-        Could not reach the backend. Start the app again with its <strong>Find Your Job With AI</strong>{' '}
-        shortcut (or <code>FindYourJob.cmd</code>); if it does not start, its window shows why, and the
-        details are in <code>logs\launcher\launcher.log</code> in the application folder.
+        <Trans
+          i18nKey="dashboard.backendError"
+          components={{ app: <strong />, cmd: <code>FindYourJob.cmd</code>, log: <code>{'logs\\launcher\\launcher.log'}</code> }}
+        />
       </div>
     )
   }
@@ -522,15 +533,15 @@ export default function Dashboard() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-6)', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-        <h1 style={{ margin: 0, fontSize: 'var(--font-size-xl)', fontWeight: 'var(--font-weight-bold)' }}>Dashboard</h1>
+        <h1 style={{ margin: 0, fontSize: 'var(--font-size-xl)', fontWeight: 'var(--font-weight-bold)' }}>{t('dashboard.title')}</h1>
         <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
           <ConnectionBadge connection={connection} />
           <span style={{ color: 'var(--color-muted)', fontSize: 'var(--font-size-sm)' }}>
-            {d.total_jobs_in_db.toLocaleString()} jobs in DB
+            {t('dashboard.jobsInDb', { count: d.total_jobs_in_db })}
           </span>
           {!liveEvent && d.is_running && (
             <span style={{ color: 'var(--color-warning)', fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)' }}>
-              ⟳ Pipeline running…
+              {t('dashboard.pipelineRunning')}
             </span>
           )}
           {runError && (
@@ -542,8 +553,8 @@ export default function Dashboard() {
             checked={useAi}
             onChange={setUseAi}
             disabled={runPending || isAlreadyRunning}
-            label="AI Understanding"
-            description="Deeper matching · slower run"
+            label={t('dashboard.ai.label')}
+            description={t('dashboard.ai.description')}
           />
           <button
             onClick={() => triggerRun()}
@@ -559,7 +570,7 @@ export default function Dashboard() {
               cursor: (runPending || isAlreadyRunning) ? 'not-allowed' : 'pointer',
             }}
           >
-            {runPending ? 'Starting…' : isAlreadyRunning ? 'Running…' : 'Run pipeline'}
+            {runPending ? t('dashboard.run.starting') : isAlreadyRunning ? t('dashboard.run.running') : t('dashboard.run.start')}
           </button>
         </div>
       </div>
@@ -573,7 +584,7 @@ export default function Dashboard() {
       ) : (
         <Card>
           <EmptyState
-            message={<>No pipeline runs yet.{' '}<button onClick={() => triggerRun()} disabled={runPending} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-accent)', cursor: runPending ? 'not-allowed' : 'pointer', font: 'inherit', textDecoration: 'underline' }}>Run the pipeline</button> to see results here.</>}
+            message={<Trans i18nKey="dashboard.noRuns" components={{ run: <button onClick={() => triggerRun()} disabled={runPending} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-accent)', cursor: runPending ? 'not-allowed' : 'pointer', font: 'inherit', textDecoration: 'underline' }} /> }} />}
           />
         </Card>
       )}
@@ -581,7 +592,7 @@ export default function Dashboard() {
       {matchedCount > 0 && (
         <div style={{ marginTop: 'var(--space-4)', textAlign: 'center' }}>
           <Link to="/jobs" style={{ color: 'var(--color-accent)', fontSize: 'var(--font-size-base)' }}>
-            Browse {matchedCount} matched jobs →
+            {t('dashboard.browseMatched', { count: matchedCount })}
           </Link>
         </div>
       )}

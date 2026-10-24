@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   getJob, getJobExplanation, updateJobApplicationStatus, recordJobEvent, getFeedbackVocabulary, getJobFeedback,
   postJobFeedback, getJobDecision,
@@ -10,11 +11,12 @@ import { Card, Chip, LoadingState } from '../components'
 import { daysAgo, httpUrl } from '../utils'
 
 function OverallScore({ score }: { score: number }) {
+  const { t } = useTranslation()
   const color = score >= 70 ? 'var(--color-success)' : score >= 45 ? 'var(--color-warning)' : 'var(--color-muted)'
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-      <span style={{ fontSize: '0.85rem', color: 'var(--color-muted)' }}>Overall match</span>
-      <span style={{ fontSize: '1.25rem', fontWeight: 'var(--font-weight-bold)', color }}>{score}/100</span>
+      <span style={{ fontSize: '0.85rem', color: 'var(--color-muted)' }}>{t('jobDetail.overallMatch')}</span>
+      <span style={{ fontSize: '1.25rem', fontWeight: 'var(--font-weight-bold)', color }}>{t('jobDetail.scoreOutOf', { score })}</span>
     </div>
   )
 }
@@ -38,27 +40,23 @@ function ReasonList({ title, reasons }: { title: string; reasons: ExplanationRea
   )
 }
 
-const FACTOR_LABELS: Record<string, string> = {
-  location_fit: 'Location',
-  domain_relevance: 'Domain',
-  skills_match: 'Skills',
-  seniority_match: 'Seniority',
-  experience_fit: 'Experience',
-}
+// Factors with a translated label (jobDetail.factors.<key>); any other key shows as sent.
+const KNOWN_FACTORS = new Set(['location_fit', 'domain_relevance', 'skills_match', 'seniority_match', 'experience_fit'])
 
 export function MatchFactorsSection({ factors }: { factors: Record<string, number> | undefined | null }) {
+  const { t } = useTranslation()
   const entries = Object.entries(factors ?? {}).filter(([, v]) => typeof v === 'number')
   if (entries.length === 0) return null
 
   return (
-    <Card title="Match factors" style={{ marginBottom: 'var(--space-4)' }}>
+    <Card title={t('jobDetail.factors.title')} style={{ marginBottom: 'var(--space-4)' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
         {entries.map(([key, value]) => {
           const pct = Math.max(0, Math.min(100, Math.round(value * 100)))
           return (
             <div key={key}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '0.2rem' }}>
-                <span style={{ color: 'var(--color-text)' }}>{FACTOR_LABELS[key] ?? key}</span>
+                <span style={{ color: 'var(--color-text)' }}>{KNOWN_FACTORS.has(key) ? t(`jobDetail.factors.${key}`) : key}</span>
                 <span style={{ color: 'var(--color-muted)' }}>{pct}%</span>
               </div>
               <div style={{ height: '6px', borderRadius: 'var(--radius-pill)', background: 'var(--color-border)', overflow: 'hidden' }}>
@@ -72,23 +70,18 @@ export function MatchFactorsSection({ factors }: { factors: Record<string, numbe
   )
 }
 
-const SIGNAL_LABELS: Record<string, string> = {
-  company: 'Company',
-  skill: 'Skill',
-  title_keyword: 'Title keyword',
-  remote: 'Remote work',
-}
+const KNOWN_SIGNALS = new Set(['company', 'skill', 'title_keyword', 'remote'])
 
 export function PersonalizationSection({ expl }: { expl: JobExplanation }) {
+  const { t } = useTranslation()
   const signals = expl.personalization_signals ?? []
   const adjustment = expl.personalization_adjustment ?? 0
 
   if (signals.length === 0) {
     return (
-      <Card title="Personalization" style={{ marginBottom: 'var(--space-4)' }}>
+      <Card title={t('jobDetail.personalization.title')} style={{ marginBottom: 'var(--space-4)' }}>
         <div style={{ fontSize: '0.85rem', color: 'var(--color-muted)' }}>
-          No personalization applied yet. Feedback you give on a job is recorded to evaluate and
-          improve the matching.
+          {t('jobDetail.personalization.none')}
         </div>
       </Card>
     )
@@ -98,7 +91,7 @@ export function PersonalizationSection({ expl }: { expl: JobExplanation }) {
 
   return (
     <Card
-      title="Personalization"
+      title={t('jobDetail.personalization.title')}
       style={{ marginBottom: 'var(--space-4)' }}
       actions={
         <span style={{
@@ -106,7 +99,7 @@ export function PersonalizationSection({ expl }: { expl: JobExplanation }) {
           fontWeight: 'var(--font-weight-semibold)',
           color: isPositive ? 'var(--color-success)' : 'var(--color-error)',
         }}>
-          {isPositive ? '+' : ''}{(adjustment * 100).toFixed(1)} pts
+          {t('jobDetail.personalization.points', { value: `${isPositive ? '+' : ''}${(adjustment * 100).toFixed(1)}` })}
         </span>
       }
     >
@@ -114,8 +107,8 @@ export function PersonalizationSection({ expl }: { expl: JobExplanation }) {
         {signals.map((s, i) => (
           <li key={i} style={{ fontSize: '0.85rem', padding: '0.25rem 0', display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ color: 'var(--color-text)' }}>
-              {SIGNAL_LABELS[s.signal_type] ?? s.signal_type}: {s.value}
-              <span style={{ color: 'var(--color-muted)' }}> ({s.feedback_count} feedback)</span>
+              {KNOWN_SIGNALS.has(s.signal_type) ? t(`jobDetail.personalization.signals.${s.signal_type}`) : s.signal_type}: {s.value}
+              <span style={{ color: 'var(--color-muted)' }}>{t('jobDetail.personalization.feedbackCount', { count: s.feedback_count })}</span>
             </span>
             <span style={{ color: s.contribution >= 0 ? 'var(--color-success)' : 'var(--color-error)' }}>
               {s.contribution >= 0 ? '+' : ''}{(s.contribution * 100).toFixed(1)}
@@ -128,6 +121,7 @@ export function PersonalizationSection({ expl }: { expl: JobExplanation }) {
 }
 
 function ExplanationSection({ expl }: { expl: JobExplanation }) {
+  const { t } = useTranslation()
   const isRejected = expl.filter_result === 'rejected'
   const hasReasons = (
     expl.positive_reasons.length > 0 ||
@@ -138,7 +132,7 @@ function ExplanationSection({ expl }: { expl: JobExplanation }) {
   return (
     <Card
       style={{ marginBottom: 'var(--space-4)' }}
-      title={isRejected ? 'Why was this rejected?' : 'Why this job?'}
+      title={isRejected ? t('jobDetail.explanation.whyRejected') : t('jobDetail.explanation.whyThisJob')}
       actions={
         <span style={{
           fontSize: '0.8rem',
@@ -149,44 +143,47 @@ function ExplanationSection({ expl }: { expl: JobExplanation }) {
           color: isRejected ? 'var(--color-error)' : 'var(--color-success)',
           border: `1px solid color-mix(in srgb, ${isRejected ? 'var(--color-error)' : 'var(--color-success)'} 27%, transparent)`,
         }}>
-          {isRejected ? 'Rejected' : 'Accepted'}
+          {isRejected ? t('jobDetail.explanation.rejected') : t('jobDetail.explanation.accepted')}
         </span>
       }
     >
       {hasReasons ? (
         <>
           {expl.positive_reasons.length > 0 && (
-            <ReasonList title="Positive matches" reasons={expl.positive_reasons} />
+            <ReasonList title={t('jobDetail.explanation.positive')} reasons={expl.positive_reasons} />
           )}
           {expl.concerns.length > 0 && (
-            <ReasonList title="Things to check" reasons={expl.concerns} />
+            <ReasonList title={t('jobDetail.explanation.concerns')} reasons={expl.concerns} />
           )}
           {expl.rejection_reasons.length > 0 && (
-            <ReasonList title="Rejection reasons" reasons={expl.rejection_reasons} />
+            <ReasonList title={t('jobDetail.explanation.rejections')} reasons={expl.rejection_reasons} />
           )}
         </>
       ) : (
         <div style={{ fontSize: '0.85rem', color: 'var(--color-muted)' }}>
-          Unable to determine the reason.
+          {t('jobDetail.explanation.unknown')}
         </div>
       )}
     </Card>
   )
 }
 
-const APPLICATION_STATUSES: { value: string | null; label: string; color: string }[] = [
-  { value: null,        label: 'No status',  color: 'var(--color-muted)' },
-  { value: 'to_apply',  label: 'To Apply',   color: 'var(--color-accent)' },
-  { value: 'applied',   label: 'Applied',    color: 'var(--color-warning)' },
-  { value: 'waiting',   label: 'Waiting',    color: 'var(--color-warning)' },
-  { value: 'interview', label: 'Interview',  color: 'var(--color-success)' },
-  { value: 'accepted',  label: 'Accepted',   color: 'var(--color-success)' },
-  { value: 'rejected',  label: 'Rejected',   color: 'var(--color-error)' },
-  { value: 'denied',    label: 'Denied',     color: 'var(--color-error)' },
-  { value: 'withdrawn', label: 'Withdrawn',  color: 'var(--color-muted)' },
+// Labels: jobDetail.applicationStatus.<value> ("none" for no status).
+const APPLICATION_STATUSES: { value: string | null; color: string }[] = [
+  { value: null,        color: 'var(--color-muted)' },
+  { value: 'to_apply',  color: 'var(--color-accent)' },
+  { value: 'applied',   color: 'var(--color-warning)' },
+  { value: 'waiting',   color: 'var(--color-warning)' },
+  { value: 'interview', color: 'var(--color-success)' },
+  { value: 'accepted',  color: 'var(--color-success)' },
+  { value: 'rejected',  color: 'var(--color-error)' },
+  { value: 'denied',    color: 'var(--color-error)' },
+  { value: 'withdrawn', color: 'var(--color-muted)' },
 ]
 
 function ApplicationStatusSection({ job }: { job: Job }) {
+  const { t } = useTranslation()
+  const statusLabel = (value: string | null) => t(`jobDetail.applicationStatus.${value ?? 'none'}`)
   const queryClient = useQueryClient()
   const { mutate: setStatus, isPending } = useMutation({
     mutationFn: (status: string | null) => updateJobApplicationStatus(job.id, status),
@@ -200,7 +197,7 @@ function ApplicationStatusSection({ job }: { job: Job }) {
   return (
     <Card style={{ marginBottom: 'var(--space-4)' }}>
       <div style={{ fontSize: '0.75rem', fontWeight: 'var(--font-weight-semibold)', color: 'var(--color-muted)', letterSpacing: '0.06em', marginBottom: 'var(--space-3)' }}>
-        APPLICATION STATUS
+        {t('jobDetail.applicationStatus.title')}
       </div>
       <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
         {APPLICATION_STATUSES.map(s => {
@@ -222,38 +219,26 @@ function ApplicationStatusSection({ job }: { job: Job }) {
                 transition: 'all 0.12s',
               }}
             >
-              {s.label}
+              {statusLabel(s.value)}
             </button>
           )
         })}
       </div>
       {job.application_status && (
         <div style={{ marginTop: '0.6rem', fontSize: '0.78rem', color: current.color, fontWeight: 'var(--font-weight-semibold)' }}>
-          Current: {current.label}
+          {t('jobDetail.applicationStatus.current', { status: statusLabel(current.value) })}
         </div>
       )}
     </Card>
   )
 }
 
-const FEEDBACK_TYPE_LABELS: Record<string, string> = {
-  interested: 'Interested',
-  not_interested: 'Not interested',
-  ranking_feedback: 'Mis-ranked',
-  unsure: 'Not sure',
-}
-
-const FEEDBACK_REASON_LABELS: Record<string, string> = {
-  too_far: 'Too far',
-  too_senior: 'Too senior',
-  insufficient_skills: 'Insufficient skills',
-  off_domain: 'Off-domain',
-  salary: 'Salary',
-  contract_type: 'Contract type',
-  interesting_despite_low_score: 'Interesting despite low score',
-  mis_ranked: 'Mis-ranked',
-  other: 'Other',
-}
+// Codes from the backend vocabulary with a translated label; an unknown code shows as sent.
+const FEEDBACK_TYPES = new Set(['interested', 'not_interested', 'ranking_feedback', 'unsure'])
+const FEEDBACK_REASONS = new Set([
+  'too_far', 'too_senior', 'insufficient_skills', 'off_domain', 'salary', 'contract_type',
+  'interesting_despite_low_score', 'mis_ranked', 'other',
+])
 
 // Presentational: all data and the submit action come from props (testable without a router/query client).
 export function FeedbackPanel({
@@ -264,6 +249,9 @@ export function FeedbackPanel({
   pending: boolean
   onSubmit: (body: { type: string; reasons: string[]; note?: string }) => Promise<unknown>
 }) {
+  const { t } = useTranslation()
+  const typeLabel = (code: string) => (FEEDBACK_TYPES.has(code) ? t(`jobDetail.feedback.types.${code}`) : code)
+  const reasonLabel = (code: string) => (FEEDBACK_REASONS.has(code) ? t(`jobDetail.feedback.reasons.${code}`) : code)
   const [type, setType] = useState<string | null>(null)
   const [reasons, setReasons] = useState<string[]>([])
   const [note, setNote] = useState('')
@@ -273,7 +261,7 @@ export function FeedbackPanel({
 
   const toggle = (r: string) =>
     setReasons(prev => (prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r]))
-  const pick = (t: string) => { setType(t); setReasons([]); setError(null) }
+  const pick = (code: string) => { setType(code); setReasons([]); setError(null) }
   // Reset the form only once the server has accepted the feedback: on failure the user keeps
   // their selection and note and sees an error.
   const submit = async () => {
@@ -282,7 +270,7 @@ export function FeedbackPanel({
       await onSubmit({ type, reasons, note: note.trim() || undefined })
       setType(null); setReasons([]); setNote(''); setError(null)
     } catch {
-      setError('Could not save your feedback. Please try again.')
+      setError(t('jobDetail.feedback.saveError'))
     }
   }
   const pill = (active: boolean): CSSProperties => ({
@@ -296,45 +284,45 @@ export function FeedbackPanel({
   })
 
   return (
-    <Card title="Your feedback" style={{ marginBottom: 'var(--space-4)' }}>
+    <Card title={t('jobDetail.feedback.title')} style={{ marginBottom: 'var(--space-4)' }}>
       <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-        {vocabulary.explicit_types.map(t => (
-          <button key={t} type="button" aria-pressed={type === t} onClick={() => pick(t)} style={pill(type === t)}>
-            {FEEDBACK_TYPE_LABELS[t] ?? t}
+        {vocabulary.explicit_types.map(code => (
+          <button key={code} type="button" aria-pressed={type === code} onClick={() => pick(code)} style={pill(type === code)}>
+            {typeLabel(code)}
           </button>
         ))}
       </div>
       {type && (
         <div style={{ marginTop: '0.75rem' }}>
-          <div style={{ fontSize: '0.75rem', color: 'var(--color-muted)', marginBottom: '0.4rem' }}>Why? (optional)</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--color-muted)', marginBottom: '0.4rem' }}>{t('jobDetail.feedback.why')}</div>
           <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
             {allowed.map(r => (
               <button key={r} type="button" aria-pressed={reasons.includes(r)} onClick={() => toggle(r)} style={pill(reasons.includes(r))}>
-                {FEEDBACK_REASON_LABELS[r] ?? r}
+                {reasonLabel(r)}
               </button>
             ))}
           </div>
           <textarea
-            aria-label="Feedback note"
+            aria-label={t('jobDetail.feedback.noteLabel')}
             value={note}
             maxLength={500}
             onChange={e => setNote(e.target.value)}
-            placeholder="Add a note (optional)"
+            placeholder={t('jobDetail.feedback.notePlaceholder')}
             style={{ width: '100%', marginTop: '0.6rem', fontSize: '0.85rem' }}
           />
           <button type="button" disabled={pending} onClick={submit} style={{ ...pill(true), marginTop: '0.5rem' }}>
-            Save feedback
+            {t('jobDetail.feedback.save')}
           </button>
           {error && <div role="alert" style={{ marginTop: '0.4rem', fontSize: '0.8rem', color: 'var(--color-error)' }}>{error}</div>}
         </div>
       )}
       <div style={{ marginTop: '0.6rem', fontSize: '0.75rem', color: 'var(--color-muted)' }}>
-        Recorded locally to evaluate and improve matching — it does not change your ranking yet.
+        {t('jobDetail.feedback.localOnly')}
       </div>
       {last && (
         <div style={{ marginTop: '0.4rem', fontSize: '0.78rem', color: 'var(--color-muted)' }}>
-          Last: {FEEDBACK_TYPE_LABELS[last.type] ?? last.type}
-          {last.reasons.length > 0 && <> — {last.reasons.map(r => FEEDBACK_REASON_LABELS[r] ?? r).join(', ')}</>}
+          {t('jobDetail.feedback.last', { type: typeLabel(last.type) })}
+          {last.reasons.length > 0 && t('jobDetail.feedback.lastReasons', { reasons: last.reasons.map(reasonLabel).join(', ') })}
         </div>
       )}
     </Card>
@@ -342,6 +330,7 @@ export function FeedbackPanel({
 }
 
 function FeedbackSection({ jobId, decisionId }: { jobId: string; decisionId?: string }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { data: vocabulary, isError } = useQuery({ queryKey: ['feedback-vocabulary'], queryFn: getFeedbackVocabulary })
   const { data: events } = useQuery({ queryKey: ['job-feedback', jobId], queryFn: () => getJobFeedback(jobId) })
@@ -351,7 +340,7 @@ function FeedbackSection({ jobId, decisionId }: { jobId: string; decisionId?: st
       postJobFeedback(jobId, { ...body, decision_id: decisionId }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['job-feedback', jobId] }),
   })
-  if (isError) return <Card title="Your feedback" style={{ marginBottom: 'var(--space-4)' }}><div style={{ fontSize: '0.85rem', color: 'var(--color-muted)' }}>Feedback is currently unavailable.</div></Card>
+  if (isError) return <Card title={t('jobDetail.feedback.title')} style={{ marginBottom: 'var(--space-4)' }}><div style={{ fontSize: '0.85rem', color: 'var(--color-muted)' }}>{t('jobDetail.feedback.unavailable')}</div></Card>
   if (!vocabulary) return null
   return <FeedbackPanel vocabulary={vocabulary} events={events ?? []} pending={isPending} onSubmit={mutateAsync} />
 }
@@ -359,13 +348,15 @@ function FeedbackSection({ jobId, decisionId }: { jobId: string; decisionId?: st
 // Presentational: the decision record for a job — what supports it, what argues against it, what is
 // UNKNOWN, what conflicts — straight from the journal (nothing recomputed in the browser).
 export function DecisionPanel({ decision }: { decision: DecisionRecord }) {
+  const { t } = useTranslation()
   const assessment = decision.signals?.assessment
   const by = (p: DecisionEvidence['polarity']) => decision.evidence.filter(e => e.polarity === p)
+  // `title` is the already translated heading, with the count in it.
   const group = (title: string, items: DecisionEvidence[]) =>
     items.length === 0 ? null : (
       <div style={{ marginBottom: '0.7rem' }}>
         <div style={{ fontSize: '0.75rem', fontWeight: 'var(--font-weight-semibold)', color: 'var(--color-muted)', letterSpacing: '0.06em', marginBottom: '0.3rem' }}>
-          {title.toUpperCase()} ({items.length})
+          {title}
         </div>
         <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
           {items.map((e, i) => (
@@ -378,30 +369,30 @@ export function DecisionPanel({ decision }: { decision: DecisionRecord }) {
       </div>
     )
   return (
-    <Card title="Decision record" style={{ marginBottom: 'var(--space-4)' }}>
+    <Card title={t('jobDetail.decision.title')} style={{ marginBottom: 'var(--space-4)' }}>
       <div style={{ fontSize: '0.85rem', marginBottom: '0.7rem' }}>{decision.summary.headline}</div>
       {decision.decision_confidence != null && (
         <div style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginBottom: '0.5rem' }}>
-          Decision confidence {decision.decision_confidence.toFixed(2)}
-          {decision.confidence_calibrated ? '' : ' (agreement-based, not calibrated)'}
+          {t('jobDetail.decision.confidence', { value: decision.decision_confidence.toFixed(2) })}
+          {decision.confidence_calibrated ? '' : t('jobDetail.decision.notCalibrated')}
         </div>
       )}
       {assessment && assessment.state === 'review' && (
         <div role="note" style={{ fontSize: '0.82rem', color: 'var(--color-warning)', marginBottom: '0.7rem' }}>
-          {decision.outcome === 'review' ? 'Flagged for review' : 'Would be flagged for review (shadow mode)'}:{' '}
+          {decision.outcome === 'review' ? t('jobDetail.decision.flagged') : t('jobDetail.decision.wouldFlag')}:{' '}
           {assessment.reasons.join('; ')}.{' '}
           {decision.outcome === 'accepted' || decision.outcome === 'review'
-            ? 'The job stays ranked and visible.'
-            : 'The job remains rejected; this only queues it for a human look.'}
+            ? t('jobDetail.decision.staysVisible')
+            : t('jobDetail.decision.staysRejected')}
         </div>
       )}
-      {group('Supporting', by('positive'))}
-      {group('Against', by('negative'))}
-      {group('Unknown', by('unknown'))}
+      {group(t('jobDetail.decision.supporting', { count: by('positive').length }), by('positive'))}
+      {group(t('jobDetail.decision.against', { count: by('negative').length }), by('negative'))}
+      {group(t('jobDetail.decision.unknown', { count: by('unknown').length }), by('unknown'))}
       {decision.conflicts.length > 0 && (
         <div style={{ marginBottom: '0.5rem' }}>
           <div style={{ fontSize: '0.75rem', fontWeight: 'var(--font-weight-semibold)', color: 'var(--color-warning)', letterSpacing: '0.06em', marginBottom: '0.3rem' }}>
-            CONFLICTS ({decision.conflicts.length})
+            {t('jobDetail.decision.conflicts', { count: decision.conflicts.length })}
           </div>
           <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
             {decision.conflicts.map((c, i) => <li key={i} style={{ fontSize: '0.82rem' }}>{c.description}</li>)}
@@ -409,13 +400,14 @@ export function DecisionPanel({ decision }: { decision: DecisionRecord }) {
         </div>
       )}
       <div style={{ fontSize: '0.72rem', color: 'var(--color-muted)' }}>
-        Decision {decision.decision_id.slice(0, 8)} · run {decision.run_id.slice(0, 8)}
+        {t('jobDetail.decision.ids', { decision: decision.decision_id.slice(0, 8), run: decision.run_id.slice(0, 8) })}
       </div>
     </Card>
   )
 }
 
 function JobHeader({ job, overallScore }: { job: Job; overallScore: number | null }) {
+  const { t } = useTranslation()
   const age = daysAgo(job.published_at)
   const originalUrl = httpUrl(job.apply_url) ?? httpUrl(job.canonical_url)
 
@@ -423,11 +415,11 @@ function JobHeader({ job, overallScore }: { job: Job; overallScore: number | nul
     <Card style={{ marginBottom: 'var(--space-4)' }}>
       <div style={{ marginBottom: '0.75rem' }}>
         <h1 style={{ margin: '0 0 0.35rem', fontSize: '1.35rem', fontWeight: 'var(--font-weight-bold)' }}>
-          {job.title || '(no title)'}
+          {job.title || t('jobDetail.header.noTitle')}
         </h1>
         <div style={{ fontSize: '0.88rem', color: 'var(--color-muted)' }}>
           {[job.company, job.location].filter(Boolean).join(' · ')}
-          {age !== null ? ` · ${age}d ago` : ''}
+          {age !== null ? t('jobDetail.header.daysAgo', { days: age }) : ''}
           {' · '}{job.source}
         </div>
       </div>
@@ -439,7 +431,7 @@ function JobHeader({ job, overallScore }: { job: Job; overallScore: number | nul
       )}
 
       <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-        {job.remote && <Chip tone="accent">Remote</Chip>}
+        {job.remote && <Chip tone="accent">{t('jobDetail.header.remote')}</Chip>}
         {job.countries.map(c => <Chip key={c}>{c}</Chip>)}
         {job.employment_type && <Chip>{job.employment_type}</Chip>}
         {job.skills.map(sk => <Chip key={sk}>{sk}</Chip>)}
@@ -447,7 +439,7 @@ function JobHeader({ job, overallScore }: { job: Job; overallScore: number | nul
 
       {(job.salary_min || job.salary_max) && (
         <div style={{ fontSize: '0.85rem', color: 'var(--color-text)', marginBottom: '0.75rem' }}>
-          Salary: {[job.salary_min, job.salary_max].filter(Boolean).join(' – ')} {job.salary_currency}
+          {t('jobDetail.header.salary', { range: [job.salary_min, job.salary_max].filter(Boolean).join(' – '), currency: job.salary_currency })}
         </div>
       )}
 
@@ -469,7 +461,7 @@ function JobHeader({ job, overallScore }: { job: Job; overallScore: number | nul
               display: 'inline-block',
             }}
           >
-            View original offer →
+            {t('jobDetail.header.viewOriginal')}
           </a>
         </div>
       )}
@@ -478,8 +470,9 @@ function JobHeader({ job, overallScore }: { job: Job; overallScore: number | nul
 }
 
 function DescriptionSection({ description }: { description: string }) {
+  const { t } = useTranslation()
   return (
-    <Card title="Description">
+    <Card title={t('jobDetail.description')}>
       <div style={{
         fontSize: '0.85rem',
         lineHeight: '1.65',
@@ -496,6 +489,7 @@ function DescriptionSection({ description }: { description: string }) {
 }
 
 export default function JobDetail() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
 
   const { data: job, isLoading: jobLoading, error: jobError } = useQuery({
@@ -530,8 +524,8 @@ export default function JobDetail() {
   if (jobLoading) return <LoadingState />
   if (jobError) return (
     <div style={{ padding: '2rem' }}>
-      <div style={{ color: 'var(--color-error)', marginBottom: '1rem' }}>Job not found.</div>
-      <Link to="/jobs" style={{ color: 'var(--color-accent)' }}>← Back to jobs</Link>
+      <div style={{ color: 'var(--color-error)', marginBottom: '1rem' }}>{t('jobDetail.notFound')}</div>
+      <Link to="/jobs" style={{ color: 'var(--color-accent)' }}>{t('jobDetail.backToJobs')}</Link>
     </div>
   )
   if (!job) return null
@@ -545,7 +539,7 @@ export default function JobDetail() {
   return (
     <div>
       <div style={{ marginBottom: '1rem' }}>
-        <Link to="/jobs" style={{ color: 'var(--color-muted)', textDecoration: 'none', fontSize: '0.85rem' }}>← Jobs</Link>
+        <Link to="/jobs" style={{ color: 'var(--color-muted)', textDecoration: 'none', fontSize: '0.85rem' }}>{t('jobDetail.breadcrumb')}</Link>
       </div>
 
       <JobHeader job={job} overallScore={overallScore} />

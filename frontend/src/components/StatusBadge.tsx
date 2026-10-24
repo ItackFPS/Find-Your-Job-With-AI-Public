@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+
 // Colors for the run/scan statuses actually produced by the backend
 // (PipelineRun.status / LinkedInScanRun.status / HelloWorkScanRun.status —
 // see src/api/schemas.py). Not a general-purpose status enum: unknown
@@ -20,6 +22,7 @@ export interface StatusBadgeProps {
 }
 
 export function StatusBadge({ status }: StatusBadgeProps) {
+  const { t } = useTranslation()
   const color = STATUS_COLORS[status] || 'var(--color-muted)'
   return (
     <span
@@ -34,7 +37,7 @@ export function StatusBadge({ status }: StatusBadgeProps) {
         textTransform: 'capitalize',
       }}
     >
-      {status}
+      {t(`status.${status}`, { defaultValue: status })}
     </span>
   )
 }

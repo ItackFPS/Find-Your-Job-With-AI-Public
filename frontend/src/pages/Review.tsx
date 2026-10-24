@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
+import { Trans, useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getDecisionSnapshot, getReviewQueue, postJobFeedback, type ReviewItem,
@@ -29,11 +30,12 @@ const pill = (active: boolean): CSSProperties => ({
 })
 
 function Snapshot({ decisionId }: { decisionId: string }) {
+  const { t } = useTranslation()
   const { data, isError, isLoading } = useQuery({
     queryKey: ['decision-snapshot', decisionId], queryFn: () => getDecisionSnapshot(decisionId), retry: false,
   })
   if (isLoading) return <LoadingState />
-  if (isError || !data) return <div style={{ fontSize: '0.8rem', color: 'var(--color-muted)' }}>The posting text is no longer available.</div>
+  if (isError || !data) return <div style={{ fontSize: '0.8rem', color: 'var(--color-muted)' }}>{t('review.postingUnavailable')}</div>
   return (
     <div style={{ fontSize: '0.82rem', whiteSpace: 'pre-wrap', maxHeight: '18rem', overflow: 'auto', color: 'var(--color-text)' }}>
       {data.description}
@@ -47,6 +49,7 @@ type Answer = 'interested' | 'not_interested' | 'unsure'
 export function ReviewCard({
   item, pending, onAnswer,
 }: { item: ReviewItem; pending: boolean; onAnswer: (type: Answer) => void }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState<'none' | 'decision' | 'posting'>('none')
   const d = item.decision
   const a = d.signals?.assessment
@@ -67,22 +70,25 @@ export function ReviewCard({
           </div>
         </div>
         <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-          <Chip tone={rejected ? 'error' : 'info'}>{rejected ? `Rejected at ${stageName(d.deciding_stage)}` : 'Accepted'}</Chip>
+          <Chip tone={rejected ? 'error' : 'info'}>{rejected ? t('review.rejectedAt', { stage: stageName(d.deciding_stage) }) : t('review.accepted')}</Chip>
           {audit && (
-            <Chip title="Picked among rule-backed rejections so a wrong rule cannot hide good jobs silently">
-              Audit sample
+            <Chip title={t('review.auditSampleTitle')}>
+              {t('review.auditSample')}
             </Chip>
           )}
           {d.decision_confidence != null && (
-            <Chip title="Agreement between signals — not calibrated">confidence {d.decision_confidence.toFixed(2)}</Chip>
+            <Chip title={t('review.confidenceTitle')}>{t('review.confidence', { value: d.decision_confidence.toFixed(2) })}</Chip>
           )}
         </div>
       </div>
       {audit && (
         <div style={{ margin: '0.6rem 0 0', fontSize: '0.85rem' }}>
           <div style={{ color: 'var(--color-muted)' }}>
-            Rejected by rule <strong>{stratumName(audit.stratum)}</strong> ({audit.stratum_size} job(s) rejected by it in that run).
-            Does this job look suitable to you anyway? Your answer is recorded as evidence; it changes nothing by itself.
+            <Trans
+              i18nKey="review.auditExplanation"
+              values={{ rule: stratumName(audit.stratum), count: audit.stratum_size }}
+              components={{ b: <strong /> }}
+            />
           </div>
           {deciding.length > 0 && (
             <ul style={{ margin: '0.4rem 0 0', paddingLeft: '1.1rem' }}>
@@ -103,20 +109,20 @@ export function ReviewCard({
       )}
       <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
         <button type="button" disabled={pending} onClick={() => onAnswer('interested')} style={pill(true)}>
-          I want this job
+          {t('review.answers.interested')}
         </button>
         <button type="button" disabled={pending} onClick={() => onAnswer('not_interested')} style={pill(false)}>
-          Not for me
+          {t('review.answers.not_interested')}
         </button>
         <button type="button" disabled={pending} onClick={() => onAnswer('unsure')} style={pill(false)}>
-          Not sure
+          {t('review.answers.unsure')}
         </button>
         <button type="button" aria-expanded={open === 'decision'} onClick={() => setOpen(open === 'decision' ? 'none' : 'decision')} style={pill(open === 'decision')}>
-          Why?
+          {t('review.why')}
         </button>
         {item.has_snapshot && (
           <button type="button" aria-expanded={open === 'posting'} onClick={() => setOpen(open === 'posting' ? 'none' : 'posting')} style={pill(open === 'posting')}>
-            Posting
+            {t('review.posting')}
           </button>
         )}
       </div>
@@ -127,6 +133,7 @@ export function ReviewCard({
 }
 
 export default function Review() {
+  const { t } = useTranslation()
   const [filter, setFilter] = useState<Filter>('all')
   const queryClient = useQueryClient()
   const { data, isLoading, isError } = useQuery({
@@ -138,29 +145,27 @@ export default function Review() {
     mutationFn: ({ item, type }: { item: ReviewItem; type: string }) =>
       postJobFeedback(item.decision.job_id, { type, reasons: [], decision_id: item.decision.decision_id }),
     onSuccess: () => { setError(null); queryClient.invalidateQueries({ queryKey: ['review-queue'] }) },
-    onError: () => setError('Could not save your answer. Please try again.'),
+    onError: () => setError(t('review.saveError')),
   })
 
   return (
     <div>
-      <h1 style={{ marginBottom: '0.3rem' }}>Review</h1>
+      <h1 style={{ marginBottom: '0.3rem' }}>{t('review.title')}</h1>
       <p style={{ color: 'var(--color-muted)', marginTop: 0, fontSize: '0.9rem' }}>
-        Decisions the system was not sure about — signals disagree, evidence is missing, or your own feedback
-        contradicts them — plus a few rule-backed rejections picked for audit, so a wrong rule cannot hide good
-        jobs silently. Your answer is recorded as feedback; it does not change rankings or rejections by itself.
+        {t('review.intro')}
       </p>
       <div style={{ display: 'flex', gap: '0.4rem', margin: '0.75rem 0' }}>
         {(['all', 'rejected', 'accepted'] as Filter[]).map(f => (
           <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)} style={pill(filter === f)}>
-            {f === 'all' ? 'All' : f === 'rejected' ? 'Rejected' : 'Accepted'}
+            {t(`review.filters.${f}`)}
           </button>
         ))}
-        {data && <span style={{ alignSelf: 'center', fontSize: '0.8rem', color: 'var(--color-muted)' }}>{data.total} to review</span>}
+        {data && <span style={{ alignSelf: 'center', fontSize: '0.8rem', color: 'var(--color-muted)' }}>{t('review.toReview', { count: data.total })}</span>}
       </div>
       {error && <div role="alert" style={{ marginBottom: '0.6rem', color: 'var(--color-error)', fontSize: '0.85rem' }}>{error}</div>}
       {isLoading && <LoadingState />}
-      {isError && <EmptyState message="The review queue is unavailable." />}
-      {data && data.items.length === 0 && <EmptyState message="Nothing to review." />}
+      {isError && <EmptyState message={t('review.unavailable')} />}
+      {data && data.items.length === 0 && <EmptyState message={t('review.empty')} />}
       {data?.items.map(item => (
         <ReviewCard key={item.decision.decision_id} item={item} pending={isPending}
           onAnswer={type => mutate({ item, type })} />

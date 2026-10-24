@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { PIPELINE_EVENTS_URL, type PipelineEvent, type RunStats } from '../api/client'
 import { stageLabel } from '../config/pipelineStages'
 import { formatTime } from '../utils/formatDate'
+import i18n from '../i18n'
 
 // ---------------------------------------------------------------------------
 // Live pipeline progress (SSE) — observational only; the backend/pipeline
@@ -44,14 +45,16 @@ const LIVE_EVENT_TYPES: PipelineEvent['type'][] = [
 ]
 
 function eventActivityText(ev: PipelineEvent): string {
-  if (ev.type === 'pipeline.started') return 'Pipeline started'
-  if (ev.type === 'pipeline.completed') return 'Pipeline completed'
-  if (ev.type === 'pipeline.failed') return `Pipeline failed${ev.error ? ` — ${ev.error}` : ''}`
+  if (ev.type === 'pipeline.started') return i18n.t('pipelineEvents.started')
+  if (ev.type === 'pipeline.completed') return i18n.t('pipelineEvents.completed')
+  if (ev.type === 'pipeline.failed') {
+    return ev.error ? i18n.t('pipelineEvents.failedWithError', { error: ev.error }) : i18n.t('pipelineEvents.failed')
+  }
   const label = stageLabel(ev.stage)
-  if (ev.type === 'pipeline.snapshot') return `Reconnected — ${label}`
+  if (ev.type === 'pipeline.snapshot') return i18n.t('pipelineEvents.reconnected', { stage: label })
   const field = STAGE_COUNT_FIELD[ev.stage]
   const count = field ? (ev.stats[field] as number | undefined) : undefined
-  return typeof count === 'number' ? `${label} — ${count.toLocaleString()} jobs` : label
+  return typeof count === 'number' ? i18n.t('pipelineEvents.stageCount', { stage: label, count }) : label
 }
 
 export function usePipelineEvents() {

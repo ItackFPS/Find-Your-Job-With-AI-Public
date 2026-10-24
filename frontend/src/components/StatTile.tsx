@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 
 export type StatTileTone = 'default' | 'success' | 'warning' | 'error' | 'info' | 'accent'
 
@@ -22,6 +23,7 @@ export interface StatTileProps {
 }
 
 export function StatTile({ label, value, secondaryText, icon, tone = 'default', loading = false }: StatTileProps) {
+  const { t, i18n } = useTranslation()
   return (
     <div
       style={{
@@ -37,7 +39,7 @@ export function StatTile({ label, value, secondaryText, icon, tone = 'default', 
         {loading ? (
           <div
             role="status"
-            aria-label={`Loading ${label}`}
+            aria-label={t('components.statTile.loading', { label })}
             style={{
               width: '3rem',
               height: '1.65rem',
@@ -48,7 +50,7 @@ export function StatTile({ label, value, secondaryText, icon, tone = 'default', 
           />
         ) : (
           <div style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 'var(--font-weight-bold)', color: TONE_COLORS[tone] }}>
-            {typeof value === 'number' ? value.toLocaleString() : (value ?? '–')}
+            {typeof value === 'number' ? value.toLocaleString(i18n.language) : (value ?? '–')}
           </div>
         )}
       </div>

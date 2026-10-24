@@ -1,10 +1,13 @@
+import { useTranslation } from 'react-i18next'
+
 export interface LoadingStateProps {
   message?: string
   /** Full-page loading block (2rem padding) vs. an inline compact line. */
   compact?: boolean
 }
 
-export function LoadingState({ message = 'Loading…', compact = false }: LoadingStateProps) {
+export function LoadingState({ message, compact = false }: LoadingStateProps) {
+  const { t } = useTranslation()
   return (
     <div
       role="status"
@@ -14,7 +17,7 @@ export function LoadingState({ message = 'Loading…', compact = false }: Loadin
         fontSize: compact ? 'var(--font-size-sm)' : undefined,
       }}
     >
-      {message}
+      {message ?? t('common.loading')}
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { Routes, Route } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import Dashboard from './pages/Dashboard'
 import Jobs from './pages/Jobs'
 import JobDetail from './pages/JobDetail'
@@ -12,6 +13,9 @@ import DesignSystem from './pages/DesignSystem'
 import { Sidebar } from './components'
 
 export default function App() {
+  // Subscribing here re-renders the whole tree when the language changes, so labels
+  // computed outside components (stage names, scanner labels) follow it too.
+  useTranslation()
   return (
     <div style={{ minHeight: '100vh', display: 'flex' }}>
       <Sidebar />

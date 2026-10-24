@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { LoadingState } from './LoadingState'
 import { EmptyState } from './EmptyState'
 
@@ -25,9 +26,10 @@ export interface DataTableProps<T> {
  * Sorting and filtering are out of scope for this phase; columns just
  * render whatever `rows` they're given.
  */
-export function DataTable<T>({ columns, rows, rowKey, loading = false, emptyMessage = 'No data.', onRowClick }: DataTableProps<T>) {
+export function DataTable<T>({ columns, rows, rowKey, loading = false, emptyMessage, onRowClick }: DataTableProps<T>) {
+  const { t } = useTranslation()
   if (loading) return <LoadingState compact />
-  if (!rows || rows.length === 0) return <EmptyState message={emptyMessage} />
+  if (!rows || rows.length === 0) return <EmptyState message={emptyMessage ?? t('components.dataTable.empty')} />
 
   return (
     <div style={{ overflowX: 'auto' }}>
