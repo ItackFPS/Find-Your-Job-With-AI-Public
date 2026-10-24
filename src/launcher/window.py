@@ -24,9 +24,11 @@ import os
 import subprocess
 import sys
 import threading
+import webbrowser
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from src.launcher import core
 from src.launcher.core import Backend
@@ -83,6 +85,7 @@ def show(url: str, root: Path, alive: Callable[[], bool] = lambda: True, webview
         import webview  # noqa: PLC0415 - the window process only
     window = webview.create_window(core.APP_TITLE, url, width=WIDTH, height=HEIGHT, min_size=MIN_SIZE,
                                    text_select=True, zoomable=True)
+    guard_navigation(window, url)
 
     closed = threading.Event()
 
@@ -94,11 +97,41 @@ def show(url: str, root: Path, alive: Callable[[], bool] = lambda: True, webview
 
     icon = icon_path(root)
     try:
-        # private_mode=False + a storage path: the dashboard's settings (localStorage) survive a restart
+        # private_mode=False + a storage path: what the dashboard keeps in the browser (localStorage,
+        # e.g. the theme) survives a restart instead of being wiped with a private session
         webview.start(watch, gui="edgechromium", private_mode=False,
                       storage_path=str(root / "data" / "webview"), icon=str(icon) if icon else None)
     finally:
         closed.set()  # closed by the user: the watcher ends at once and the process can exit
+
+
+def navigation_allowed(url: str, origin: str) -> bool:
+    """Only the backend's own pages load in the app window (same scheme, host and port)."""
+    target, home = urlsplit(url), urlsplit(origin)
+    if target.scheme == "about":
+        return target.path == "blank"
+    return (target.scheme, target.hostname, target.port) == (home.scheme, home.hostname, home.port)
+
+
+def guard_navigation(window: Any, origin: str, opener: Callable[[str], Any] = webbrowser.open) -> None:
+    """Keep the app window on the backend's origin: any other http(s) page (a plain link to an offer,
+    a redirect) opens in the default browser instead, and other schemes are refused. Links opening a
+    new window already go to the default browser (pywebview's OPEN_EXTERNAL_LINKS_IN_BROWSER)."""
+
+    def on_navigation(_sender: Any, args: Any) -> None:
+        target = str(args.Uri)
+        if navigation_allowed(target, origin):
+            return
+        args.Cancel = True
+        if urlsplit(target).scheme in ("http", "https"):
+            opener(target)
+
+    def attach() -> None:  # the native WebView2 control exists once the form is built
+        native = getattr(getattr(window, "native", None), "webview", None)
+        if native is not None:
+            native.NavigationStarting += on_navigation
+
+    window.events.before_show += attach
 
 
 def focus_existing() -> bool:
