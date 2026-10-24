@@ -65,6 +65,7 @@ from src.api.routes import (
     pipeline,
     profile,
     scheduler as scheduler_routes,
+    settings as settings_routes,
     skills,
 )
 from src.api.progress_stream import ProgressBus
@@ -308,6 +309,8 @@ _ESCO_DB_PATH = str(_PROJECT_ROOT / "data" / "esco.db")
 _CONFIG_DIR = str(_PROJECT_ROOT / "config")
 
 app.state.db_path = _DB_PATH
+# Application settings outside the profile (src/app_settings.py): notification categories.
+app.state.settings_path = str(_PROJECT_ROOT / "data" / "settings.json")
 app.state.config_dir = _CONFIG_DIR
 # Read by _lifespan's ESCO auto-seed step so a test can point it at an
 # isolated tmp db before triggering lifespan via `with TestClient(app)`.
@@ -338,6 +341,7 @@ app.include_router(departments.router)
 app.include_router(linkedin.router)
 app.include_router(hellowork.router)
 app.include_router(scheduler_routes.router)
+app.include_router(settings_routes.router)
 app.include_router(skills.router)
 app.include_router(lab.router)
 
