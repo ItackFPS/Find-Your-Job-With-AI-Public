@@ -11,7 +11,7 @@ thread. So:
   "Start with Windows", opens the logs, and **Quit** stops everything the app started
   (scans stop at their next checkpoint);
 * a backend that crashes is restarted once, and the user is told;
-* a Windows notification says when a search finishes.
+* Windows notifications, for the categories the user opted into (RunWatcher).
 
 pystray and Pillow are imported only here, when the tray runs: nothing else in the
 app (or its tests on Linux) needs them.
@@ -28,6 +28,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from src.app_settings import NOTIFICATION_DEFAULTS
 from src.launcher import core
 from src.launcher.autostart import Autostart
 from src.launcher.run import Launcher
@@ -36,8 +37,24 @@ RUN_POLL_S = 30.0
 HINT_MARKER = ".tray-hint-shown"
 
 
+# The default categories, used when the backend cannot be asked: one source of truth (src/app_settings.py,
+# standard library only, like the launcher).
+DEFAULT_CATEGORIES = dict(NOTIFICATION_DEFAULTS)
+SOURCES = {"linkedin": "LinkedIn", "hellowork": "HelloWork"}
+RATE_LIMIT_MARKERS = ("429", "rate limit", "rate-limit", "rate_limit", "too many requests")
+
+
 class RunWatcher:
-    """Reports pipeline runs that complete while the tray app is running."""
+    """Windows notifications for what happened while the tray app runs, limited to the categories
+    the user opted into (``GET /api/settings/notifications``; update plan F2.4):
+
+    * ``strong_matches``: a search finished with offers in a "strong" tier or better;
+    * ``search_failed``: a search, or a LinkedIn/HelloWork scan, failed;
+    * ``source_paused``: a LinkedIn/HelloWork scan paused, or stopped on a rate limit;
+    * ``saved_expiring``: TODO(F6.6), no saved-offer expiry data yet.
+
+    The first poll only records the current state, so starting the app never announces old events.
+    """
 
     def __init__(self, backend_url: str | Callable[[], str | None],
                  fetch: Callable[[str], tuple[int, bytes] | None] | None = None) -> None:
@@ -46,38 +63,82 @@ class RunWatcher:
         self._fetch = fetch or (lambda url: core.http_get(url, timeout_s=5.0))
         self._seen: str | None = None
         self._primed = False
+        self._sources: dict[str, tuple[str, str | None]] = {}  # source -> (state, last scan id)
 
-    def poll(self) -> str | None:
-        """A message for a run that completed since the last poll, else None.
-
-        The first poll only records the latest run, so starting the app never
-        announces an old run.
-        """
-        base = self._base()
-        if base is None:
-            return None
-        result = self._fetch(f"{base}/api/pipeline/runs?limit=1")
+    def _json(self, url: str) -> Any:
+        result = self._fetch(url)
         if result is None or result[0] != 200:
             return None
         try:
-            runs = json.loads(result[1])
+            return json.loads(result[1])
         except ValueError:
             return None
+
+    def categories(self, base: str) -> dict[str, bool]:
+        answer = self._json(f"{base}/api/settings/notifications")
+        chosen = answer.get("categories") if isinstance(answer, dict) else None
+        if not isinstance(chosen, dict):
+            return dict(DEFAULT_CATEGORIES)
+        return {name: bool(chosen.get(name, default)) for name, default in DEFAULT_CATEGORIES.items()}
+
+    def poll(self) -> list[str]:
+        """The messages for events since the last poll that the user opted into."""
+        base = self._base()
+        if base is None:
+            return []
+        wanted = self.categories(base)
+        messages = self._runs(base, wanted)
+        messages += self._scans(base, wanted)
+        self._primed = True
+        return messages
+
+    def _runs(self, base: str, wanted: dict[str, bool]) -> list[str]:
+        runs = self._json(f"{base}/api/pipeline/runs?limit=1")
         latest = runs[0] if isinstance(runs, list) and runs else None
         if not isinstance(latest, dict):
-            self._primed = True
-            return None
+            return []
         run_id, status = latest.get("id"), latest.get("status")
         if not self._primed:
-            self._primed, self._seen = True, run_id if status in ("completed", "failed") else None
-            return None
+            self._seen = run_id if status in ("completed", "failed") else None
+            return []
         if run_id == self._seen or status not in ("completed", "failed"):
-            return None
+            return []
         self._seen = run_id
         if status == "failed":
-            return "A job search failed. Open the dashboard to see why."
-        scored = (latest.get("stats") or {}).get("scored", 0)
-        return f"Job search finished: {scored} offer(s) matched your profile."
+            return ["A job search failed. Open the dashboard to see why."] if wanted["search_failed"] else []
+        if not wanted["strong_matches"]:
+            return []
+        strong = self._json(f"{base}/api/jobs?min_tier=strong&limit=500")
+        count = len(strong) if isinstance(strong, list) else 0
+        if count == 0:
+            return []
+        return [f"Job search finished: {count}{'+' if count >= 500 else ''} strong match(es). "
+                "Open the app to see them."]
+
+    def _scans(self, base: str, wanted: dict[str, bool]) -> list[str]:
+        messages: list[str] = []
+        for source, label in SOURCES.items():
+            status = self._json(f"{base}/api/{source}/status")
+            if not isinstance(status, dict):
+                continue
+            state = str(status.get("state") or "")
+            raw_last = status.get("last_scan")
+            last: dict[str, Any] = raw_last if isinstance(raw_last, dict) else {}
+            scan_id = last.get("id")
+            before = self._sources.get(source)
+            self._sources[source] = (state, scan_id)
+            if before is None or not self._primed:
+                continue
+            if state == "paused" and before[0] != "paused" and wanted["source_paused"]:
+                messages.append(f"{label} search paused. Resume it from the app.")
+            if scan_id != before[1] and last.get("status") == "failed":
+                error = str(last.get("error") or "").lower()
+                if any(marker in error for marker in RATE_LIMIT_MARKERS):
+                    if wanted["source_paused"]:
+                        messages.append(f"{label} paused: rate-limited. It is tried again later.")
+                elif wanted["search_failed"]:
+                    messages.append(f"The {label} search failed. Open the app to see why.")
+        return messages
 
 
 class TrayApp:
@@ -209,9 +270,9 @@ class TrayApp:
         threading.Thread(target=self._watch_runs, name="tray-runs", daemon=True).start()
 
     def _watch_runs(self) -> None:
+        self.watcher.poll()  # records the current state: nothing old is announced
         while not self._done.wait(RUN_POLL_S):
-            message = self.watcher.poll()
-            if message:
+            for message in self.watcher.poll():
                 self.notify(message)
 
     def run(self) -> int:

@@ -92,31 +92,119 @@ def _runs(*runs: dict) -> tuple[int, bytes]:
     return 200, json.dumps(list(runs)).encode()
 
 
+class _Backend:
+    """Answers the tray's polls by path; each value is a list of answers served in turn (the last
+    one repeats), so a test scripts what the backend says poll after poll."""
+
+    def __init__(self, **paths: list) -> None:
+        self.paths = {"runs": [(200, b"[]")], "strong": [(200, b"[]")], "settings": [None],
+                      "linkedin": [None], "hellowork": [None]}
+        self.paths.update(paths)
+        self.urls: list[str] = []
+
+    def __call__(self, url: str):  # noqa: ANN204
+        self.urls.append(url)
+        key = ("runs" if "/pipeline/runs" in url else "strong" if "min_tier=strong" in url else
+               "settings" if "/settings/notifications" in url else
+               "linkedin" if "/linkedin/" in url else "hellowork")
+        answers = self.paths[key]
+        return answers.pop(0) if len(answers) > 1 else answers[0]
+
+
+def _settings(**categories: bool) -> tuple[int, bytes]:
+    return 200, json.dumps({"categories": categories}).encode()
+
+
+def _strong(n: int) -> tuple[int, bytes]:
+    return 200, json.dumps([{"id": str(i)} for i in range(n)]).encode()
+
+
 def test_run_watcher_announces_only_runs_finishing_after_start() -> None:
-    responses = [
-        _runs({"id": "old", "status": "completed", "stats": {"scored": 9}}),
-        _runs({"id": "old", "status": "completed", "stats": {"scored": 9}}),
-        _runs({"id": "new", "status": "running", "stats": {}}),
-        _runs({"id": "new", "status": "completed", "stats": {"scored": 12}}),
-        _runs({"id": "new", "status": "completed", "stats": {"scored": 12}}),
+    backend = _Backend(runs=[
+        _runs({"id": "old", "status": "completed"}),
+        _runs({"id": "old", "status": "completed"}),
+        _runs({"id": "new", "status": "running"}),
+        _runs({"id": "new", "status": "completed"}),
+        _runs({"id": "new", "status": "completed"}),
         _runs({"id": "next", "status": "failed"}),
         None,
         (200, b"not json"),
-    ]
-    watcher = RunWatcher("http://127.0.0.1:1", fetch=lambda _url: responses.pop(0))
+    ], strong=[_strong(5)])
+    watcher = RunWatcher("http://127.0.0.1:1", fetch=backend)
     messages = [watcher.poll() for _ in range(8)]
-    assert messages[:3] == [None, None, None]  # the run that existed before start is not news
-    assert messages[3] == "Job search finished: 12 offer(s) matched your profile."
-    assert messages[4] is None  # announced once
-    assert messages[5] and "failed" in messages[5]
-    assert messages[6:] == [None, None]
+    assert messages[:3] == [[], [], []]  # the run that existed before start is not news
+    assert messages[3] == ["Job search finished: 5 strong match(es). Open the app to see them."]
+    assert messages[4] == []  # announced once
+    assert len(messages[5]) == 1 and "failed" in messages[5][0]
+    assert messages[6:] == [[], []]
 
 
 def test_run_watcher_first_run_ever_is_announced() -> None:
-    responses = [(200, b"[]"), _runs({"id": "r1", "status": "completed", "stats": {"scored": 3}})]
-    watcher = RunWatcher("http://127.0.0.1:1", fetch=lambda _url: responses.pop(0))
-    assert watcher.poll() is None
-    assert watcher.poll() == "Job search finished: 3 offer(s) matched your profile."
+    backend = _Backend(runs=[(200, b"[]"), _runs({"id": "r1", "status": "completed"})], strong=[_strong(3)])
+    watcher = RunWatcher("http://127.0.0.1:1", fetch=backend)
+    assert watcher.poll() == []
+    assert watcher.poll() == ["Job search finished: 3 strong match(es). Open the app to see them."]
+
+
+def test_a_search_without_strong_matches_is_not_announced() -> None:
+    backend = _Backend(runs=[(200, b"[]"), _runs({"id": "r1", "status": "completed"})], strong=[_strong(0)])
+    watcher = RunWatcher("http://127.0.0.1:1", fetch=backend)
+    assert watcher.poll() == [] and watcher.poll() == []
+
+
+def test_only_the_categories_the_user_opted_into_are_announced() -> None:
+    off = _settings(strong_matches=False, search_failed=False, source_paused=False)
+    backend = _Backend(runs=[(200, b"[]"), _runs({"id": "r1", "status": "completed"}),
+                             _runs({"id": "r2", "status": "failed"})],
+                       strong=[_strong(4)], settings=[off])
+    watcher = RunWatcher("http://127.0.0.1:1", fetch=backend)
+    assert [watcher.poll() for _ in range(3)] == [[], [], []]
+    assert not any("min_tier" in url for url in backend.urls)   # nothing is even counted when off
+
+
+def _status(state: str, scan: dict | None = None) -> tuple[int, bytes]:
+    return 200, json.dumps({"state": state, "last_scan": scan}).encode()
+
+
+def test_source_pauses_rate_limits_and_failures_follow_their_categories() -> None:
+    on = _settings(strong_matches=True, search_failed=True, source_paused=True)
+    backend = _Backend(settings=[on], linkedin=[
+        _status("running"),
+        _status("paused"),                                                     # the user paused it
+        _status("idle", {"id": "s2", "status": "failed", "error": "HTTP 429 Too Many Requests"}),
+    ], hellowork=[
+        _status("idle", {"id": "h1", "status": "completed"}),
+        _status("idle", {"id": "h2", "status": "failed", "error": "page format changed"}),
+    ])
+    watcher = RunWatcher("http://127.0.0.1:1", fetch=backend)
+    assert watcher.poll() == []                                                # state recorded only
+    assert watcher.poll() == ["LinkedIn search paused. Resume it from the app.",
+                              "The HelloWork search failed. Open the app to see why."]
+    assert watcher.poll() == ["LinkedIn paused: rate-limited. It is tried again later."]
+    assert watcher.poll() == []
+
+
+def test_source_paused_is_off_by_default() -> None:
+    backend = _Backend(linkedin=[_status("running"), _status("paused")])      # settings unreachable
+    watcher = RunWatcher("http://127.0.0.1:1", fetch=backend)
+    assert watcher.poll() == [] and watcher.poll() == []
+
+
+def test_a_notification_fires_on_a_fixture_run(tmp_path: Path) -> None:
+    # plan F2.4 "Verify": a finished fixture run makes the tray icon show a Windows notification
+    launcher = _FakeLauncher(tmp_path)
+    launcher.backend_url = "http://127.0.0.1:1"
+    backend = _Backend(runs=[(200, b"[]"), _runs({"id": "fixture", "status": "completed"})],
+                       strong=[_strong(2)])
+    app = TrayApp(launcher, _Registry().autostart(tmp_path), pystray=_fake_pystray(),  # type: ignore[arg-type]
+                  image_loader=lambda _p: object(), watcher=RunWatcher(lambda: launcher.backend_url, fetch=backend))
+    app.icon = _FakeIcon("", None, "", None)
+    import src.launcher.tray as tray_module
+
+    waits = iter([False, True])                         # one polling interval, then the app stops
+    app._done.wait = lambda _timeout=None: next(waits)  # type: ignore[method-assign]
+    tray_module.TrayApp._watch_runs(app)
+    assert app.icon.notes == ["Job search finished: 2 strong match(es). Open the app to see them."]
 
 
 # -- tray actions -------------------------------------------------------------------------------
@@ -273,7 +361,7 @@ def test_open_waits_for_a_backend_that_answered_with_our_token(tmp_path: Path) -
     app.icon = _FakeIcon("", None, "", None)
     app.open_dashboard()
     assert launcher.windows == 0 and "still starting" in app.icon.notes[0]
-    assert app.watcher.poll() is None                         # nothing is fetched from an unknown port
+    assert app.watcher.poll() == []                           # nothing is fetched from an unknown port
     launcher.backend_url = "http://127.0.0.1:51234"
     app.open_dashboard()                                      # opens, or focuses, the app window
     assert launcher.windows == 1
