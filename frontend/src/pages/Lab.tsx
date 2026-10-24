@@ -259,7 +259,8 @@ export function ActiveStrategyView({ data }: { data: ActiveStrategy }) {
   )
 }
 
-export default function Lab() {
+// `embedded`: shown inside the Quality page's Advanced section, under that page's own title.
+export default function Lab({ embedded = false }: { embedded?: boolean }) {
   const { t } = useTranslation()
   const runs = useQuery({ queryKey: ['lab-runs'], queryFn: getEvalRuns })
   const exps = useQuery({ queryKey: ['lab-experiments'], queryFn: getLabExperiments })
@@ -268,7 +269,9 @@ export default function Lab() {
   const check = useQuery({ queryKey: ['lab-self-check'], queryFn: getSelfCheck })
   return (
     <div>
-      <h1 style={{ marginBottom: '0.3rem' }}>{t('lab.title')}</h1>
+      {embedded
+        ? <h2 style={{ marginBottom: '0.3rem' }}>{t('lab.title')}</h2>
+        : <h1 style={{ marginBottom: '0.3rem' }}>{t('lab.title')}</h1>}
       <p style={{ color: 'var(--color-muted)', marginTop: 0, fontSize: '0.9rem' }}>
         <Trans i18nKey="lab.intro" components={{ cmd: <code>python -m src.lab sandbox run</code> }} />
       </p>

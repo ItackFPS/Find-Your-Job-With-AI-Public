@@ -25,6 +25,8 @@ const EMPTY: Record<string, unknown> = {
   '/lab/runs': { total: 0, unreadable: 0, runs: [] },
   '/lab/experiments': { experiments: [] },
   '/lab/memory': { items: [] },
+  '/quality/health': { self_check: null, evaluation: null },
+  '/quality/jobs': { active_id: null, jobs: [] },
   '/linkedin/status': { ...fixtures.linkedInStatus, last_scan: null },
   '/linkedin/scans': [],
   '/hellowork/status': { ...fixtures.helloWorkStatus, last_scan: null },
@@ -89,7 +91,7 @@ function untranslated(root: HTMLElement): string[] {
   )
 }
 
-const PAGES = ['/', '/jobs', '/jobs/job-1', '/profile', '/stats', '/review', '/skills', '/lab', '/pipeline', '/design']
+const PAGES = ['/', '/jobs', '/jobs/job-1', '/profile', '/stats', '/review', '/skills', '/lab', '/quality', '/pipeline', '/design']
 
 async function renderPage(path: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
