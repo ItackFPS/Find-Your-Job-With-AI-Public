@@ -18,6 +18,23 @@ rulebook. When it disagrees with the code, the code wins. When it disagrees with
    [`docs/architecture.md`](architecture.md), [`docs/reference.md`](reference.md),
    [`docs/adr/`](adr/README.md).
 
+**Your first session is orientation, not code.** Make no commits and open no PRs. Read the
+files above, look at the repository on GitHub (open PRs, recent merged PRs, CI on `main`,
+branches), and spot-check the code wherever the docs make a claim you can verify cheaply.
+Then report back to the owner with:
+
+1. **Your understanding:** the vision, the current state and the next steps, in your own
+   words, so the owner can correct misunderstandings early.
+2. **Discrepancies:** anything in this file, the plan or the status record that the code or
+   GitHub contradicts.
+3. **Questions:** what you need from the owner before starting, for example the unpushed
+   local worktrees (§4), the pending owner decisions (§5), and what your environment cannot
+   verify (Windows, live sites, local models, `data/`). Give each question options and a
+   recommendation.
+4. **Proposed first mandate:** which items you would do first and why.
+
+Start implementing only after the owner answers.
+
 ---
 
 ## 1. Vision
