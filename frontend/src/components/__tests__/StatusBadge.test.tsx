@@ -5,12 +5,12 @@ import { StatusBadge } from '../StatusBadge'
 describe('StatusBadge', () => {
   it.each(['completed', 'failed', 'running'])('renders the %s status used by the backend', (status) => {
     render(<StatusBadge status={status} />)
-    expect(screen.getByText(status)).toBeInTheDocument()
+    expect(screen.getByText(new RegExp(`^${status}$`, 'i'))).toBeInTheDocument()
   })
 
   it.each(['pausing', 'paused', 'interrupted'])('gives the %s scanner state its own color', (status) => {
     render(<StatusBadge status={status} />)
-    expect(screen.getByText(status).style.color).not.toBe('var(--color-muted)')
+    expect(screen.getByText(new RegExp(`^${status}$`, 'i')).style.color).not.toBe('var(--color-muted)')
   })
 
   it('falls back gracefully for an unrecognized status rather than crashing', () => {

@@ -1,4 +1,5 @@
 import type { LocationPreference } from '../api/client'
+import i18n from '../i18n'
 
 // Location Priority feature (2026-09-10): display-only location grouping.
 // Mirrors the fixed, rarely-changing constant PACA_NEIGHBOR_DEPARTMENTS in
@@ -50,8 +51,8 @@ export function locationBadge(
   if (dept && PACA_NEIGHBOR_DEPARTMENTS.has(dept)) return { label: `PACA (${dept})`, kind: 'paca' }
   if (isRemote) {
     return isFrance
-      ? { label: 'France · Remote', kind: 'france-remote' }
-      : { label: 'International · Remote', kind: 'international-remote' }
+      ? { label: i18n.t('location.franceRemote'), kind: 'france-remote' }
+      : { label: i18n.t('location.internationalRemote'), kind: 'international-remote' }
   }
-  return { label: job.location || 'Unknown location', kind: 'other' }
+  return { label: job.location || i18n.t('location.unknown'), kind: 'other' }
 }
