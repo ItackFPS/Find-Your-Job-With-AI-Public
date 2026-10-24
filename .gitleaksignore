@@ -1,0 +1,5 @@
+# Gitleaks false positives, by fingerprint (commit:file:rule:line). Keep each one explained.
+
+# linkedin-client-id matched the test fixture line "export const linkedInStatus: LinkedInStatus = {"
+# (a TypeScript type name, not a credential); the fixture no longer uses that form.
+d2e5b4272607ac77fbe9de0fb20a07a76778fcbf:frontend/src/test/apiFixtures.ts:linkedin-client-id:175

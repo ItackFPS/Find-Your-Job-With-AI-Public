@@ -167,14 +167,16 @@ export const activeStrategy: ActiveStrategy = {
 
 export const selfCheck: SelfCheckResponse = { latest: null, unreadable: 0, history: [] }
 
-export const linkedInScan: LinkedInScanRun = {
+// `satisfies` (not a type annotation): gitleaks' linkedin-client-id rule reads
+// "linkedInX: LinkedInStatus" as a client id.
+export const linkedInScan = {
   id: 'li-1', started_at: EARLIER, completed_at: NOW, status: 'completed', jobs_found: 40, jobs_new: 12, error: null,
   stats: null,
-}
+} satisfies LinkedInScanRun
 
-export const linkedInStatus: LinkedInStatus = {
+export const linkedInStatus = {
   enabled: true, waiting: 3, last_scan: linkedInScan, is_scanning: false, state: 'idle', progress: null,
-}
+} satisfies LinkedInStatus
 
 export const helloWorkScan: HelloWorkScanRun = {
   id: 'hw-1', started_at: EARLIER, completed_at: NOW, status: 'completed', jobs_found: 30, jobs_new: 5, error: null,
