@@ -40,6 +40,8 @@ dependencies = [
     # The notification-area app (src/launcher/tray.py); Windows only.
     "pystray>=0.19.5,<1.0.0; sys_platform == 'win32'",
     "Pillow>=11.0.0,<14.0.0; sys_platform == 'win32'",
+    # The app's own window (src/launcher/window.py) on Edge WebView2; pythonnet comes with it.
+    "pywebview>=6.0,<7.0; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
@@ -94,7 +96,7 @@ ignore_missing_imports = true
 # pystray ships no type information, and neither it nor Pillow is installed on
 # Linux (Windows-only dependencies of src/launcher/tray.py).
 [[tool.mypy.overrides]]
-module = ["pystray.*", "PIL.*"]
+module = ["pystray.*", "PIL.*", "webview.*"]
 ignore_missing_imports = true
 
 # feedparser ships no py.typed marker / stubs either. Used only in

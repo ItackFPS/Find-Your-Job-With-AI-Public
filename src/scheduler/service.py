@@ -157,6 +157,10 @@ class LinkedInHandler:
     def interrupted_checkpoint_id(self) -> str | None:
         return _marker(self._scanner, "interrupted_checkpoint_id")
 
+    def request_pause(self) -> bool:
+        """Ask a running scan to stop at its next checkpoint (False when none runs)."""
+        return bool(self._scanner.request_pause())
+
     def dispatch(self) -> DispatchResult:
         return _scanner_dispatch(self._scanner)
 
@@ -180,6 +184,10 @@ class HelloWorkHandler:
 
     def interrupted_checkpoint_id(self) -> str | None:
         return _marker(self._scanner, "interrupted_checkpoint_id")
+
+    def request_pause(self) -> bool:
+        """Ask a running scan to stop at its next checkpoint (False when none runs)."""
+        return bool(self._scanner.request_pause())
 
     def dispatch(self) -> DispatchResult:
         return _scanner_dispatch(self._scanner)
@@ -217,6 +225,13 @@ class SchedulerService:
         # unchanged (issue #81 review, F1; re-review, R3). In memory on purpose: after a restart an
         # interruption gets one fresh attempt, like any startup recovery.
         self._resumed_checkpoints: dict[str, str] = {}
+        # "Pause scans" (the tray menu, POST /api/scheduler/pause): no scheduled dispatch while set.
+        # In memory on purpose: a restart of the app resumes its schedule (a paused scan itself stays
+        # paused across restarts, as before, until it is resumed).
+        self._paused = threading.Event()
+        # The scans "Pause scans" itself paused: "Resume scans" resumes these only, never a source
+        # the user had paused on its own before (that one stays paused until resumed on its card).
+        self._paused_by_pause_all: set[str] = set()
 
     def _open_storage(self) -> SchedulerStorage:
         return SchedulerStorage(self._db_path, clock=self._now)
@@ -254,6 +269,42 @@ class SchedulerService:
         """Signal the background thread to stop.  Returns immediately."""
         self._stop_event.set()
 
+    # -- pause / resume (the tray's "Pause scans") ----------------------------
+
+    @property
+    def paused(self) -> bool:
+        return self._paused.is_set()
+
+    def pause_all(self) -> list[str]:
+        """Stop dispatching scheduled runs and ask every running scan to pause at its next
+        checkpoint. Returns the sources asked to pause."""
+        self._paused.set()
+        asked = []
+        for source_id, handler in self._handlers.items():
+            pause = getattr(handler, "request_pause", None)
+            if callable(pause) and handler.is_running() and pause():
+                asked.append(source_id)
+                self._paused_by_pause_all.add(source_id)
+        logger.info("Scheduler: paused (scans asked to pause: %s).", ", ".join(asked) or "none")
+        return asked
+
+    def resume_all(self) -> list[str]:
+        """Dispatch scheduled runs again and resume, through its schedule (from its checkpoint),
+        every scan that ``pause_all`` paused. Returns the sources resumed."""
+        self._paused.clear()
+        ours, self._paused_by_pause_all = self._paused_by_pause_all, set()
+        resumed = []
+        for source_id, handler in self._handlers.items():
+            if source_id not in ours or not _flag(handler, "is_paused"):
+                continue
+            try:
+                if self.resume_source(source_id) is not None:
+                    resumed.append(source_id)
+            except (RuntimeError, ValueError) as exc:
+                logger.info("Scheduler: %s not resumed: %s", source_id, exc)
+        logger.info("Scheduler: resumed (sources resumed: %s).", ", ".join(resumed) or "none")
+        return resumed
+
     # -- status (for API) -----------------------------------------------------
 
     def get_status(self) -> dict[str, Any]:
@@ -274,7 +325,7 @@ class SchedulerService:
                     "is_running": handler.is_running() if handler else False,
                     "last_execution": last,
                 })
-            return {"schedules": result}
+            return {"schedules": result, "paused": self.paused}
         finally:
             storage.close()
 
@@ -367,7 +418,7 @@ class SchedulerService:
         # A user-paused source stays paused, across restarts too, until it is
         # explicitly resumed (issue #81). Checked first: no execution row, no
         # retry bookkeeping, no log line every tick.
-        if _flag(handler, "is_paused"):
+        if _flag(handler, "is_paused") or self._paused.is_set():
             return
 
         trigger = "startup" if is_startup else "scheduled"
