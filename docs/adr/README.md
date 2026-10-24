@@ -19,3 +19,4 @@ is the source of truth and the ADR must be updated or superseded.
 | [0010](0010-disagreement-and-abstention.md) | Signals are compared; uncertainty becomes `review`, never a rejection |
 | [0011](0011-experiment-lab.md) | Strategy changes are tested in a separate lab and promoted only by explicit human approval |
 | [0012](0012-freshness-dates.md) | Listing age comes from the source date, else our first sighting — never the last collection |
+| [0013](0013-distance-and-remote-policy-location.md) | Location is matched on distance from home and a typed remote policy (supersedes 0005 once a home is set) |

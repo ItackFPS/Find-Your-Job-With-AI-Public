@@ -337,6 +337,11 @@ def run_pipeline(
         profile_path = resolve_config_path(config_dir, "profile.yaml")
         early_profile = None
         if profile_path.exists():
+            # A v1 personal profile (département priorities) is converted to the distance
+            # model once, with a backup (src/geo/profile_migration.py). Fail-open.
+            from src.geo.profile_migration import migrate_personal_profile
+
+            migrate_personal_profile(profile_path)
             try:
                 from src.pipeline.filter import load_profile as _load_profile_fn
                 early_profile = _load_profile_fn(str(profile_path))
@@ -445,9 +450,13 @@ def run_pipeline(
             if src_type in all_partition_vocabularies:
                 merged_cfg["partition_vocabulary"] = all_partition_vocabularies[src_type]
             if src_type == "france_travail_web" and early_profile is not None:
-                # What to read: the profile's domains and its departement locations.
+                # What to read: the profile's domains and its départements — with a home,
+                # those within the maximum distance (plus home's); else the v1 list.
+                from src.pipeline.location_distance import distance_config, ft_departments
+
                 merged_cfg.setdefault("target_domains", list(early_profile.target_domains))
-                merged_cfg.setdefault("departments", [
+                distance_cfg = distance_config(early_profile)
+                merged_cfg.setdefault("departments", ft_departments(distance_cfg) if distance_cfg else [
                     p.value for p in early_profile.geography.location_preferences
                     if p.type == "department" and p.status != "excluded"])
             # Registered collectors all take ``config=``; the abstract

@@ -50,7 +50,9 @@ def test_full_evaluation_is_a_superset_and_has_facts(world):
         first = explain_filter_checks(job, world["cfg"], stop_at_first_failure=True)
         full = explain_filter_checks(job, world["cfg"])
         assert [o.code for o in full[: len(first)]] == [o.code for o in first]
-        assert len(full) == 8 and all(o.observed for o in full)
+        # the pinned v1 profile has no home: the distance-model checks are inert and observe nothing
+        assert len(full) == 10
+        assert all(o.observed for o in full if o.code not in ("distance", "remote_policy"))
     assert any(len([o for o in explain_filter_checks(j, world["cfg"]) if not o.passed]) > 1 for j in rejected)
 
 
