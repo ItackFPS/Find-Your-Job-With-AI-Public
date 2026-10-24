@@ -1,0 +1,35 @@
+# v1 location profile (ADR 0005): two preferred départements, one acceptable far away,
+# an excluded one, and Remote France. Synthetic test data, not anyone's profile.
+target_domains:
+- software_development
+geography:
+  preferred_countries:
+  - France
+  allowed_regions:
+  - Europe
+  location_preferences:
+  - type: department
+    value: '83'
+    status: preferred
+    label: null
+  - type: department
+    value: '04'
+    status: preferred
+    label: null
+  - type: department
+    value: '69'
+    status: acceptable
+    label: null
+  - type: department
+    value: '13'
+    status: excluded
+    label: null
+  - type: remote
+    value: remote_france
+    status: acceptable
+    label: Remote France
+work_modes:
+- remote
+- on-site
+- hybrid
+freshness_days: 30
