@@ -256,6 +256,7 @@ def run_pipeline(
     stats.use_ai = use_ai
 
     # Lazy imports keep startup fast and avoid circular dependency issues.
+    from src.collectors.registry import REMOVED_SOURCE_TYPES
     from src.collectors.registry import registry as collector_registry
     from src.decisions.recorder import DecisionRecorder
     from src.discovery.registry import SourceRegistry
@@ -382,7 +383,7 @@ def run_pipeline(
                         recent_runs = _hist_rs.list_runs(limit=10)
                     finally:
                         _hist_rs.close()
-                    for src_type in ("france_travail", "apec", "jobicy", "remoteok"):
+                    for src_type in ("france_travail", "jobicy", "remoteok"):
                         history = compute_query_yield_history(recent_runs, src_type)
                         if history:
                             yield_history_by_source[src_type] = history
@@ -417,7 +418,18 @@ def run_pipeline(
         active_sources = [
             s for s in source_registry.all_sources
             if s.get("active", True) and s.get("type") not in skipped_source_types
+            and s.get("type") not in REMOVED_SOURCE_TYPES
         ]
+        # A 1.x config may still list a source type removed in 2.0: skip it with
+        # one line per run saying so, rather than a failure on every run.
+        for s in source_registry.all_sources:
+            removed_reason = REMOVED_SOURCE_TYPES.get(s.get("type", ""))
+            if s.get("active", True) and removed_reason:
+                logger.warning("Skipping source %s: %s", s["name"], removed_reason)
+                stats.by_source[s["name"]] = {
+                    "collected": 0, "accepted": 0, "errors": 0,
+                    "status": "skipped", "reason": removed_reason,
+                }
         # An active source left out by the preflight is listed as skipped, with what
         # to set up, so a missing credential never looks like a source that ran.
         for s in source_registry.all_sources:

@@ -139,7 +139,7 @@ sources:
     board_identifier: null
     active: true
     # Indeed mobile GraphQL API — same endpoint as Indeed's iOS app.
-    # No browser or Crawl4AI required.  Verified 2026-08-31 (Phase 0 benchmark):
+    # No browser required.  Verified 2026-08-31 (Phase 0 benchmark):
     #   500 jobs collected across 5 pages in 7.1 s, zero blocking, full descriptions.
     #
     # API key: Indeed's iOS app key, read from INDEED_API_KEY (.env); not shipped
@@ -216,42 +216,6 @@ sources:
         # Alternance / apprentissage
         - keyword: "alternance développeur"
           location: "France"
-
-  # ---- Browser-based collectors (require: pip install crawl4ai) ----------
-  # These use Crawl4AI (Playwright) to render JavaScript-heavy pages.
-  # Set active: true only after crawl4ai is installed and live test passes.
-
-  - name: wttj
-    type: wttj
-    domain: "welcometothejungle.com"
-    careers_url: "https://www.welcometothejungle.com/fr/companies"
-    ats: null
-    board_identifier: null
-    active: false
-    # Robots.txt (verified 2026-08-27): allows /fr/companies/{slug}/jobs and
-    # /fr/companies/{slug}/jobs/{slug} — clean URLs, no query params.
-    # Disallows /*? (any URL with ?), so no paginated search is used.
-    # Strategy: per-company listing page → job-detail pages → JSON-LD extraction.
-    # Requires: pip install crawl4ai && playwright install --with-deps chromium
-    # BLOCKED (live test 2026-08-27): WTTJ deploys AWS WAF bot protection.
-    # Headless Playwright receives HTTP 202 + WAF cookie challenge (2KB HTML)
-    # instead of the actual job listing (~80KB+). WAF is an access control;
-    # bypassing it is prohibited by project constraints. Keeping the collector
-    # code as a valid implementation; activate only if WTTJ provides API access.
-    config:
-      company_slugs:
-        - doctolib
-        - ledger
-        - qonto
-        - alan
-        - contentsquare
-        - aircall
-        - swile
-        - ankorstore
-        - malt
-      max_jobs_per_company: 20
-      rate_limit_delay: 3.0
-      timeout: 60
 
   - name: eures
     type: eures
@@ -383,27 +347,3 @@ sources:
       max_jobs_per_slug: 3
       rate_limit_delay: 1.0
       timeout: 20
-
-  - name: apec
-    type: apec
-    domain: "apec.fr"
-    careers_url: "https://www.apec.fr/cms/webservices/rechercheOffre"
-    ats: null
-    board_identifier: null
-    active: true
-    # Robots.txt (verified 2026-08-27): "All robots will spider the domain".
-    # No Disallow rules — fully permissive.
-    # Strategy: POST to the public JSON search API (same endpoint as the SPA).
-    # No browser or Crawl4AI required.
-    # Pagination: startIndex-based (20 jobs/page). max_pages controls collection depth.
-    # Work mode: idNomTeletravail field (20765=on_site, 20766=hybrid, else unknown).
-    # Employment type: typeContrat codes don't reliably decode; left as None.
-    # Keyword search (2026-08-28): 'motsCles' field in POST body verified to work.
-    # discovery_queries (French keywords) injected by orchestrator; one paginated
-    # search cycle per keyword. APEC covers France exclusively; all jobs pass the
-    # location filter, so multi-keyword search directly improves candidate volume.
-    config:
-      max_pages: 4
-      page_size: 50
-      rate_limit_delay: 2.0
-      timeout: 30

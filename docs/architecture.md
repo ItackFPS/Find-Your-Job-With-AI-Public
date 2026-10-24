@@ -134,10 +134,8 @@ orchestrator loads collectors dynamically based on the `type` field in
 | `weworkremotely` | `weworkremotely.py` | Active — RSS/Atom feeds |
 | `indeed` | `indeed.py` | Active — unofficial mobile GraphQL API, cursor-based pagination |
 | `eures` | `eures.py` | Active — public REST API |
-| `apec` | `apec.py` | Active — public REST search endpoint |
 | `bundesagentur` | `bundesagentur.py` | Disabled — Germany-only, fails this project's location filter |
 | `arbetsformedlingen` | `arbetsformedlingen.py` | Disabled — Sweden-only, same reason |
-| `wttj` | `wttj.py` | Disabled — Crawl4AI/Playwright-based; blocked by AWS WAF bot protection as of the last live check (2026-08-27) |
 | `hellowork` | `hellowork.py` | Disabled in the registry — production HelloWork collection uses the separate scanner below |
 | `greenhouse` | `greenhouse.py` | Registered, working, not configured — needs a `board_identifier` |
 | `lever` | `lever.py` | Registered, working, not configured — needs a company slug |
