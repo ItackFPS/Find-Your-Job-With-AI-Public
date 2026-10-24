@@ -16,7 +16,9 @@ COMMANDS = ("start", "tray", "dev", "status", "stop", "shortcut", "autostart")
 
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--port", type=int, help="backend port (default: FYJ_PORT or 8000)")
+    common.add_argument("--port", type=int,
+                        help="fixed backend port (default: FYJ_PORT; otherwise a free port chosen at "
+                             "start, or 8000 in dev mode)")
 
     run = argparse.ArgumentParser(add_help=False, parents=[common])
     run.add_argument("--window", choices=("app", "browser", "none"), default="app",
@@ -62,6 +64,9 @@ def main(argv: list[str] | None = None) -> int:
     root = core.project_root()
     os.chdir(root)  # the backend resolves logs/, data/ and config/ from here
     settings = core.Settings.load(root, backend_port=args.port)
+    if args.command == "dev" and not settings.fixed_port:
+        # the Vite dev server's proxy defaults to 8000 (frontend/vite.config.ts)
+        settings = dataclasses.replace(settings, backend_port=core.DEFAULT_BACKEND_PORT)
     if args.command in ("start", "dev", "tray"):
         settings = dataclasses.replace(settings, startup_timeout_s=args.timeout)
         out = Output(settings.logs_dir / "launcher.log")

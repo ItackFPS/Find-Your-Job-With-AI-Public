@@ -38,9 +38,10 @@ HINT_MARKER = ".tray-hint-shown"
 class RunWatcher:
     """Reports pipeline runs that complete while the tray app is running."""
 
-    def __init__(self, backend_url: str,
+    def __init__(self, backend_url: str | Callable[[], str | None],
                  fetch: Callable[[str], tuple[int, bytes] | None] | None = None) -> None:
-        self.url = f"{backend_url}/api/pipeline/runs?limit=1"
+        # a callable: the backend's port is known only once it answered with our token
+        self._base = backend_url if callable(backend_url) else (lambda: backend_url)
         self._fetch = fetch or (lambda url: core.http_get(url, timeout_s=5.0))
         self._seen: str | None = None
         self._primed = False
@@ -51,7 +52,10 @@ class RunWatcher:
         The first poll only records the latest run, so starting the app never
         announces an old run.
         """
-        result = self._fetch(self.url)
+        base = self._base()
+        if base is None:
+            return None
+        result = self._fetch(f"{base}/api/pipeline/runs?limit=1")
         if result is None or result[0] != 200:
             return None
         try:
@@ -85,7 +89,7 @@ class TrayApp:
         self.autostart = autostart
         self._pystray = pystray
         self._load_image = image_loader
-        self.watcher = watcher or RunWatcher(launcher.s.backend_url)
+        self.watcher = watcher or RunWatcher(lambda: launcher.backend_url)
         self.icon: Any = None
         self.exit_code = 0
         self._ready = threading.Event()
@@ -95,7 +99,11 @@ class TrayApp:
     # ---- actions (menu items) -----------------------------------------------------------
 
     def open_dashboard(self, *_args: object) -> None:
-        open_dashboard(self.launcher.s.backend_url, "app", self.launcher.out)
+        url = self.launcher.backend_url
+        if url is None:  # not answering with our token (yet): never open anything else
+            self.notify("Find Your Job With AI is still starting; try again in a moment.")
+            return
+        open_dashboard(url, "app", self.launcher.out)
 
     def toggle_autostart(self, *_args: object) -> None:
         if self.autostart.enabled():

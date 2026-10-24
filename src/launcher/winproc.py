@@ -239,6 +239,110 @@ def process_alive(pid: int, created: int | None) -> bool:
     return now is not None and (created is None or now == created)
 
 
+if IS_WINDOWS:
+    _advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)  # type: ignore[attr-defined,unused-ignore]
+    _TOKEN_QUERY = 0x0008
+    _TOKEN_USER = 1
+    _k32.GetCurrentProcess.restype = wintypes.HANDLE
+    _k32.LocalFree.argtypes = [ctypes.c_void_p]
+    _advapi32.OpenProcessToken.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE)]
+    _advapi32.GetTokenInformation.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p,
+                                              wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
+    _advapi32.ConvertSidToStringSidW.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p)]
+    _advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW.argtypes = [
+        wintypes.LPCWSTR, wintypes.DWORD, ctypes.POINTER(ctypes.c_void_p), ctypes.c_void_p]
+    _GENERIC_WRITE = 0x40000000
+    _CREATE_NEW = 1
+    _FILE_ATTRIBUTE_NORMAL = 0x80
+    _INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+
+    class _SecurityAttributes(ctypes.Structure):
+        _fields_ = [("nLength", wintypes.DWORD), ("lpSecurityDescriptor", ctypes.c_void_p),
+                    ("bInheritHandle", wintypes.BOOL)]
+
+    _k32.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
+                                 wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+    _k32.CreateFileW.restype = wintypes.HANDLE
+
+
+def current_user_sid() -> str | None:
+    """The SID string of the account running this process (Windows), else None."""
+    if not IS_WINDOWS:
+        return None
+    token = wintypes.HANDLE()
+    if not _advapi32.OpenProcessToken(_k32.GetCurrentProcess(), _TOKEN_QUERY, ctypes.byref(token)):
+        return None
+    try:
+        needed = wintypes.DWORD(0)
+        _advapi32.GetTokenInformation(token, _TOKEN_USER, None, 0, ctypes.byref(needed))
+        buf = ctypes.create_string_buffer(needed.value)
+        if not needed.value or not _advapi32.GetTokenInformation(token, _TOKEN_USER, buf, needed,
+                                                                 ctypes.byref(needed)):
+            return None
+        sid = ctypes.cast(buf, ctypes.POINTER(ctypes.c_void_p))[0]  # TOKEN_USER.User.Sid
+        text = ctypes.c_void_p()
+        if not _advapi32.ConvertSidToStringSidW(sid, ctypes.byref(text)) or not text.value:
+            return None
+        try:
+            return ctypes.wstring_at(text.value)
+        finally:
+            _k32.LocalFree(text)
+    finally:
+        _k32.CloseHandle(token)
+
+
+def _owner_only_sddl() -> str:
+    sid = current_user_sid()
+    if sid is None:
+        raise OSError("cannot read the current account's SID")
+    return f"D:P(A;;FA;;;{sid})(A;;FA;;;SY)"  # protected: nothing inherited from the folder
+
+
+def _create_private(path: Path) -> int:
+    """Create ``path`` (it must not exist) and return a writable fd. On Windows the file is created
+    WITH its owner-only DACL (CreateFileW + SECURITY_ATTRIBUTES), so no other account can open a
+    handle to it at any moment, not even between creation and a later ACL change."""
+    if not IS_WINDOWS:
+        return os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    import msvcrt
+
+    sd = ctypes.c_void_p()
+    if not _advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            _owner_only_sddl(), 1, ctypes.byref(sd), None):
+        raise _winerror("ConvertStringSecurityDescriptorToSecurityDescriptorW")
+    try:
+        sa = _SecurityAttributes(ctypes.sizeof(_SecurityAttributes), sd, False)
+        handle = _k32.CreateFileW(str(path), _GENERIC_WRITE, 0, ctypes.byref(sa), _CREATE_NEW,
+                                  _FILE_ATTRIBUTE_NORMAL, None)
+        if handle in (None, _INVALID_HANDLE_VALUE):
+            raise _winerror("CreateFileW")
+    finally:
+        _k32.LocalFree(sd)
+    return msvcrt.open_osfhandle(handle, os.O_WRONLY | os.O_BINARY)  # the fd now owns the handle
+
+
+def write_private_text(path: Path, text: str) -> None:
+    """Atomically write ``text`` to a file only this OS account can read (and SYSTEM, on Windows).
+
+    The temporary file is created already restricted (``_create_private``) and the rename keeps its
+    DACL, so the content is never readable by another account, not even for a moment."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        tmp.unlink()
+    except OSError:
+        pass
+    fd = _create_private(tmp)  # CREATE_NEW / O_EXCL: a file planted in between is refused, not reused
+    try:
+        os.write(fd, text.encode("utf-8"))
+    except BaseException:
+        os.close(fd)
+        tmp.unlink(missing_ok=True)
+        raise
+    os.close(fd)
+    os.replace(tmp, path)
+
+
 class StopEvent:
     """Named, session-local event: owned by the running launcher, set by ``stop``."""
 

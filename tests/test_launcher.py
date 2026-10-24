@@ -84,7 +84,32 @@ def test_settings_precedence(tmp_path):
 def test_settings_bad_port_falls_back(tmp_path):
     for bad in ("eighty", "70000"):
         s = Settings.load(tmp_path, environ={"FYJ_PORT": bad})
-        assert s.backend_port == core.DEFAULT_BACKEND_PORT
+        assert s.backend_port == 0 and not s.fixed_port      # a free port is chosen at start
+
+
+def test_port_is_dynamic_unless_fixed(tmp_path):
+    assert not Settings.load(tmp_path, environ={}).fixed_port
+    assert Settings.load(tmp_path, environ={"FYJ_PORT": "8100"}).fixed_port
+
+
+def test_dev_mode_keeps_the_fixed_dev_port(tmp_path, monkeypatch):
+    from src.launcher import __main__ as cli
+
+    seen: dict[str, Settings] = {}
+
+    class FakeLauncher:
+        def __init__(self, settings, *a, **k):
+            seen["s"] = settings
+
+        def run(self):
+            return 0
+
+    monkeypatch.setattr(cli, "Launcher", FakeLauncher)
+    monkeypatch.setattr(core, "project_root", lambda: tmp_path)
+    monkeypatch.setattr(cli.os, "chdir", lambda _p: None)
+    monkeypatch.delenv("FYJ_PORT", raising=False)
+    assert cli.main(["dev"]) == 0 and seen["s"].backend_port == core.DEFAULT_BACKEND_PORT
+    assert cli.main(["start"]) == 0 and seen["s"].backend_port == 0
 
 
 def test_stop_event_name_is_per_checkout(tmp_path):
@@ -124,6 +149,63 @@ def test_probe_backend_reads_a_large_openapi_document(server):
 def test_probe_backend_foreign(server):
     s = server({"/api/health": (200, b'{"status": "ok"}')})
     assert core.probe_backend(s.port) is Backend.FOREIGN
+
+
+def test_probe_backend_with_a_token_accepts_only_that_instance(server):
+    mine = server({"/api/health": (200, json.dumps({"app": core.APP_ID, "instance_token": "tok"}).encode())})
+    other = server({"/api/health": (200, json.dumps({"app": core.APP_ID, "instance_token": "x"}).encode())})
+    silent = server({"/api/health": (200, json.dumps({"app": core.APP_ID}).encode())})  # no token for us
+    assert core.probe_backend(mine.port, token="tok") is Backend.OURS
+    assert core.probe_backend(other.port, token="tok") is Backend.OTHER
+    assert core.probe_backend(silent.port, token="tok") is Backend.OTHER
+    assert core.probe_backend(free_port(), timeout_s=0.5, token="tok") is Backend.FREE
+
+
+def _owner_only(path: Path) -> bool:
+    """This account and SYSTEM only, protected: nothing inherited from data/ (other accounts may read it)."""
+    from src.launcher.winproc import current_user_sid
+
+    script = ("$a = Get-Acl -LiteralPath $env:FYJ_FILE; 'protected=' + $a.AreAccessRulesProtected; "
+              "$a.Access | ForEach-Object { $_.IdentityReference.Translate("
+              "[Security.Principal.SecurityIdentifier]).Value + ' inherited=' + $_.IsInherited }")
+    acl = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+                         env={**os.environ, "FYJ_FILE": str(path)},
+                         capture_output=True, text=True, timeout=60).stdout.split()
+    return sorted(acl) == sorted(["protected=True", str(current_user_sid()), "inherited=False",
+                                  "S-1-5-18", "inherited=False"])
+
+
+@windows_only
+def test_the_lock_file_is_owner_only_from_its_creation(tmp_path):
+    # review finding: the file used to be created with the folder's inherited ACL and restricted
+    # afterwards, a window in which another account could open a handle and read the token later
+    from src.launcher.winproc import _create_private
+
+    (tmp_path / "state").mkdir()
+    tmp = tmp_path / "state" / "instance.json.tmp"
+    fd = _create_private(tmp)
+    try:
+        assert tmp.stat().st_size == 0 and _owner_only(tmp)     # restricted before any byte is written
+        with pytest.raises(FileExistsError):
+            _create_private(tmp)                                 # never reuses a file planted there
+    finally:
+        os.close(fd)
+
+
+def test_instance_lock_roundtrip_is_private(tmp_path):
+    settings = Settings(root=tmp_path)
+    inst = core.Instance(pid=1, created=2, port=51234, instance_token="secret-token",
+                         install_path=str(tmp_path), version="1.0.0")
+    inst.save(settings)
+    assert core.Instance.load(settings.instance_file) == inst
+    assert json.loads(settings.port_file.read_text()) == {"pid": 1, "port": 51234}
+    assert "secret-token" not in settings.port_file.read_text()
+    if IS_WINDOWS:
+        assert _owner_only(settings.instance_file)
+    else:
+        assert settings.instance_file.stat().st_mode & 0o077 == 0
+    core.Instance.remove(settings)
+    assert not settings.instance_file.exists() and not settings.port_file.exists()
 
 
 def test_probe_llm(server):
@@ -318,10 +400,12 @@ def test_a_start_while_the_app_is_stopping_waits_then_starts(tmp_path, monkeypat
 
 FAKE_BACKEND = """\
 import http.server, json, os, sys
+TOKEN = os.environ.pop("FYJ_INSTANCE_TOKEN", "")
 class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         ok = self.path == "/api/health"
-        health = {"status": "ok", "app": "find-your-job-with-ai", "pid": os.getpid()}
+        health = {"status": "ok", "app": "find-your-job-with-ai", "pid": os.getpid(),
+                  "version": "9.9.9", "instance_token": TOKEN}
         body = json.dumps(health if ok else {}).encode()
         self.send_response(200 if ok else 404)
         self.send_header("Content-Length", str(len(body)))
@@ -329,17 +413,20 @@ class H(http.server.BaseHTTPRequestHandler):
         self.wfile.write(body)
     def log_message(self, *a):
         pass
-http.server.HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
+class S(http.server.HTTPServer):
+    allow_reuse_address = False  # on Windows it would share a port another program holds
+S(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
 """
 
 
-def _launcher(tmp_path: Path, port: int, monkeypatch) -> run.Launcher:
-    script = tmp_path / "fake_backend.py"
-    script.write_text(FAKE_BACKEND, encoding="utf-8")
-    monkeypatch.setattr(core, "backend_command",
-                        lambda python, p, reload=False: [python, str(script), str(p)])
-    monkeypatch.setattr(core, "prerequisite_checks", lambda root: [])
-    monkeypatch.setattr(run.Launcher, "_ensure_frontend", lambda self: True)
+def _launcher(tmp_path: Path, port: int, monkeypatch, *, patch: bool = True) -> run.Launcher:
+    if patch:
+        script = tmp_path / "fake_backend.py"
+        script.write_text(FAKE_BACKEND, encoding="utf-8")
+        monkeypatch.setattr(core, "backend_command",
+                            lambda python, p, reload=False: [python, str(script), str(p)])
+        monkeypatch.setattr(core, "prerequisite_checks", lambda root: [])
+        monkeypatch.setattr(run.Launcher, "_ensure_frontend", lambda self: True)
     settings = Settings(root=tmp_path, backend_port=port,
                         llm_endpoint=f"http://127.0.0.1:{free_port()}", startup_timeout_s=60)
     launcher = run.Launcher(settings, run.Output(None), mode="start", window="none")
@@ -355,9 +442,10 @@ def test_launcher_starts_owns_and_stops_backend(tmp_path, monkeypatch):
     def stop_when_ready() -> None:
         deadline = time.monotonic() + 60
         while time.monotonic() < deadline:
-            if core.probe_backend(port, timeout_s=0.5) is Backend.OURS and "backend" in launcher.children:
+            if launcher.port is not None and "backend" in launcher.children:
                 seen["pid"] = launcher.children["backend"].pid
                 seen["state"] = core.State.load(launcher.s.state_file)
+                seen["instance"] = core.Instance.load(launcher.s.instance_file)
                 break
             time.sleep(0.2)
         launcher.stop_requested = True
@@ -366,17 +454,143 @@ def test_launcher_starts_owns_and_stops_backend(tmp_path, monkeypatch):
     assert launcher.run() == 0
     state = seen["state"]
     assert isinstance(state, core.State) and state.components["backend"].pid == seen["pid"]
+    instance = seen["instance"]
+    assert isinstance(instance, core.Instance)
+    assert (instance.pid, instance.port, instance.version) == (os.getpid(), port, "9.9.9")
+    assert instance.instance_token == launcher.token and instance.install_path == str(tmp_path)
     assert not process_alive(int(seen["pid"]), None)          # stopped with the launcher
     assert core.probe_backend(port, timeout_s=0.5) is Backend.FREE
     assert not launcher.s.state_file.exists()
+    assert not launcher.s.instance_file.exists() and not launcher.s.port_file.exists()
 
 
-def test_launcher_reuses_running_backend_and_leaves_it_running(tmp_path, monkeypatch, server):
+def _until_ready(launcher: run.Launcher, then=None) -> threading.Thread:
+    """Run ``then()`` once the launcher's backend answered with its token, then stop it."""
+
+    def wait() -> None:
+        deadline = time.monotonic() + 60
+        while launcher.port is None and time.monotonic() < deadline:
+            time.sleep(0.1)
+        try:
+            if then is not None:
+                then()
+        finally:
+            launcher.stop_requested = True
+
+    t = threading.Thread(target=wait, daemon=True)
+    t.start()
+    return t
+
+
+def test_launcher_picks_a_free_port_when_none_is_fixed(tmp_path, monkeypatch):
+    launcher = _launcher(tmp_path, 0, monkeypatch)
+    seen: dict[str, object] = {}
+
+    def look() -> None:
+        seen["url"] = launcher.backend_url
+        seen["port_file"] = json.loads(launcher.s.port_file.read_text())
+
+    _until_ready(launcher, look)
+    assert launcher.run() == 0
+    port = seen["port_file"]["port"]  # type: ignore[index]
+    assert seen["url"] == f"http://127.0.0.1:{port}" and port != core.DEFAULT_BACKEND_PORT
+
+
+def test_a_dynamic_port_taken_meanwhile_is_replaced(tmp_path, monkeypatch, server):
+    # the port is picked free, then bound by the backend a moment later: another program may take it first
+    squatter = server({"/api/health": (200, b'{"hello": "world"}')})
+    launcher = _launcher(tmp_path, 0, monkeypatch)
+    picks = iter([squatter.port])
+    real_free_port = core.free_port
+    monkeypatch.setattr(core, "free_port", lambda: next(picks, None) or real_free_port())
+    lines: list[str] = []
+    launcher.out = lines.append  # type: ignore[assignment]
+    _until_ready(launcher)
+    assert launcher.run() == 0
+    assert any(f"port {squatter.port} was taken" in line for line in lines)
+    assert not any("exited during startup" in line for line in lines)
+    assert launcher.children == {} and squatter.port != launcher.state.components["backend"].port
+
+
+def test_a_stale_lock_is_recovered(tmp_path, monkeypatch):
+    dead = subprocess.Popen([sys.executable, "-c", "pass"])
+    dead.wait()
+    settings = Settings(root=tmp_path)
+    core.Instance(pid=dead.pid, created=1, port=free_port(), instance_token="old",
+                  install_path=str(tmp_path), version="0.9").save(settings)
+    launcher = _launcher(tmp_path, 0, monkeypatch)
+    lines: list[str] = []
+    launcher.out = lines.append  # type: ignore[assignment]
+    seen: dict[str, object] = {}
+    _until_ready(launcher, lambda: seen.update(instance=core.Instance.load(settings.instance_file)))
+    assert launcher.run() == 0
+    assert any(f"stale instance lock (pid {dead.pid})" in line for line in lines)
+    instance = seen["instance"]
+    assert isinstance(instance, core.Instance) and instance.pid == os.getpid()
+    assert instance.instance_token == launcher.token != "old"
+
+
+def test_status_reports_a_stale_lock(tmp_path):
+    settings = Settings(root=tmp_path, llm_endpoint=f"http://127.0.0.1:{free_port()}")
+    dead = subprocess.Popen([sys.executable, "-c", "pass"])
+    dead.wait()
+    core.Instance(pid=dead.pid, created=1, port=free_port(), instance_token="old",
+                  install_path=str(tmp_path), version="").save(settings)
+    rows = {name: text for _level, name, text in run.status_lines(settings)}
+    assert "stale lock" in rows["instance"] and rows["backend"] == "not running"
+
+
+@windows_only
+def test_second_launch_reuses_the_running_instance(tmp_path, monkeypatch):
+    first = _launcher(tmp_path, 0, monkeypatch)
+    first.window = "app"
+    opened: list[str] = []
+    monkeypatch.setattr(run, "open_dashboard", lambda url, window, out: opened.append(url))
+    result: dict[str, int] = {}
+
+    def second_launch() -> None:
+        second = _launcher(tmp_path, 0, monkeypatch, patch=False)
+        result["code"] = second.run()
+        result["children"] = len(second.children)
+
+    _until_ready(first, second_launch)
+    assert first.run() == 0
+    assert result == {"code": 0, "children": 0}                # nothing started twice
+    assert len(opened) == 2 and opened[0] == opened[1]         # the second launch opened the first's backend
+
+
+@windows_only
+def test_second_launch_never_connects_to_a_foreign_process_on_the_lock_port(tmp_path, monkeypatch, server):
+    # a running instance's lock names a port where something answers with ANOTHER token
+    impostor = server({"/api/health": (200, json.dumps({"app": core.APP_ID,
+                                                        "instance_token": "not-yours"}).encode())})
+    settings = Settings(root=tmp_path)
+    core.Instance(pid=os.getpid(), created=process_creation_time(os.getpid()), port=impostor.port,
+                  instance_token="the-real-token", install_path=str(tmp_path), version="").save(settings)
+    owner = StopEvent(settings.stop_event_name)               # the running instance owns the event
+    assert owner.create()
+    try:
+        launcher = _launcher(tmp_path, 0, monkeypatch)
+        monkeypatch.setattr(run, "open_dashboard", lambda *a, **k: pytest.fail("connected to a foreign process"))
+        lines: list[str] = []
+        launcher.out = lines.append  # type: ignore[assignment]
+        assert launcher.run() == 1
+        assert any("not connecting" in line for line in lines)
+        assert launcher.children == {}
+    finally:
+        owner.close()
+
+
+def test_launcher_never_connects_to_a_backend_it_did_not_start(tmp_path, monkeypatch, server):
+    # another copy of the app (a terminal, the startup task, another install) on the fixed port:
+    # it does not return our instance token, so it is refused, and left running
     external = server({"/api/health": (200, json.dumps({"app": core.APP_ID}).encode())})
     launcher = _launcher(tmp_path, external.port, monkeypatch)
-    threading.Timer(1.0, lambda: setattr(launcher, "stop_requested", True)).start()
-    assert launcher.run() == 0
+    lines: list[str] = []
+    launcher.out = lines.append  # type: ignore[assignment]
+    assert launcher.run() == 1
     assert launcher.children == {}
+    assert any("another copy" in line and "not connecting" in line for line in lines)
     assert core.probe_backend(external.port) is Backend.OURS  # not ours to stop
 
 
@@ -466,36 +680,20 @@ def test_shortcut_command_builds_no_script_from_paths(monkeypatch, tmp_path):
     assert env["FYJ_TARGET"].endswith("FindYourJob.cmd")
 
 
-def test_launcher_reuses_a_backend_that_won_the_port_race(tmp_path, monkeypatch):
-    # the logon task's backend binds the port while ours is still starting; ours exits
-    launcher = _launcher(tmp_path, free_port(), monkeypatch)
-    monkeypatch.setattr(core, "backend_command",
-                        lambda python, p, reload=False: [python, "-c", "raise SystemExit(1)"])
-    answers = iter([Backend.FREE])
-    monkeypatch.setattr(core, "probe_backend",
-                        lambda port, timeout_s=2.0: next(answers, Backend.OURS))
-    monkeypatch.setattr(core, "backend_pid", lambda port, timeout_s=2.0: 4)  # not our child
-    lines: list[str] = []
-    launcher.out = lines.append  # type: ignore[assignment]
-    threading.Timer(3.0, lambda: setattr(launcher, "stop_requested", True)).start()
-    assert launcher.run() == 0
-    assert launcher.children == {}
-    assert any("reusing it" in line for line in lines)
-    assert not any("exited during startup" in line for line in lines)
-
-
 def test_port_open_but_silent_gets_a_grace_period(tmp_path, monkeypatch):
     launcher = _launcher(tmp_path, free_port(), monkeypatch)
     answers = iter([Backend.STARTING, Backend.STARTING])
     monkeypatch.setattr(core, "probe_backend",
-                        lambda port, timeout_s=2.0: next(answers, Backend.OURS))
-    threading.Timer(2.0, lambda: setattr(launcher, "stop_requested", True)).start()
-    assert launcher.run() == 0
-    assert launcher.children == {}  # reused once it answered
+                        lambda port, timeout_s=2.0, token=None: next(answers, Backend.OTHER))
+    lines: list[str] = []
+    launcher.out = lines.append  # type: ignore[assignment]
+    assert launcher.run() == 1
+    assert launcher.children == {}  # waited for it to answer, then refused what answered
+    assert any("another copy" in line for line in lines)
 
 
 def test_port_that_never_answers_is_refused(tmp_path, monkeypatch):
     launcher = _launcher(tmp_path, free_port(), monkeypatch)
     monkeypatch.setattr(run, "STARTING_GRACE_S", 1.0)
-    monkeypatch.setattr(core, "probe_backend", lambda port, timeout_s=2.0: Backend.STARTING)
+    monkeypatch.setattr(core, "probe_backend", lambda port, timeout_s=2.0, token=None: Backend.STARTING)
     assert launcher.run() == 1

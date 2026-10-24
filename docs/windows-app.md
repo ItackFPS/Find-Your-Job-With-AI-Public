@@ -13,7 +13,7 @@ or Google Chrome is installed, otherwise in your default browser.
 
 | Component | Role | Required? | What the launcher does |
 |---|---|---|---|
-| Backend (FastAPI, `src/api`) | API, pipeline runs, scanners, scheduler; serves the dashboard | yes | starts it on `127.0.0.1:8000`, or reuses one that is already running |
+| Backend (FastAPI, `src/api`) | API, pipeline runs, scanners, scheduler; serves the dashboard | yes | starts it on `127.0.0.1` at a free port chosen at start (`FYJ_PORT` fixes one); connects only to the backend that returns this instance's token |
 | Dashboard (`frontend/dist`) | the web UI, built once with Vite | yes | rebuilds it when `frontend/` sources are newer than the build (needs Node.js and `frontend/node_modules`) |
 | SQLite (`data/jobs.db`, `data/esco.db`) | all application data | yes | nothing: the backend opens and migrates it; the launcher never touches data |
 | LM Studio / Ollama | local LLM, only for AI-enabled runs (`use_ai`) | no | never starts it; reports whether it answers at `PHASE2_LLM_ENDPOINT` and warns if that address is not local |
@@ -35,7 +35,8 @@ FindYourJob.cmd tray             :: the installed app's mode: no console, an ico
 FindYourJob.cmd autostart on     :: installed app only: start it (tray) when you sign in;
                                  ::   "off", "status"
 FindYourJob.cmd start --window browser   :: default browser instead of an app window
-FindYourJob.cmd start --port 8100        :: another backend port (or FYJ_PORT in .env)
+FindYourJob.cmd start --port 8100        :: a fixed backend port (or FYJ_PORT in .env);
+                                 ::   default: a free port at each start (dev: 8000)
 FindYourJob.cmd status           :: what is running and who owns it; starts nothing
 FindYourJob.cmd stop             :: ask the running launcher to stop what it started
 FindYourJob.cmd dev              :: development: backend + Vite dev server (hot reload)
@@ -110,7 +111,8 @@ There is no installer: the app runs from its folder (which may contain spaces).
 |---|---|
 | `[XX] packages ... missing` | run `.venv\Scripts\python -m pip install -e .` |
 | `[XX] dashboard is not built` | install Node.js 22 LTS (or 20.19+), then `cd frontend && npm ci && npm run build` |
-| `port 8000 is already used by another program` | something that is not this app holds the port: stop it, or `FindYourJob.cmd --port 8100` |
+| `port 8100 is already used by another program` | only with a fixed port (`FYJ_PORT`, `--port`): stop that program, choose another port, or remove `FYJ_PORT` to let the launcher pick a free one |
+| `port ... is used by another copy of Find Your Job With AI` | a backend this launcher did not start (another install, a terminal, the startup task) answers on the fixed port without this instance's token: the launcher never connects to it. Stop it, or remove `FYJ_PORT` |
 | `backend exited during startup` | the printed log lines say why (often a broken `.env` value or a locked database); full output in `logs\launcher\backend.log` |
 | `backend did not become ready within 180s` | startup on a large database can be slow: `--timeout 600` |
 | `PHASE2_LLM_ENDPOINT points to a non-local address` | AI-enabled runs refuse that host and run without AI; point it at LM Studio/Ollama on this machine, or set `FYJ_ALLOW_REMOTE_LLM=1` for a server you control |

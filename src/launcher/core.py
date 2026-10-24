@@ -17,9 +17,11 @@ local LLM      LM Studio / Ollama, only for --ai runs      never starts it; repo
 from __future__ import annotations
 
 import enum
+import hmac
 import importlib.util
 import json
 import os
+import secrets
 import shutil
 import socket
 import sys
@@ -33,8 +35,13 @@ APP_ID = "find-your-job-with-ai"
 APP_TITLE = "Find Your Job With AI"
 LOOPBACK = "127.0.0.1"
 
+# The fixed port of `dev` mode (the Vite dev server proxies to it). `start` and `tray` pick a free
+# port at start instead, unless FYJ_PORT / --port fixes one (update plan §C7, §E4).
 DEFAULT_BACKEND_PORT = 8000
 DEFAULT_VITE_PORT = 5173
+# The launcher passes its instance token to the backend in this variable; /api/health returns it
+# to processes of the same OS account only (src/api/app.py), and it is never printed or logged.
+INSTANCE_TOKEN_ENV = "FYJ_INSTANCE_TOKEN"
 DEFAULT_LLM_ENDPOINT = "http://localhost:1234"
 
 # Imports the backend cannot start without (module name -> pip distribution).
@@ -80,7 +87,8 @@ def _port(value: str | None, default: int) -> int:
 @dataclass(frozen=True)
 class Settings:
     root: Path
-    backend_port: int = DEFAULT_BACKEND_PORT
+    # 0: a free port is chosen when the backend starts (the default); otherwise this fixed port
+    backend_port: int = 0
     vite_port: int = DEFAULT_VITE_PORT
     llm_endpoint: str = DEFAULT_LLM_ENDPOINT
     startup_timeout_s: float = 180.0
@@ -92,13 +100,19 @@ class Settings:
         env = {**read_dotenv(root), **(os.environ if environ is None else environ)}
         return cls(
             root=root,
-            backend_port=backend_port or _port(env.get("FYJ_PORT"), DEFAULT_BACKEND_PORT),
+            backend_port=backend_port or _port(env.get("FYJ_PORT"), 0),
             vite_port=_port(env.get("FYJ_VITE_PORT"), DEFAULT_VITE_PORT),
             llm_endpoint=(env.get("PHASE2_LLM_ENDPOINT") or DEFAULT_LLM_ENDPOINT).rstrip("/"),
         )
 
     @property
+    def fixed_port(self) -> bool:
+        return self.backend_port != 0
+
+    @property
     def backend_url(self) -> str:
+        """The configured fixed port's URL (meaningless while the port is dynamic: use the
+        running instance's, :attr:`Instance.url`)."""
         return f"http://{LOOPBACK}:{self.backend_port}"
 
     @property
@@ -108,6 +122,21 @@ class Settings:
     @property
     def state_file(self) -> Path:
         return self.logs_dir / "state.json"
+
+    @property
+    def state_dir(self) -> Path:
+        return self.root / "data" / "state"
+
+    @property
+    def instance_file(self) -> Path:
+        """The running instance's lock: pid, port, token, install path, version (owner-only)."""
+        return self.state_dir / "instance.json"
+
+    @property
+    def port_file(self) -> Path:
+        """The running instance's port alone, readable by other accounts: the lab's isolation
+        check must probe the live API port (src/lab/isolation.py), never the token."""
+        return self.state_dir / "api-port.json"
 
     @property
     def stop_event_name(self) -> str:
@@ -145,7 +174,8 @@ def http_get(url: str, timeout_s: float = 2.0, max_bytes: int = 65536) -> tuple[
 
 class Backend(enum.Enum):
     FREE = "free"          # nothing listening: the launcher may start one
-    OURS = "ours"          # this application answers on the port
+    OURS = "ours"          # this application answers on the port (with our token, when one is given)
+    OTHER = "other"        # this application, but not our instance (another token, or none)
     FOREIGN = "foreign"    # something else holds the port
     STARTING = "starting"  # port open, not answering yet
 
@@ -158,35 +188,50 @@ def _json(body: bytes) -> dict | None:
     return value if isinstance(value, dict) else None
 
 
-def probe_backend(port: int, timeout_s: float = 2.0) -> Backend:
+def new_instance_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def free_port() -> int:
+    """A loopback port nothing listens on now (the backend binds it a moment later)."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind((LOOPBACK, 0))
+        return int(s.getsockname()[1])
+
+
+def health(port: int, timeout_s: float = 2.0) -> dict | None:
+    """This application's /api/health answer on ``port``, or None."""
+    result = http_get(f"http://{LOOPBACK}:{port}/api/health", timeout_s)
+    data = _json(result[1]) if result and result[0] == 200 else None
+    return data if data is not None and data.get("app") == APP_ID else None
+
+
+def probe_backend(port: int, timeout_s: float = 2.0, token: str | None = None) -> Backend:
+    """What answers on ``port``. With ``token``, only the backend that returns this exact
+    instance token is :attr:`Backend.OURS`; any other copy of the app is :attr:`Backend.OTHER`
+    (never connected to). Without one (a fixed port and no lock), any copy of the app is OURS."""
     base = f"http://{LOOPBACK}:{port}"
-    health = http_get(f"{base}/api/health", timeout_s)
-    if health is None:
+    reply = http_get(f"{base}/api/health", timeout_s)
+    if reply is None:
         return Backend.STARTING if port_in_use(port) else Backend.FREE
-    status, body = health
+    status, body = reply
     data = _json(body) if status == 200 else None
     if data is not None and data.get("app") == APP_ID:
-        return Backend.OURS
+        if token is None:
+            return Backend.OURS
+        answer = data.get("instance_token")
+        same = isinstance(answer, str) and hmac.compare_digest(answer.encode(), token.encode())
+        return Backend.OURS if same else Backend.OTHER
     if status == 403 and b"OS account" in body:  # peer guard refusal: our app, other account
-        return Backend.OURS
+        return Backend.OURS if token is None else Backend.OTHER
     # A backend from before /api/health existed answers it with the SPA (or 404):
     # recognise it by its OpenAPI title.
     openapi = http_get(f"{base}/api/openapi.json", timeout_s, max_bytes=16_000_000)
     if openapi and openapi[0] == 200:
         info = (_json(openapi[1]) or {}).get("info") or {}
         if isinstance(info, dict) and info.get("title") == APP_TITLE:
-            return Backend.OURS
+            return Backend.OURS if token is None else Backend.OTHER
     return Backend.FOREIGN
-
-
-def backend_pid(port: int, timeout_s: float = 2.0) -> int | None:
-    """PID reported by this application's /api/health on ``port``, if it answers."""
-    result = http_get(f"http://{LOOPBACK}:{port}/api/health", timeout_s)
-    data = _json(result[1]) if result and result[0] == 200 else None
-    if not data or data.get("app") != APP_ID:
-        return None
-    pid = data.get("pid")
-    return pid if isinstance(pid, int) else None
 
 
 def probe_llm(endpoint: str, timeout_s: float = 2.0) -> bool:
@@ -390,6 +435,53 @@ class State:
             )
         except (OSError, ValueError, KeyError, TypeError):
             return None
+
+
+@dataclass(frozen=True)
+class Instance:
+    """The running app's lock file (update plan §C7): who owns it (``pid`` + creation time,
+    so a recycled pid is never taken for it), where its backend listens, and the token that
+    backend must return before anything connects to it. Written owner-only: the token never
+    leaves this OS account (src/launcher/winproc.py ``write_private_text``)."""
+
+    pid: int
+    created: int | None
+    port: int
+    instance_token: str
+    install_path: str
+    version: str
+
+    @property
+    def url(self) -> str:
+        return f"http://{LOOPBACK}:{self.port}"
+
+    def save(self, settings: Settings) -> None:
+        from src.launcher.winproc import write_private_text
+
+        write_private_text(settings.instance_file, json.dumps(vars(self), indent=2))
+        # the port alone, for the lab's isolation check (Settings.port_file)
+        public = settings.port_file.with_suffix(".tmp")
+        public.write_text(json.dumps({"pid": self.pid, "port": self.port}), encoding="utf-8")
+        os.replace(public, settings.port_file)
+
+    @classmethod
+    def load(cls, path: Path) -> Instance | None:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return cls(pid=int(data["pid"]), created=data.get("created"), port=int(data["port"]),
+                       instance_token=str(data["instance_token"]),
+                       install_path=str(data.get("install_path", "")),
+                       version=str(data.get("version", "")))
+        except (OSError, ValueError, KeyError, TypeError):
+            return None
+
+    @staticmethod
+    def remove(settings: Settings) -> None:
+        for path in (settings.instance_file, settings.port_file):
+            try:
+                path.unlink()
+            except OSError:
+                pass
 
 
 def rotate_log(path: Path, max_bytes: int = 5_000_000) -> None:

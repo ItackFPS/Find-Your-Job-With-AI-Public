@@ -261,6 +261,22 @@ def test_first_run_hint_is_shown_once(tmp_path: Path) -> None:
     assert app.icon.notes == []
 
 
+def test_open_waits_for_a_backend_that_answered_with_our_token(tmp_path: Path, monkeypatch) -> None:
+    launcher = _FakeLauncher(tmp_path)
+    launcher.backend_url = None  # type: ignore[attr-defined]  # not verified yet
+    opened: list[str] = []
+    monkeypatch.setattr("src.launcher.tray.open_dashboard", lambda url, *_a: opened.append(url))
+    app = TrayApp(launcher, _Registry().autostart(tmp_path), pystray=_fake_pystray(),  # type: ignore[arg-type]
+                  image_loader=lambda _p: object(), watcher=RunWatcher(lambda: None, fetch=lambda _u: None))
+    app.icon = _FakeIcon("", None, "", None)
+    app.open_dashboard()
+    assert opened == [] and "still starting" in app.icon.notes[0]
+    assert app.watcher.poll() is None                         # nothing is fetched from an unknown port
+    launcher.backend_url = "http://127.0.0.1:51234"  # type: ignore[attr-defined]
+    app.open_dashboard()
+    assert opened == ["http://127.0.0.1:51234"]
+
+
 # -- backend restart (real processes, as in test_launcher) ----------------------------------------------
 
 

@@ -39,6 +39,7 @@ Each network probe is one ``GET /`` to loopback.
 from __future__ import annotations
 
 import http.client
+import json
 import os
 import secrets
 import socket
@@ -50,6 +51,9 @@ from src.lab.sandbox import in_app_container
 PROBE_SUFFIX = ".isolation-probe"
 API_PORTS = (8000,)
 RELAY_PORTS = (5173, 5678)                 # Vite dev proxy, n8n
+# written by the launcher (src/launcher/core.py Settings.instance_file / port_file); the lab never imports it
+INSTANCE_LOCK = Path("data") / "state" / "instance.json"
+LIVE_PORT_FILE = Path("data") / "state" / "api-port.json"
 LOOPBACK_HOSTS = ("127.0.0.1", "::1")
 # the API's same-account guard marks its refusals with this header (``src/api/peer_guard.py``
 # REFUSAL_HEADER; the lab never imports the API, a test checks that the two agree)
@@ -97,11 +101,25 @@ def _dir_writable(path: Path) -> bool:
 
 
 def secret_files(root: Path, config_dir: Path) -> list[Path]:
-    """Credential files this repository uses: ``.env*`` (not the example) and local config overrides."""
+    """Credential files this repository uses: ``.env*`` (not the example), local config overrides and the
+    running app's instance lock (it holds the launcher's instance token; the launcher writes it owner-only)."""
     found = [p for p in root.glob(".env*") if p.is_file() and p.name != ".env.example"]
     if config_dir.is_dir():
         found += [p for p in config_dir.glob("*.local.*") if p.is_file()]
+    if (root / INSTANCE_LOCK).is_file():
+        found.append(root / INSTANCE_LOCK)
     return sorted(found)
+
+
+def live_api_ports(root: Path) -> tuple[int, ...]:
+    """The running app's API port, read from the port file its launcher writes next to the lock
+    (``src/launcher/core.py`` ``Settings.port_file``): the launcher picks a free port at each start, so
+    the fixed ``API_PORTS`` alone would leave the live one unprobed. Empty when no app is running."""
+    try:
+        port = int(json.loads((root / LIVE_PORT_FILE).read_text(encoding="utf-8"))["port"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return ()
+    return (port,) if 0 < port < 65536 else ()
 
 
 def _probe_one(host: str, port: int, timeout: float) -> str:

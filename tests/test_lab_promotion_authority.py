@@ -403,6 +403,31 @@ def test_readable_secrets_break_isolation(tmp_path, ports):
     assert found == {".env", "notifications.local.yaml"}                  # the example is no secret
 
 
+def test_the_instance_lock_is_a_secret_and_the_live_port_is_probed(tmp_path, monkeypatch, capsys, ports):
+    # the launcher picks a free API port at each start (update plan §E4): the check must probe that one too
+    import src.lab.__main__ as cli
+    from src.launcher.core import Settings
+
+    t = _production_tree(tmp_path)
+    settings = Settings(root=tmp_path)
+    assert settings.instance_file == tmp_path / isolation.INSTANCE_LOCK         # the lab keeps its own copy
+    assert settings.port_file == tmp_path / isolation.LIVE_PORT_FILE
+    assert isolation.live_api_ports(tmp_path) == ()
+    settings.state_dir.mkdir(parents=True)
+    settings.instance_file.write_text('{"instance_token": "x"}')
+    settings.port_file.write_text('{"pid": 1, "port": 51234}')
+    assert isolation.live_api_ports(tmp_path) == (51234,)
+    found = {Path(p).name for p in check_isolation(tmp_path, t["jobs"], t["config"])["readable_secrets"]}
+    assert "instance.json" in found
+    monkeypatch.setattr(cli, "PROJECT_ROOT", tmp_path)
+    ports.update({8000: "refused", 51234: "reachable"})                         # the live API serves this account
+    common = ["--lab-db", str(t["jobs"].parent / "lab" / "lab.db"), "--jobs-db", str(t["jobs"]),
+              "--config-dir", str(t["config"])]
+    assert cli.main([*common, "isolation-check", "--api-port", "8000"]) == 3
+    report = json.loads(capsys.readouterr().out)
+    assert report["network"]["51234"] == "reachable"
+
+
 def test_the_isolated_agent_keeps_its_lab_database_in_data_lab(tmp_path, monkeypatch, capsys, ports):
     import src.lab.__main__ as cli
 
