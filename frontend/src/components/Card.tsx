@@ -31,7 +31,7 @@ export function Card({ title, subtitle, actions, hoverable = false, elevated = f
     border: `1px solid ${hoverable && hovered ? 'var(--color-accent)' : 'var(--color-border)'}`,
     borderRadius: 'var(--radius-lg)',
     padding: compact ? 'var(--space-4)' : 'var(--space-5)',
-    transition: 'border-color 0.15s',
+    transition: 'border-color var(--motion-duration-fast) var(--motion-ease)',
     ...style,
   }
 

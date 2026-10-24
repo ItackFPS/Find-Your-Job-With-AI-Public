@@ -198,13 +198,14 @@ class TrayApp:
         self._read_paused()
         marker = self.launcher.s.logs_dir / HINT_MARKER
         if not marker.exists():
-            self.notify("Find Your Job With AI keeps running here, in the notification area, so "
-                        "searches continue when you close the window. Right-click the icon to quit.")
+            # Record the hint before showing it: whoever sees the hint can rely on the marker.
             try:
                 marker.parent.mkdir(parents=True, exist_ok=True)
                 marker.touch()
             except OSError:
                 pass
+            self.notify("Find Your Job With AI keeps running here, in the notification area, so "
+                        "searches continue when you close the window. Right-click the icon to quit.")
         threading.Thread(target=self._watch_runs, name="tray-runs", daemon=True).start()
 
     def _watch_runs(self) -> None:

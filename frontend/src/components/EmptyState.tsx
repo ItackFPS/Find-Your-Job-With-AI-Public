@@ -8,7 +8,7 @@ export interface EmptyStateProps {
 
 export function EmptyState({ message, action, icon }: EmptyStateProps) {
   return (
-    <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--color-muted)' }}>
+    <div style={{ textAlign: 'center', padding: 'var(--space-12)', color: 'var(--color-muted)' }}>
       {icon && <div style={{ marginBottom: 'var(--space-3)' }}>{icon}</div>}
       <div>{message}</div>
       {action && <div style={{ marginTop: 'var(--space-3)' }}>{action}</div>}

@@ -7,7 +7,7 @@ name: Frontend
 # that does not touch frontend/. Running always also re-checks npm advisories,
 # which change without any commit here. Costs about a minute per run.
 #
-# Reproduce locally: cd frontend && npm ci && npm run lint && npx tsc -b && npx vite build && npm test
+# Reproduce locally: cd frontend && npm ci && npm run lint && npx tsc -b && npx vite build && npm test && npm run i18n:check
 on:
   push:
     branches: [main]
@@ -53,6 +53,11 @@ jobs:
 
       - name: Unit tests (Vitest)
         run: npm test
+
+      # Every locale has every English key (and no other), messages are valid ICU with the
+      # same placeholders, and no English key is unused.
+      - name: Translation catalogue (i18n:check)
+        run: npm run i18n:check
 
       # Fails on known high/critical advisories in the dependencies the
       # dashboard ships (dev tooling is reported but not blocking).

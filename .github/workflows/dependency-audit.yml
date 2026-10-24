@@ -12,8 +12,6 @@ name: Dependency audit
 #   3. pip-audit of packaging/windows/requirements.txt: the pinned versions the
 #      Windows installer bundles.
 #
-# Not covered: the "browser" extra (crawl4ai, inactive by default).
-#
 # Reproduce locally:
 #   pip install -e ".[dev,linkedin]" "pip-audit==2.10.1"
 #   pip-audit --skip-editable

@@ -7,6 +7,8 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/setupTests.ts'],
     globals: false,
+    // Vitest blanks CSS by default; the contrast test reads tokens.css?raw, so keep it.
+    css: { include: [/tokens\.css/] },
   },
   server: {
     port: 5173,

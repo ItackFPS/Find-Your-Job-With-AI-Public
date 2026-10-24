@@ -36,7 +36,7 @@ export function Ring({ value, size = 56, strokeWidth = 6, color = 'var(--color-a
           strokeDashoffset={offset}
           strokeLinecap="round"
           transform={`rotate(-90 ${center} ${center})`}
-          style={{ transition: 'stroke-dashoffset 0.4s ease' }}
+          style={{ transition: 'stroke-dashoffset var(--motion-duration-slow) var(--motion-ease)' }}
         />
       </svg>
       {children !== undefined && (
