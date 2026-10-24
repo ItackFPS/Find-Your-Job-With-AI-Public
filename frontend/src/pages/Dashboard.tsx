@@ -302,7 +302,7 @@ function CurrentRunCard({ run, activity, isLive }: { run: CurrentRun; activity: 
     <Card
       style={{ marginBottom: 'var(--space-5)', borderColor: run.status === 'running' ? 'var(--color-accent)' : 'var(--color-border)' }}
       title={isLive ? t('dashboard.liveRun') : t('dashboard.latestRun')}
-      subtitle={!isLive && run.startedAt ? `${new Date(run.startedAt).toLocaleString()} · ${formatDuration(s.duration_seconds)}` : undefined}
+      subtitle={!isLive && run.startedAt ? `${formatDateTime(run.startedAt)} · ${formatDuration(s.duration_seconds)}` : undefined}
       actions={
         <>
           {s.model_name && <Chip>{s.model_name}</Chip>}
