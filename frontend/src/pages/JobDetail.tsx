@@ -145,9 +145,9 @@ function ExplanationSection({ expl }: { expl: JobExplanation }) {
           fontWeight: 'var(--font-weight-semibold)',
           padding: '0.2rem 0.65rem',
           borderRadius: 'var(--radius-pill)',
-          background: isRejected ? 'var(--color-error)22' : 'var(--color-success)22',
+          background: isRejected ? 'color-mix(in srgb, var(--color-error) 13%, transparent)' : 'color-mix(in srgb, var(--color-success) 13%, transparent)',
           color: isRejected ? 'var(--color-error)' : 'var(--color-success)',
-          border: `1px solid ${isRejected ? 'var(--color-error)' : 'var(--color-success)'}44`,
+          border: `1px solid color-mix(in srgb, ${isRejected ? 'var(--color-error)' : 'var(--color-success)'} 27%, transparent)`,
         }}>
           {isRejected ? 'Rejected' : 'Accepted'}
         </span>
@@ -216,7 +216,7 @@ function ApplicationStatusSection({ job }: { job: Job }) {
                 padding: '0.25rem 0.75rem',
                 fontSize: '0.8rem',
                 fontWeight: isActive ? 'var(--font-weight-bold)' : 'var(--font-weight-normal)',
-                background: isActive ? `${s.color}22` : 'transparent',
+                background: isActive ? `color-mix(in srgb, ${s.color} 13%, transparent)` : 'transparent',
                 color: isActive ? s.color : 'var(--color-muted)',
                 cursor: isActive || isPending ? 'default' : 'pointer',
                 transition: 'all 0.12s',
@@ -290,7 +290,7 @@ export function FeedbackPanel({
     borderRadius: 'var(--radius-pill)',
     padding: '0.25rem 0.75rem',
     fontSize: '0.8rem',
-    background: active ? 'var(--color-accent)22' : 'transparent',
+    background: active ? 'color-mix(in srgb, var(--color-accent) 13%, transparent)' : 'transparent',
     color: active ? 'var(--color-accent)' : 'var(--color-muted)',
     cursor: 'pointer',
   })
@@ -460,7 +460,7 @@ function JobHeader({ job, overallScore }: { job: Job; overallScore: number | nul
             onClick={() => recordJobEvent(job.id, 'apply_link_opened')}
             style={{
               background: 'var(--color-accent)',
-              color: '#fff',
+              color: 'var(--color-on-accent)',
               borderRadius: 'var(--radius-md)',
               padding: '0.45rem 1rem',
               textDecoration: 'none',

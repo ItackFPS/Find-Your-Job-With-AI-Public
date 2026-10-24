@@ -9,7 +9,7 @@ import { rejectionReasonLabel, type ScoreTier } from '../utils'
 const TIER_META: Record<ScoreTier, { label: string; color: string }> = {
   exceptional: { label: 'Exceptional (≥80)', color: 'var(--color-accent)' },
   excellent: { label: 'Excellent (72–79)', color: 'var(--color-info)' },
-  strong: { label: 'Strong (65–71)', color: '#5b9ee8' },
+  strong: { label: 'Strong (65–71)', color: 'var(--color-tier-strong)' },
   relevant: { label: 'Relevant (60–64)', color: 'var(--color-warning)' },
   low_priority: { label: 'Low priority (<60)', color: 'var(--color-muted)' },
 }

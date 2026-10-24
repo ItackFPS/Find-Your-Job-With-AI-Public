@@ -293,7 +293,7 @@ function CurrentRunCard({ run, activity, isLive }: { run: CurrentRun; activity: 
 
   return (
     <Card
-      style={{ marginBottom: 'var(--space-5)', borderColor: run.status === 'running' ? 'var(--color-accent)' : undefined }}
+      style={{ marginBottom: 'var(--space-5)', borderColor: run.status === 'running' ? 'var(--color-accent)' : 'var(--color-border)' }}
       title={isLive ? 'Live run' : 'Latest run'}
       subtitle={!isLive && run.startedAt ? `${new Date(run.startedAt).toLocaleString()} · ${formatDuration(s.duration_seconds)}` : undefined}
       actions={
@@ -550,7 +550,7 @@ export default function Dashboard() {
             disabled={runPending || isAlreadyRunning}
             style={{
               background: (runPending || isAlreadyRunning) ? 'var(--color-border)' : 'var(--color-accent)',
-              color: '#fff',
+              color: 'var(--color-on-accent)',
               border: 'none',
               borderRadius: 'var(--radius-md)',
               padding: '0.45rem 1rem',

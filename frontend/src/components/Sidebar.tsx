@@ -1,6 +1,8 @@
 import { NavLink } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getHealth } from '../api/client'
+import { AppLogo } from './AppLogo'
+import { ThemePicker } from './ThemePicker'
 
 const NAV_ITEMS: { to: string; label: string; icon: React.ReactNode; end?: boolean }[] = [
   {
@@ -119,7 +121,8 @@ export function Sidebar() {
       position: 'sticky',
       top: 0,
     }}>
-      <div style={{ padding: '1.25rem 1.25rem 1rem', fontWeight: 'var(--font-weight-bold)', color: 'var(--color-accent)', fontSize: 'var(--font-size-lg)' }}>
+      <div style={{ padding: '1.25rem 1.25rem 1rem', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontWeight: 'var(--font-weight-bold)', color: 'var(--color-accent)', fontSize: 'var(--font-size-lg)' }}>
+        <AppLogo size={24} />
         Find Your Job
       </div>
 
@@ -137,10 +140,10 @@ export function Sidebar() {
               borderRadius: 'var(--radius-md)',
               textDecoration: 'none',
               fontSize: 'var(--font-size-base)',
-              color: isActive ? '#fff' : 'var(--color-muted)',
+              color: isActive ? 'var(--color-on-accent)' : 'var(--color-muted)',
               background: isActive ? 'var(--color-accent)' : 'transparent',
               fontWeight: isActive ? 'var(--font-weight-semibold)' : 'var(--font-weight-normal)',
-              transition: 'all 0.1s',
+              transition: 'background-color var(--motion-duration-fast), color var(--motion-duration-fast)',
             })}
           >
             {icon}
@@ -153,6 +156,7 @@ export function Sidebar() {
         <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: '0.6rem 0.75rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
           <StatusRow label={backendConnected ? 'Backend connected' : 'Backend offline'} connected={backendConnected} />
         </div>
+        <ThemePicker />
       </div>
     </div>
   )

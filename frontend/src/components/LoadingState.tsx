@@ -10,7 +10,7 @@ export function LoadingState({ message = 'Loading…', compact = false }: Loadin
       role="status"
       style={{
         color: 'var(--color-muted)',
-        padding: compact ? 0 : '2rem',
+        padding: compact ? 0 : 'var(--space-8)',
         fontSize: compact ? 'var(--font-size-sm)' : undefined,
       }}
     >

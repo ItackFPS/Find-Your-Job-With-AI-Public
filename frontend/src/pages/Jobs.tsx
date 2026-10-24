@@ -16,7 +16,7 @@ type Tier = typeof TIER_ORDER[number]
 const TIER_META: Record<Tier, { label: string; color: string }> = {
   exceptional: { label: 'Exceptional', color: 'var(--color-accent)' },
   excellent: { label: 'Excellent', color: 'var(--color-info)' },
-  strong: { label: 'Strong', color: '#5b9ee8' },
+  strong: { label: 'Strong', color: 'var(--color-tier-strong)' },
   relevant: { label: 'Relevant', color: 'var(--color-warning)' },
   low_priority: { label: 'Low priority', color: 'var(--color-muted)' },
 }
@@ -42,7 +42,7 @@ const LOCATION_KIND_COLOR: Record<string, string> = {
   preferred: 'var(--color-accent)',
   paca: 'var(--color-info)',
   'france-remote': 'var(--color-success)',
-  'international-remote': '#5b9ee8',
+  'international-remote': 'var(--color-tier-strong)',
   other: 'var(--color-muted)',
 }
 

@@ -24,9 +24,9 @@ export function StatusBadge({ status }: StatusBadgeProps) {
   return (
     <span
       style={{
-        background: `${color}22`,
+        background: `color-mix(in srgb, ${color} 13%, transparent)`,
         color,
-        border: `1px solid ${color}44`,
+        border: `1px solid color-mix(in srgb, ${color} 27%, transparent)`,
         borderRadius: 'var(--radius-pill)',
         padding: '0.15rem 0.65rem',
         fontSize: 'var(--font-size-xs)',
