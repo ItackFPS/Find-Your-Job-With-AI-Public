@@ -15,7 +15,7 @@ response shape (a 200 response whose body isn't valid JSON) and asserts
 recorded in ``errors``, never an exception.
 
 Collectors confirmed ALREADY safe before this fix (broad ``except Exception``
-already in place) are deliberately NOT duplicated here: apec, eures,
+already in place) are deliberately NOT duplicated here: eures,
 france_travail's search-page parsing, indeed.
 """
 

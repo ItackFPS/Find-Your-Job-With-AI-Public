@@ -1,0 +1,130 @@
+/*
+ * Design tokens (F10.1). The single source of colour, spacing, type, radius, shadow and
+ * motion values for the UI. Components and pages reference these custom properties only.
+ *
+ * Themes: light is the default. `src/theme/theme.ts` sets `data-theme="light|dark"` on
+ * <html> from the user's choice (localStorage) or the system preference. Any element may
+ * also carry `data-theme` to render a subtree in the other theme (the /design page does).
+ *
+ * Contrast: every text/background pair used by the UI is checked against WCAG 2.2 AA in
+ * src/theme/__tests__/contrast.test.ts, which parses this file. Change a colour here and
+ * that test tells you whether it still passes.
+ */
+
+:root,
+[data-theme='light'] {
+  /* Semantic colours */
+  --color-bg: #f5f6fa;
+  --color-surface: #ffffff;
+  --color-surface-elevated: #eceef4;
+  --color-border: #d6dae4;          /* decorative dividers and card edges */
+  --color-border-strong: #868ca0;   /* control boundaries: >= 3:1 against bg and surface */
+  --color-text: #1b1e2b;
+  --color-muted: #545b72;
+  --color-accent: #5a4bd1;
+  --color-accent-dim: #d9d5fb;
+  --color-on-accent: #ffffff;       /* text and icons drawn on an accent fill */
+  --color-success: #17703c;
+  --color-warning: #8a5300;
+  --color-danger: #b3261e;
+  --color-info: #1f5fae;
+  --color-focus: #2c55c9;
+  --color-link: #1f5fae;
+  --color-tier-strong: #285f99;     /* the "Strong" score tier, between info and accent */
+  --shadow-color: 27 30 43;
+
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --color-bg: #0f1117;
+  --color-surface: #1a1d27;
+  --color-surface-elevated: #232735;
+  --color-border: #2d3148;
+  --color-border-strong: #646b91;
+  --color-text: #e2e8f0;
+  --color-muted: #9aa3c0;
+  --color-accent: #8f84f7;
+  --color-accent-dim: #3d3780;
+  --color-on-accent: #0f1117;
+  --color-success: #4ade80;
+  --color-warning: #fbbf24;
+  --color-danger: #f87171;
+  --color-info: #60a5fa;
+  --color-focus: #93b4ff;
+  --color-link: #60a5fa;
+  --color-tier-strong: #5b9ee8;
+  --shadow-color: 0 0 0;
+
+  color-scheme: dark;
+}
+
+:root,
+[data-theme] {
+  /* Aliases kept so existing pages keep working; prefer the semantic names above. */
+  --color-error: var(--color-danger);
+  --color-green: var(--color-success);
+  --color-red: var(--color-danger);
+  --color-yellow: var(--color-warning);
+  --color-blue: var(--color-info);
+  --color-text-secondary: var(--color-muted);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgb(var(--shadow-color) / 0.12);
+  --shadow-md: 0 4px 16px rgb(var(--shadow-color) / 0.16);
+  --shadow-lg: 0 8px 20px rgb(var(--shadow-color) / 0.24);
+}
+
+:root {
+  /* Spacing scale (4 px base) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
+  /* Type scale */
+  --font-family-base: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-family-mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.82rem;
+  --font-size-base: 0.9rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.05rem;
+  --font-size-xl: 1.4rem;
+  --font-size-2xl: 1.65rem;
+  --line-height-tight: 1.25;
+  --line-height-base: 1.5;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+
+  /* Motion */
+  --motion-duration-fast: 120ms;
+  --motion-duration-base: 200ms;
+  --motion-duration-slow: 400ms;
+  --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Interaction */
+  --target-min: 44px;               /* WCAG 2.5.5 / §C13 minimum touch target */
+  --focus-ring-width: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration-fast: 0ms;
+    --motion-duration-base: 0ms;
+    --motion-duration-slow: 0ms;
+  }
+}

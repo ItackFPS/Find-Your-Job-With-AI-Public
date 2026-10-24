@@ -1,0 +1,848 @@
+{
+  "common": {
+    "loading": "Chargement…",
+    "noData": "Aucune donnée",
+    "tryAgain": "Réessayer",
+    "moreInformation": "Plus d’informations"
+  },
+  "status": {
+    "completed": "Terminé",
+    "failed": "Échec",
+    "running": "En cours",
+    "pausing": "Mise en pause",
+    "paused": "En pause",
+    "interrupted": "Interrompu",
+    "partial": "Partiel",
+    "skipped": "Ignoré",
+    "idle": "Inactif"
+  },
+  "pipelineStages": {
+    "collect": {
+      "label": "Collecte",
+      "activity": "Collecte des offres"
+    },
+    "validate": {
+      "label": "Validation",
+      "activity": "Validation des offres"
+    },
+    "deduplicate": {
+      "label": "Dédoublonnage",
+      "activity": "Dédoublonnage des offres"
+    },
+    "filter": {
+      "label": "Filtre strict",
+      "activity": "Application des filtres stricts"
+    },
+    "requirements_gate": {
+      "label": "Contrôle des exigences",
+      "activity": "Vérification des exigences"
+    },
+    "llm_eligibility": {
+      "label": "Contrôle d’éligibilité (IA)",
+      "activity": "Vérification de l’éligibilité (IA)"
+    },
+    "score": {
+      "label": "Notation",
+      "activity": "Notation des offres"
+    },
+    "phase2": {
+      "label": "Compréhension IA",
+      "activity": "Compréhension des offres (IA)"
+    },
+    "semantic": {
+      "label": "Pré-classement sémantique",
+      "activity": "Rapprochement sémantique"
+    },
+    "personalize": {
+      "label": "Classement personnalisé",
+      "activity": "Personnalisation du classement"
+    },
+    "preflight": {
+      "activity": "Préparation de l’exécution"
+    },
+    "working": "En cours",
+    "units": {
+      "sources": "sources",
+      "jobs": "offres"
+    }
+  },
+  "pipelineEvents": {
+    "started": "Pipeline démarré",
+    "completed": "Pipeline terminé",
+    "failed": "Échec du pipeline",
+    "failedWithError": "Échec du pipeline — {error}",
+    "reconnected": "Reconnecté — {stage}",
+    "stageCount": "{stage} — {count, number} offres"
+  },
+  "scanner": {
+    "starting": "Démarrage…",
+    "pause": "Pause",
+    "pausing": "Mise en pause…",
+    "resume": "Reprendre",
+    "resuming": "Reprise…",
+    "scanNow": "Lancer le scan",
+    "progress": {
+      "query": "Requête {query} / {total}",
+      "page": " · page {page}",
+      "pages": " · ~{done} / {total} pages",
+      "metierPages": "{count, plural, one {# page métier traitée} other {# pages métier traitées}}"
+    }
+  },
+  "dashboard": {
+    "title": "Tableau de bord",
+    "jobsInDb": "{count, number} offres en base",
+    "pipelineRunning": "⟳ Pipeline en cours…",
+    "ai": {
+      "label": "Compréhension IA",
+      "description": "Rapprochement plus fin · exécution plus lente"
+    },
+    "run": {
+      "start": "Lancer le pipeline",
+      "starting": "Démarrage…",
+      "running": "En cours…"
+    },
+    "noRuns": "Aucune exécution du pipeline pour l’instant. <run>Lancez le pipeline</run> pour voir les résultats ici.",
+    "browseMatched": "Parcourir les {count, number} offres retenues →",
+    "backendError": "Impossible de joindre le serveur local. Relancez l’application avec son raccourci <app>Find Your Job With AI</app> (ou <cmd/>) ; si elle ne démarre pas, sa fenêtre en indique la raison, et le détail se trouve dans <log/> dans le dossier de l’application.",
+    "liveRun": "Exécution en direct",
+    "latestRun": "Dernière exécution",
+    "tiles": {
+      "collected": "Collectées",
+      "validated": "Validées",
+      "deduplicated": "Dédoublonnées",
+      "filtered": "Filtrées",
+      "scored": "Notées",
+      "matched": "Retenues",
+      "errors": "Erreurs"
+    },
+    "sections": {
+      "stages": "ÉTAPES DU PIPELINE",
+      "bySource": "PAR SOURCE",
+      "bySourceLive": "PAR SOURCE (en direct)",
+      "byCountry": "PAR PAYS",
+      "activity": "ACTIVITÉ",
+      "errors": "ERREURS"
+    },
+    "moreErrors": "…et {count, number} de plus",
+    "connection": {
+      "connecting": "Connexion…",
+      "live": "● En direct",
+      "reconnecting": "● Reconnexion…",
+      "offline": "● Hors ligne"
+    },
+    "funnel": {
+      "working": "en cours…",
+      "liveCount": "{processed, number} / {total, number} {unit}"
+    },
+    "sourceTable": {
+      "source": "Source",
+      "collected": "Collectées",
+      "accepted": "Acceptées",
+      "rejected": "Rejetées",
+      "errors": "Erreurs",
+      "status": "Statut"
+    },
+    "scanner": {
+      "linkedin": "Scan LinkedIn",
+      "hellowork": "Scan HelloWork",
+      "searching": "Recherche en cours…",
+      "pausingNextPage": "Pause à la page suivante…",
+      "etaUnknown": "Temps restant : pas encore assez de données",
+      "etaRemaining": "environ {eta} restantes (estimation)",
+      "finishing": "Finalisation…",
+      "slow": "Plus long que d’habitude…",
+      "paused": "En pause",
+      "interrupted": "Interrompu — reprendra au dernier point de sauvegarde",
+      "percentDone": " · ~{percent} % effectués",
+      "foundNew": "{found, number} trouvées · {new, number} nouvelles",
+      "lastAttempt": "Dernière tentative le {date}",
+      "noScans": "Aucun scan pour l’instant."
+    }
+  },
+  "app": {
+    "name": "Find Your Job",
+    "nav": {
+      "dashboard": "Tableau de bord",
+      "jobs": "Offres",
+      "review": "À vérifier",
+      "profile": "Profil",
+      "stats": "Statistiques",
+      "skills": "Compétences",
+      "lab": "Labo",
+      "pipeline": "Pipeline",
+      "label": "Navigation principale"
+    },
+    "backend": {
+      "connected": "Serveur local connecté",
+      "offline": "Serveur local hors ligne"
+    },
+    "theme": {
+      "label": "Thème",
+      "system": "Système",
+      "light": "Clair",
+      "dark": "Sombre"
+    },
+    "language": {
+      "label": "Langue",
+      "en": "English",
+      "fr": "Français",
+      "en-XA": "Pseudo (dév.)"
+    }
+  },
+  "components": {
+    "dataTable": {
+      "empty": "Aucune donnée."
+    },
+    "statTile": {
+      "loading": "Chargement : {label}"
+    },
+    "toast": {
+      "dismiss": "Fermer la notification",
+      "region": "Notifications"
+    },
+    "gettingStarted": {
+      "title": "Bien démarrer",
+      "intro": "Rien n’est collecté sans votre demande : ouvrir l’application ne lance ni scan ni exécution.",
+      "profile": "Remplissez votre <profile>profil</profile> : postes visés, compétences, lieux et langues. Les recherches en découlent.",
+      "sources": "Sources sans compte : {noAccount} (collectées par <b>Lancer le pipeline</b>), et {scanners} (<b>Lancer le scan</b> sur leurs cartes ci-dessous).",
+      "and": " et ",
+      "optional": "Sources facultatives, ignorées tant que leurs identifiants ne sont pas renseignés :",
+      "envFile": "Copiez <example/> en <env/> dans le dossier de l’application, remplissez seulement ces lignes, puis relancez l’application.",
+      "run": "Cliquez sur <b>Lancer le pipeline</b>. La première exécution télécharge une seule fois le modèle d’embeddings local (environ 470 Mo). L’IA locale est désactivée ; aucune donnée d’offre n’est envoyée à un service d’IA dans le cloud.",
+      "envVarsJoin": " et "
+    }
+  },
+  "tiers": {
+    "exceptional": "Exceptionnelle",
+    "excellent": "Excellente",
+    "strong": "Solide",
+    "relevant": "Pertinente",
+    "low_priority": "Priorité basse"
+  },
+  "location": {
+    "franceRemote": "France · Télétravail",
+    "internationalRemote": "International · Télétravail",
+    "unknown": "Lieu inconnu"
+  },
+  "jobs": {
+    "title": "Offres",
+    "noTitle": "(sans titre)",
+    "daysAgo": " · il y a {days, number} j",
+    "search": "Rechercher des offres…",
+    "allCountries": "Tous les pays",
+    "allCountriesCount": "Tous les pays ({count, number})",
+    "worldwide": "Monde entier / Télétravail ({count, number})",
+    "countryCount": "{name} ({count, number})",
+    "departmentTitle": "Filtrer par département français",
+    "departmentDisabledTitle": "Choisissez la France comme pays pour filtrer par département",
+    "allDepartments": "Tous les départements",
+    "allModes": "Tous les modes",
+    "remoteOnly": "Télétravail uniquement",
+    "onsiteOnly": "Sur site uniquement",
+    "minTierTitle": "Niveau minimal affiché (les offres en dessous restent enregistrées — choisissez « Tous les niveaux » pour tout voir)",
+    "minTier": {
+      "exceptional": "Exceptionnelles uniquement",
+      "excellent": "Excellentes et plus",
+      "strong": "Solides et plus",
+      "relevant": "Pertinentes et plus (par défaut)",
+      "low_priority": "Tous les niveaux"
+    },
+    "clear": "Effacer",
+    "loadError": "Impossible de charger les offres.",
+    "empty": "Aucune offre trouvée. Modifiez vos filtres ou lancez le pipeline.",
+    "prev": "← Précédent",
+    "next": "Suivant →"
+  },
+  "jobDetail": {
+    "overallMatch": "Correspondance globale",
+    "scoreOutOf": "{score}/100",
+    "factors": {
+      "title": "Critères de correspondance",
+      "location_fit": "Lieu",
+      "domain_relevance": "Domaine",
+      "skills_match": "Compétences",
+      "seniority_match": "Séniorité",
+      "experience_fit": "Expérience"
+    },
+    "personalization": {
+      "title": "Personnalisation",
+      "none": "Aucune personnalisation appliquée pour l’instant. Vos retours sur une offre sont enregistrés pour évaluer et améliorer le rapprochement.",
+      "points": "{value} pts",
+      "feedbackCount": " ({count, plural, one {# retour} other {# retours}})",
+      "signals": {
+        "company": "Entreprise",
+        "skill": "Compétence",
+        "title_keyword": "Mot-clé du titre",
+        "remote": "Télétravail"
+      }
+    },
+    "explanation": {
+      "whyRejected": "Pourquoi cette offre a-t-elle été écartée ?",
+      "whyThisJob": "Pourquoi cette offre ?",
+      "rejected": "Écartée",
+      "accepted": "Retenue",
+      "positive": "Points forts",
+      "concerns": "À vérifier",
+      "rejections": "Motifs d’exclusion",
+      "unknown": "Impossible de déterminer la raison."
+    },
+    "applicationStatus": {
+      "title": "STATUT DE CANDIDATURE",
+      "current": "Actuel : {status}",
+      "none": "Aucun statut",
+      "to_apply": "À postuler",
+      "applied": "Candidature envoyée",
+      "waiting": "En attente",
+      "interview": "Entretien",
+      "accepted": "Acceptée",
+      "rejected": "Refusée",
+      "denied": "Déclinée",
+      "withdrawn": "Retirée"
+    },
+    "feedback": {
+      "title": "Votre avis",
+      "types": {
+        "interested": "Intéressé",
+        "not_interested": "Pas intéressé",
+        "ranking_feedback": "Mal classée",
+        "unsure": "Je ne sais pas"
+      },
+      "reasons": {
+        "too_far": "Trop loin",
+        "too_senior": "Trop senior",
+        "insufficient_skills": "Compétences insuffisantes",
+        "off_domain": "Hors domaine",
+        "salary": "Salaire",
+        "contract_type": "Type de contrat",
+        "interesting_despite_low_score": "Intéressante malgré un score faible",
+        "mis_ranked": "Mal classée",
+        "other": "Autre"
+      },
+      "why": "Pourquoi ? (facultatif)",
+      "noteLabel": "Note sur votre avis",
+      "notePlaceholder": "Ajouter une note (facultatif)",
+      "save": "Enregistrer mon avis",
+      "saveError": "Impossible d’enregistrer votre avis. Veuillez réessayer.",
+      "localOnly": "Enregistré localement pour évaluer et améliorer le rapprochement — cela ne modifie pas encore votre classement.",
+      "last": "Dernier avis : {type}",
+      "lastReasons": " — {reasons}",
+      "unavailable": "Les avis sont indisponibles pour le moment."
+    },
+    "decision": {
+      "title": "Dossier de décision",
+      "confidence": "Confiance de la décision {value}",
+      "notCalibrated": " (fondée sur l’accord des signaux, non calibrée)",
+      "flagged": "Signalée pour vérification",
+      "wouldFlag": "Serait signalée pour vérification (mode observation)",
+      "staysVisible": "L’offre reste classée et visible.",
+      "staysRejected": "L’offre reste écartée ; elle est seulement mise en file pour un examen humain.",
+      "supporting": "EN FAVEUR ({count, number})",
+      "against": "EN DÉFAVEUR ({count, number})",
+      "unknown": "INCONNU ({count, number})",
+      "conflicts": "CONFLITS ({count, number})",
+      "ids": "Décision {decision} · exécution {run}"
+    },
+    "header": {
+      "noTitle": "(sans titre)",
+      "daysAgo": " · il y a {days, number} j",
+      "remote": "Télétravail",
+      "salary": "Salaire : {range} {currency}",
+      "viewOriginal": "Voir l’offre d’origine →"
+    },
+    "description": "Description",
+    "notFound": "Offre introuvable.",
+    "backToJobs": "← Retour aux offres",
+    "breadcrumb": "← Offres"
+  },
+  "rejectionReasons": {
+    "location": "Lieu",
+    "remote": "Télétravail",
+    "work_mode": "Mode de travail",
+    "seniority": "Séniorité",
+    "published_age": "Ancienneté de l’annonce",
+    "salary": "Salaire",
+    "title_keywords": "Mots-clés du titre",
+    "education": "Diplôme",
+    "experience": "Expérience",
+    "principal_skill": "Compétence principale",
+    "mandatory_skill": "Compétence obligatoire",
+    "mandatory_secondary_skill": "Compétence secondaire obligatoire"
+  },
+  "stats": {
+    "title": "Statistiques",
+    "subtitle": "Ce que demande le marché, sur {count, number} offres collectées",
+    "notEnoughData": "Pas encore assez de données.",
+    "noDataYet": "Pas encore de données",
+    "noDataYetDot": "Pas encore de données.",
+    "mentions": "{count, plural, one {# offre la mentionne} other {# offres la mentionnent}}",
+    "countPercent": "{count, number} ({percent} %)",
+    "latestRun": "Dernière exécution terminée",
+    "tierRanges": {
+      "exceptional": "Exceptionnelle (≥ 80)",
+      "excellent": "Excellente (72–79)",
+      "strong": "Solide (65–71)",
+      "relevant": "Pertinente (60–64)",
+      "low_priority": "Priorité basse (< 60)"
+    },
+    "scoreDistribution": "Répartition des scores",
+    "noScoredRun": "Aucune exécution notée pour l’instant.",
+    "rejections": "Pourquoi les offres sont écartées",
+    "noRejections": "Pas encore de données d’exclusion.",
+    "titleCategories": "Catégories d’intitulés",
+    "titleCategoriesSubtitle": "Intitulés réels de la dernière exécution, regroupés selon les requêtes de recherche configurées du pipeline",
+    "apiError": "Impossible de joindre l’API. Le serveur local est-il lancé ?",
+    "topSkill": "Compétence la plus demandée",
+    "topSkillCaps": "COMPÉTENCE LA PLUS DEMANDÉE",
+    "topTool": "Outil le plus demandé",
+    "topToolCaps": "OUTIL LE PLUS DEMANDÉ",
+    "topSkills": "Compétences les plus demandées",
+    "topTools": "Outils et plateformes les plus demandés"
+  },
+  "review": {
+    "title": "À vérifier",
+    "intro": "Les décisions dont le système n’était pas sûr — signaux contradictoires, éléments manquants ou vos propres retours qui les contredisent — ainsi que quelques exclusions par règle tirées au sort pour audit, afin qu’une règle erronée ne puisse pas cacher de bonnes offres sans bruit. Votre réponse est enregistrée comme retour ; elle ne modifie à elle seule ni le classement ni les exclusions.",
+    "filters": {
+      "all": "Toutes",
+      "rejected": "Écartées",
+      "accepted": "Retenues"
+    },
+    "toReview": "{count, plural, one {# à vérifier} other {# à vérifier}}",
+    "saveError": "Impossible d’enregistrer votre réponse. Veuillez réessayer.",
+    "unavailable": "La file de vérification est indisponible.",
+    "empty": "Rien à vérifier.",
+    "postingUnavailable": "Le texte de l’annonce n’est plus disponible.",
+    "rejectedAt": "Écartée à l’étape {stage}",
+    "accepted": "Retenue",
+    "auditSample": "Échantillon d’audit",
+    "auditSampleTitle": "Tirée parmi les exclusions par règle, pour qu’une règle erronée ne puisse pas cacher de bonnes offres sans bruit",
+    "confidence": "confiance {value}",
+    "confidenceTitle": "Accord entre les signaux — non calibré",
+    "auditExplanation": "Écartée par la règle <b>{rule}</b> ({count, plural, one {# offre écartée} other {# offres écartées}} par cette règle lors de cette exécution). Cette offre vous semble-t-elle convenir malgré tout ? Votre réponse est enregistrée comme élément de preuve ; elle ne change rien à elle seule.",
+    "answers": {
+      "interested": "Cette offre m’intéresse",
+      "not_interested": "Pas pour moi",
+      "unsure": "Je ne sais pas"
+    },
+    "why": "Pourquoi ?",
+    "posting": "Annonce"
+  },
+  "skills": {
+    "title": "Compétences",
+    "intro": "Les technologies demandées par les offres qui vous correspondent, comment elles se combinent et ce qui manque à votre profil — d’après les annonces conservées par le pipeline.",
+    "days": "{count, number} jours",
+    "relevantOf": "{relevant, number} pertinentes sur {total, number} offres étiquetées",
+    "unavailable": "Le graphe des compétences est indisponible.",
+    "empty": "Aucune offre étiquetée sur cette période pour l’instant.",
+    "opportunities": "Pistes de progression",
+    "relevantDefinition": "Pertinente = {definition}",
+    "noGaps": "Aucune compétence absente de votre profil n’est assez souvent demandée parmi les offres pertinentes.",
+    "market": "Ce que demande le marché",
+    "limits": "Limites de cette vue",
+    "shareOfRelevant": "{percent} % des offres pertinentes",
+    "examples": "p. ex. {titles}",
+    "yours": "acquise",
+    "counts": "{relevant, number} pertinentes / {total, number} au total",
+    "oftenAskedWith": "SOUVENT DEMANDÉE AVEC {skill}",
+    "selectSkill": "CHOISISSEZ UNE COMPÉTENCE POUR VOIR CELLES QUI LUI SONT LIÉES",
+    "noPairing": "Pas encore d’association fréquente.",
+    "pairJobs": " — {count, plural, one {# offre} other {# offres}}"
+  },
+  "lab": {
+    "title": "Labo",
+    "intro": "Évaluations de référence et expériences de stratégie, en lecture seule. Les changements sont testés ici sur des jeux de données étiquetés figés, et seule une approbation humaine (en ligne de commande) peut en promouvoir un. Ce qu’écrit l’agent du labo est une entrée non fiable. Rien ici ne le démarre : lancé depuis son bac à sable (<cmd/>, un AppContainer Windows), il ne peut ni écrire vos données ni lire vos identifiants ; lancé autrement, seule une protection interne au processus le tient à l’écart de vos données.",
+    "verdicts": {
+      "improvement": "amélioration",
+      "regression": "régression",
+      "inconclusive": "non concluant",
+      "insufficient_evidence": "preuves insuffisantes"
+    },
+    "nextAction": {
+      "submit_for_human_approval": {
+        "label": "suite : votre examen",
+        "title": "Mérite une décision humaine : python -m src.lab approve (confirmation saisie)"
+      },
+      "reject": {
+        "label": "suite : abandonner",
+        "title": "Le candidat a fait moins bien ou a enfreint un garde-fou"
+      },
+      "investigate": {
+        "label": "suite : approfondir",
+        "title": "Pas assez de preuves dans un sens ou dans l’autre : plus d’offres étiquetées ou une autre hypothèse"
+      },
+      "approved": {
+        "label": "approuvé par un humain",
+        "title": "Promu via la commande d’approbation humaine"
+      }
+    },
+    "status": {
+      "pass": {
+        "label": "conforme",
+        "text": "Mêmes décisions que la référence enregistrée, et aucune offre adaptée écartée."
+      },
+      "changed": {
+        "label": "modifié",
+        "text": "Certaines décisions diffèrent de la référence enregistrée sans dégrader d’offre étiquetée : examinez-les avant de mettre à jour la référence."
+      },
+      "regression": {
+        "label": "régression",
+        "text": "Une offre que la référence décidait correctement est maintenant mal décidée."
+      },
+      "baseline_mismatch": {
+        "label": "référence incompatible",
+        "text": "La référence a été enregistrée sur d’autres données : rien n’a pu être comparé."
+      },
+      "safety_violation": {
+        "label": "atteinte à la sûreté",
+        "text": "Une offre étiquetée adaptée a été écartée, ou une exclusion n’a pas de motif enregistré."
+      }
+    },
+    "answers": {
+      "interested": "intéressé",
+      "not_interested": "pas intéressé",
+      "unsure": "incertain",
+      "ranking_feedback": "avis sur le classement"
+    },
+    "feedback": {
+      "notMeasured": "Avis : non mesurés ({why}).",
+      "coverage": "Offres avec une réponse : {answered} sur {decided} décidées ({percent})",
+      "latestAnswers": " · dernières réponses : {answers}",
+      "answerCount": "{count} {answer}",
+      "disagreements": "Réponse en désaccord avec la décision : {rejectedInterested} écartées mais intéressantes · {acceptedNotInterested} retenues mais sans intérêt",
+      "evidence": "Décisions avec éléments de preuve enregistrés : {percent}",
+      "signalsNotLabels": "Vos réponses sont des signaux, pas des étiquettes vérifiées : un désaccord est une offre à examiner, pas la preuve d’une erreur."
+    },
+    "selfCheck": {
+      "title": "Auto-contrôle",
+      "subtitle": "la stratégie actuelle rejouée sur des offres étiquetées figées, comparée à la référence enregistrée",
+      "none": "Aucun auto-contrôle enregistré pour l’instant. Lancez-le depuis le menu Démarrer (Find Your Job With AI self-check), ou depuis les sources : python -m src.evaluation self-check",
+      "computed": "{date} · calculé à partir des décisions et des étiquettes ({generator}), sans IA",
+      "datasetMeta": "({kind}, {jobs} offres, {suitable} étiquetées adaptées)",
+      "suitableRejected": "Offres adaptées écartées :",
+      "metrics": " · offres inadaptées laissées passer : {fp} · précision {precision} · rappel {recall}",
+      "reasonCoverage": " · exclusions avec un motif indiqué : {percent}",
+      "flips": "Depuis la référence : {fixed} corrigées · {broken} dégradées · {unjudged} non étiquetées ou limites",
+      "noBaseline": "Aucune référence n’est enregistrée pour ce jeu de données.",
+      "ranking": "Qualité du classement : non mesurée — {why}.",
+      "feedbackHeading": "VOS AVIS (SIGNAUX, PAS ÉTIQUETTES)",
+      "nextHeading": "QUE FAIRE ENSUITE",
+      "recommendationKind": {
+        "action": "action",
+        "suggestion": "suggestion"
+      },
+      "actionTitle": "Découle d’un résultat mesuré",
+      "suggestionTitle": "Une suggestion à tester dans le labo, pas un résultat",
+      "earlier": "Précédemment : {history}",
+      "unavailable": "L’auto-contrôle est indisponible."
+    },
+    "runs": {
+      "title": "Évaluations",
+      "subtitle": "python -m src.evaluation run … — métriques sur des offres étiquetées",
+      "confusion": "vp {tp} · fp {fp} · fn {fn} · vn {tn}",
+      "columns": {
+        "when": "Date",
+        "dataset": "Jeu de données",
+        "strategy": "Stratégie",
+        "labelled": "Étiquetées",
+        "confusion": "Confusion",
+        "precision": "Précision",
+        "recall": "Rappel",
+        "unsafe": "Exclusion à tort"
+      },
+      "unreadable": "{count, plural, one {# fichier illisible ignoré} other {# fichiers illisibles ignorés}}",
+      "unavailable": "Les évaluations sont indisponibles.",
+      "empty": "Aucune évaluation enregistrée pour l’instant."
+    },
+    "experiments": {
+      "title": "Expériences",
+      "subtitle": "référence contre candidat sur le même jeu de données figé",
+      "eligible": "éligible à une approbation humaine",
+      "eligibleTitle": "Un humain peut l’approuver ; rien n’est promu automatiquement",
+      "independent": "soutenu de manière indépendante",
+      "independentTitle": "Les étiquettes humaines indépendantes suffisent à soutenir l’amélioration",
+      "exploratory": "exploratoire uniquement — non validé de manière indépendante",
+      "exploratoryTitle": "À approfondir seulement : les étiquettes humaines indépendantes ne suffisent pas à le soutenir",
+      "approved": "approuvé",
+      "deltas": "corrigées {fixed} · dégradées {broken} · Δprécision {precision} · Δrappel {recall} · Δexclusion à tort {unsafe} · Δfp {fp} · Δfn {fn}",
+      "unavailable": "Les expériences sont indisponibles.",
+      "empty": "Aucune expérience pour l’instant."
+    },
+    "memory": {
+      "title": "Mémoire de l’agent",
+      "empty": "L’agent du labo n’a encore rien enregistré.",
+      "unavailable": "La mémoire de l’agent est indisponible.",
+      "recommendations": "RECOMMANDATIONS À EXAMINER ({count, number})",
+      "refuted": "HYPOTHÈSES RÉFUTÉES ({count, number})",
+      "evidence": "ÉLÉMENTS DE PREUVE ({count, number})"
+    },
+    "active": {
+      "title": "Stratégie active",
+      "unavailable": "La stratégie active est indisponible.",
+      "pointer": "Pointeur {pointer} → lot {bundle} ({action}{by})",
+      "by": " par {name}",
+      "none": "Aucune stratégie n’a été promue : le pipeline utilise <code>config/</code>.",
+      "pipelineBundle": "pipeline : lot approuvé ({status})",
+      "pipelineConfig": "pipeline : config/ ({status})",
+      "exploratory": "approuvé sur des preuves exploratoires — non validé de manière indépendante",
+      "exploratoryTitle": "Approuvé en reconnaissant explicitement que les étiquettes humaines indépendantes ne suffisent pas à le soutenir",
+      "unrecorded": "preuves d’approbation non enregistrées",
+      "unrecordedTitle": "Cette approbation est antérieure à l’enregistrement des preuves d’approbation"
+    }
+  },
+  "pipeline": {
+    "title": "Pipeline",
+    "drop": "−{percent} % · {label}",
+    "funnel": {
+      "collected": "Collectées",
+      "validated": "Validées",
+      "deduplicated": "Dédoublonnées",
+      "input": "Entrée",
+      "passed": "Retenues",
+      "scored": "Notées",
+      "semantic": "Rapprochées (sémantique)",
+      "personalized": "Personnalisées",
+      "hardFilterGroup": "FILTRE STRICT (mots-clés, lieu, séniorité, mode de travail…)",
+      "hardFilterDrop": "filtre strict",
+      "requirementsGroup": "CONTRÔLE DES EXIGENCES (diplôme, compétences)",
+      "requirementsDrop": "contrôle diplôme et compétences",
+      "eligibilityGroup": "CONTRÔLE D’ÉLIGIBILITÉ IA (diplôme/séniorité implicites — facultatif)",
+      "eligibilityDrop": "contrôle d’éligibilité IA"
+    },
+    "sources": "SOURCES",
+    "sourceTable": {
+      "source": "Source",
+      "collected": "Collectées",
+      "accepted": "Acceptées",
+      "errors": "Erreurs",
+      "status": "Statut"
+    },
+    "live": {
+      "connecting": "Connexion…",
+      "running": "⟳ En cours…",
+      "complete": "Exécution terminée",
+      "failed": "Échec de l’exécution",
+      "stage": "Étape : {stage}",
+      "phase2Stage": "phase2 (enrichissement IA)",
+      "aiProgress": "Enrichissement IA : {done, number}/{total, number} analysées",
+      "aiFailed": " ({count, plural, one {# échec} other {# échecs}})",
+      "aiPercent": " — {percent} %",
+      "aiElapsed": " — {seconds} s écoulées",
+      "aiEnabled": "✓ IA (phase 2) activée"
+    },
+    "duration": "Durée : {duration}",
+    "started": "Début : {date}",
+    "ended": "Fin : {date}",
+    "aiBadge": "✓ IA (phase 2)",
+    "browseResults": "Parcourir les résultats →",
+    "collectorErrors": "Erreurs de collecte ({count, number})",
+    "ranked": "{count, plural, one {# classée} other {# classées}}",
+    "foundNew": "{found, number} trouvées, {new, number} nouvelles",
+    "queryTable": {
+      "query": "Requête",
+      "pages": "Pages",
+      "raw": "Brutes",
+      "unique": "Uniques",
+      "filtered": "Filtrées",
+      "known": "Connues",
+      "staged": "Ajoutées",
+      "endedBy": "Arrêt",
+      "failedRetried": "échec (réessayée au prochain scan)"
+    },
+    "scanStats": {
+      "raw": "Collectées (brut)",
+      "unique": "Uniques",
+      "filteredOut": "Filtrées",
+      "known": "Déjà connues",
+      "staged": "Ajoutées (nouvelles)",
+      "failedQueries": "Requêtes en échec",
+      "queries": "REQUÊTES",
+      "jobsFound": "Offres trouvées",
+      "newStaged": "Nouvelles (ajoutées)",
+      "metierPages": "Pages métier interrogées",
+      "collectorErrors": "Erreurs de collecte",
+      "collectionTime": "Durée de collecte"
+    },
+    "linkedinHistory": "HISTORIQUE DES SCANS LINKEDIN",
+    "helloworkHistory": "HISTORIQUE DES SCANS HELLOWORK",
+    "history": "HISTORIQUE",
+    "noScans": "Aucun scan pour l’instant.",
+    "noRuns": "Aucune exécution pour l’instant."
+  },
+  "profile": {
+    "title": "Profil",
+    "loadError": "Impossible de charger le profil.",
+    "saved": "Enregistré !",
+    "saveFailed": "Échec de l’enregistrement.",
+    "save": "Enregistrer le profil",
+    "saving": "Enregistrement…",
+    "remove": "Retirer {item}",
+    "addPlaceholder": "Saisissez puis appuyez sur Entrée…",
+    "skills": {
+      "escoTitle": "Rattachée à la taxonomie ESCO",
+      "placeholder": "Rechercher une compétence ESCO, ou appuyez sur Entrée pour en ajouter une personnalisée…",
+      "addCustom": "Appuyez sur Entrée pour ajouter « {value} » comme compétence personnalisée"
+    },
+    "domains": {
+      "labels": {
+        "software_development": "Développement logiciel",
+        "web_development": "Développement web",
+        "qa_testing": "Qualité et tests",
+        "automation": "Automatisation",
+        "data": "Données et IA",
+        "it_support": "Support informatique",
+        "systems": "Systèmes",
+        "networking": "Réseaux",
+        "cybersecurity": "Cybersécurité",
+        "devops": "DevOps",
+        "cloud": "Cloud",
+        "sales": "Vente",
+        "cleaning": "Nettoyage",
+        "healthcare": "Santé",
+        "accounting": "Comptabilité et finance",
+        "legal": "Juridique",
+        "trades": "Métiers manuels qualifiés",
+        "manual_labor": "Manutention et entrepôt",
+        "hospitality": "Hôtellerie-restauration",
+        "logistics": "Logistique et transport",
+        "recruitment": "RH et recrutement",
+        "procurement": "Achats",
+        "marketing": "Marketing"
+      },
+      "curated": "Sélection",
+      "placeholder": "Rechercher un domaine ou un métier (p. ex. développement logiciel, vendeur, agent d’entretien)…",
+      "addCustomHint": "Aucun résultat ? Appuyez sur Entrée pour ajouter « {value} » comme domaine personnalisé",
+      "noMatch": "Aucun résultat pour « {value} » — appuyez sur Entrée pour l’ajouter comme domaine personnalisé."
+    },
+    "location": {
+      "status": {
+        "preferred": "Préféré",
+        "acceptable": "Acceptable",
+        "excluded": "Exclu"
+      },
+      "remoteFrance": "Télétravail France",
+      "moveUp": "Monter",
+      "moveDown": "Descendre",
+      "placeholder": "Rechercher un département à ajouter (p. ex. 83 ou Var)…",
+      "noMatch": "Aucun département ne correspond à « {value} ».",
+      "remoteAdded": "🌍 Télétravail France ajouté",
+      "addRemote": "🌍 Ajouter le télétravail France"
+    },
+    "sections": {
+      "targets": "Domaines et compétences visés",
+      "targetsSubtitle": "Ce que le pipeline recherche et compare aux offres",
+      "geography": "Géographie",
+      "work": "Conditions de travail",
+      "experience": "Expérience",
+      "education": "Formation"
+    },
+    "fields": {
+      "targetDomains": "Domaines visés",
+      "focusDomain": "Priorité au domaine",
+      "focusSkills": "Priorité aux compétences",
+      "targetSkills": "Compétences visées",
+      "languages": "Langues",
+      "languagesPlaceholder": "Ajoutez une langue puis appuyez sur Entrée…",
+      "countries": "Pays préférés",
+      "countriesPlaceholder": "Ajoutez un pays puis appuyez sur Entrée…",
+      "remoteScope": "Périmètre du télétravail",
+      "remoteScopeHint": "Jusqu’où, hors de vos pays préférés, un poste en télétravail peut être basé",
+      "sameCountry": "Même pays uniquement",
+      "europe": "Europe",
+      "home": "Domicile",
+      "homeNotSet": "Non renseigné : le classement par lieu utilise vos priorités de lieu ci-dessous",
+      "homeDepartmentCentre": "centre du département ; choisissez votre commune pour l’affiner",
+      "homePlaceholder": "Tapez votre commune ou votre code postal…",
+      "maxDistance": "Distance maximale : {km} km",
+      "maxDistanceHint": "Estimée par la route depuis votre domicile. Les offres proches sont mieux classées ; les plus lointaines sont moins bien classées mais restent visibles.",
+      "strictDistance": "Strict : masquer les offres sur site au-delà de cette distance",
+      "remoteAccepted": "Télétravail accepté",
+      "remotePolicy": {
+        "remote_france": "Télétravail depuis la France",
+        "remote_eu": "Télétravail depuis l’UE",
+        "remote_worldwide": "Télétravail depuis le monde entier",
+        "hybrid": "Hybride au-delà de ma distance"
+      },
+      "locationHomeNote": "Utilisé pour le classement seulement tant qu’aucun domicile n’est renseigné ; ensuite, la distance et les choix de télétravail ci-dessus remplacent cette liste.",
+      "locationPriorities": "Priorités de lieu",
+      "locationHint": "Les départements et/ou le télétravail que vous préférez, par ordre de priorité (réordonnez avec ↑/↓ — la position n° 1 est votre préférence la plus forte). Cela influence le classement des offres. « Acceptable » compte moins que « Préféré » ; « Exclu » empêche un lieu d’obtenir un bonus de priorité. Aucun de ces choix n’est un filtre strict : les offres hors de cette liste (autres départements et télétravail compris) restent pleinement éligibles et peuvent bien se classer grâce au domaine, aux compétences et aux autres critères.",
+      "workModes": "Modes de travail",
+      "contractTypes": "Types de contrat",
+      "freshness": "Fraîcheur (jours)",
+      "preferredLevels": "Niveaux souhaités",
+      "excludedSeniority": "Mots-clés de séniorité exclus",
+      "maxYears": "Années d’expérience maximum (facultatif)",
+      "noLimit": "Sans limite",
+      "maxEducation": "Niveau de diplôme maximum (Bac+N)"
+    },
+    "options": {
+      "remote": "télétravail",
+      "hybrid": "hybride",
+      "on-site": "sur site",
+      "full-time": "temps plein",
+      "part-time": "temps partiel",
+      "internship": "stage",
+      "freelance": "freelance",
+      "junior": "junior",
+      "mid": "confirmé",
+      "senior": "senior",
+      "lead": "lead"
+    }
+  },
+  "design": {
+    "title": "Système de design",
+    "intro": "Les jetons sont dans <tokens/>. Le contraste est vérifié par <test/>.",
+    "light": "Thème clair",
+    "dark": "Thème sombre",
+    "sections": {
+      "colour": "Couleurs",
+      "contrast": "Contraste du texte sur la surface",
+      "type": "Échelle typographique",
+      "spacing": "Espacements",
+      "radius": "Arrondis et ombres",
+      "buttons": "Boutons",
+      "chips": "Pastilles et statuts",
+      "controls": "Contrôles",
+      "stepper": "Étapes",
+      "cards": "Cartes et tuiles",
+      "states": "États vide, chargement et erreur",
+      "toasts": "Notifications"
+    },
+    "aa": "AA",
+    "belowAa": "sous AA",
+    "ratio": "{ratio}:1 {verdict}",
+    "sample": "Portez ce vieux whisky au juge blond",
+    "buttons": {
+      "primary": "Principal",
+      "secondary": "Secondaire",
+      "ghost": "Discret",
+      "danger": "Danger",
+      "disabled": "Désactivé"
+    },
+    "switch": "Un interrupteur",
+    "switchDescription": "Avec une description",
+    "progress": "Progression",
+    "indeterminate": "Indéterminée",
+    "steps": {
+      "label": "Exemple d’étapes",
+      "about": "À propos de moi",
+      "experience": "Expérience",
+      "wishes": "Ce que je veux",
+      "where": "Où"
+    },
+    "back": "Retour",
+    "next": "Suivant",
+    "card": {
+      "title": "Titre de carte",
+      "subtitle": "Sous-titre",
+      "action": "Action",
+      "jobs": "Offres",
+      "matches": "Correspondances",
+      "loading": "Chargement"
+    },
+    "empty": "Rien ici pour l’instant.",
+    "emptyAction": "Faire la première action",
+    "error": "Impossible de charger les offres.",
+    "errorDetails": "Le serveur local n’a pas répondu.",
+    "retrying": "Nouvelle tentative…",
+    "toast": "Un message de type {tone}."
+  }
+}

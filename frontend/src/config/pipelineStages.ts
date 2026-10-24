@@ -1,4 +1,5 @@
 import type { RunStats } from '../api/client'
+import i18n from '../i18n'
 
 // ---------------------------------------------------------------------------
 // Canonical pipeline stage definition.
@@ -28,25 +29,28 @@ export interface PipelineStageDef {
   done: (s: RunStats) => number | undefined
 }
 
-export const PIPELINE_STAGES: PipelineStageDef[] = [
+type StageSpec = Omit<PipelineStageDef, 'label' | 'activityLabel' | 'unit'> & { unit: 'sources' | 'jobs' }
+
+// Labels are read from the translations each time, so they follow the UI language.
+const STAGE_SPECS: StageSpec[] = [
   {
-    key: 'collect', label: 'Collection', activityLabel: 'Collecting jobs', unit: 'sources',
+    key: 'collect', unit: 'sources',
     input: () => undefined, done: s => s.collected,
   },
   {
-    key: 'validate', label: 'Validation', activityLabel: 'Validating jobs', unit: 'jobs',
+    key: 'validate', unit: 'jobs',
     input: s => s.collected, done: s => s.validated,
   },
   {
-    key: 'deduplicate', label: 'Deduplication', activityLabel: 'Deduplicating jobs', unit: 'jobs',
+    key: 'deduplicate', unit: 'jobs',
     input: s => s.validated, done: s => s.deduplicated,
   },
   {
-    key: 'filter', label: 'Hard Filter', activityLabel: 'Applying hard filters', unit: 'jobs',
+    key: 'filter', unit: 'jobs',
     input: s => s.hard_filter_input, done: s => s.hard_filter_passed,
   },
   {
-    key: 'requirements_gate', label: 'Requirements Gate', activityLabel: 'Checking requirements', unit: 'jobs',
+    key: 'requirements_gate', unit: 'jobs',
     input: s => s.requirements_gate_input, done: s => s.requirements_gate_passed,
   },
   // Optional, AI-enabled-only gate (src/ai/eligibility.py) that runs after
@@ -57,27 +61,34 @@ export const PIPELINE_STAGES: PipelineStageDef[] = [
   // (disabled in config, or --ai not passed), the same "always populated"
   // convention hard_filter_*/requirements_gate_* already follow.
   {
-    key: 'llm_eligibility', label: 'AI Eligibility Check', activityLabel: 'Checking eligibility (AI)', unit: 'jobs',
+    key: 'llm_eligibility', unit: 'jobs',
     input: s => s.llm_eligibility_input, done: s => s.llm_eligibility_passed,
   },
   {
-    key: 'score', label: 'Scoring', activityLabel: 'Scoring jobs', unit: 'jobs',
+    key: 'score', unit: 'jobs',
     // what scoring receives: the jobs both eligibility gates passed on
     input: s => s.llm_eligibility_passed ?? s.requirements_gate_passed, done: s => s.scored,
   },
   {
-    key: 'phase2', label: 'AI Understanding', activityLabel: 'Understanding jobs (AI)', unit: 'jobs',
+    key: 'phase2', unit: 'jobs',
     input: s => s.phase2?.total, done: s => s.phase2?.completed,
   },
   {
-    key: 'semantic', label: 'Semantic Pre-Ranking', activityLabel: 'Semantic matching', unit: 'jobs',
+    key: 'semantic', unit: 'jobs',
     input: s => s.scored, done: s => s.semantically_matched,
   },
   {
-    key: 'personalize', label: 'Personalized Ranking', activityLabel: 'Personalizing ranking', unit: 'jobs',
+    key: 'personalize', unit: 'jobs',
     input: s => s.semantically_matched, done: s => s.personalized,
   },
 ]
+
+export const PIPELINE_STAGES: PipelineStageDef[] = STAGE_SPECS.map(spec => ({
+  ...spec,
+  get label() { return i18n.t(`pipelineStages.${spec.key}.label`) },
+  get activityLabel() { return i18n.t(`pipelineStages.${spec.key}.activity`) },
+  get unit() { return i18n.t(`pipelineStages.units.${spec.unit}`) },
+}))
 
 export function findPipelineStage(key: string): PipelineStageDef | undefined {
   return PIPELINE_STAGES.find(s => s.key === key)
@@ -87,16 +98,10 @@ export function findPipelineStage(key: string): PipelineStageDef | undefined {
 // step (src/pipeline/preflight.py) that runs before collection and never
 // produces a countable RunStats field, so it has no PIPELINE_STAGES entry
 // (no funnel row) but still needs a label for the live status text.
-const EXTRA_ACTIVITY_LABELS: Record<string, string> = {
-  preflight: 'Preparing run',
-}
-
-export const STAGE_LABELS: Record<string, string> = {
-  ...EXTRA_ACTIVITY_LABELS,
-  ...Object.fromEntries(PIPELINE_STAGES.map(s => [s.key, s.activityLabel])),
-}
+const EXTRA_ACTIVITY_STAGES = new Set(['preflight'])
 
 export function stageLabel(stage: string): string {
-  if (!stage) return 'Working'
-  return STAGE_LABELS[stage] || stage
+  if (!stage) return i18n.t('pipelineStages.working')
+  if (EXTRA_ACTIVITY_STAGES.has(stage) || findPipelineStage(stage)) return i18n.t(`pipelineStages.${stage}.activity`)
+  return stage
 }

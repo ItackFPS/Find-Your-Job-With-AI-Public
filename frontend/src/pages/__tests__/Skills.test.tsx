@@ -31,6 +31,6 @@ describe('Skills', () => {
     expect(screen.getByText('yours')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /docker/ }))
     expect(screen.getByText('OFTEN ASKED WITH DOCKER')).toBeInTheDocument()
-    expect(screen.getByText(/— 3 job\(s\)/)).toBeInTheDocument()
+    expect(screen.getByText(/— 3 jobs/)).toBeInTheDocument()
   })
 })
