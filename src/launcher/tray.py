@@ -28,6 +28,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from src.app_settings import NOTIFICATION_DEFAULTS
 from src.launcher import core
 from src.launcher.autostart import Autostart
 from src.launcher.run import Launcher
@@ -36,9 +37,9 @@ RUN_POLL_S = 30.0
 HINT_MARKER = ".tray-hint-shown"
 
 
-# The categories the user opted into (src/app_settings.py); used when the backend cannot be asked.
-DEFAULT_CATEGORIES = {"strong_matches": True, "search_failed": True, "source_paused": False,
-                      "saved_expiring": False}
+# The default categories, used when the backend cannot be asked: one source of truth (src/app_settings.py,
+# standard library only, like the launcher).
+DEFAULT_CATEGORIES = dict(NOTIFICATION_DEFAULTS)
 SOURCES = {"linkedin": "LinkedIn", "hellowork": "HelloWork"}
 RATE_LIMIT_MARKERS = ("429", "rate limit", "rate-limit", "rate_limit", "too many requests")
 
