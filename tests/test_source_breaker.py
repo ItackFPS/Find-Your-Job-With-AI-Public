@@ -217,3 +217,87 @@ def test_run_api_returns_the_new_fields() -> None:
     assert {k: out[k] for k in row} == row
     old = _build_run_stats({"by_source": {"x": {"collected": 1}}}).by_source["x"].model_dump()
     assert old["access_class"] is None and old["paused_until"] is None   # older runs still load
+
+
+# -- review #58: network outage, manual reset, history rows -----------------------------
+
+def _row(status: str, unreachable: bool = False) -> dict[str, Any]:
+    return {"status": status, "network_unreachable": True} if unreachable else {"status": status}
+
+
+@pytest.mark.parametrize("rows,outage", [
+    ([_row("failed", True), _row("failed", True), _row("failed", True)], True),
+    ([_row("failed", True)] * 4 + [_row("failed")], True),          # nearly all: 4 of 5
+    ([_row("failed", True), _row("failed"), _row("failed")], False),  # sources failing for other reasons
+    ([_row("failed", True), _row("failed", True), _row("completed")], False),  # one source was reached
+    ([_row("failed", True)], False),                                # one source cannot tell
+    ([_row("failed", True), _row("failed", True), _row("skipped"), _row("paused")], True),
+])
+def test_network_outage_is_told_apart_from_source_failures(rows: list[dict[str, Any]], outage: bool) -> None:
+    from src.pipeline.circuit_breaker import is_network_outage
+
+    assert is_network_outage(rows) is outage
+
+
+class _Offline(BaseCollector):
+    """No HTTP answer at all, as when the machine is offline."""
+
+    access_class = "official"
+
+    def __init__(self, config: dict | None = None) -> None:
+        super().__init__(rate_limit_delay=0)
+
+    def collect(self) -> CollectorResult:
+        self._note_network_error()
+        return CollectorResult(source_name="offline", jobs=[], errors=["[Errno 11001] getaddrinfo failed"])
+
+
+def test_a_machine_wide_outage_moves_no_breaker(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    from src.collectors.registry import registry
+    from src.pipeline.orchestrator import run_pipeline
+
+    monkeypatch.setattr(registry, "get_collector_class", lambda src_type: _Offline)
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "profile.yaml").write_text("target_domains: [software_development]\n", encoding="utf-8")
+    (config_dir / "filters.yaml").write_text("{}\n", encoding="utf-8")
+    (config_dir / "sources.yaml").write_text(
+        "sources:\n  - {name: a, type: x, active: true}\n  - {name: b, type: x, active: true}\n", encoding="utf-8")
+    db = str(tmp_path / "jobs.db")
+    save_states(db, [BreakerState("a", consecutive_failures=2)])
+
+    result = run_pipeline(db_path=db, config_dir=str(config_dir))
+
+    rows = result.stats.by_source
+    assert rows["a"]["status"] == "failed" and rows["a"]["network_unreachable"] and rows["a"]["network_outage"]
+    assert "paused_until" not in rows["a"]
+    assert load_states(db) == {"a": BreakerState("a", consecutive_failures=2)}   # unchanged, b not created
+    assert any("No source could be reached" in e for e in result.stats.errors)
+
+
+@pytest.fixture
+def client(isolated_app):  # noqa: ANN001, ANN201
+    from fastapi.testclient import TestClient
+
+    return TestClient(isolated_app)
+
+
+def test_breaker_can_be_reset_by_hand_and_is_listed(client, isolated_app) -> None:  # noqa: ANN001
+    db = isolated_app.state.db_path
+    save_states(db, [BreakerState("eures", consecutive_failures=3, trips=1,
+                                  paused_until=datetime.now(UTC) + timedelta(hours=6), last_failure_reason="HTTP 503")])
+
+    listed = client.get("/api/sources/breakers").json()
+    assert [(b["source"], b["paused"]) for b in listed] == [("eures", True)]
+    status = client.get("/api/scheduler/status").json()
+    assert status["source_breakers"][0]["source"] == "eures" and status["source_breakers"][0]["paused"]
+
+    resp = client.post("/api/sources/eures/breaker/reset")
+    assert resp.status_code == 200 and resp.json()["consecutive_failures"] == 0 and not resp.json()["paused"]
+    assert load_states(db)["eures"] == BreakerState("eures")
+    assert client.post("/api/sources/unknown/breaker/reset").status_code == 404
+
+
+def test_breaker_reset_is_refused_from_another_web_origin(client) -> None:  # noqa: ANN001
+    resp = client.post("/api/sources/eures/breaker/reset", headers={"Origin": "https://evil.example"})
+    assert resp.status_code == 403

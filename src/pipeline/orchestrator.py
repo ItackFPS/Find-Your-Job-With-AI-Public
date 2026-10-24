@@ -285,7 +285,7 @@ def run_pipeline(
         integrate_semantic_into_ranking,
         load_semantic_config,
     )
-    from src.pipeline.circuit_breaker import BreakerState, paused_reason
+    from src.pipeline.circuit_breaker import BreakerState, is_network_outage, paused_reason
     from src.pipeline.circuit_breaker import load_states as load_breaker_states
     from src.pipeline.circuit_breaker import next_state as next_breaker_state
     from src.pipeline.circuit_breaker import save_states as save_breaker_states
@@ -545,8 +545,19 @@ def run_pipeline(
 
         # Each source that ran moves its breaker: a success closes it, a failure counts,
         # the third failure in a row pauses the source (its row says until when).
+        # A run where (nearly) every source got no HTTP answer at all is this machine's
+        # outage, not the sources' failure: no breaker moves.
+        ran_rows = [stats.by_source.get(cfg["name"], {}) for cfg in active_sources]
+        if is_network_outage(ran_rows):
+            for row in ran_rows:
+                row["network_outage"] = True
+            stats.errors.append("No source could be reached (network down?): failed sources are not counted "
+                                "towards their circuit breaker this run")
+            active_sources_for_breaker: list[dict[str, Any]] = []
+        else:
+            active_sources_for_breaker = active_sources
         updated_breakers = []
-        for cfg in active_sources:
+        for cfg in active_sources_for_breaker:
             name = cfg["name"]
             row = stats.by_source.get(name, {})
             state = next_breaker_state(breakers.get(name) or BreakerState(source=name),
@@ -1349,6 +1360,8 @@ def _apply_source_contract(
         health = collector.health()
         if health.get("request_cap_reached"):
             source_stats["request_cap_reached"] = True
+        if health.get("network_errors") and not health.get("responses"):
+            source_stats["network_unreachable"] = True  # no HTTP answer at all (DNS, connect, timeout)
         canary = parser_canary(collector, source_stats["collected"])
         if canary:
             source_stats["canary"] = canary

@@ -102,6 +102,10 @@ class SourceStats(BaseModel):
     consecutive_failures: int | None = None
     paused_until: str | None = None
     request_cap_reached: bool | None = None
+    # no HTTP answer at all (DNS, connect, timeout); network_outage: the whole run was
+    # unreachable, so no circuit breaker moved
+    network_unreachable: bool | None = None
+    network_outage: bool | None = None
     # sudden drop of the source's yield: severity (zero | drop), current_yield,
     # baseline_yield, baseline_run_count, is_new (src/pipeline/source_health.py)
     yield_anomaly: dict[str, Any] | None = None

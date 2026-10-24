@@ -81,6 +81,8 @@ def _extract_yield(run: dict[str, Any], source: str) -> int | None:
     entry = by_source.get(source)
     if not isinstance(entry, dict) or entry.get("from_staging"):
         return None
+    if entry.get("status") in ("paused", "skipped"):  # the source did not run: its 0 is not a yield
+        return None
     collected = entry.get("collected")
     if isinstance(collected, bool) or not isinstance(collected, int) or collected < 0:
         return None

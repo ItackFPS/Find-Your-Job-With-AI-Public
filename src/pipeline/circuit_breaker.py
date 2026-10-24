@@ -9,7 +9,10 @@ one more failure pauses it again, for longer.
 
 A run counts as failed when its collection status is ``failed`` (errors and nothing
 collected; the parser canary's ``parser_changed`` is one). ``partial`` and
-``completed`` are successes; ``skipped`` and ``paused`` runs change nothing.
+``completed`` are successes; ``skipped`` and ``paused`` runs change nothing. A run where
+(nearly) every source got no HTTP answer at all (``is_network_outage``: the machine is
+offline, DNS is down) changes nothing either. ``reset`` closes a breaker by hand (the
+``POST /api/sources/{name}/breaker/reset`` route).
 
 State lives in the ``source_breakers`` table (src/storage/runs.py). Reading or writing
 it never breaks a run: on any storage error the run proceeds as if no source were paused.
@@ -27,6 +30,9 @@ logger = logging.getLogger(__name__)
 FAILURE_THRESHOLD = 3
 BASE_PAUSE = timedelta(hours=6)
 MAX_PAUSE = timedelta(days=7)
+# Share of the sources that ran which must have got no HTTP answer at all for the run to
+# count as a network outage (with at least two sources run and none reachable).
+OUTAGE_SHARE = 0.8
 
 
 @dataclass(frozen=True)
@@ -80,6 +86,19 @@ def next_state(state: BreakerState, status: str | None, reason: str | None, now:
     return new
 
 
+def is_network_outage(rows: list[dict[str, Any]]) -> bool:
+    """Whether a run's per-source rows show this machine's outage rather than sources
+    failing: at least two sources ran, none was reached, and at least ``OUTAGE_SHARE`` of
+    them failed without any HTTP answer (``network_unreachable``)."""
+    ran = [r for r in rows if r.get("status") in ("completed", "partial", "failed")]
+    if len(ran) < 2:
+        return False
+    if any(r.get("status") in ("completed", "partial") and not r.get("network_unreachable") for r in ran):
+        return False
+    unreachable = sum(1 for r in ran if r.get("status") == "failed" and r.get("network_unreachable"))
+    return unreachable >= OUTAGE_SHARE * len(ran)
+
+
 def paused_reason(state: BreakerState) -> str:
     until = state.paused_until.isoformat(timespec="minutes") if state.paused_until else "?"
     last = f" (last: {state.last_failure_reason})" if state.last_failure_reason else ""
@@ -115,3 +134,20 @@ def save_states(db_path: str, states: list[BreakerState]) -> None:
             storage.close()
     except Exception as exc:  # noqa: BLE001
         logger.warning("Circuit breaker state not saved: %s", exc)
+
+
+def reset(db_path: str, source: str) -> BreakerState | None:
+    """Close ``source``'s breaker by hand (counters cleared, pause lifted): the next run
+    tries it. ``None`` when the source has no breaker row. Raises on storage errors."""
+    from src.storage.runs import RunStorage
+
+    storage = RunStorage(db_path=db_path)
+    storage.init_db()
+    try:
+        if not any(row["source"] == source for row in storage.list_source_breakers()):
+            return None
+        state = BreakerState(source=source)
+        storage.save_source_breakers([state.to_row()])
+        return state
+    finally:
+        storage.close()
