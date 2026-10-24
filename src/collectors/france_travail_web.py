@@ -164,6 +164,7 @@ class FranceTravailWebCollector(BaseCollector):
     robots_policy = True
     robots_agent = ROBOTS_AGENT
     robots_user_agent = USER_AGENT
+    robots_strict = True  # documented above: crawl only with a robots.txt actually served
     # >= 1 s between requests; 500 requests per run is far above the default max_pages
     # (60 pages + robots.txt + sitemap) and stops a misconfigured run.
     rate_policy = RatePolicy(min_delay_seconds=MIN_RATE_LIMIT_DELAY, max_requests_per_run=500)
@@ -179,12 +180,16 @@ class FranceTravailWebCollector(BaseCollector):
         self.departments = [str(d).upper().zfill(2) for d in cfg.get("departments") or []]
         self._client: httpx.Client | None = None
 
-    def _get(self, url: str) -> httpx.Response:
+    def _get(self, url: str, *, parsed: bool = True) -> httpx.Response:
         self._before_request(url)  # robots.txt (rules seeded by collect()) and the request cap
         self._enforce_rate_limit()
         assert self._client is not None
-        resp = self._client.get(url)
-        self._observe_response(resp)
+        try:
+            resp = self._client.get(url)
+        except httpx.TransportError:
+            self._note_network_error()
+            raise
+        self._observe_response(resp, parsed=parsed)  # robots.txt and the sitemap are not offer pages
         return resp
 
     def fixture(self) -> RecordedFixture:
@@ -204,7 +209,7 @@ class FranceTravailWebCollector(BaseCollector):
                           headers={"User-Agent": USER_AGENT, "Accept-Language": "fr-FR,fr;q=0.9"}) as client:
             self._client = client
             try:
-                robots = self._get(f"{BASE}/robots.txt")
+                robots = self._get(f"{BASE}/robots.txt", parsed=False)
             except (httpx.HTTPError, RuntimeError) as exc:
                 return CollectorResult(source_name="france-travail-web", jobs=[], errors=[
                     f"France Travail is unreachable: {exc}"])
@@ -212,7 +217,7 @@ class FranceTravailWebCollector(BaseCollector):
             # RFC 9309 makes 5xx/unreachable "disallow all"; it lets other 4xx mean "no
             # robots.txt, allow all", but this source is read conservatively, so any answer
             # other than a real robots.txt means no page is requested.
-            rules = rules_from_response(robots.status_code, robots.text, ROBOTS_AGENT)
+            rules = rules_from_response(robots.status_code, robots.text, ROBOTS_AGENT, strict=True)
             if rules is None:
                 return CollectorResult(source_name="france-travail-web", jobs=[], errors=[
                     f"France Travail robots.txt unavailable (HTTP {robots.status_code}"
@@ -255,7 +260,7 @@ class FranceTravailWebCollector(BaseCollector):
         département page France Travail lists in its sitemap, and how many sitemap URLs
         were skipped for not being on BASE. Only these pages are read: it answers 410
         Gone for combinations it does not publish."""
-        resp = self._get(SITEMAP)
+        resp = self._get(SITEMAP, parsed=False)
         resp.raise_for_status()
         pages = []
         offsite = 0

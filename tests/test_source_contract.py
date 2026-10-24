@@ -137,10 +137,67 @@ def test_canary_ignores_collectors_without_a_fixture() -> None:
 # -- shared robots.txt helper ------------------------------------------------------------
 
 
-@pytest.mark.parametrize("status,text", [(404, "User-agent: *\nDisallow:\n"), (500, ""), (200, "  \n"),
-                                         (403, "User-agent: *\nAllow: /\n")])
-def test_robots_answer_that_is_not_a_real_robots_txt_fails_closed(status: int, text: str) -> None:
-    assert robots.rules_from_response(status, text, "x") is None
+@pytest.mark.parametrize("status,text,allowed", [
+    (200, "User-agent: *\nDisallow: /private\n", True),   # the file's rules
+    (200, "  \n", True),                                   # an empty file allows everything
+    (404, "", True),                                       # 4xx: no robots.txt, no restriction
+    (403, "User-agent: *\nDisallow: /\n", True),           # a 4xx body is not a robots.txt
+    (410, "", True),
+    (500, "", False),                                      # 5xx: disallow all
+    (503, "User-agent: *\nAllow: /\n", False),
+    (302, "", False),                                      # an unfollowed redirect is no answer
+])
+def test_robots_answer_follows_rfc_9309(status: int, text: str, allowed: bool) -> None:
+    rules = robots.rules_from_response(status, text, "x")
+    assert (rules is not None and robots.robots_allows(rules, "/jobs")) is allowed
+
+
+@pytest.mark.parametrize("status,text", [(404, ""), (403, "x"), (200, "  \n"), (500, "")])
+def test_strict_reading_needs_a_served_robots_txt(status: int, text: str) -> None:
+    assert robots.rules_from_response(status, text, "x", strict=True) is None
+
+
+def test_robots_cache_reads_404_as_no_restriction_and_5xx_as_disallow_all(monkeypatch) -> None:  # noqa: ANN001
+    answers = {"https://none.example/robots.txt": (404, ""), "https://broken.example/robots.txt": (502, "")}
+    monkeypatch.setattr(robots, "fetch_robots_txt", lambda url, **_: answers[url])
+    cache = robots.RobotsCache("FindYourJobWithAI", "ua")
+    assert cache.allows("https://none.example/jobs")
+    assert not cache.allows("https://broken.example/jobs")
+    strict = robots.RobotsCache("FindYourJobWithAI", "ua", strict=True)
+    assert not strict.allows("https://none.example/jobs")
+
+
+def test_france_travail_web_keeps_its_strict_fail_closed_reading() -> None:
+    from src.collectors.france_travail_web import FranceTravailWebCollector
+
+    assert FranceTravailWebCollector.robots_strict is True
+    assert all(not _cls(n).robots_strict for n in NAMES if n != "france_travail_web")
+
+
+def test_agent_lines_end_at_the_first_other_line() -> None:
+    text = ("User-agent: FindYourJobWithAI\nCrawl-delay: 5\nUser-agent: OtherBot\nDisallow: /x\n"
+            "User-agent: *\nDisallow: /y\n")
+    # Crawl-delay closed the first group, so "Disallow: /x" belongs to OtherBot only.
+    rules = robots.parse_robots(text, "FindYourJobWithAI")
+    assert robots.robots_allows(rules, "/x") and robots.robots_allows(rules, "/y")
+
+
+def test_groups_match_on_the_product_token() -> None:
+    text = "User-agent: FindYourJobWithAI/2.0\nDisallow: /private\n\nUser-agent: *\nDisallow: /\n"
+    for agent in ("FindYourJobWithAI", "findyourjobwithai/3.1 (local app)"):
+        rules = robots.parse_robots(text, agent)
+        assert robots.robots_allows(rules, "/jobs") and not robots.robots_allows(rules, "/private/a")
+
+
+@pytest.mark.parametrize("rule,path,allowed", [
+    ("/caf%C3%A9", "/café/menu", False),      # non-ASCII path compared percent-encoded
+    ("/café", "/caf%c3%a9/menu", False),      # either side may be the encoded one
+    ("/%7Ejoe", "/~joe/index.html", False),   # escapes of unreserved characters decoded
+    ("/a%2Fb", "/a/b", True),                 # an encoded "/" stays distinct from "/"
+])
+def test_paths_are_compared_percent_encoding_normalised(rule: str, path: str, allowed: bool) -> None:
+    rules = robots.parse_robots(f"User-agent: *\nDisallow: {rule}\n")
+    assert robots.robots_allows(rules, path) is allowed
 
 
 def test_robots_cache_fetches_each_site_once_and_fails_closed(monkeypatch) -> None:  # noqa: ANN001
@@ -276,6 +333,73 @@ def test_unreadable_robots_txt_means_nothing_is_requested(monkeypatch) -> None: 
     result = _make("weworkremotely", {"category_rss": False}).collect()
     assert web.urls == []
     assert result.jobs == [] and "robots.txt unavailable (HTTP 503)" in result.errors[0]
+
+
+# -- canary on real collectors: only offer pages count, genuine empties are fine ---------
+
+_BIG_SITEMAP = "<urlset>" + "".join(
+    f"<url><loc>https://candidat.francetravail.fr/offres/emploi/developpeur-web/x/s28m7d{d:02d}</loc></url>"
+    for d in range(1, 96) if d != 13) + "</urlset>"
+
+
+def test_robots_and_sitemap_answers_are_not_pages_served(monkeypatch) -> None:  # noqa: ANN001
+    """Review #58: a run whose plan is legitimately empty (no sitemap page for the
+    profile's département) is not a parser change, however large the sitemap."""
+    web = _FakeWeb("User-agent: *\nAllow: /\n" + "# padding\n" * 400, lambda url: _BIG_SITEMAP)
+    web.install(monkeypatch)
+    collector = _make("france_travail_web", {"target_domains": ["web_development"], "departments": ["13"]})
+    result = collector.collect()
+    assert result.jobs == [] and len(_BIG_SITEMAP) > 4 * collector.canary_min_bytes
+    assert parser_canary(collector, 0) is None
+    assert collector.health()["responses"] == 2 and collector.health()["ok_responses"] == 0  # robots + sitemap
+
+
+def test_a_served_listing_page_without_offers_is_still_flagged(monkeypatch) -> None:  # noqa: ANN001
+    redesigned = "<html><body>" + "<div class='card-v2'>Offre</div>" * 200 + "</body></html>"
+    web = _FakeWeb("User-agent: *\nAllow: /\n",
+                   lambda url: _FT_SITEMAP if url.endswith(".xml") else redesigned)
+    web.install(monkeypatch)
+    collector = _make("france_travail_web", {"target_domains": ["web_development"], "departments": ["83"]})
+    assert collector.collect().jobs == []
+    assert parser_canary(collector, 0) == PARSER_CHANGED
+
+
+def test_a_listing_that_genuinely_lists_no_offer_is_not_flagged(monkeypatch) -> None:  # noqa: ANN001
+    empty_list = ('<html><script type="application/ld+json">{"@type": "ItemList", "itemListElement": []}'
+                  "</script>" + "<p>0 offre</p>" * 500 + "</html>")
+    web = _FakeWeb("User-agent: *\nAllow: /\n", lambda url: empty_list)
+    web.install(monkeypatch)
+    collector = _make("hellowork", {"domains": ["informatique"], "metier_slugs": ["developpeur"]})
+    result = collector.collect()
+    assert result.jobs == [] and collector.health()["empty_results"] == 1
+    assert parser_canary(collector, 0) is None
+
+
+@pytest.mark.parametrize("name,body", [
+    ("eures", json.dumps({"numberRecords": 0, "jvs": [], "facets": {"pad": "x" * 5000}})),
+    ("workingnomads", "[]" + " " * 5000),
+    ("weworkremotely", '<?xml version="1.0"?><rss version="2.0"><channel><title>WWR</title>'
+                       + "<!-- pad -->" * 500 + "</channel></rss>"),
+])
+def test_well_formed_empty_answers_are_not_parser_changes(name: str, body: str, monkeypatch) -> None:  # noqa: ANN001
+    web = _FakeWeb("User-agent: *\nAllow: /\n", lambda url: body)
+    web.install(monkeypatch)
+    collector = _make(name, PUBLIC_PAGE_CONFIGS[name])
+    assert collector.collect().jobs == []
+    assert parser_canary(collector, 0) is None
+
+
+def test_no_http_answer_at_all_is_reported_as_unreachable(monkeypatch) -> None:  # noqa: ANN001
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("Name or service not known", request=request)
+
+    web = _FakeWeb("", lambda url: "")
+    web.handler = refuse  # type: ignore[method-assign]
+    web.install(monkeypatch)
+    collector = _make("weworkremotely", {"category_rss": False})
+    assert collector.collect().jobs == []
+    health = collector.health()
+    assert health["network_errors"] >= 1 and health["responses"] == 0
 
 
 # -- rate policy: floor, injected clock/sleep, per-run cap -------------------------------

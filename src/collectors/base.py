@@ -142,7 +142,8 @@ class BaseCollector(ABC):
       - Timeout handling per request
       - Retry logic with exponential backoff
       - Rate limiting between requests to the same source
-      - robots.txt checks (fail closed) and a per-run request cap
+      - robots.txt checks (RFC 9309: 4xx allows, 5xx or unreachable disallows) and a
+        per-run request cap
       - Structured logging
     """
 
@@ -153,6 +154,9 @@ class BaseCollector(ABC):
     # fetched with (a collector sending its own User-Agent sets both to match it).
     robots_agent: ClassVar[str] = DEFAULT_ROBOTS_AGENT
     robots_user_agent: ClassVar[str] = DEFAULT_ROBOTS_USER_AGENT
+    # robots.txt answers read per RFC 9309 (4xx: no restriction; 5xx or unreachable:
+    # disallow all). True: only a served, non-empty robots.txt allows anything.
+    robots_strict: ClassVar[bool] = False
     # The parser canary only speaks up when a 200 answer was at least this large.
     canary_min_bytes: ClassVar[int] = 2048
     # Injected clock and sleep for the rate limiter (None: time.time / time.sleep, looked
@@ -168,6 +172,9 @@ class BaseCollector(ABC):
         self._requests_made = 0
         self._request_cap_reached = False
         self._robots_refused = 0
+        self._responses = 0
+        self._network_errors = 0
+        self._empty_results = 0
         self._ok_responses = 0
         self._largest_ok_bytes = 0
         self._last_status: int | None = None
@@ -187,8 +194,9 @@ class BaseCollector(ABC):
 
     def robots_check(self, url: str) -> bool:
         """Whether ``url`` may be requested: always for a collector without a robots
-        policy; otherwise what the site's robots.txt says (fetched once per run, failing
-        closed when it cannot be read)."""
+        policy; otherwise what the site's robots.txt says (fetched once per run; a 4xx
+        answer allows everything, a 5xx answer or an unreachable site nothing, and with
+        ``robots_strict`` only a served, non-empty robots.txt allows anything)."""
         if not self.honours_robots:
             return True
         return self._robots_cache().allows(url)
@@ -211,6 +219,12 @@ class BaseCollector(ABC):
             "request_cap": self.rate_policy.max_requests_per_run,
             "request_cap_reached": get("_request_cap_reached", False),
             "robots_refused": get("_robots_refused"),
+            # any HTTP answer at all, and requests that got none (DNS, connect, timeout)
+            "responses": get("_responses"),
+            "network_errors": get("_network_errors"),
+            # answers the collector recognised as a genuine "no offer" result
+            "empty_results": get("_empty_results"),
+            # HTTP 200 answers of pages parsed for offers (not robots.txt or sitemaps)
             "ok_responses": get("_ok_responses"),
             "largest_ok_bytes": get("_largest_ok_bytes"),
             "last_status": get("_last_status", None),
@@ -224,7 +238,8 @@ class BaseCollector(ABC):
 
     def _robots_cache(self) -> RobotsCache:
         if self._robots is None:
-            self._robots = RobotsCache(self.robots_agent, self.robots_user_agent, timeout=min(self.timeout, 15))
+            self._robots = RobotsCache(self.robots_agent, self.robots_user_agent, timeout=min(self.timeout, 15),
+                                       strict=self.robots_strict)
         return self._robots
 
     def _before_request(self, url: str, *, check_robots: bool = True) -> None:
@@ -238,6 +253,8 @@ class BaseCollector(ABC):
             if not cache.allows(url):
                 with self._budget_lock:
                     self._robots_refused += 1
+                    if origin(url) in cache.unreachable:
+                        self._network_errors += 1
                 raise RobotsDisallowed(f"not requested: {cache.refusal(url)}")
         cap = self.rate_policy.max_requests_per_run
         with self._budget_lock:
@@ -247,10 +264,27 @@ class BaseCollector(ABC):
                     f"request cap of {cap} per run reached; not requested: {origin(url)}")
             self._requests_made += 1
 
-    def _observe_response(self, response: Any) -> None:
-        """Record a response's status and size for ``health()`` and the parser canary."""
+    def _note_network_error(self) -> None:
+        """A request got no HTTP answer at all (DNS, connection refused, timeout)."""
+        with self._budget_lock:
+            self._network_errors += 1
+
+    def _note_empty_result(self) -> None:
+        """A page or answer was read and genuinely lists no offer (e.g. an empty result
+        list in a well-formed answer): the parser canary then stays quiet."""
+        with self._budget_lock:
+            self._empty_results += 1
+
+    def _observe_response(self, response: Any, *, parsed: bool = True) -> None:
+        """Record a response for ``health()`` and the parser canary. ``parsed=False``
+        for answers that are not parsed for offers (robots.txt, sitemaps, taxonomy
+        indexes): they count as reachability, never as "pages served" for the canary."""
         status = getattr(response, "status_code", None)
         if not isinstance(status, int):
+            return
+        with self._budget_lock:
+            self._responses += 1
+        if not parsed:
             return
         size = 0
         content = getattr(response, "content", None)
@@ -277,7 +311,7 @@ class BaseCollector(ABC):
             sleep(sleep_time)
         self._last_request_time = clock()
 
-    def _fetch_with_retry(self, url: str, **kwargs: Any) -> httpx.Response:
+    def _fetch_with_retry(self, url: str, *, parsed: bool = True, **kwargs: Any) -> httpx.Response:
         """Fetch a URL with retries and exponential backoff.
 
         Retries on network errors (timeout/connect) and on transient HTTP
@@ -287,15 +321,18 @@ class BaseCollector(ABC):
         treated as permanent and raised immediately without retrying.
 
         The URL is first checked against robots.txt (public-page collectors) and the
-        per-run request cap: see ``_before_request``.
+        per-run request cap: see ``_before_request``. ``parsed=False`` for a page that is
+        not parsed for offers (see ``_observe_response``).
         """
         self._before_request(url)
         last_error: str | None = None
+        network_failure = False
         for attempt in range(1, self.retries + 1):
             try:
                 logger.debug("Fetching %s (attempt %d/%d)", url, attempt, self.retries)
                 response = httpx.get(url, timeout=self.timeout, **kwargs)
-                self._observe_response(response)
+                self._observe_response(response, parsed=parsed)
+                network_failure = False
 
                 if response.status_code in _RETRYABLE_STATUS_CODES:
                     last_error = f"HTTP {response.status_code}: {response.text[:300]}"
@@ -313,12 +350,15 @@ class BaseCollector(ABC):
                 return response
             except (httpx.TimeoutException, httpx.ConnectError) as exc:
                 last_error = str(exc)
+                network_failure = True
                 if attempt < self.retries:
                     backoff = 2 ** (attempt - 1) * 0.5
                     logger.warning("Attempt %d failed for %s: %s. Retrying in %.1fs",
                                    attempt, url, exc, backoff)
                     time.sleep(backoff)
 
+        if network_failure:
+            self._note_network_error()
         raise RuntimeError(f"Failed to fetch {url} after {self.retries} attempts: {last_error}")
 
     @staticmethod

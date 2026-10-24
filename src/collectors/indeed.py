@@ -453,6 +453,8 @@ class IndeedCollector(BaseCollector):
 
             job_search = (data.get("data") or {}).get("jobSearch") or {}
             results = job_search.get("results") or []
+            if not results and "results" in job_search:
+                self._note_empty_result()  # a well-formed answer with no match
             next_cursor: str | None = (
                 (job_search.get("pageInfo") or {}).get("nextCursor") or None
             )
@@ -464,6 +466,8 @@ class IndeedCollector(BaseCollector):
             ]
             return raw_jobs, next_cursor, None
 
+        if last_error is not None and last_error.startswith("network error"):
+            self._note_network_error()
         return [], None, f"indeed: all {self.retries} attempts failed: {last_error}"
 
 

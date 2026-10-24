@@ -199,6 +199,8 @@ class WeWorkRemotelyCollector(BaseCollector):
             )
             return jobs, errors
 
+        if not feed.entries:
+            self._note_empty_result()  # a well-formed feed with no item
         new_count = 0
         for entry in feed.entries:
             raw = _rss_entry_to_raw(entry)

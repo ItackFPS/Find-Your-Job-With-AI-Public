@@ -69,6 +69,8 @@ class WorkingNomadsCollector(BaseCollector):
                 errors.append(f"Unexpected response type: {type(raw_list)}")
                 raw_list = []
 
+            if isinstance(raw_list, list) and not raw_list and not errors:
+                self._note_empty_result()  # a well-formed answer with no offer
             for raw in raw_list:
                 if not isinstance(raw, dict):
                     continue

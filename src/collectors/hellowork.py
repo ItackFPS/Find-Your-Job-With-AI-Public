@@ -251,6 +251,8 @@ class HelloWorkCollector(BaseCollector):
                 unreadable_listings += 1
                 logger.warning("HelloWork: no ItemList JSON-LD on the listing page for metier '%s'", slug)
                 continue
+            if not job_urls:
+                self._note_empty_result()  # the list is there and empty: no offer for this role today
 
             logger.info("HelloWork: %d job URLs found for metier '%s'", len(job_urls), slug)
 
@@ -335,7 +337,7 @@ class HelloWorkCollector(BaseCollector):
             index_url = _DOMAIN_INDEX_URL.format(domain=domain)
             try:
                 self._enforce_rate_limit()
-                response = self._fetch_with_retry(index_url, headers=_HEADERS)
+                response = self._fetch_with_retry(index_url, headers=_HEADERS, parsed=False)  # taxonomy, no offer
             except (httpx.HTTPError, RuntimeError) as exc:
                 errors.append(f"HelloWork: failed to load domain taxonomy for '{domain}': {exc}")
                 continue

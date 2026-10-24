@@ -30,10 +30,14 @@ def has_canary(collector: BaseCollector) -> bool:
 
 def parser_canary(collector: BaseCollector, jobs_count: int) -> str | None:
     """``"parser_changed"`` when a canary-covered collector returned no job although at
-    least one answer was HTTP 200 and ``canary_min_bytes`` or larger; otherwise ``None``."""
+    least one page parsed for offers was HTTP 200 and ``canary_min_bytes`` or larger, and
+    none was recognised as a genuine empty result; otherwise ``None``. robots.txt,
+    sitemaps and taxonomy indexes never count as pages served."""
     if jobs_count > 0 or not has_canary(collector):
         return None
     health = collector.health()
+    if health.get("empty_results", 0):
+        return None  # the collector recognised a genuine "no offer" answer
     if health.get("ok_responses", 0) and health.get("largest_ok_bytes", 0) >= collector.canary_min_bytes:
         return PARSER_CHANGED
     return None

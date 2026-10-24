@@ -352,7 +352,10 @@ class EURESCollector(BaseCollector):
 
                 resp.raise_for_status()
                 data = resp.json()
-                return data.get("jvs") or [], int(data.get("numberRecords") or 0)
+                jvs, total = data.get("jvs") or [], int(data.get("numberRecords") or 0)
+                if not jvs and total == 0 and "numberRecords" in data:
+                    self._note_empty_result()  # a well-formed answer with no match
+                return jvs, total
 
             except (httpx.TimeoutException, httpx.ConnectError) as exc:
                 last_error = str(exc)
@@ -364,6 +367,8 @@ class EURESCollector(BaseCollector):
                     )
                     time.sleep(backoff)
 
+        if last_error != "unknown error" and not last_error.startswith("HTTP"):
+            self._note_network_error()
         raise RuntimeError(f"EURES API unreachable after {self.retries} attempts: {last_error}")
 
 

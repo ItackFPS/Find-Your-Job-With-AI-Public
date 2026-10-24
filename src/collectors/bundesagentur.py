@@ -97,6 +97,8 @@ class BundesagenturCollector(BaseCollector):
                 )
                 data = response.json()
                 raw_jobs: list[Any] = data.get("ergebnisliste") or []
+                if not raw_jobs and isinstance(data, dict):
+                    self._note_empty_result()  # a well-formed answer with no match
 
                 for raw in raw_jobs:
                     if not isinstance(raw, dict):

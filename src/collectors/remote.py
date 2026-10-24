@@ -99,6 +99,8 @@ class RemoteCollector(BaseCollector):
             errors.append(f"Failed to parse RSS feed from {self.careers_url}: {bozo_exc}")
             return jobs, errors
 
+        if not parsed.entries:
+            self._note_empty_result()  # a well-formed feed with no item
         for entry in parsed.entries:
             jobs.append(self._rss_entry_to_raw_job(entry))
 
