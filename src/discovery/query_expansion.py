@@ -53,14 +53,6 @@ _STATIC_BASELINE: dict[str, list[str]] = {
         "cybersecurity",     # Cybersecurity
         "admin",             # DevOps & Infrastructure
     ],
-    # APEC motsCles French keywords (verified 2026-08-28 via rechercheOffre POST).
-    # Each keyword drives one paginated search cycle.
-    "apec": [
-        "informatique",
-        "développeur",
-        "data",
-        "devops",
-    ],
     # RemoteOK tag filter (verified 2026-08-28 via /api?tags=).
     # Each tag drives one API call returning tag-filtered jobs.
     "remoteok": [
@@ -243,7 +235,7 @@ class DiscoveryQueryExpander:
         """Return discovery queries for all supported source types.
 
         Returns a dict mapping source_type → list[query_string].
-        Expands for france_travail (FR), apec (FR), jobicy (EN slugs), remoteok (EN tags).
+        Expands for france_travail (FR), jobicy (EN slugs), remoteok (EN tags).
 
         ``yield_history_by_source``, if given, maps source_type -> the
         per-query yield history for that source (see
@@ -257,10 +249,6 @@ class DiscoveryQueryExpander:
             "france_travail": self.expand(
                 profile, source="france_travail", language="fr",
                 yield_history=yield_history_by_source.get("france_travail"),
-            ),
-            "apec": self.expand(
-                profile, source="apec", language="fr",
-                yield_history=yield_history_by_source.get("apec"),
             ),
             "jobicy": self.expand(
                 profile, source="jobicy", language="en",
@@ -391,14 +379,6 @@ class DiscoveryQueryExpander:
                 skill = skill.strip()
                 if skill and 2 <= len(skill) <= 25:
                     extra.append(skill)
-
-        elif source == "apec":
-            # APEC motsCles: same French IT vocabulary as France Travail.
-            for domain in profile.target_domains:
-                extra.extend(_DOMAIN_TO_FR_QUERIES.get(domain, []))
-
-            for contract in profile.contract_types:
-                extra.extend(_CONTRACT_TO_FR_QUERIES.get(contract, []))
 
         elif source == "jobicy":
             # Jobicy industry slugs: map domains to verified industry slugs.

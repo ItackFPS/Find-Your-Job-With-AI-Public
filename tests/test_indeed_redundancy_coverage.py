@@ -4,7 +4,9 @@ I12's decision (see the phase report / commit for the full evaluation): NO
 new collector was added. France Travail (official Pôle Emploi API, active,
 exhaustive, unrestricted by keyword or seniority) already provides
 authoritative, ToS-clean, general-purpose FR coverage independent of
-Indeed, with APEC and EURES as secondary/overlapping FR sources.
+Indeed, with EURES as a secondary/overlapping FR source. (APEC, once a
+second FR source, was removed in 2.0: its bot protection blocks every
+request, and its offers also reach EURES.)
 
 These tests exist to keep that finding TRUE over time — each one would fail
 if a future change quietly removed the exact property the redundancy
@@ -44,26 +46,27 @@ class TestFranceTravailProvidesUnrestrictedRedundancy:
         assert "max_jobs" not in sources["france-travail"]["config"]
 
     def test_france_travail_config_has_no_keyword_or_category_restriction(self) -> None:
-        """Unlike APEC (executive/cadre-scoped by the nature of the source
-        itself), France Travail's collector config carries no keyword list,
+        """France Travail's collector config carries no keyword list,
         category filter, or seniority restriction — it searches the general
-        French job market, covering junior/entry-level roles APEC does not."""
+        French job market, including junior/entry-level roles."""
         config = _load_sources()["france-travail"]["config"]
         restrictive_keys = {"keywords", "category", "cadre", "seniority", "max_jobs"}
         assert not (restrictive_keys & config.keys())
 
 
-class TestApecIsSecondaryNotPrimaryRedundancy:
-    """APEC ('association pour l'emploi des cadres') is executive/cadre-
-    scoped by what the source itself indexes, not by our config — this is a
-    structural limitation, not something a config change can fix. It's
-    documented here as a REASON France Travail (not APEC) is the primary
-    redundancy source, not evidence APEC is unhelpful (it still overlaps
-    for a good fraction of postings)."""
+class TestRemovedSourcesStayRemoved:
+    """2.0 plan F1.4: APEC (bot protection with a CAPTCHA on every request)
+    and the Welcome to the Jungle browser collector (behind a firewall) were
+    removed deliberately. The shipped config must not list them again, and
+    the pipeline must recognise them as removed so an old config that still
+    lists them is skipped with a reason rather than failing."""
 
-    def test_apec_is_active_as_secondary_fr_coverage(self) -> None:
-        sources = _load_sources()
-        assert sources["apec"]["active"] is True
+    def test_shipped_config_lists_no_removed_source(self) -> None:
+        from src.collectors.registry import REMOVED_SOURCE_TYPES
+
+        source_types = {src["type"] for src in _load_sources().values()}
+        assert not (source_types & REMOVED_SOURCE_TYPES.keys())
+        assert {"apec", "wttj"} <= REMOVED_SOURCE_TYPES.keys()
 
 
 class TestEuresOverlapsFranceTravailByDesign:
@@ -103,16 +106,17 @@ class TestNoRedundantCollectorWasAdded:
     def test_source_types_match_pre_i12_baseline(self) -> None:
         sources = _load_sources()
         source_types = {src["type"] for src in sources.values()}
-        # The complete set of collector types this project has ever shipped,
-        # as of I12 — France Travail/APEC/EURES (redundancy sources) plus
+        # The complete set of collector types this project ships, as of
+        # I12 — France Travail/EURES (redundancy sources) plus
         # every other already-existing type. Adding a name here later means
         # a new collector was introduced and this test should be updated
         # deliberately, not accidentally.
         # france_travail_web (2.0 plan F6.2): France Travail without credentials,
-        # since its API no longer accepts new subscribers.
+        # since its API no longer accepts new subscribers. apec and wttj were
+        # removed in 2.0 (plan F1.4): blocked by a CAPTCHA and a firewall.
         expected_types = {
             "france_travail", "france_travail_web", "remoteok", "jobicy", "bundesagentur",
-            "arbetsformedlingen", "apec", "eures", "hellowork", "wttj",
+            "arbetsformedlingen", "eures", "hellowork",
             "indeed", "weworkremotely",
         }
         assert source_types == expected_types

@@ -52,9 +52,6 @@ dev = [
     "types-requests>=2.31.0",
     "types-PyYAML>=6.0.0",
 ]
-browser = [
-    "crawl4ai>=0.6.0",
-]
 linkedin = [
     # >=1.3.0: older releases pin markdownify<0.14 (PYSEC-2026-1604, unbounded memory on
     # crafted heading tags in posting HTML) and name the description option differently.
@@ -115,12 +112,6 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "pandas.*"
-ignore_missing_imports = true
-
-# crawl4ai (optional `browser` extra) ships no py.typed marker; it is imported
-# lazily by src/collectors/base_browser.py and src/collectors/wttj.py.
-[[tool.mypy.overrides]]
-module = "crawl4ai.*"
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -58,7 +58,6 @@ feedback, evaluation, lab) · [ADRs](docs/adr/README.md) · [Windows app](docs/w
 | Evaluation harness (labelled datasets, metrics, comparisons; [ADR 0007](docs/adr/0007-evaluation-harness-outside-production-path.md)) | 🧪 developer tooling, outside the production path |
 | Experiment lab with human-approved promotion ([ADR 0011](docs/adr/0011-experiment-lab.md)) | 🧪 experimental; the lab agent is OS-isolated only when you run it in its sandbox (`python -m src.lab sandbox`, Windows AppContainer) |
 | Greenhouse, Lever, SmartRecruiters, WorkingNomads collectors | ⚙️ implemented, no source configured |
-| Welcome to the Jungle collector | ⚠️ implemented, disabled — blocked by the site's bot protection |
 | macOS / Linux | ⚠️ backend, CLI and tests run (CI is Linux); the launcher and startup scripts are Windows-only |
 | Docker | ⚠️ the image runs the CLI pipeline only, not the web UI |
 | Windows installer: per-user, bundled Python, desktop + Start Menu shortcuts ([docs](docs/windows-installer.md)) | ✅ 1.0.0, not code-signed |
@@ -235,7 +234,7 @@ the internet):
 
 | Outbound connection | When | What is sent |
 |---|---|---|
-| Job sources — France Travail (its public occupation pages, robots.txt respected; the API when you have credentials), RemoteOK, Jobicy, We Work Remotely, Indeed (its mobile app's API), EURES, APEC; LinkedIn (via `python-jobspy`) and HelloWork scanners | pipeline runs, scheduled scans | search queries built from your profile (keywords, locations); never your profile file, feedback or database |
+| Job sources — France Travail (its public occupation pages, robots.txt respected; the API when you have credentials), RemoteOK, Jobicy, We Work Remotely, Indeed (its mobile app's API), EURES; LinkedIn (via `python-jobspy`) and HelloWork scanners | pipeline runs, scheduled scans | search queries built from your profile (keywords, locations); never your profile file, feedback or database |
 | Hugging Face Hub | first use of the embedding model; each later model load checks for updates unless `HF_HUB_OFFLINE=1` | model file requests (Hub telemetry is turned off) |
 | `PHASE2_LLM_ENDPOINT` (default `http://localhost:1234`); `--llm-endpoint` of the evaluation/lab tools | only AI-enabled runs, or those tools when you pass the flag | job text and profile summary. It is whatever you configure — keep it local; the launcher warns if it is not (its `status` check sends only a `GET /v1/models`) |
 | ESCO API (European Commission) | only when you run `scripts/setup_esco.py` | skill search terms |
@@ -396,12 +395,11 @@ issue for a security problem.
 - Some collectors use unofficial endpoints or scraping (Indeed's mobile API, LinkedIn via
   `python-jobspy`, HelloWork pages). Sites change, block automated access, or forbid it
   in their terms: check each site's terms before enabling a source.
-- Welcome to the Jungle is blocked by bot protection; several registered collectors have
-  no configured source.
-- APEC answers automated requests with HTTP 403 and a CAPTCHA (bot protection, seen
-  since October 2026). It stays active in the shipped config, so each run lists it as
-  *failed* after one request with that reason; set `active: false` on `apec` in
-  `config/sources.yaml` to stop trying. The app never tries to get round a CAPTCHA.
+- APEC and Welcome to the Jungle were removed in 2.0: their bot protection (a CAPTCHA,
+  a firewall) blocks automated requests, and the app never tries to get round it. Offers
+  they collected before stay in your history. A `config/sources.yaml` from 1.x that still
+  lists `apec` or `wttj` is skipped with that reason on each run; delete those entries.
+- Several registered collectors have no configured source.
 - The Docker image runs the CLI pipeline only.
 - The lab agent is OS-isolated only when it runs in the lab sandbox (Windows AppContainer:
   `python -m src.lab sandbox grant --apply`, then `sandbox run -- …`; see
