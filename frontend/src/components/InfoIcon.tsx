@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 
 export interface InfoIconProps {
   /** Accessible name for the trigger button. */
@@ -19,7 +20,8 @@ export interface InfoIconProps {
  * No backend dependency and no business logic — later phases decide what
  * content goes inside.
  */
-export function InfoIcon({ label = 'More information', children }: InfoIconProps) {
+export function InfoIcon({ label, children }: InfoIconProps) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLSpanElement>(null)
   const popoverId = useId()
@@ -50,7 +52,7 @@ export function InfoIcon({ label = 'More information', children }: InfoIconProps
     >
       <button
         type="button"
-        aria-label={label}
+        aria-label={label ?? t('common.moreInformation')}
         aria-expanded={hasContent ? open : undefined}
         aria-describedby={hasContent && open ? popoverId : undefined}
         onClick={() => hasContent && setOpen(o => !o)}

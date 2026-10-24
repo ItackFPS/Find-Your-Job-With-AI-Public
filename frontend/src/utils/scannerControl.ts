@@ -1,4 +1,5 @@
 import type { HelloWorkScanProgress, LinkedInScanProgress, ScanState } from '../api/client'
+import i18n from '../i18n'
 
 // Which control a scanner card shows, derived from the backend's persisted
 // scan state (issue #81):
@@ -31,18 +32,19 @@ export function scannerControl(
   // no control until it is, since a pause would have nothing to stop.
   starting: boolean = false,
 ): ScannerControl {
-  if (starting) return { state: 'running', action: 'none', label: 'Starting…', disabled: true }
+  const t = i18n.t.bind(i18n)
+  if (starting) return { state: 'running', action: 'none', label: t('scanner.starting'), disabled: true }
   const state = scannerState(status)
   switch (state) {
     case 'running':
-      return { state, action: 'pause', label: 'Pause', disabled: pending }
+      return { state, action: 'pause', label: t('scanner.pause'), disabled: pending }
     case 'pausing':
-      return { state, action: 'none', label: 'Pausing…', disabled: true }
+      return { state, action: 'none', label: t('scanner.pausing'), disabled: true }
     case 'paused':
     case 'interrupted':
-      return { state, action: 'resume', label: pending ? 'Resuming…' : 'Resume', disabled: pending }
+      return { state, action: 'resume', label: pending ? t('scanner.resuming') : t('scanner.resume'), disabled: pending }
     default:
-      return { state, action: 'scan', label: pending ? 'Starting…' : 'Scan now', disabled: pending }
+      return { state, action: 'scan', label: pending ? t('scanner.starting') : t('scanner.scanNow'), disabled: pending }
   }
 }
 
@@ -78,14 +80,13 @@ export function scannerProgressLabel(
   if (!progress) return null
   if ('queries_total' in progress) {
     const query = Math.min(progress.queries_completed + 1, progress.queries_total)
-    const page = progress.current_query ? ` · page ${progress.current_page + 1}` : ''
+    const page = progress.current_query ? i18n.t('scanner.progress.page', { page: progress.current_page + 1 }) : ''
     const pages = progress.pages_total_est
-      ? ` · ~${progress.pages_done_est ?? 0} / ${progress.pages_total_est} pages`
+      ? i18n.t('scanner.progress.pages', { done: progress.pages_done_est ?? 0, total: progress.pages_total_est })
       : ''
-    return `Query ${query} / ${progress.queries_total}${page}${pages}`
+    return i18n.t('scanner.progress.query', { query, total: progress.queries_total }) + page + pages
   }
-  const n = progress.slugs_completed
-  return `${n.toLocaleString()} metier page${n === 1 ? '' : 's'} done`
+  return i18n.t('scanner.progress.metierPages', { count: progress.slugs_completed })
 }
 
 // The backend's work-based estimate (LinkedIn, issue #86), or null for a

@@ -64,7 +64,7 @@ export function FunnelChart({ rows, showPercent = false, labelWidth = '160px' }:
                     height: '100%',
                     background: 'var(--color-accent)',
                     borderRadius: 'var(--radius-sm)',
-                    transition: 'width 0.5s ease',
+                    transition: 'width var(--motion-duration-slow) var(--motion-ease)',
                   }}
                 />
               </div>
@@ -84,8 +84,8 @@ export function FunnelChart({ rows, showPercent = false, labelWidth = '160px' }:
                 display: 'inline-flex',
                 fontSize: 'var(--font-size-xs)',
                 color: 'var(--color-error)',
-                background: 'var(--color-error)1a',
-                border: '1px solid var(--color-error)44',
+                background: 'color-mix(in srgb, var(--color-error) 10%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--color-error) 27%, transparent)',
                 borderRadius: 'var(--radius-pill)',
                 padding: '0.05rem 0.5rem',
               }}>

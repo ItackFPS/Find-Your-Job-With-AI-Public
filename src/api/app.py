@@ -53,6 +53,7 @@ from src.api.peer_guard import (
     is_same_account_peer,
 )
 from src.api.routes import (
+    ai,
     dashboard,
     decisions,
     departments,
@@ -344,6 +345,7 @@ app.include_router(scheduler_routes.router)
 app.include_router(settings_routes.router)
 app.include_router(skills.router)
 app.include_router(lab.router)
+app.include_router(ai.router)
 
 # Must match src/launcher/core.py APP_ID: the launcher recognises this backend by it.
 APP_ID = "find-your-job-with-ai"

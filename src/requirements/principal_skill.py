@@ -215,7 +215,7 @@ def extract_known_technologies(text: str) -> list[str]:
 
     Used as a skills fallback during normalization (src/pipeline/normalize.py)
     for sources whose raw payload has no structured skills field (Indeed,
-    APEC, EURES, Hellowork, Greenhouse, Lever, WTTJ, most LinkedIn listings).
+    EURES, Hellowork, Greenhouse, Lever, most LinkedIn listings).
     Matches against the same KNOWN_TECHNOLOGIES vocabulary the requirements
     gate and Stats page already use, so a job gets tagged with a technology
     only if the pipeline would recognise it as one elsewhere too.
