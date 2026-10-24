@@ -36,38 +36,40 @@ Until then, they are reported as *not met* rather than replaced by agent evidenc
 
 | Item | Tier | Status | Where / evidence |
 |---|---|---|---|
-| F0.1 baselines | R | PR #45 | `docs/baselines/v1.0.0.md`; full run duration not measured |
+| F0.1 baselines | R | merged #45 | `docs/baselines/v1.0.0.md`; full run duration not measured |
 | F0.2 personal labels | T | owner data exists | `real-v1` 250 labels (K2); the self-check must report on them |
 | F0.3 FT coverage benchmark | T | ready | #44 merged; needs 7 calendar days of runs |
 | F1.1–F1.3 removals | R | merged #40 | review fixes 6d951ab; F1.3 "Settings shows source health" still open (`source_health.py` has no consumer yet) |
-| F1.4 APEC, WTTJ browser, crawl4ai | R | in progress | worktree fyj-pub-rm2 |
-| F2.1–F2.5 desktop | R | merged #42 (tray, autostart, stop, restart); rest in progress | worktree fyj-pub-win: dynamic port + instance token, pywebview window (K4), notification categories, kill-and-resume |
-| F3.1 ONNX | R | done #43 | Spearman 1.000 on 1,000 jobs; installer 62.1 MB; fail-open follow-up PR #46 |
+| F1.4 APEC, WTTJ browser, crawl4ai | R | merged #51 | |
+| F2.1–F2.5 desktop | R | merged #42 (tray, autostart, stop, restart); F2.1 rest PR #52 | dynamic port + instance token in #52; pywebview window (K4), toasts, kill-and-resume not pushed (local worktree fyj-pub-win) |
+| F3.1 ONNX | R | done #43 | Spearman 1.000 on 1,000 jobs; installer 62.1 MB; fail-open follow-up merged #46 |
 | F4.1–F4.2 geo | R | merged #41 | resolver 100 % on 483 FT; remote extractor: agent review, owner labels pending |
-| F4.3 distance scoring | R | in progress | worktree fyj-pub-loc (2 PRs: matching, baseline re-record) |
+| F4.3 distance scoring | R | ready | not pushed (local worktree fyj-pub-loc); 2 PRs: matching, baseline re-record |
 | F5.1–F5.4 profile v2, onboarding | R | blocked | F4.3 |
 | F5.5 CV import | T | blocked | F5.1 |
-| F6.1 source contract | R | ready | |
+| F6.1 source contract | R | ready | F1.4 merged |
 | F6.2 FT web | R | merged #44 | robots fail-closed + 5 review fixes (aea09d1); F0.3 coverage report pending |
 | F6.3–F6.6 | R | blocked | F6.1 (F6.6 also F4.1) |
-| F7.1 i18n skeleton | R | in progress | worktree fyj-pub-ds (stacked on F10.1) |
+| F7.1 i18n skeleton | R | PR #53 | stacked on #48; backend prose still untranslated (see PR follow-ups) |
 | F7.2 EN+FR (R), ES/IT/DE beta (T) | R/T | blocked | pages rebuilt |
 | F7.3 posting language | T | ready | |
-| F8.1–F8.4 AI platform + analysis | R | F8.1 in progress | worktree fyj-pub-ai1; K3 |
+| F8.1–F8.4 AI platform + analysis | R | F8.1 merged #50 | probe on 3 machines = owner; F8.2/F8.3 ready; K3 |
 | F8.5–F8.7 | T | blocked | F8.4 |
 | F9.1 Quality page | R | blocked | F10.1 |
 | F9.2–F9.3 | T | blocked | F9.1 |
-| F10.1 design system | R | in progress | worktree fyj-pub-ds |
+| F10.1 design system | R | PR #48 | |
 | F10.2, F10.4 pages | R | blocked | F10.1, F7.1 |
 | F10.3 settings/insights/quality | T | blocked | F10.1 |
 | F11.1 slim installer | R | blocked | wave 4 |
 
 ## Next actions
 
-1. Review and merge the in-flight PRs as they turn green: #45, #46, F8.1, F10.1/F7.1, F2 rest, F1.4, F4.3.
-2. Then F6.1 source contract (after F1.4), F5.1 profile v2 (after F4.3), F8.2/F8.3 model catalogue and benchmark (after F8.1), F0.3 coverage runs.
+1. Land the open PRs: #48 (F10.1), then #53 (F7.1, retarget to `main`), and #52 (F2.1 rest; fill in the full-suite result).
+2. Ask the owner whether the unpushed local worktrees (fyj-pub-loc F4.3, fyj-pub-win F2.2–F2.5, fyj-pub-ai1) can be pushed; otherwise start them fresh.
+3. Then F1.3 source health in Settings, F6.1 source contract, F4.3 location scoring, F8.2/F8.3 model catalogue and benchmark, F0.3 coverage runs (7 days). Full order: `docs/HANDOFF.md` §5.
 
 ## Log
 
 - 2026-10-23: execution kickoff; owner decisions K1–K4 recorded; #44 CI failure (undeclared `beautifulsoup4`) fixed.
 - 2026-10-23: wave 0 reviewed and merged: #39, #41, #40 (after fixes), #43, #42 (after fixes: autostart refused outside the installed app, failed start reported), #44 (after fixes: robots.txt fails closed). Main 46c4f0f.
+- 2026-10-24: #45, #46, #49, #50 (F8.1), #51 (F1.4) merged; #48, #52, #53 open as drafts. Handoff to Codex written (`docs/HANDOFF.md`).
