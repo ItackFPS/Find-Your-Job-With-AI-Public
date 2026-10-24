@@ -25,7 +25,30 @@ class LocationPreferenceIn(BaseModel):
     label: str | None = None
 
 
+class HomePlaceIn(BaseModel):
+    """Mirrors ``src.models.profile.HomePlace``."""
+    name: str
+    insee: str | None = None
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    department: str | None = None
+    precision: Literal["commune", "department"] = "commune"
+
+
+class RemotePolicyIn(BaseModel):
+    """Mirrors ``src.models.profile.RemotePolicy``."""
+    remote_france: bool = True
+    remote_eu: bool = False
+    remote_worldwide: bool = False
+    hybrid: bool = True
+
+
 class GeographyIn(BaseModel):
+    # Distance model (F4.3) — mirrors GeographyPreferences; see src/pipeline/location_distance.py.
+    home: HomePlaceIn | None = None
+    max_distance_km: int = Field(default=50, ge=1, le=1000)
+    strict_distance: bool = False
+    remote_policy: RemotePolicyIn = RemotePolicyIn()
     preferred_countries: list[str] = []
     allowed_regions: list[str] = []
     # Mirrors GeographyPreferences.location_preferences — ordered
@@ -79,6 +102,16 @@ class ProfileIn(BaseModel):
 
 
 ProfileOut = ProfileIn  # same shape; alias for clarity
+
+
+class PlaceOut(BaseModel):
+    """One commune from the offline autocomplete (GET /api/geo/places)."""
+    name: str
+    insee: str
+    department: str | None = None
+    department_name: str | None = None
+    lat: float
+    lon: float
 
 
 # ---------------------------------------------------------------------------

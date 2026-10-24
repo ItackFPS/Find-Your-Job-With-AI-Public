@@ -174,7 +174,8 @@ def generate_explanation(
 # ---------------------------------------------------------------------------
 
 _FILTER_LABELS = {
-    "location": "location", "remote": "remote policy", "work_mode": "work mode", "seniority": "seniority",
+    "location": "location", "distance": "distance from home (strict)", "remote_policy": "remote area",
+    "remote": "remote policy", "work_mode": "work mode", "seniority": "seniority",
     "published_age": "posting age", "salary": "salary", "title_keywords": "role / domain keywords",
     "contract_type": "contract type",
 }
@@ -415,6 +416,23 @@ def _explain_rejection(
         blocking.append(ExplanationReason(
             emoji="🔴",
             text="Salary does not meet your configured requirements",
+            kind="rejection",
+        ))
+
+    elif rejection_detail == "distance":
+        geo = profile.geography
+        home = geo.home.name if geo.home else "home"
+        blocking.append(ExplanationReason(
+            emoji="🔴",
+            text=(f"On-site position more than {geo.max_distance_km} km from {home} — "
+                  "excluded because you ticked 'strict' for the maximum distance"),
+            kind="rejection",
+        ))
+
+    elif rejection_detail == "remote_policy":
+        blocking.append(ExplanationReason(
+            emoji="🔴",
+            text="Remote position explicitly restricted to residents of another area",
             kind="rejection",
         ))
 

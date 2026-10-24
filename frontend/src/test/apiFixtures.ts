@@ -94,6 +94,9 @@ export const profile: Profile = {
   target_domains: ['software_development'], focus_domain: false, target_skills: ['Python'],
   target_skills_esco: [{ concept_uri: 'http://data.europa.eu/esco/skill/python', label: 'Python', keyword: 'Python', custom: false }],
   geography: {
+    home: { name: 'Toulon', insee: '83137', lat: 43.1361, lon: 5.9334, department: '83', precision: 'commune' },
+    max_distance_km: 50, strict_distance: false,
+    remote_policy: { remote_france: true, remote_eu: false, remote_worldwide: false, hybrid: true },
     preferred_countries: ['France'], allowed_regions: [],
     location_preferences: [{ type: 'department', value: '83', status: 'preferred', label: 'Var' }],
   },

@@ -20,6 +20,13 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from src.models.job import Job
+from src.pipeline.location_distance import (
+    assess,
+    describe,
+    distance_config,
+    remote_policy_exclusion,
+    strict_distance_exclusion,
+)
 
 if TYPE_CHECKING:
     from src.models.profile import JobSearchProfile
@@ -259,6 +266,9 @@ def build_filter_config(profile: "JobSearchProfile", engine_cfg: dict[str, Any])
         # Read by the title check: a source's own occupation in one of these domains
         # is role evidence (see matches_title_keywords, step 3b).
         "target_domains": list(profile.target_domains),
+        # Distance + remote-policy model (F4.3): None for a v1 profile without a home,
+        # which keeps the "distance" and "remote_policy" checks inert.
+        "location_distance": distance_config(profile),
     }
 
 
@@ -763,8 +773,28 @@ def matches_contract_type(job: Job, config: dict[str, Any]) -> bool:
     return True
 
 
+def matches_distance(job: Job, config: dict[str, Any]) -> bool:
+    """Distance model (F4.3): reject only on-site work beyond the user's maximum distance
+    when the user ticked "strict". Unknown places never fail. Inert without a home."""
+    cfg = config.get("location_distance")
+    if not cfg:
+        return True
+    return not strict_distance_exclusion(assess(job, cfg), cfg)
+
+
+def matches_remote_policy(job: Job, config: dict[str, Any]) -> bool:
+    """Distance model (F4.3): reject a remote offer only when it states explicitly that it is
+    restricted to residents of another area, and is not itself placed in France."""
+    cfg = config.get("location_distance")
+    if not cfg:
+        return True
+    return not remote_policy_exclusion(assess(job, cfg))
+
+
 _FILTER_CHECKS: list[tuple[str, Callable[[Job, dict[str, Any]], bool]]] = [
     ("location", matches_location),
+    ("distance", matches_distance),
+    ("remote_policy", matches_remote_policy),
     ("remote", matches_remote),
     ("work_mode", matches_work_mode),
     ("seniority", matches_seniority),
@@ -807,6 +837,8 @@ def filter_expected(code: str, config: dict[str, Any]) -> str | None:
 
     return {
         "location": lambda: cfg("locations"),
+        "distance": lambda: _distance_expected(config, "distance"),
+        "remote_policy": lambda: _distance_expected(config, "remote_policy"),
         "remote": lambda: cfg("remote", "allowed"),
         "work_mode": lambda: cfg("work_modes", "allowed"),
         "seniority": lambda: cfg("seniority"),
@@ -817,8 +849,37 @@ def filter_expected(code: str, config: dict[str, Any]) -> str | None:
     }.get(code, lambda: None)()
 
 
-def filter_observed(code: str, job: Job) -> str | None:
-    """The job fields a check reads (descriptive only)."""
+def _distance_expected(config: dict[str, Any], code: str) -> str | None:
+    """Structured (JSON) like every other ``expected``: the profile settings the check compares to."""
+    import json as _json
+
+    cfg = config.get("location_distance")
+    if not cfg:
+        return None
+    if code == "distance":
+        part: dict[str, Any] = {"home": cfg["home"]["name"], "max_distance_km": cfg["max_distance_km"],
+                                "strict_distance": bool(cfg.get("strict_distance"))}
+    else:
+        part = {"remote_accepted": [k for k, v in (cfg.get("remote_policy") or {}).items() if v],
+                "excluded": "explicit restriction to another area"}
+    return _json.dumps(part, ensure_ascii=False)
+
+
+def filter_observed(code: str, job: Job, config: dict[str, Any] | None = None) -> str | None:
+    """The job fields a check reads (descriptive only). ``config`` is needed only by the
+    distance-model checks (their observation is the resolved place and distance)."""
+    if code in ("distance", "remote_policy"):
+        cfg = (config or {}).get("location_distance")
+        if not cfg:
+            return None
+        d = describe(assess(job, cfg), cfg)
+        place = d["place"]
+        where = "unknown place" if place is None else f"{place['name']} ({place['precision']})"
+        km = "distance unknown" if d["road_km"] is None else f"~{d['road_km']} km by road"
+        if code == "distance":
+            return f"{where}, {km}, work mode {d['remote_kind']}"
+        area = f" {d['remote_area']}" if d["remote_area"] else ""
+        return f"remote {d['remote_kind']}{area} ({d['remote_strength']}: {d['remote_evidence']}); {where}"
     if code == "location":
         return f"location={job.location!r} department={job.department!r} countries={job.countries} remote={job.remote}"
     if code == "remote":
@@ -841,7 +902,7 @@ def filter_observed(code: str, job: Job) -> str | None:
 def filter_facts(code: str, job: Job, config: dict[str, Any]) -> tuple[str | None, str | None]:
     """(observed, expected) for a check. Descriptive only — the verdict always comes from the real
     ``matches_*`` functions."""
-    return filter_observed(code, job), filter_expected(code, config)
+    return filter_observed(code, job, config), filter_expected(code, config)
 
 
 def explain_filter_checks(

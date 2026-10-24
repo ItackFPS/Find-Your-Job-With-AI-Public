@@ -56,6 +56,8 @@ LEVERS: dict[str, tuple[str, ...]] = {
 NO_LEVER = {
     "published_age": "the freshness window comes from the profile (posted_within_days)",
     "location": "locations come from the profile",
+    "distance": "home, maximum distance and strictness come from the profile",
+    "remote_policy": "the remote policy comes from the profile",
     "remote": "remote preferences come from the profile",
     "work_mode": "work modes come from the profile",
     "salary": "salary bounds come from the profile",
