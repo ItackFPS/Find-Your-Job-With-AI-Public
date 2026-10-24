@@ -49,6 +49,7 @@ configure_logging()
 from src.api.origin_guard import LocalHostGuardMiddleware, OriginGuardMiddleware
 from src.api.peer_guard import SameUserPeerGuardMiddleware, enabled_from_env as same_user_only
 from src.api.routes import (
+    ai,
     dashboard,
     decisions,
     departments,
@@ -188,6 +189,10 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
     scheduler.start()
     application.state.scheduler = scheduler
 
+    # -- Graceful stop for a launcher without a console (the tray app) -------
+    from src.api.stop_signal import start_stop_signal_watcher
+    stop_signal_event = start_stop_signal_watcher()
+
     # -- ESCO seed -----------------------------------------------------------
     # Auto-seed the ESCO skill database with bundled data if not yet populated.
     # This requires no network access — seed data is embedded in the codebase.
@@ -231,6 +236,8 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
         scheduler.stop()
         li_staging.close()
         hw_staging.close()
+        if stop_signal_event is not None:
+            stop_signal_event.close()
 
 
 app = FastAPI(
@@ -329,6 +336,7 @@ app.include_router(hellowork.router)
 app.include_router(scheduler_routes.router)
 app.include_router(skills.router)
 app.include_router(lab.router)
+app.include_router(ai.router)
 
 # Must match src/launcher/core.py APP_ID: the launcher recognises this backend by it.
 APP_ID = "find-your-job-with-ai"

@@ -10,14 +10,9 @@ name: Dependency audit
 # without any commit here.
 #
 #   3. pip-audit of packaging/windows/requirements.txt: the pinned versions the
-#      Windows installer bundles (with the PyPI torch wheel).
-#
-# Not covered: the "browser" extra (crawl4ai, inactive by default) and the
-# CPU torch wheel of step 1, whose "+cpu" version pip-audit cannot look up on PyPI.
+#      Windows installer bundles.
 #
 # Reproduce locally:
-#   pip install torch --index-url https://download.pytorch.org/whl/cpu
-#   pip install --upgrade setuptools
 #   pip install -e ".[dev,linkedin]" "pip-audit==2.10.1"
 #   pip-audit --skip-editable
 #   pytest -m "not network" tests/test_quality_fixes.py tests/test_linkedin_description_workmode.py tests/test_linkedin_scanner.py
@@ -50,17 +45,6 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
-      # Same as the Tests workflow: the default Linux torch wheel pulls several
-      # GB of CUDA libraries nothing here uses.
-      # torch requires setuptools on Python 3.12+, and the PyTorch index serves
-      # an old copy (78.1.0, with advisories); the README's plain
-      # `pip install -e .` takes torch and setuptools from PyPI, current. Upgrade it here so
-      # the audit reflects the user's install, not this CI shortcut.
-      - name: Install CPU-only torch
-        run: |
-          pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install --upgrade setuptools
-
       - name: Install the package with the linkedin extra
         run: pip install -e ".[dev,linkedin]" "pip-audit==2.10.1"
 
@@ -70,8 +54,7 @@ jobs:
       - name: pip-audit
         run: pip-audit --skip-editable --progress-spinner off
 
-      # The exact versions the Windows installer bundles (packaging/windows/build.ps1),
-      # including the PyPI torch wheel the CPU shortcut above replaces.
+      # The exact versions the Windows installer bundles (packaging/windows/build.ps1).
       - name: pip-audit (Windows installer runtime)
         if: ${{ !cancelled() }}
         run: >-

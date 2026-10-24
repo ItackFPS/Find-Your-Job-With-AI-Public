@@ -4,11 +4,6 @@ Used by src/collectors/hellowork.py, which discovers jobs via server-
 rendered pages embedding structured data rather than a dedicated API. Pure
 functions only -- no network I/O, no browser dependency -- so they are
 trivially unit-testable against fixture HTML.
-
-Note: src/collectors/wttj.py implements equivalent JSON-LD parsing logic
-independently (it predates this module and is a disabled browser-based
-collector). Left untouched here to avoid touching an unrelated, disabled
-collector for a shared-abstraction refactor.
 """
 
 from __future__ import annotations

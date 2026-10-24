@@ -23,16 +23,25 @@ Running from a source checkout (`FindYourJob.cmd` in a clone, see the
 | Application and your data | `%LOCALAPPDATA%\Programs\Find Your Job With AI` (one folder, see below) |
 | Start Menu | **Find Your Job With AI**, **Stop Find Your Job With AI**, **… logs**, **… self-check**, **Uninstall …** |
 | Desktop | **Find Your Job With AI** (optional) |
-| Disk | about 1 GB installed, plus ~470 MB for the embedding model on the first run |
+| Disk | about 300 MB installed (62 MB download), plus ~470 MB for the embedding model on the first run |
 
 Requirements: Windows 10 1809 or later / Windows 11, 64-bit. Nothing else.
 
 ## First run
 
-Double-click **Find Your Job With AI**. A console window opens: it checks the
-installation, starts the backend on `127.0.0.1` (this computer only), waits until it
-answers, then opens the dashboard in an app window (Edge or Chrome) or your browser. The
-first start takes up to a minute or two; later starts take seconds.
+Double-click **Find Your Job With AI**. The app starts in the notification area (an
+icon next to the clock, no console window): it checks the installation, starts the
+backend on `127.0.0.1` (this computer only), waits until it answers, then opens the
+dashboard in an app window (Edge or Chrome) or your browser. The first start takes up to a
+minute or two; later starts take seconds. The first time, a notification explains that
+the app keeps running in the notification area.
+
+**Closing the dashboard window does not stop the app**: the backend, its schedules and any
+LinkedIn or HelloWork scan keep running. Reopen the dashboard from the icon (double-click,
+or right-click › **Open**). Right-click the icon for **Start with Windows** (off by
+default; it starts the app in the notification area when you sign in), **Open logs
+folder** and **Quit**. A notification says when a job search finishes. If the backend
+stops unexpectedly it is started again once, and a notification says so.
 
 **Nothing is collected until you ask.** Opening the app starts no scan and no pipeline run;
 the scanners are manual in the shipped settings and nothing runs at logon.
@@ -43,9 +52,7 @@ Then:
    `config\profile.local.yaml`.
 2. **Sources.** These work without any account: RemoteOK, Jobicy, We Work Remotely and
    EURES (pipeline run), HelloWork and LinkedIn (**Scan now** on their dashboard cards).
-   APEC also needs no account but currently refuses automated access (HTTP 403 with a
-   CAPTCHA), so runs list it as *failed*; see the README's known limitations. Two
-   sources need credentials and are *skipped* until you add them:
+   Two sources need credentials and are *skipped* until you add them:
 
    | Source | What to set in `.env` | Where to get it |
    |---|---|---|
@@ -63,15 +70,15 @@ see the README's [Local AI](../README.md#local-ai) section to opt in to a local 
 
 ## Stop, restart
 
-- **Stop:** close the console window, press Ctrl+C in it, or use **Stop Find Your Job With
-  AI** in the Start Menu. A running LinkedIn or HelloWork scan stops at its next
+- **Stop:** right-click the notification-area icon › **Quit**, or use **Stop Find Your
+  Job With AI** in the Start Menu. Closing the dashboard window does not stop it. A running LinkedIn or HelloWork scan stops at its next
   checkpoint and can be resumed from its card later. A pipeline run still in progress is
   abandoned: the next start marks it *failed* (stale), and you run it again. SQLite keeps
   everything already written.
 - **Restart:** the same shortcut again. Launching while the app already runs only opens the
   dashboard again; it never starts a second backend. Launching while it is still stopping
   waits until it has stopped, then starts it.
-- If port 8000 is taken by another program, the console says so. Set another port: add
+- If port 8000 is taken by another program, `logs\launcher\launcher.log` says so. Set another port: add
   `FYJ_PORT=8010` to `.env`.
 
 ## Self-check and the Lab

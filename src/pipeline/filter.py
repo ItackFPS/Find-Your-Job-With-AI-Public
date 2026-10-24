@@ -24,6 +24,11 @@ from src.models.job import Job
 if TYPE_CHECKING:
     from src.models.profile import JobSearchProfile
 
+# Sources whose raw_payload["occupation"] (the source's own occupation for an offer)
+# counts as role evidence in the title check: the source name set in config/sources.yaml
+# for src/collectors/france_travail_web.py. Other sources' payloads are not read for it.
+_OCCUPATION_EVIDENCE_SOURCES = frozenset({"france-travail-web"})
+
 # Skill abbreviation → expanded canonical forms used for DESCRIPTION matching.
 # The raw abbreviation stays in TITLE matching (short tokens are fine in titles
 # where context is tighter); only the description fallback uses the expanded
@@ -251,6 +256,9 @@ def build_filter_config(profile: "JobSearchProfile", engine_cfg: dict[str, Any])
         "posted_within_days": profile.freshness_days,
         "salary_requirements": {},
         "experience_years": {"max_years": profile.experience.max_years},
+        # Read by the title check: a source's own occupation in one of these domains
+        # is role evidence (see matches_title_keywords, step 3b).
+        "target_domains": list(profile.target_domains),
     }
 
 
@@ -694,6 +702,21 @@ def matches_title_keywords(job: Job, config: dict[str, Any]) -> bool:
         non_it_pattern = _build_description_pattern(non_it_norm)
         if non_it_pattern and non_it_pattern.search(title_norm):
             return False
+
+    # 3b. The source's own occupation for this offer is one of the profile's
+    #     target domains (France Travail web: the occupation page it was listed
+    #     on). Role evidence when the description is only a short extract that
+    #     cannot name the role; exclusions and non-IT functions above still apply.
+    #     Only trusted from the source that sets it, and only in the shape it sets
+    #     (a dict whose "target_domains" is a list of strings); anything else is ignored.
+    if job.source in _OCCUPATION_EVIDENCE_SOURCES:
+        occupation = (job.raw_payload or {}).get("occupation")
+        domains = occupation.get("target_domains") if isinstance(occupation, dict) else None
+        profile_domains = config.get("target_domains")
+        if (isinstance(domains, list) and isinstance(profile_domains, list)
+                and {d for d in domains if isinstance(d, str)}
+                & {d for d in profile_domains if isinstance(d, str)}):
+            return True
 
     # 4. Title match → accept immediately (IT keyword found in title).
     # Word-boundary guards prevent short abbreviations like "ia" (the "IA" skill)

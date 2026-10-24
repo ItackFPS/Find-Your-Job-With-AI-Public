@@ -134,10 +134,8 @@ orchestrator loads collectors dynamically based on the `type` field in
 | `weworkremotely` | `weworkremotely.py` | Active — RSS/Atom feeds |
 | `indeed` | `indeed.py` | Active — unofficial mobile GraphQL API, cursor-based pagination |
 | `eures` | `eures.py` | Active — public REST API |
-| `apec` | `apec.py` | Active — public REST search endpoint |
 | `bundesagentur` | `bundesagentur.py` | Disabled — Germany-only, fails this project's location filter |
 | `arbetsformedlingen` | `arbetsformedlingen.py` | Disabled — Sweden-only, same reason |
-| `wttj` | `wttj.py` | Disabled — Crawl4AI/Playwright-based; blocked by AWS WAF bot protection as of the last live check (2026-08-27) |
 | `hellowork` | `hellowork.py` | Disabled in the registry — production HelloWork collection uses the separate scanner below |
 | `greenhouse` | `greenhouse.py` | Registered, working, not configured — needs a `board_identifier` |
 | `lever` | `lever.py` | Registered, working, not configured — needs a company slug |
@@ -218,7 +216,8 @@ hard gates:
 
 ## Embedding Layer (Phase 3)
 
-`src/embeddings/embedding.py` wraps `sentence-transformers` (in-memory LRU-ish cache,
+`src/embeddings/embedding.py` runs the model's pinned ONNX export with ONNX Runtime
+(`src/embeddings/onnx_encoder.py`, no PyTorch; in-memory LRU-ish cache,
 SHA-256 keyed). The default model is `paraphrase-multilingual-MiniLM-L12-v2`
 (384-dimensional, multilingual, CPU-ready, ~470 MB on first download). The *durable*
 cache lives in `Storage` (SQLite `job_embeddings` table, keyed by job id + model name +

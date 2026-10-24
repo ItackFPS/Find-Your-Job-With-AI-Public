@@ -145,8 +145,8 @@ def normalize_job(source_name: str, raw_data: dict[str, Any]) -> Job:
         str(s).strip() for s in raw_skills if str(s).strip()
     ]
 
-    # Sources with no structured skills field (Indeed, APEC, EURES, Hellowork,
-    # Greenhouse, Lever, WTTJ, most LinkedIn listings) leave `skills` empty —
+    # Sources with no structured skills field (Indeed, EURES, Hellowork,
+    # Greenhouse, Lever, most LinkedIn listings) leave `skills` empty —
     # fall back to scanning title+description for known technology mentions
     # rather than storing no skill data at all for the majority of jobs.
     if not skills:
