@@ -8,7 +8,7 @@ rulebook. When it disagrees with the code, the code wins. When it disagrees with
 
 1. [`CLAUDE.md`](../CLAUDE.md): project rules, architecture, testing and the Git workflow
    (§11). Everything it says applies to you. Where it names a Claude-only tool, see
-   [§7 below](#7-claude-specific-terms-in-claudemd-and-what-they-mean-for-you).
+   [§8 below](#8-claude-specific-terms-in-claudemd-and-what-they-mean-for-you).
 2. This file.
 3. [`docs/plans/2026-10-23-final-update-plan.md`](plans/2026-10-23-final-update-plan.md):
    the approved 2.0 roadmap. It defines scope and the acceptance criterion of every item.
@@ -254,7 +254,44 @@ pre-existing ruff/mypy findings as part of other work.
 logs, models or secrets. If a failure is unrelated to your change, report it with evidence
 and propose an issue.
 
-## 7. Claude-specific terms in CLAUDE.md and what they mean for you
+## 7. Working with the owner
+
+The owner is the product owner and the only user. They decide the vision and review
+outcomes. They do not want to be consulted step by step.
+
+**How they give work:** one prompt that describes the final vision or end state, often covering
+several plan items. **Finish the whole prompt before coming back.** Treat it as a mandate to
+work through every item it covers, in dependency order: branch, commit, push, open a PR, get CI
+green and merge (within K1) for each, without returning between items.
+
+**When something needs them mid-way:** do not stop and wait. Park the blocked item, record why,
+and keep working on everything else that does not depend on it. Put all questions together in
+the final report. Never resolve a parked decision yourself by loosening an invariant (§2). If
+the blocker is product-changing, legal, security-significant or costly, it stays parked.
+
+**Stop the whole prompt early only when** continuing would touch real data, rewrite history,
+change repository settings, cut a release, or break an invariant. Even then, finish and push the
+items already in progress first.
+
+**Final report** (in English, detailed). For each item in the prompt:
+
+- status: done (criterion verified), partly done, parked (and why), or not started;
+- what changed, with PR links and merge state;
+- the exact tests and commands run, with their results;
+- what was **not** tested (especially Windows-only behaviour and live sites) and how the owner
+  can check it;
+- risks, and any baseline or strategy-version re-record;
+- follow-ups found along the way, proposed as issues.
+
+End with one list: **"Needs you"**, the questions and actions that only the owner can take,
+each with the options and your recommendation.
+
+**What they care about** (from the plan and owner decisions): French job coverage first;
+results they can trust (no false rejections, no false "Remote France"); a real Windows app
+that non-technical people can use; everything local and private; the vision kept whole while
+releases ship in tiers. Report honestly: "not met" is acceptable; an unverified "done" is not.
+
+## 8. Claude-specific terms in CLAUDE.md and what they mean for you
 
 | CLAUDE.md says | Do this instead |
 |---|---|
@@ -263,7 +300,7 @@ and propose an issue.
 | `.claude/` directory | Not in this repository. Don't create it. |
 | "Claude-authored" PR footers | Use your own attribution; don't copy Claude's. |
 
-## 8. Pitfalls the previous agent hit
+## 9. Pitfalls the previous agent hit
 
 - `strategy_version` changes with any profile, filter or scoring change. Re-record the
   self-check baseline in its own PR (plan §A3).
