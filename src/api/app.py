@@ -54,6 +54,7 @@ from src.api.routes import (
     departments,
     esco,
     feedback,
+    geo,
     hellowork,
     jobs,
     lab,
@@ -330,6 +331,7 @@ app.include_router(decisions.router)
 app.include_router(dashboard.router)
 app.include_router(esco.router)
 app.include_router(departments.router)
+app.include_router(geo.router)
 app.include_router(linkedin.router)
 app.include_router(hellowork.router)
 app.include_router(scheduler_routes.router)

@@ -11,6 +11,7 @@ rewritten by the UI.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import yaml
@@ -18,8 +19,10 @@ from fastapi import APIRouter, HTTPException
 
 from src.api.schemas import ProfileIn, ProfileOut
 from src.config_files import local_config_path, resolve_config_path
+from src.geo.profile_migration import migrate_profile_data, migrate_profile_file
 from src.models.profile import JobSearchProfile
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/profile", tags=["profile"])
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -42,8 +45,17 @@ def get_profile() -> ProfileOut:
     read_path = _read_path()
     if not read_path.exists():
         raise HTTPException(status_code=404, detail="profile.yaml not found")
+    # A v1 location profile is shown converted to the distance model (home, radius,
+    # remote policy). The file itself is rewritten (after a one-time backup) only when
+    # it is the file saves go to, so the tracked default is never touched.
+    if read_path == _write_path():
+        try:
+            migrate_profile_file(read_path)
+        except Exception as exc:  # noqa: BLE001 — still serve the profile, unconverted on disk
+            logger.warning("Profile migration to the distance model skipped: %s", exc)
     with open(read_path, encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
+    data, _notes = migrate_profile_data(data)
     return ProfileOut(**data)
 
 
