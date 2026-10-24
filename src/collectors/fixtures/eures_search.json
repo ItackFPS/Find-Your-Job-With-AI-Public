@@ -1,0 +1,58 @@
+{
+ "numberRecords": 2,
+ "jvs": [
+  {
+   "id": "SYNTH0001",
+   "title": "Software Engineer",
+   "description": "Build and run internal tools. Build and run internal tools. Build and run internal tools. Build and run internal tools. Build and run internal tools. Build and run internal tools. Build and run internal tools. Build and run internal tools. Build and run internal tools. Build and run internal tools. Build and run internal tools. Build and run internal tools. Build and run internal tools. Build and run internal tools. Build and run internal tools. Build and run internal tools. Build and run internal tools. Build and run internal tools. Build and run internal tools. Build and run internal tools. ",
+   "employer": {
+    "name": "Example Corp",
+    "legalID": null,
+    "website": null
+   },
+   "creationDate": 1700000000000,
+   "lastModificationDate": 1700000000000,
+   "numberOfPosts": 1,
+   "locationMap": {
+    "FR": "FRJ22"
+   },
+   "euresFlag": false,
+   "jobCategoriesCodes": [],
+   "positionScheduleCodes": [
+    "fulltime"
+   ],
+   "positionOfferingCode": "directhire",
+   "availableLanguages": [
+    "fr"
+   ],
+   "score": null
+  },
+  {
+   "id": "SYNTH0002",
+   "title": "Data Analyst",
+   "description": "Analyse sales data. Analyse sales data. Analyse sales data. Analyse sales data. Analyse sales data. Analyse sales data. Analyse sales data. Analyse sales data. Analyse sales data. Analyse sales data. Analyse sales data. Analyse sales data. Analyse sales data. Analyse sales data. Analyse sales data. Analyse sales data. Analyse sales data. Analyse sales data. Analyse sales data. Analyse sales data. ",
+   "employer": {
+    "name": "Non renseigné",
+    "legalID": null,
+    "website": null
+   },
+   "creationDate": 1700000000000,
+   "lastModificationDate": 1700000000000,
+   "numberOfPosts": 1,
+   "locationMap": {
+    "FR": "FRK26"
+   },
+   "euresFlag": false,
+   "jobCategoriesCodes": [],
+   "positionScheduleCodes": [
+    "fulltime"
+   ],
+   "positionOfferingCode": "directhire",
+   "availableLanguages": [
+    "fr"
+   ],
+   "score": null
+  }
+ ],
+ "facets": {}
+}

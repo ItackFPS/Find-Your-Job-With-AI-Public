@@ -38,7 +38,7 @@ from typing import Any
 
 import httpx
 
-from src.collectors.base import BaseCollector, CollectorResult
+from src.collectors.base import BaseCollector, CollectorResult, RatePolicy, RecordedFixture
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +61,16 @@ _DEFAULT_SEARCH_TERMS = [
 
 class BundesagenturCollector(BaseCollector):
     """Collects German job listings from the BA Jobsuche API."""
+
+    # unofficial: the backend of the BA's own jobsuche app, with that app's public client
+    # id. The BA publishes no developer documentation or terms for it (only the community
+    # bundesAPI project documents it), so it is opt-in (plan F6.5). Not a crawled page.
+    access_class = "unofficial"
+    rate_policy = RatePolicy(min_delay_seconds=1.0, max_requests_per_run=50)  # one per search term
+
+    def fixture(self) -> RecordedFixture:
+        return RecordedFixture("bundesagentur_jobs.json", self._load_fixture("bundesagentur_jobs.json"),
+                               parse_jobs_response)
 
     def __init__(self, config: dict[str, Any] | None = None, **_: Any) -> None:
         super().__init__(timeout=30, retries=3, rate_limit_delay=1.0)
@@ -162,3 +172,10 @@ class BundesagenturCollector(BaseCollector):
 
         out["published_at"] = raw.get("datumErsteVeroeffentlichung") or ""
         return out
+
+
+def parse_jobs_response(text: str) -> list[dict[str, Any]]:
+    """The offers in one jobs search answer, mapped like collect() maps them."""
+    data = json.loads(text)
+    raw_jobs = data.get("ergebnisliste") if isinstance(data, dict) else None
+    return [BundesagenturCollector._normalize_fields(r) for r in raw_jobs or [] if isinstance(r, dict)]

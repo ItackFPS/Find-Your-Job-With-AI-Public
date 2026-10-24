@@ -24,7 +24,7 @@ from typing import Any
 
 import httpx
 
-from src.collectors.base import BaseCollector, CollectorResult
+from src.collectors.base import BaseCollector, CollectorResult, RatePolicy, RecordedFixture
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,18 @@ _HEADERS = {
 
 class WorkingNomadsCollector(BaseCollector):
     """Collects remote jobs from the Working Nomads public API."""
+
+    # public_page: an anonymous JSON endpoint (exposed_jobs) without published terms of
+    # reuse; robots.txt (checked 2026-10-24) disallows nothing. Read as a public page.
+    access_class = "public_page"
+    robots_policy = True
+    robots_agent = "job-aggregator"  # product token of the User-Agent sent
+    robots_user_agent = _HEADERS["User-Agent"]
+    rate_policy = RatePolicy(min_delay_seconds=1.0, max_requests_per_run=10)  # one request per run
+
+    def fixture(self) -> RecordedFixture:
+        return RecordedFixture("workingnomads_jobs.json", self._load_fixture("workingnomads_jobs.json"),
+                               parse_jobs_response)
 
     def __init__(self, config: dict[str, Any] | None = None, **_: Any) -> None:
         super().__init__(timeout=30, retries=3, rate_limit_delay=2.0)
@@ -96,3 +108,11 @@ class WorkingNomadsCollector(BaseCollector):
         elif isinstance(tags, list):
             out["skills"] = [str(t) for t in tags if t]
         return out
+
+
+def parse_jobs_response(text: str) -> list[dict[str, Any]]:
+    """The offers in one exposed_jobs answer, mapped like collect() maps them."""
+    data = json.loads(text)
+    if not isinstance(data, list):
+        return []
+    return [WorkingNomadsCollector._normalize_fields(r) for r in data if isinstance(r, dict)]

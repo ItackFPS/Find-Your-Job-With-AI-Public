@@ -96,7 +96,7 @@ from src.collectors._jsonld import (
     has_itemlist,
     map_jobposting_ld_to_raw,
 )
-from src.collectors.base import BaseCollector, CollectorResult
+from src.collectors.base import BaseCollector, CollectorResult, RatePolicy, RecordedFixture
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +112,16 @@ _JOB_ID_RE = re.compile(r"/emplois/([A-Za-z0-9]+)\.html")
 # Matches metier role-listing links (not the paired "index-metier_..." pages,
 # which describe/paginate a single metier rather than listing jobs).
 _METIER_SLUG_RE = re.compile(r'href="/fr-fr/emploi/metier_([a-z0-9-]+)\.html"')
+_FIXTURE_URL = _BASE_URL + "/fr-fr/emplois/00000001.html"
+
+
+def parse_job_page(html: str, job_url: str = _FIXTURE_URL) -> list[dict[str, Any]]:
+    """The offer on one job page (its JobPosting JSON-LD), as raw dicts; [] when absent."""
+    ld = extract_jobposting_ld(html)
+    if not ld:
+        return []
+    job_id = _JOB_ID_RE.search(job_url)
+    return [map_jobposting_ld_to_raw(ld, job_url, job_id.group(1) if job_id else None)]
 
 
 class HelloWorkCollector(BaseCollector):
@@ -132,6 +142,22 @@ class HelloWorkCollector(BaseCollector):
                                crawl-delay; still well within polite-scraping norms).
         timeout                Per-request timeout in seconds (default: 20).
     """
+
+    # public_page: anonymous server-rendered pages. robots.txt (re-checked 2026-10-24 for the
+    # exact URLs fetched: /fr-fr/emploi/index-domaine_*.html, /fr-fr/emploi/metier_*.html and
+    # /fr-fr/emplois/<id>.html) allows all three for "*" and names no group for this
+    # crawler; it disallows any query string ("/*?"), /api/ and /rss/, never requested.
+    access_class = "public_page"
+    robots_policy = True
+    robots_agent = "job-aggregator"  # product token of the User-Agent below
+    robots_user_agent = _HEADERS["User-Agent"]
+    # >= 1 s between requests; the full ~430-slug taxonomy at 3 jobs per slug is ~1,700
+    # requests, so 3,000 only stops a runaway configuration.
+    rate_policy = RatePolicy(min_delay_seconds=1.0, max_requests_per_run=3000)
+
+    def fixture(self) -> RecordedFixture:
+        return RecordedFixture("hellowork_job_page.html", self._load_fixture("hellowork_job_page.html"),
+                               parse_job_page)
 
     def __init__(self, config: dict[str, Any] | None = None, **_: Any) -> None:
         cfg = config or {}

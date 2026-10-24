@@ -1,0 +1,83 @@
+{
+ "data": {
+  "jobSearch": {
+   "pageInfo": {
+    "nextCursor": "synthetic-cursor"
+   },
+   "results": [
+    {
+     "job": {
+      "key": "synth00001",
+      "title": "Développeur Python H/F",
+      "datePublished": 1756000000000,
+      "description": {
+       "html": "<p>Description for Développeur Python H/F</p>"
+      },
+      "location": {
+       "countryName": "France",
+       "countryCode": "FR",
+       "admin1Code": "IDF",
+       "city": "Paris",
+       "postalCode": "69003",
+       "formatted": {
+        "short": "Paris",
+        "long": "69003 Paris"
+       }
+      },
+      "compensation": null,
+      "attributes": [
+       {
+        "key": "CF3CP",
+        "label": "Temps plein"
+       }
+      ],
+      "employer": {
+       "relativeCompanyPageUrl": "/cmp/AcmeCorp",
+       "name": "Acme Corp"
+      },
+      "recruit": {
+       "viewJobUrl": "https://apply.indeed.com/synth00001",
+       "workSchedule": "Full-time"
+      }
+     }
+    },
+    {
+     "job": {
+      "key": "synth00002",
+      "title": "Ingénieur DevOps",
+      "datePublished": 1756000000000,
+      "description": {
+       "html": "<p>Description for Ingénieur DevOps</p>"
+      },
+      "location": {
+       "countryName": "France",
+       "countryCode": "FR",
+       "admin1Code": "IDF",
+       "city": "Paris",
+       "postalCode": "75011",
+       "formatted": {
+        "short": "Paris",
+        "long": "75011 Paris"
+       }
+      },
+      "compensation": null,
+      "attributes": [
+       {
+        "key": "CF3CP",
+        "label": "Temps plein"
+       }
+      ],
+      "employer": {
+       "relativeCompanyPageUrl": "/cmp/AcmeCorp",
+       "name": "Acme Corp"
+      },
+      "recruit": {
+       "viewJobUrl": "https://apply.indeed.com/synth00002",
+       "workSchedule": "Full-time"
+      }
+     }
+    }
+   ]
+  }
+ }
+}

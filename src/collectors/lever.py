@@ -51,6 +51,10 @@ class LeverCollector(BaseCollector):
         max_jobs           Optional hard cap across all sites.
     """
 
+    # official: Lever's documented public Postings API (github.com/lever/postings-api),
+    # designed for employers' job boards to be read by third parties.
+    access_class = "official"
+
     def __init__(self, config: dict[str, Any] | None = None):
         cfg = config or {}
         super().__init__(

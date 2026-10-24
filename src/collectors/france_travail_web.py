@@ -42,7 +42,10 @@ from typing import Any
 import httpx
 from bs4 import BeautifulSoup
 
-from src.collectors.base import BaseCollector, CollectorResult
+from src.collectors.base import BaseCollector, CollectorResult, RatePolicy, RecordedFixture
+from src.collectors.robots import RobotsRule, parse_robots, robots_allows, rules_from_response
+
+__all__ = ["FranceTravailWebCollector", "RobotsRule", "parse_listing", "parse_robots", "robots_allows"]
 
 logger = logging.getLogger(__name__)
 
@@ -81,56 +84,6 @@ OCCUPATIONS: dict[str, list[str]] = {
 _PAGE_IN_SITEMAP = re.compile(r"/offres/emploi/([^/]+)/([^/]+)/(s\d+m\d+)d(\d{2,3}|2[ab])$", re.I)
 _SUBTEXT_SPLIT = re.compile(r"\s+[-–]\s+(?=\d{2,3}\s*[-–]|\(?\d{2,3}\)?\s)")
 _AGE_DAYS = re.compile(r"(\d+)\s+jour", re.I)
-
-
-# -- robots.txt ---------------------------------------------------------------------------
-
-
-RobotsRule = tuple[bool, re.Pattern[str], int]  # (allow, pattern, length of the path as written)
-
-
-def parse_robots(text: str, agent: str = "*") -> list[RobotsRule]:
-    """Rules that apply to ``agent``, per RFC 9309; ``*`` and ``$`` supported.
-
-    Consecutive ``User-agent:`` lines open one group, which the following rules belong
-    to. Every group naming ``agent`` (case-insensitive) applies, merged; when none does,
-    the ``*`` groups apply.
-    """
-    groups: list[tuple[set[str], list[RobotsRule]]] = []
-    in_agent_lines = False
-    for raw in text.splitlines():
-        line = raw.split("#", 1)[0].strip()
-        if ":" not in line:
-            continue
-        key, value = (part.strip() for part in line.split(":", 1))
-        key = key.lower()
-        if key == "user-agent":
-            if not in_agent_lines:
-                groups.append((set(), []))
-                in_agent_lines = True
-            groups[-1][0].add(value.lower())
-        elif key in ("allow", "disallow"):
-            in_agent_lines = False
-            if groups and value:
-                regex = "".join(".*" if ch == "*" else ("$" if ch == "$" and i == len(value) - 1 else re.escape(ch))
-                                for i, ch in enumerate(value))
-                groups[-1][1].append((key == "allow", re.compile(regex), len(value)))
-    wanted = agent.lower()
-    chosen = [rules for agents, rules in groups if wanted in agents]
-    if not chosen:
-        chosen = [rules for agents, rules in groups if "*" in agents]
-    return [rule for rules in chosen for rule in rules]
-
-
-def robots_allows(rules: list[RobotsRule], path_and_query: str) -> bool:
-    """Longest matching rule wins, measured on the path as written in robots.txt (allow
-    wins a tie); no matching rule means allowed."""
-    best: tuple[int, bool] | None = None
-    for allow, pattern, length in rules:
-        if pattern.match(path_and_query):
-            if best is None or length > best[0] or (length == best[0] and allow):
-                best = (length, allow)
-    return True if best is None else best[1]
 
 
 # -- listing parsing ------------------------------------------------------------------------
@@ -205,6 +158,16 @@ def _published_at(text: str, now: datetime) -> str | None:
 class FranceTravailWebCollector(BaseCollector):
     """Reads France Travail's public occupation x département listing pages."""
 
+    # public_page: anonymous listing pages France Travail publishes in its own sitemaps for
+    # search engines; robots.txt allows them (only motsCles= and t:ac= are disallowed).
+    access_class = "public_page"
+    robots_policy = True
+    robots_agent = ROBOTS_AGENT
+    robots_user_agent = USER_AGENT
+    # >= 1 s between requests; 500 requests per run is far above the default max_pages
+    # (60 pages + robots.txt + sitemap) and stops a misconfigured run.
+    rate_policy = RatePolicy(min_delay_seconds=MIN_RATE_LIMIT_DELAY, max_requests_per_run=500)
+
     def __init__(self, config: dict[str, Any] | None = None) -> None:
         cfg = config or {}
         # Never faster than one request per MIN_RATE_LIMIT_DELAY, whatever the config says.
@@ -217,9 +180,16 @@ class FranceTravailWebCollector(BaseCollector):
         self._client: httpx.Client | None = None
 
     def _get(self, url: str) -> httpx.Response:
+        self._before_request(url)  # robots.txt (rules seeded by collect()) and the request cap
         self._enforce_rate_limit()
         assert self._client is not None
-        return self._client.get(url)
+        resp = self._client.get(url)
+        self._observe_response(resp)
+        return resp
+
+    def fixture(self) -> RecordedFixture:
+        return RecordedFixture("france_travail_web_listing.html",
+                               self._load_fixture("france_travail_web_listing.html"), parse_listing)
 
     def collect(self) -> CollectorResult:
         if not self.target_domains:
@@ -235,18 +205,19 @@ class FranceTravailWebCollector(BaseCollector):
             self._client = client
             try:
                 robots = self._get(f"{BASE}/robots.txt")
-            except httpx.HTTPError as exc:
+            except (httpx.HTTPError, RuntimeError) as exc:
                 return CollectorResult(source_name="france-travail-web", jobs=[], errors=[
                     f"France Travail is unreachable: {exc}"])
             # Fail closed: crawl only with a robots.txt actually served (HTTP 200, non-empty).
             # RFC 9309 makes 5xx/unreachable "disallow all"; it lets other 4xx mean "no
             # robots.txt, allow all", but this source is read conservatively, so any answer
             # other than a real robots.txt means no page is requested.
-            if robots.status_code != 200 or not robots.text.strip():
+            rules = rules_from_response(robots.status_code, robots.text, ROBOTS_AGENT)
+            if rules is None:
                 return CollectorResult(source_name="france-travail-web", jobs=[], errors=[
                     f"France Travail robots.txt unavailable (HTTP {robots.status_code}"
                     f"{', empty' if robots.status_code == 200 else ''}); not crawling"])
-            rules = parse_robots(robots.text, ROBOTS_AGENT)
+            self._robots_cache().seed(BASE, rules)
             try:
                 published, offsite = self._published_pages()
             except (httpx.HTTPError, RuntimeError) as exc:
@@ -262,7 +233,7 @@ class FranceTravailWebCollector(BaseCollector):
                     continue
                 try:
                     resp = self._get(url)
-                except httpx.HTTPError as exc:
+                except (httpx.HTTPError, RuntimeError) as exc:
                     errors.append(f"{path}: {exc}")
                     continue
                 if resp.status_code != 200:
