@@ -285,6 +285,11 @@ def run_pipeline(
         integrate_semantic_into_ranking,
         load_semantic_config,
     )
+    from src.pipeline.circuit_breaker import BreakerState, paused_reason
+    from src.pipeline.circuit_breaker import load_states as load_breaker_states
+    from src.pipeline.circuit_breaker import next_state as next_breaker_state
+    from src.pipeline.circuit_breaker import save_states as save_breaker_states
+    from src.pipeline.source_health import annotate_yield_anomalies
     from src.pipeline.validate import validate_jobs
     from src.storage.runs import RunStorage
     from src.storage.sqlite import Storage
@@ -439,6 +444,23 @@ def run_pipeline(
                     "status": "skipped", "reason": skip_reasons.get(s.get("type", ""), ""),
                 }
 
+        # Circuit breaker (plan F6.1): a source that failed FAILURE_THRESHOLD runs in a row
+        # is skipped until its pause is over, then tried again. Never blocks the run.
+        breakers = load_breaker_states(db_path)
+        breaker_now = datetime.now(UTC)
+        paused_names = {s["name"] for s in active_sources
+                        if s["name"] in breakers and breakers[s["name"]].is_paused(breaker_now)}
+        for name in sorted(paused_names):
+            state = breakers[name]
+            reason = paused_reason(state)
+            logger.warning("Skipping source %s: %s", name, reason)
+            stats.by_source[name] = {
+                "collected": 0, "accepted": 0, "errors": 0, "status": "paused", "reason": reason,
+                "paused_until": state.paused_until.isoformat() if state.paused_until else None,
+                "consecutive_failures": state.consecutive_failures,
+            }
+        active_sources = [s for s in active_sources if s["name"] not in paused_names]
+
         all_jobs: list[Job] = []
 
         def _run_source(source_cfg: dict[str, Any]) -> tuple[str, list[Job], dict[str, Any], list[str]]:
@@ -482,6 +504,7 @@ def run_pipeline(
                 if result.metadata.get("per_query_status"):
                     source_stats["per_query_status"] = result.metadata["per_query_status"]
                 errors = [f"{name}: {e}" for e in result.errors]
+                _apply_source_contract(collector, source_stats, errors, name)
                 logger.info("  Collected %d jobs from %s", len(normalized), name)
                 return name, normalized, source_stats, errors
             except Exception as exc:
@@ -520,6 +543,22 @@ def run_pipeline(
                 stats.collected = len(all_jobs)
                 _collect_reporter(_sources_done)
 
+        # Each source that ran moves its breaker: a success closes it, a failure counts,
+        # the third failure in a row pauses the source (its row says until when).
+        updated_breakers = []
+        for cfg in active_sources:
+            name = cfg["name"]
+            row = stats.by_source.get(name, {})
+            state = next_breaker_state(breakers.get(name) or BreakerState(source=name),
+                                       row.get("status"), row.get("reason"), breaker_now)
+            if state.consecutive_failures:
+                row["consecutive_failures"] = state.consecutive_failures
+            if state.paused_until is not None:
+                row["paused_until"] = state.paused_until.isoformat()
+            if name in breakers or state.consecutive_failures:
+                updated_breakers.append(state)
+        save_breaker_states(db_path, updated_breakers)
+
         # Inject pre-collected LinkedIn jobs from the staging snapshot.
         # These arrive as proper Job objects, bypassing the collector executor,
         # so the pipeline never waits for LinkedIn collection.
@@ -554,6 +593,19 @@ def run_pipeline(
                 "HelloWork: injected %d pre-collected job(s) from staging snapshot.",
                 len(prefetched_hellowork_jobs),
             )
+
+        # A source whose yield suddenly dropped (to 0, or far below its recent baseline)
+        # gets a yield_anomaly in its row (plan F1.3). Observability only: never raises.
+        try:
+            _health_rs = RunStorage(db_path=db_path)
+            _health_rs.init_db()
+            try:
+                _history = [r for r in _health_rs.list_runs(limit=7) if r.get("id") != run_id]
+            finally:
+                _health_rs.close()
+            annotate_yield_anomalies(stats.by_source, _history)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Source yield check failed (non-fatal): %s", exc)
 
         stats.collected = len(all_jobs)
         stats.stage_times["collect"] = time.perf_counter() - _t_collect
@@ -1280,6 +1332,30 @@ def collection_status(collected: int, errors: int) -> str:
     if not errors:
         return "completed"
     return "partial" if collected else "failed"
+
+
+def _apply_source_contract(
+    collector: BaseCollector, source_stats: dict[str, Any], errors: list[str], name: str
+) -> None:
+    """Add what the source plug-in contract reports to one source's row (plan F6.1):
+    its access class, a reached request cap, and the parser canary — a collector that
+    returned nothing although its pages were served gets ``canary: "parser_changed"``
+    and an error saying so, which makes the source ``failed`` instead of a silent 0.
+    Never raises: a collector without the contract's state is simply not annotated."""
+    from src.collectors.canary import canary_message, parser_canary
+
+    try:
+        source_stats["access_class"] = collector.access_class
+        health = collector.health()
+        if health.get("request_cap_reached"):
+            source_stats["request_cap_reached"] = True
+        canary = parser_canary(collector, source_stats["collected"])
+        if canary:
+            source_stats["canary"] = canary
+            source_stats["errors"] += 1
+            errors.insert(0, f"{name}: {canary_message(collector)}")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Source contract check failed for %s (non-fatal): %s", name, exc)
 
 
 def _build_collector_config(source_config: dict[str, Any]) -> dict[str, Any]:

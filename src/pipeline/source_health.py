@@ -6,9 +6,10 @@ the pipeline already computes every run: ``PipelineStats.by_source`` (see
 src/pipeline/orchestrator.py), persisted verbatim in
 ``pipeline_runs.stats_json`` on every completed run. No new table, no new
 background worker — this module is a pure function over that existing
-history. It no longer has a caller: its former consumer, the Discord
-notification engine, was removed, and the desktop app's source-health view and
-notifications (update plan F1.3, F2.4) are its next consumers.
+history. The pipeline runs it after collection (``annotate_yield_anomalies``, plan
+F1.3/F6.1): an anomaly lands in the run's ``by_source`` row as ``yield_anomaly``, which
+the run API returns, so the desktop app's source-health view and notifications (F10.3,
+F2.4) can show it.
 
 Design (thresholds are module-level constants with sensible defaults below,
 not configurable yet):
@@ -193,3 +194,20 @@ def detect_source_yield_anomalies(
         ))
 
     return anomalies
+
+
+def annotate_yield_anomalies(by_source: dict[str, dict[str, Any]], history: list[dict[str, Any]]) -> None:
+    """Add ``yield_anomaly`` to each ``by_source`` row whose yield dropped (see
+    ``detect_source_yield_anomalies``). Rows of sources that did not run this time
+    (``skipped``, ``paused``) are left out: their 0 is not a yield. ``history`` must not
+    include the current run."""
+    ran = {name: row for name, row in by_source.items()
+           if isinstance(row, dict) and row.get("status") not in ("skipped", "paused")}
+    for anomaly in detect_source_yield_anomalies(ran, history):
+        by_source[anomaly.source]["yield_anomaly"] = {
+            "severity": anomaly.severity,
+            "current_yield": anomaly.current_yield,
+            "baseline_yield": anomaly.baseline_yield,
+            "baseline_run_count": anomaly.baseline_run_count,
+            "is_new": anomaly.is_new,
+        }
