@@ -118,6 +118,7 @@ def test_show_uses_webview2_with_the_app_title_and_icon(tmp_path):
         calls.update(start=k)
         func()                                      # pywebview runs it once the window exists
 
+    native.events = SimpleNamespace(before_show=_Handlers())
     fake = SimpleNamespace(create_window=lambda *a, **k: calls.update(window=(a, k)) or native, start=start)
     answers = iter([True, True, False])               # the instance stops answering (Quit, a crash)
     window.show("http://127.0.0.1:5", tmp_path, alive=lambda: next(answers), webview=fake, poll_s=0.01)
@@ -140,7 +141,8 @@ def test_closing_the_window_ends_its_watcher_at_once(tmp_path):
         threads[0].start()
         time.sleep(0.05)                                # ...then the user closes the window
 
-    fake = SimpleNamespace(create_window=lambda *a, **k: SimpleNamespace(destroy=lambda: None), start=start)
+    fake = SimpleNamespace(create_window=lambda *a, **k: SimpleNamespace(
+        destroy=lambda: None, events=SimpleNamespace(before_show=_Handlers())), start=start)
     window.show("http://127.0.0.1:5", tmp_path, alive=lambda: True, webview=fake, poll_s=30)
     threads[0].join(2)
     assert not threads[0].is_alive()                    # the process is not held open for 30 s
@@ -180,3 +182,44 @@ def test_pywebview_and_its_windows_backend_import():
     import clr_loader  # noqa: F401
     import webview  # noqa: F401
     import webview.platforms.winforms  # noqa: F401  # loads pythonnet + WebView2 assemblies
+
+
+class _Handlers(list):
+    """Stands in for a pywebview event / a .NET event: ``+=`` subscribes."""
+
+    def __iadd__(self, handler):  # noqa: ANN001, ANN204
+        self.append(handler)
+        return self
+
+
+@pytest.mark.parametrize("url, allowed", [
+    ("http://127.0.0.1:5123/jobs?x=1", True),
+    ("about:blank", True),
+    ("http://127.0.0.1:5124/", False),                 # another local service
+    ("https://127.0.0.1:5123/", False),
+    ("http://localhost:5123/", False),
+    ("https://www.hellowork.com/fr-fr/emplois/1.html", False),
+    ("file:///C:/Windows/win.ini", False),
+])
+def test_only_the_backend_origin_loads_in_the_window(url, allowed):
+    assert window.navigation_allowed(url, "http://127.0.0.1:5123") is allowed
+
+
+def test_external_links_open_in_the_default_browser_not_in_the_window():
+    opened: list[str] = []
+    webview2 = SimpleNamespace(NavigationStarting=_Handlers())
+    app_window = SimpleNamespace(events=SimpleNamespace(before_show=_Handlers()),
+                                 native=SimpleNamespace(webview=webview2))
+    window.guard_navigation(app_window, "http://127.0.0.1:5123", opener=opened.append)
+    app_window.events.before_show[0]()                 # the form exists: the guard attaches
+    navigate = webview2.NavigationStarting[0]
+
+    def go(url: str) -> bool:
+        args = SimpleNamespace(Uri=url, Cancel=False)
+        navigate(None, args)
+        return args.Cancel
+
+    assert go("http://127.0.0.1:5123/jobs") is False
+    assert go("https://www.linkedin.com/jobs/view/1") is True
+    assert go("mailto:hr@example.com") is True
+    assert opened == ["https://www.linkedin.com/jobs/view/1"]      # mailto is refused, not opened

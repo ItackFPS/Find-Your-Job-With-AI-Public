@@ -161,6 +161,37 @@ def test_probe_backend_with_a_token_accepts_only_that_instance(server):
     assert core.probe_backend(free_port(), timeout_s=0.5, token="tok") is Backend.FREE
 
 
+def _owner_only(path: Path) -> bool:
+    """This account and SYSTEM only, protected: nothing inherited from data/ (other accounts may read it)."""
+    from src.launcher.winproc import current_user_sid
+
+    script = ("$a = Get-Acl -LiteralPath $env:FYJ_FILE; 'protected=' + $a.AreAccessRulesProtected; "
+              "$a.Access | ForEach-Object { $_.IdentityReference.Translate("
+              "[Security.Principal.SecurityIdentifier]).Value + ' inherited=' + $_.IsInherited }")
+    acl = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+                         env={**os.environ, "FYJ_FILE": str(path)},
+                         capture_output=True, text=True, timeout=60).stdout.split()
+    return sorted(acl) == sorted(["protected=True", str(current_user_sid()), "inherited=False",
+                                  "S-1-5-18", "inherited=False"])
+
+
+@windows_only
+def test_the_lock_file_is_owner_only_from_its_creation(tmp_path):
+    # review finding: the file used to be created with the folder's inherited ACL and restricted
+    # afterwards, a window in which another account could open a handle and read the token later
+    from src.launcher.winproc import _create_private
+
+    (tmp_path / "state").mkdir()
+    tmp = tmp_path / "state" / "instance.json.tmp"
+    fd = _create_private(tmp)
+    try:
+        assert tmp.stat().st_size == 0 and _owner_only(tmp)     # restricted before any byte is written
+        with pytest.raises(FileExistsError):
+            _create_private(tmp)                                 # never reuses a file planted there
+    finally:
+        os.close(fd)
+
+
 def test_instance_lock_roundtrip_is_private(tmp_path):
     settings = Settings(root=tmp_path)
     inst = core.Instance(pid=1, created=2, port=51234, instance_token="secret-token",
@@ -170,17 +201,7 @@ def test_instance_lock_roundtrip_is_private(tmp_path):
     assert json.loads(settings.port_file.read_text()) == {"pid": 1, "port": 51234}
     assert "secret-token" not in settings.port_file.read_text()
     if IS_WINDOWS:
-        from src.launcher.winproc import current_user_sid
-
-        script = ("$a = Get-Acl -LiteralPath $env:FYJ_FILE; 'protected=' + $a.AreAccessRulesProtected; "
-                  "$a.Access | ForEach-Object { $_.IdentityReference.Translate("
-                  "[Security.Principal.SecurityIdentifier]).Value + ' inherited=' + $_.IsInherited }")
-        acl = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
-                             env={**os.environ, "FYJ_FILE": str(settings.instance_file)},
-                             capture_output=True, text=True, timeout=60).stdout.split()
-        # this account and SYSTEM only, nothing inherited from data/ (which other accounts may read)
-        assert sorted(acl) == sorted(["protected=True", str(current_user_sid()), "inherited=False",
-                                      "S-1-5-18", "inherited=False"])
+        assert _owner_only(settings.instance_file)
     else:
         assert settings.instance_file.stat().st_mode & 0o077 == 0
     core.Instance.remove(settings)

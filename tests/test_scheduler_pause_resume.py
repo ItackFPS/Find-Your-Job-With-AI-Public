@@ -578,6 +578,19 @@ def test_pause_all_stops_dispatching_and_pauses_running_scans_until_resumed(tmp_
     assert [e["trigger"] for e in _executions(db)] == ["resume"]
 
 
+def test_resume_all_leaves_a_source_the_user_had_paused_on_its_own(tmp_path):
+    clock = _Clock(_DAY.replace(hour=8))
+    handler = _RunningHandler()
+    handler.paused = True                                # paused from its card before "Pause scans"
+    service, db = _service(tmp_path, handler, clock)
+    assert service.pause_all() == []                     # not running: nothing for pause_all to pause
+    assert service.resume_all() == []                    # so nothing for resume_all to resume
+    service.join_dispatches(timeout=5)
+    assert handler.calls == 0 and _executions(db) == []
+    _tick(service)
+    assert handler.calls == 0                            # still paused, as the user left it
+
+
 def test_scheduler_pause_routes(tmp_path):
     from fastapi.testclient import TestClient
 

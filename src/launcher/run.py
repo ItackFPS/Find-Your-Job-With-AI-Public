@@ -258,6 +258,10 @@ class Launcher:
                 if verdict is Backend.OURS:
                     self.instance = instance
                     self.out("The app is already running; opening the dashboard.")
+                    # Opened right after the check, nothing in between. Checking again would not
+                    # close the gap for a browser (or Edge --app): it connects on its own, later,
+                    # and cannot be given the token. The app's own window process verifies the
+                    # token itself before it loads anything, and keeps watching it (window.py).
                     self.open_window()
                     return 0
                 if verdict in (Backend.OTHER, Backend.FOREIGN):
