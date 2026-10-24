@@ -45,7 +45,8 @@ REQUIRED_MODULES = {
     "yaml": "pyyaml",
     "httpx": "httpx",
     "dotenv": "python-dotenv",
-    "sentence_transformers": "sentence-transformers",
+    "onnxruntime": "onnxruntime",
+    "tokenizers": "tokenizers",
 }
 
 

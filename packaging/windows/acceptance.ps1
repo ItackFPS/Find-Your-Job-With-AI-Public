@@ -73,9 +73,10 @@ function Wait-Down([int]$Seconds = 90) {
     return $false
 }
 function Start-App([string]$Root) {
-    # What the shortcut does, minus the browser window.
-    Start-Process -FilePath (Join-Path $Root "FindYourJob.cmd") -ArgumentList "--window", "none" `
-        -WorkingDirectory $Root -WindowStyle Minimized | Out-Null
+    # What the shortcut does (the notification-area app), minus the browser window.
+    Start-Process -FilePath (Join-Path $Root "runtime\pythonw.exe") `
+        -ArgumentList "-m", "src.launcher", "tray", "--window", "none" `
+        -WorkingDirectory $Root | Out-Null
 }
 function Invoke-Launcher([string]$Root, [string[]]$Arguments) {
     $p = Start-Process -FilePath (Join-Path $Root "FindYourJob.cmd") -ArgumentList $Arguments `
@@ -131,7 +132,8 @@ try {
             Check (Test-Path $lnk) "shortcut exists: $lnk"
             if (Test-Path $lnk) {
                 $s = Get-Shortcut $lnk
-                Check ($s.Target -eq (Join-Path $App "FindYourJob.cmd")) "  targets the installed launcher ($($s.Target))"
+                Check ($s.Target -eq (Join-Path $App "runtime\pythonw.exe")) "  targets the bundled pythonw ($($s.Target))"
+                Check ($s.Args -eq "-m src.launcher tray") "  starts the notification-area app ($($s.Args))"
                 Check ($s.Dir -eq $App) "  starts in the install folder"
                 Check ($s.Icon -like "$App\FindYourJob.ico*") "  uses the application icon"
             }

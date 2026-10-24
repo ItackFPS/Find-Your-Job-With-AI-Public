@@ -29,6 +29,9 @@
 
 #define AppName "Find Your Job With AI"
 #define AppExeName "FindYourJob.cmd"
+; The app itself: the notification-area (tray) launcher, no console window.
+#define TrayExe "runtime\pythonw.exe"
+#define TrayArgs "-m src.launcher tray"
 
 [Setup]
 ; Never change AppId: upgrades find the existing installation through it.
@@ -84,18 +87,20 @@ Source: "{#StageDir}\*"; DestDir: "{app}"; Excludes: "\config\*"; Flags: recurse
 Source: "{#StageDir}\config\*"; DestDir: "{app}\config"; Flags: recursesubdirs createallsubdirs onlyifdoesntexist uninsneveruninstall
 
 [Icons]
-Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\FindYourJob.ico"; Comment: "Start {#AppName} and open its dashboard"
+Name: "{group}\{#AppName}"; Filename: "{app}\{#TrayExe}"; Parameters: "{#TrayArgs}"; WorkingDir: "{app}"; IconFilename: "{app}\FindYourJob.ico"; Comment: "Start {#AppName} and open its dashboard"
 Name: "{group}\Stop {#AppName}"; Filename: "{app}\{#AppExeName}"; Parameters: "stop"; WorkingDir: "{app}"; IconFilename: "{app}\FindYourJob.ico"; Comment: "Stop the running {#AppName}"
 Name: "{group}\{#AppName} logs"; Filename: "{app}\logs"; Comment: "Open the folder with the application's logs"
 ; Replays the current strategy on the bundled benchmark; the report appears on the Lab page.
 Name: "{group}\{#AppName} self-check"; Filename: "{cmd}"; Parameters: "/k """"{app}\runtime\python.exe"" -m src.evaluation self-check"""; WorkingDir: "{app}"; IconFilename: "{app}\FindYourJob.ico"; Comment: "Check the current strategy against its recorded baseline"
 Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
-Name: "{userdesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\FindYourJob.ico"; Comment: "Start {#AppName} and open its dashboard"; Tasks: desktopicon
+Name: "{userdesktop}\{#AppName}"; Filename: "{app}\{#TrayExe}"; Parameters: "{#TrayArgs}"; WorkingDir: "{app}"; IconFilename: "{app}\FindYourJob.ico"; Comment: "Start {#AppName} and open its dashboard"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; Description: "Start {#AppName} now"; Flags: postinstall nowait skipifsilent shellexec
+Filename: "{app}\{#TrayExe}"; Parameters: "{#TrayArgs}"; WorkingDir: "{app}"; Description: "Start {#AppName} now"; Flags: postinstall nowait skipifsilent
 
 [UninstallRun]
+; Remove "Start with Windows" if the user turned it on (only this installation's value).
+Filename: "{app}\runtime\python.exe"; Parameters: "-m src.launcher autostart off"; WorkingDir: "{app}"; Flags: runhidden waituntilterminated skipifdoesntexist; RunOnceId: "AutostartOff"
 ; Stop a running copy through its launcher (graceful: scans are told to stop, SQLite closes).
 Filename: "{app}\runtime\python.exe"; Parameters: "-m src.launcher stop"; WorkingDir: "{app}"; Flags: runhidden waituntilterminated skipifdoesntexist; RunOnceId: "StopApp"
 

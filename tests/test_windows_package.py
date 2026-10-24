@@ -58,22 +58,25 @@ def test_desktop_shortcut_is_offered_and_can_be_declined():
     assert len(desktop) == 1 and "Tasks: desktopicon" in desktop[0]
 
 
-def test_shortcuts_target_the_installed_launcher_with_its_icon():
+def test_shortcuts_start_the_tray_app_and_stop_through_the_launcher():
     icons = _section("Icons")
-    launch = [ln for ln in icons if 'Filename: "{app}\\{#AppExeName}"' in ln]
-    assert len(launch) == 3  # Start Menu, Stop, desktop
-    for line in launch:
-        assert 'WorkingDir: "{app}"' in line and 'IconFilename: "{app}\\FindYourJob.ico"' in line
-    assert re.search(r'#define AppExeName "FindYourJob\.cmd"', ISS)
-    stop = [ln for ln in launch if "Parameters:" in ln]
+    tray = [ln for ln in icons if 'Filename: "{app}\\{#TrayExe}"' in ln]
+    assert len(tray) == 2  # Start Menu and desktop: the notification-area app, no console
+    assert re.search(r'#define TrayExe "runtime\\pythonw\.exe"', ISS)
+    assert re.search(r'#define TrayArgs "-m src\.launcher tray"', ISS)
+    stop = [ln for ln in icons if 'Filename: "{app}\\{#AppExeName}"' in ln]
     assert len(stop) == 1 and 'Parameters: "stop"' in stop[0]
+    assert re.search(r'#define AppExeName "FindYourJob\.cmd"', ISS)
+    for line in tray + stop:
+        assert 'WorkingDir: "{app}"' in line and 'IconFilename: "{app}\\FindYourJob.ico"' in line
     assert any(ln.startswith('Name: "{group}\\') and "{app}\\logs" in ln for ln in icons)
 
 
-def test_launching_after_install_passes_no_arguments():
+def test_launching_after_install_only_starts_the_tray_app():
     # the launcher starts no scan; nothing here may ask it to
     (run,) = _section("Run")
-    assert "Parameters" not in run and "skipifsilent" in run
+    assert 'Filename: "{app}\\{#TrayExe}"; Parameters: "{#TrayArgs}";' in run
+    assert "skipifsilent" in run
 
 
 def test_user_data_is_never_installed_overwritten_or_uninstalled():
@@ -93,9 +96,10 @@ def test_user_data_is_never_installed_overwritten_or_uninstalled():
         assert f"{{app}}\\{name}\"" not in deleted
 
 
-def test_uninstall_stops_the_app_and_asks_before_deleting_data():
-    (run,) = _section("UninstallRun")
-    assert '"-m src.launcher stop"' in run and "waituntilterminated" in run
+def test_uninstall_turns_autostart_off_stops_the_app_and_asks_before_deleting_data():
+    autostart, stop = _section("UninstallRun")
+    assert '"-m src.launcher autostart off"' in autostart and "waituntilterminated" in autostart
+    assert '"-m src.launcher stop"' in stop and "waituntilterminated" in stop
     code = ISS[ISS.index("procedure CurUninstallStepChanged"):]
     assert "UninstallSilent()" in code  # silent uninstall keeps data
     assert "MB_DEFBUTTON2" in code  # the default answer is No

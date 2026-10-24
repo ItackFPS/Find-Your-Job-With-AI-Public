@@ -185,10 +185,20 @@ class JobObject:
             self._handle = None
 
 
-def request_graceful_stop(proc: subprocess.Popen[bytes]) -> None:
+# The launcher names a stop event for each child it starts and passes the name in this
+# environment variable; the backend watches it (src/api/stop_signal.py). A name, not the
+# child's pid: a venv's python.exe is a redirector whose pid is not the interpreter's.
+STOP_EVENT_ENV = "FYJ_STOP_EVENT"
+
+
+def request_graceful_stop(proc: subprocess.Popen[bytes], stop_event: str | None = None) -> None:
     """Ask a child started by ``JobObject.spawn`` to shut down (Ctrl+Break / SIGTERM)."""
     if proc.poll() is not None:
         return
+    if IS_WINDOWS and stop_event:
+        # Without a shared console (the tray app runs under pythonw) Ctrl+Break cannot
+        # reach the child; the backend also watches this event and stops the same way.
+        StopEvent(stop_event).signal_existing()
     try:
         if IS_WINDOWS:
             # Reaches the child's own process group only; uvicorn and node treat

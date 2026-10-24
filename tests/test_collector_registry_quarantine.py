@@ -79,3 +79,57 @@ class TestDormantButWorkingCollectorsUnaffected:
         configured_types = {s.get("type") for s in registry.all_sources}
         for dormant_type in ("greenhouse", "lever", "smartrecruiters", "workingnomads", "linkedin"):
             assert dormant_type not in configured_types
+
+
+class TestRemovedSourceTypes:
+    """2.0 plan F1.4: APEC and the Welcome to the Jungle browser collector
+    were removed. A 1.x config that still lists them is skipped, with one line
+    per run saying why, instead of reporting a failed source on every run."""
+
+    @pytest.mark.parametrize("collector_type", ["apec", "wttj"])
+    def test_removed_type_is_not_registered(self, collector_type: str) -> None:
+        from src.collectors.registry import REMOVED_SOURCE_TYPES
+
+        reg = CollectorRegistry()
+        assert collector_type not in reg.list_collectors()
+        assert "removed in 2.0" in REMOVED_SOURCE_TYPES[collector_type]
+
+    def test_old_config_listing_removed_sources_is_skipped_not_failed(
+        self, tmp_path, monkeypatch, caplog
+    ) -> None:
+        import logging
+        from unittest.mock import MagicMock, patch
+
+        from src.pipeline.orchestrator import run_pipeline
+
+        monkeypatch.delenv("FRANCE_TRAVAIL_CLIENT_ID", raising=False)
+        monkeypatch.delenv("FRANCE_TRAVAIL_CLIENT_SECRET", raising=False)
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "sources.yaml").write_text(
+            "sources:\n"
+            "  - name: apec\n    type: apec\n    active: true\n    config: {}\n"
+            "  - name: wttj\n    type: wttj\n    active: true\n    config: {}\n"
+            "  - name: typo\n    type: no_such_type\n    active: true\n    config: {}\n",
+            encoding="utf-8",
+        )
+        mock_embed = MagicMock()
+        mock_embed.embed.return_value = [0.1] * 384
+        mock_embed.compute_semantic_score.return_value = 0.5
+        mock_embed.compute_job_semantic_score.return_value = 0.5
+        with caplog.at_level(logging.WARNING, logger="src.pipeline.orchestrator"), patch(
+            "src.embeddings.embedding.EmbeddingService", return_value=mock_embed
+        ):
+            result = run_pipeline(db_path=str(tmp_path / "test.db"), config_dir=str(config_dir))
+
+        assert result.status == "completed", f"Pipeline failed: {result.error}"
+        for name in ("apec", "wttj"):
+            row = result.stats.by_source[name]
+            assert (row["status"], row["collected"], row["errors"]) == ("skipped", 0, 0)
+            assert "removed in 2.0" in row["reason"]
+            assert not any(e.startswith(f"Unknown source type '{name}'") for e in result.stats.errors)
+            skip_lines = [r for r in caplog.records if r.getMessage().startswith(f"Skipping source {name}:")]
+            assert len(skip_lines) == 1
+        # A type that never existed (a typo) still fails visibly.
+        assert result.stats.by_source["typo"]["status"] == "failed"
+        assert any("Unknown source type 'no_such_type'" in e for e in result.stats.errors)

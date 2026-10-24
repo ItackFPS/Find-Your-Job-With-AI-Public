@@ -1,4 +1,4 @@
-"""``python -m src.launcher [start|dev|status|stop|shortcut]`` — see ``--help``."""
+"""``python -m src.launcher [start|tray|dev|status|stop|shortcut|autostart]`` — see ``--help``."""
 
 from __future__ import annotations
 
@@ -8,9 +8,10 @@ import os
 import sys
 
 from src.launcher import core
+from src.launcher.autostart import Autostart
 from src.launcher.run import Launcher, Output, cmd_shortcut, cmd_status, cmd_stop
 
-COMMANDS = ("start", "dev", "status", "stop", "shortcut")
+COMMANDS = ("start", "tray", "dev", "status", "stop", "shortcut", "autostart")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -32,6 +33,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command")
     sub.add_parser("start", parents=[run],
                    help="build the dashboard if needed, start the backend, open the dashboard")
+    sub.add_parser("tray", parents=[run],
+                   help="like start, but runs in the notification area with no console: closing "
+                        "the dashboard keeps searches running; Quit from the tray icon stops them")
     dev = sub.add_parser("dev", parents=[run], help="backend + Vite dev server with hot reload")
     dev.add_argument("--reload", action="store_true",
                      help="also restart the backend on code changes (interrupts running scans)")
@@ -41,6 +45,9 @@ def build_parser() -> argparse.ArgumentParser:
                         help="create (or --remove) a shortcut for your Windows account")
     sc.add_argument("--where", choices=("start-menu", "desktop"), default="start-menu")
     sc.add_argument("--remove", action="store_true")
+    au = sub.add_parser("autostart", parents=[common],
+                        help="start the app (in the notification area) when you sign in to Windows")
+    au.add_argument("action", choices=("on", "off", "status"))
     return p
 
 
@@ -55,17 +62,38 @@ def main(argv: list[str] | None = None) -> int:
     root = core.project_root()
     os.chdir(root)  # the backend resolves logs/, data/ and config/ from here
     settings = core.Settings.load(root, backend_port=args.port)
-    if args.command in ("start", "dev"):
+    if args.command in ("start", "dev", "tray"):
         settings = dataclasses.replace(settings, startup_timeout_s=args.timeout)
         out = Output(settings.logs_dir / "launcher.log")
+        if args.command == "tray":
+            from src.launcher.tray import TrayApp
+
+            launcher = Launcher(settings, out, mode="start", window=args.window,
+                                handle_signals=False, backend_restarts=1)
+            return TrayApp(launcher, Autostart(root)).run()
         return Launcher(settings, out, mode=args.command, window=args.window,
                         reload=getattr(args, "reload", False)).run()
     out = Output(None)
+    if args.command == "autostart":
+        return cmd_autostart(Autostart(root), args.action, out)
     if args.command == "status":
         return cmd_status(settings, out)
     if args.command == "stop":
         return cmd_stop(settings, out)
     return cmd_shortcut(settings, out, args.where, args.remove)
+
+
+def cmd_autostart(autostart: Autostart, action: str, out: Output) -> int:
+    if not autostart.supported:
+        out("Start with Windows is only available in the installed Windows app."
+            if sys.platform == "win32" else "Start with Windows is only available on Windows.")
+        return 2
+    if action == "on":
+        autostart.enable()
+    elif action == "off":
+        autostart.disable()
+    out(f"Start with Windows: {'on' if autostart.enabled() else 'off'}")
+    return 0
 
 
 if __name__ == "__main__":
