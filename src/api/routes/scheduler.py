@@ -3,6 +3,8 @@
 GET  /api/scheduler/status          — current status of all schedules (+ source breakers)
 GET  /api/scheduler/executions      — recent execution history
 POST /api/scheduler/run/{id}        — manually trigger a schedule
+POST /api/scheduler/pause           — pause scheduled runs and running scans (the tray's "Pause scans")
+POST /api/scheduler/resume          — resume them
 """
 
 from __future__ import annotations
@@ -47,6 +49,24 @@ def list_executions(
         return storage.list_executions(definition_id=definition_id, limit=limit)
     finally:
         storage.close()
+
+
+@router.post("/pause")
+def pause_scheduler(request: Request) -> dict[str, Any]:
+    """Stop scheduled dispatches; running scans stop at their next checkpoint."""
+    scheduler = getattr(request.app.state, "scheduler", None)
+    if scheduler is None:
+        raise HTTPException(status_code=503, detail="Scheduler not available")
+    return {"paused": True, "pausing": scheduler.pause_all()}
+
+
+@router.post("/resume")
+def resume_scheduler(request: Request) -> dict[str, Any]:
+    """Dispatch scheduled runs again; paused scans resume from their checkpoint."""
+    scheduler = getattr(request.app.state, "scheduler", None)
+    if scheduler is None:
+        raise HTTPException(status_code=503, detail="Scheduler not available")
+    return {"paused": False, "resumed": scheduler.resume_all()}
 
 
 @router.post("/run/{definition_id}")

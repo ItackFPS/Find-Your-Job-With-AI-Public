@@ -11,17 +11,20 @@ from src.launcher import core
 from src.launcher.autostart import Autostart
 from src.launcher.run import Launcher, Output, cmd_shortcut, cmd_status, cmd_stop
 
-COMMANDS = ("start", "tray", "dev", "status", "stop", "shortcut", "autostart")
+COMMANDS = ("start", "tray", "dev", "status", "stop", "shortcut", "autostart", "window")
 
 
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--port", type=int, help="backend port (default: FYJ_PORT or 8000)")
+    common.add_argument("--port", type=int,
+                        help="fixed backend port (default: FYJ_PORT; otherwise a free port chosen at "
+                             "start, or 8000 in dev mode)")
 
     run = argparse.ArgumentParser(add_help=False, parents=[common])
     run.add_argument("--window", choices=("app", "browser", "none"), default="app",
-                     help="open the dashboard in an app window (Edge/Chrome; falls back to the "
-                          "default browser), the default browser, or not at all (default: app)")
+                     help="open the dashboard in the app's own window (WebView2; falls back to an "
+                          "Edge/Chrome app window, then the default browser), the default browser, "
+                          "or not at all (default: app)")
     run.add_argument("--timeout", type=float, default=180.0,
                      help="seconds to wait for the backend to answer (default: 180)")
 
@@ -48,6 +51,9 @@ def build_parser() -> argparse.ArgumentParser:
     au = sub.add_parser("autostart", parents=[common],
                         help="start the app (in the notification area) when you sign in to Windows")
     au.add_argument("action", choices=("on", "off", "status"))
+    win = sub.add_parser("window", help="the app window alone (started by the launcher and the tray; "
+                                        "it reads the instance token from FYJ_INSTANCE_TOKEN)")
+    win.add_argument("--port", type=int, required=True, help="the running instance's backend port")
     return p
 
 
@@ -61,7 +67,16 @@ def main(argv: list[str] | None = None) -> int:
     args = parse(list(sys.argv[1:] if argv is None else argv))
     root = core.project_root()
     os.chdir(root)  # the backend resolves logs/, data/ and config/ from here
+    if args.command == "window":
+        from src.launcher import window
+
+        # out of the environment: WebView2 and anything else this process starts never inherit it
+        token = os.environ.pop(core.INSTANCE_TOKEN_ENV, "")
+        return window.window_main(root, args.port, token)
     settings = core.Settings.load(root, backend_port=args.port)
+    if args.command == "dev" and not settings.fixed_port:
+        # the Vite dev server's proxy defaults to 8000 (frontend/vite.config.ts)
+        settings = dataclasses.replace(settings, backend_port=core.DEFAULT_BACKEND_PORT)
     if args.command in ("start", "dev", "tray"):
         settings = dataclasses.replace(settings, startup_timeout_s=args.timeout)
         out = Output(settings.logs_dir / "launcher.log")
