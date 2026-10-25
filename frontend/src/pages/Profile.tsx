@@ -9,6 +9,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import { Card, LoadingState, Switch } from '../components'
 import i18n from '../i18n'
+import { ProfileReviewCard } from './ProfileReviewCard'
 
 // Prevents "Docker" and "docker" (or "French"/"french") coexisting as two
 // separate entries — an exact-string check alone lets that through.
@@ -1096,6 +1097,12 @@ export default function ProfilePage() {
           </button>
         </div>
       </div>
+
+      <ProfileReviewCard
+        profile={profile}
+        saving={isPending}
+        onConfirm={() => save({ ...profile, review: profile.review ? { ...profile.review, pending: false } : null })}
+      />
 
       <Card style={{ marginBottom: '1rem' }} title={t('profile.sections.targets')} subtitle={t('profile.sections.targetsSubtitle')}>
         <div style={{ marginTop: 'var(--space-4)' }}>

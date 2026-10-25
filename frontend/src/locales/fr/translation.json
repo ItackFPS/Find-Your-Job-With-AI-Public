@@ -938,6 +938,28 @@
       "mid": "confirmé",
       "senior": "senior",
       "lead": "lead"
+    },
+    "review": {
+      "title": "Nous avons mis à jour votre profil — merci de vérifier",
+      "intro": "Votre profil a été converti au nouveau format : niveaux de carrière visés et niveaux de diplôme au lieu de listes de mots-clés. Rien n'a été supprimé, et la recherche fonctionne comme avant tant que vous ne les modifiez pas.",
+      "changes": "Ce qui a changé",
+      "targetLevels": "Niveaux visés",
+      "noLevels": "aucun (les offres de tous niveaux sont affichées)",
+      "educationLevel": "Niveau de diplôme le plus élevé",
+      "noEducation": "non renseigné",
+      "levelValue": "niveau {level}",
+      "confirm": "C'est correct",
+      "confirming": "Enregistrement…",
+      "levels": {
+        "internship": "Stage",
+        "alternance": "Alternance",
+        "graduate": "Jeune diplômé / débutant",
+        "junior": "Junior",
+        "mid": "Confirmé",
+        "senior": "Senior",
+        "lead": "Lead",
+        "manager": "Manager"
+      }
     }
   },
   "design": {
