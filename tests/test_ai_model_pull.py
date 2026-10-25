@@ -101,6 +101,7 @@ def fake_ollama(monkeypatch):
 @pytest.fixture()
 def client(isolated_app, monkeypatch, fake_ollama):
     monkeypatch.setattr(ai_routes, "PULL_JOBS", JobRegistry("pull"))
+    monkeypatch.setattr(ollama, "free_disk_bytes", lambda _path: 10**15)
     return TestClient(isolated_app)
 
 
@@ -265,3 +266,39 @@ def test_pull_route_reports_ollama_errors(client, fake_ollama):
 def test_pull_status_unknown_job(client):
     assert client.get("/api/ai/models/pull/nope").status_code == 404
     assert client.delete("/api/ai/models/pull/nope").status_code == 404
+
+
+def test_pull_route_refuses_when_the_models_drive_is_too_full(client, fake_ollama, monkeypatch):
+    small = _small()
+    monkeypatch.setattr(ollama, "free_disk_bytes", lambda _path: small.download_bytes)
+    resp = client.post("/api/ai/models/pull", json={
+        "model": small.ollama_tag, "confirm_size_bytes": small.download_bytes})
+    assert resp.status_code == 409
+    detail = resp.json()["detail"]
+    assert detail["error"] == "disk_space_low" and detail["free_bytes"] == small.download_bytes
+    assert detail["needed_bytes"] > small.download_bytes
+    assert fake_ollama.requests == []
+
+
+def test_pull_route_one_job_per_server_whatever_the_loopback_spelling(client, fake_ollama):
+    fake_ollama.delay, fake_ollama.steps = 0.05, 50
+    small = _small()
+    port = fake_ollama.url.rsplit(":", 1)[1]
+    body = {"model": small.ollama_tag, "confirm_size_bytes": small.download_bytes}
+    first = client.post("/api/ai/models/pull",
+                        json={**body, "base_url": f"http://127.0.0.1:{port}"}).json()["id"]
+    second = client.post("/api/ai/models/pull",
+                         json={**body, "base_url": f"http://localhost:{port}/"}).json()["id"]
+    assert first == second
+    client.delete(f"/api/ai/models/pull/{first}")
+    ai_routes.PULL_JOBS.wait(first, 5)
+
+
+def test_endpoint_key_and_models_dir(tmp_path):
+    assert (ollama.endpoint_key("http://127.0.0.1:11434") == ollama.endpoint_key(
+        "http://localhost:11434") == ollama.endpoint_key("http://[::1]:11434")
+        == "loopback:11434")
+    assert ollama.endpoint_key("http://127.0.0.1:8080") == "loopback:8080"
+    assert ollama.models_dir({"OLLAMA_MODELS": str(tmp_path)}) == tmp_path
+    assert ollama.models_dir({"USERPROFILE": str(tmp_path)}) == tmp_path / ".ollama" / "models"
+    assert ollama.free_disk_bytes(tmp_path / "not" / "yet") is not None

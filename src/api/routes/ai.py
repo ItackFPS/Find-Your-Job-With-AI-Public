@@ -48,7 +48,13 @@ from pydantic import BaseModel, Field
 
 from src.ai.benchmark.runner import DEFAULT_OFFERS, load_fixtures, run_benchmark
 from src.ai.benchmark.scoring import DEFAULT_OFFERS_PER_DAY
-from src.ai.catalogue import Catalogue, Recommendation, load_catalogue, recommend
+from src.ai.catalogue import (
+    DISK_MARGIN_BYTES,
+    Catalogue,
+    Recommendation,
+    load_catalogue,
+    recommend,
+)
 from src.ai.runtime import ollama, ollama_install
 from src.ai.runtime.detect import RuntimeReport, detect_runtimes
 from src.ai.runtime.hardware import HardwareProbe, probe_hardware
@@ -170,6 +176,13 @@ def start_pull(body: PullRequest) -> dict[str, Any]:
         raise HTTPException(status_code=409, detail={"error": "size_mismatch",
                                                      "expected": entry.download_bytes})
     base = _local_base(body.base_url)
+    # Ollama writes to its models folder (OLLAMA_MODELS or ~/.ollama/models) on this machine.
+    # A resumed pull needs less than this; refusing early beats failing near the end.
+    free = ollama.free_disk_bytes(ollama.models_dir())
+    needed = entry.download_bytes + DISK_MARGIN_BYTES
+    if free is not None and free < needed:
+        raise HTTPException(status_code=409, detail={"error": "disk_space_low",
+                                                     "free_bytes": free, "needed_bytes": needed})
 
     def worker(job: Job) -> None:
         def progress(p: ollama.PullProgress) -> None:
@@ -180,7 +193,8 @@ def start_pull(body: PullRequest) -> dict[str, Any]:
         ollama.pull(entry.ollama_tag, base_url=base, on_progress=progress,
                     cancelled=job.cancel_event.is_set)
 
-    job, _ = PULL_JOBS.start(worker, key=f"{base}|{entry.ollama_tag}", model=entry.ollama_tag,
+    job, _ = PULL_JOBS.start(worker, key=f"{ollama.endpoint_key(base)}|{entry.ollama_tag}",
+                             model=entry.ollama_tag,
                              completed_bytes=0, total_bytes=entry.download_bytes,
                              status_text=None)
     return job.snapshot()
