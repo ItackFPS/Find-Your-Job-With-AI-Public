@@ -1,0 +1,19 @@
+# v1 location profile whose top département carries a town label, on-site work only and no
+# remote entry. Synthetic test data, not anyone's profile.
+target_domains:
+- data
+geography:
+  preferred_countries:
+  - France
+  location_preferences:
+  - type: department
+    value: '85'
+    status: acceptable
+    label: null
+  - type: department
+    value: '44'
+    status: preferred
+    label: Nantes
+work_modes:
+- on-site
+freshness_days: 30

@@ -276,6 +276,44 @@ def resolve_place(text: str | None, countries: list[str] | None = None) -> Place
     return None
 
 
+def search_communes(query: str, limit: int = 10) -> list[Place]:
+    """Offline autocomplete over communes: name prefix (accent/case-insensitive) or
+    postcode prefix, largest communes first. Empty list for a query under 2 chars."""
+    q = normalize(query or "")
+    if len(q) < 2:
+        return []
+    idx = _idx()
+    limit = max(1, min(limit, 50))
+    if q.isdigit():
+        found = {c.insee: c for pc, cs in idx.by_postcode.items() if pc.startswith(q) for c in cs}
+        matches = list(found.values())
+    else:
+        matches = [c for name, cs in idx.by_name.items() if name.startswith(q) for c in cs]
+    matches.sort(key=lambda c: (normalize(c.name) != q, -c.population, c.name))
+    return [_commune_place(c) for c in matches[:limit]]
+
+
+def commune_by_insee(insee: str) -> Place | None:
+    c = _idx().by_insee.get(insee)
+    return _commune_place(c) if c is not None else None
+
+
+def department_name(code: str) -> str | None:
+    return _idx().dept_name.get(code)
+
+
+def departments_within(centre: tuple[float, float], radius_km: float, road_factor: float = 1.0) -> list[str]:
+    """Département codes with their centre or at least one commune within ``radius_km``
+    of ``centre`` (distances are great-circle × ``road_factor``), sorted by code."""
+    idx = _idx()
+    out = {code for code, c in idx.dept_centroid.items()
+           if distance_km(centre, c) * road_factor <= radius_km}
+    for c in idx.by_insee.values():
+        if c.department not in out and distance_km(centre, (c.lat, c.lon)) * road_factor <= radius_km:
+            out.add(c.department)
+    return sorted(code for code in out if code in idx.dept_name)
+
+
 # Country names that end a "City, Region, Country" string. Only the ones seen in
 # postings matter: they stop "Valencia, Spain" or "London, United Kingdom" from
 # matching a French commune.

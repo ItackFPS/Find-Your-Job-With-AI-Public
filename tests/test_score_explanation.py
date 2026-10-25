@@ -13,7 +13,7 @@ from src.evaluation.runner import frozen_clock, run_decisions
 from src.models.job import Job
 from src.pipeline.filter import load_filters, load_profile
 from src.pipeline.scoring import (
-    _apply_weights, _compute_factors, _is_top_preferred_location, build_scoring_config, explain_score,
+    _apply_weights, _compute_factors, _is_top_preferred_location, _location_bonus, build_scoring_config, explain_score,
     load_scoring_config, score_job, score_jobs_with_breakdown,
 )
 from src.requirements.models import GateResult
@@ -46,8 +46,12 @@ def test_explanation_equals_the_production_score_for_every_accepted_job(world):
         prod_score, prod_factors = world["scored"][job.id]
         assert e.final == prod_score == score_job(job, world["cfg"], gate)
         assert e.factors == prod_factors == _compute_factors(job, world["cfg"], gate)
-        is_top = _is_top_preferred_location(job.location, job.countries, job.work_mode, job.remote, job.department, world["cfg"])
-        assert e.composite == _apply_weights(e.factors, world["cfg"], is_top_preferred_location=is_top)
+        bonus = _location_bonus(job, world["cfg"])   # v1 top-location or distance-model proximity bonus
+        assert e.composite == _apply_weights(e.factors, world["cfg"], location_bonus=bonus)
+        if world["cfg"]["scoring"]["location_fit"].get("distance") is None:
+            is_top = _is_top_preferred_location(
+                job.location, job.countries, job.work_mode, job.remote, job.department, world["cfg"])
+            assert e.composite == _apply_weights(e.factors, world["cfg"], is_top_preferred_location=is_top)
         # passing precomputed factors changes nothing
         assert explain_score(job, world["cfg"], gate, factors=prod_factors) == e
 

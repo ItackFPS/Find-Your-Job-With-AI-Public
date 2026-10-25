@@ -32,6 +32,7 @@ using the ``id`` field present in every summary response object.
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 import time
@@ -41,7 +42,7 @@ from typing import Any
 
 import httpx
 
-from src.collectors.base import BaseCollector, CollectorResult
+from src.collectors.base import BaseCollector, CollectorResult, RatePolicy, RecordedFixture
 
 logger = logging.getLogger(__name__)
 
@@ -159,6 +160,15 @@ class EURESCollector(BaseCollector):
     vs. ~9% rate-limit padding, measured).
     """
 
+    # public_page: the EURES portal's own anonymous search endpoint, not documented as an
+    # API for third parties, but europa.eu content is reusable (Commission Decision
+    # 2011/833/EU) and robots.txt (europa.eu, checked 2026-10-24) does not disallow
+    # /eures/api/. Read as a public page: robots.txt is checked before every request.
+    access_class = "public_page"
+    robots_policy = True
+    # >= 1 s between requests; the shipped config makes ~10 queries x 5 pages = 50.
+    rate_policy = RatePolicy(min_delay_seconds=1.0, max_requests_per_run=300)
+
     def __init__(self, config: dict[str, Any] | None = None):
         cfg = config or {}
         super().__init__(
@@ -171,6 +181,10 @@ class EURESCollector(BaseCollector):
         self.queries: list[dict[str, Any]] = cfg.get("queries") or _DEFAULT_QUERIES
         self.concurrent_queries: int = max(1, int(cfg.get("concurrent_queries", 2)))
         self._rate_lock = threading.Lock()
+
+    def fixture(self) -> RecordedFixture:
+        return RecordedFixture("eures_search.json", self._load_fixture("eures_search.json"),
+                               parse_search_response)
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -308,6 +322,7 @@ class EURESCollector(BaseCollector):
             "sessionId": "find-your-job-collector",
             "requestLanguage": "en",
         }
+        self._before_request(_API_URL)  # robots.txt and the per-run request cap
         last_error = "unknown error"
         for attempt in range(1, self.retries + 1):
             try:
@@ -316,6 +331,7 @@ class EURESCollector(BaseCollector):
                     page, keyword, location_codes, attempt,
                 )
                 resp = httpx.post(_API_URL, json=body, headers=_HEADERS, timeout=self.timeout)
+                self._observe_response(resp)
 
                 # 307 here is europa.eu's own overload/maintenance redirect to
                 # https://sorry.ec.europa.eu/ (verified 2026-09-08: a genuine
@@ -336,7 +352,10 @@ class EURESCollector(BaseCollector):
 
                 resp.raise_for_status()
                 data = resp.json()
-                return data.get("jvs") or [], int(data.get("numberRecords") or 0)
+                jvs, total = data.get("jvs") or [], int(data.get("numberRecords") or 0)
+                if not jvs and total == 0 and "numberRecords" in data:
+                    self._note_empty_result()  # a well-formed answer with no match
+                return jvs, total
 
             except (httpx.TimeoutException, httpx.ConnectError) as exc:
                 last_error = str(exc)
@@ -348,12 +367,21 @@ class EURESCollector(BaseCollector):
                     )
                     time.sleep(backoff)
 
+        if last_error != "unknown error" and not last_error.startswith("HTTP"):
+            self._note_network_error()
         raise RuntimeError(f"EURES API unreachable after {self.retries} attempts: {last_error}")
 
 
 # ---------------------------------------------------------------------------
 # Pure helpers — testable without network access
 # ---------------------------------------------------------------------------
+
+def parse_search_response(text: str) -> list[dict[str, Any]]:
+    """The offers in one search API answer, mapped like collect() maps them."""
+    data = json.loads(text)
+    jvs = data.get("jvs") if isinstance(data, dict) else None
+    return [m for m in (_map_job(j) for j in jvs or [] if isinstance(j, dict)) if m.get("title")]
+
 
 def _map_job(job: dict[str, Any]) -> dict[str, Any]:
     """Map a EURES API jv dict to the pipeline normalizer raw-dict contract."""

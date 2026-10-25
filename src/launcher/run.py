@@ -20,6 +20,7 @@ from pathlib import Path
 
 from src.launcher import core
 from src.launcher.core import Backend, Level, Settings
+from src.launcher.window import open_app_window
 from src.launcher.winproc import (
     IS_WINDOWS,
     JobObject,
@@ -231,6 +232,20 @@ class Launcher:
         """Stop everything this launcher started (thread-safe; the tray's Quit)."""
         self.stop_requested = True
 
+    def open_window(self) -> None:
+        """Show the dashboard. ``--window app`` (the default) outside dev mode: the app's own
+        window process (src/launcher/window.py, pywebview on WebView2, with the Edge/Chrome
+        ``--app`` window as its fallback), focused if already open. Started by this launcher, it
+        joins the kill-on-close job, so Quit closes it; closing it stops nothing else."""
+        if self.window == "app" and self.mode != "dev":
+            if self.port is not None:
+                open_app_window(self.s.root, self.port, self.token, self.out, job=self.job)
+                return
+            if self.instance is not None:
+                open_app_window(self.s.root, self.instance.port, self.instance.instance_token, self.out)
+                return
+        open_dashboard(self._dashboard_url(), self.window, self.out)
+
     def _open_running_instance(self) -> int:
         """A second launch: open the running instance's window, once its backend has proved
         (by returning the token from the lock file) that it is that instance."""
@@ -244,10 +259,10 @@ class Launcher:
                     self.instance = instance
                     self.out("The app is already running; opening the dashboard.")
                     # Opened right after the check, nothing in between. Checking again would not
-                    # close the gap: a browser (or Edge --app) connects on its own, later, and cannot
-                    # be given the token. The app's own window process (feat/f2-app-window) verifies
-                    # the token itself before it loads anything, and keeps watching it.
-                    open_dashboard(instance.url, self.window, self.out)
+                    # close the gap for a browser (or Edge --app): it connects on its own, later,
+                    # and cannot be given the token. The app's own window process verifies the
+                    # token itself before it loads anything, and keeps watching it (window.py).
+                    self.open_window()
                     return 0
                 if verdict in (Backend.OTHER, Backend.FOREIGN):
                     reason = (f"port {instance.port} does not answer as the running instance "
@@ -322,7 +337,7 @@ class Launcher:
         if self.mode == "dev" and not self._start_vite():
             return 1
         self._report_llm()
-        open_dashboard(self._dashboard_url(), self.window, self.out)
+        self.open_window()
         self.out("")
         for level, name, text in status_lines(self.s):
             self.out(f"  {MARK[level]} {name:<10} {text}")

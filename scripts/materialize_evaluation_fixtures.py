@@ -40,7 +40,8 @@ def build_ai_filter_50(dest: Path) -> None:
         dest, dataset_id="synthetic-ai-filter-50", version="1", kind="synthetic",
         created_at=CREATED_AT, as_of=AS_OF, jobs=[dict(j) for j in JOBS], labels=labels,
         profile_yaml=(FIXTURES / "ai_filter_benchmark" / "profile.yaml").read_bytes(),
-        notes="50 synthetic French postings, hand-labelled; pinned profile snapshot 2026-09-17.",
+        notes=("50 synthetic French postings, hand-labelled; pinned profile snapshot 2026-09-17, "
+               "location migrated to the distance model 2026-10-24."),
     )
 
 

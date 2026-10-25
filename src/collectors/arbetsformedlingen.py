@@ -45,6 +45,10 @@ _DEFAULT_SEARCH_TERMS = [
 class ArbetsformedlingenCollector(BaseCollector):
     """Collects Swedish job listings from the official JobTech JobSearch API."""
 
+    # official: the Swedish Public Employment Service's open JobSearch API (JobTech
+    # Dev), documented and published as open data.
+    access_class = "official"
+
     def __init__(self, config: dict[str, Any] | None = None, **_: Any) -> None:
         super().__init__(timeout=30, retries=3, rate_limit_delay=1.0)
         cfg = config or {}

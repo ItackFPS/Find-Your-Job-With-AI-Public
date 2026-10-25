@@ -285,6 +285,11 @@ def run_pipeline(
         integrate_semantic_into_ranking,
         load_semantic_config,
     )
+    from src.pipeline.circuit_breaker import BreakerState, is_network_outage, paused_reason
+    from src.pipeline.circuit_breaker import load_states as load_breaker_states
+    from src.pipeline.circuit_breaker import next_state as next_breaker_state
+    from src.pipeline.circuit_breaker import save_states as save_breaker_states
+    from src.pipeline.source_health import annotate_yield_anomalies
     from src.pipeline.validate import validate_jobs
     from src.storage.runs import RunStorage
     from src.storage.sqlite import Storage
@@ -337,9 +342,18 @@ def run_pipeline(
         # =================================================================
         profile_path = resolve_config_path(config_dir, "profile.yaml")
         early_profile = None
+        early_profile_hash = ""
         if profile_path.exists():
+            # A v1 personal profile (département priorities) is converted to the distance
+            # model once, with a backup (src/geo/profile_migration.py). Fail-open.
+            from src.geo.profile_migration import migrate_personal_profile
+
+            migrate_personal_profile(profile_path)
             try:
                 from src.pipeline.filter import load_profile as _load_profile_fn
+                # Hash read right after the (post-migration) load: stats.profile_hash then
+                # names the profile this run actually uses, not a later save.
+                early_profile_hash = _hash_file(str(profile_path))
                 early_profile = _load_profile_fn(str(profile_path))
             except Exception as exc:
                 logger.warning("Could not load profile for discovery expansion: %s", exc)
@@ -439,6 +453,23 @@ def run_pipeline(
                     "status": "skipped", "reason": skip_reasons.get(s.get("type", ""), ""),
                 }
 
+        # Circuit breaker (plan F6.1): a source that failed FAILURE_THRESHOLD runs in a row
+        # is skipped until its pause is over, then tried again. Never blocks the run.
+        breakers = load_breaker_states(db_path)
+        breaker_now = datetime.now(UTC)
+        paused_names = {s["name"] for s in active_sources
+                        if s["name"] in breakers and breakers[s["name"]].is_paused(breaker_now)}
+        for name in sorted(paused_names):
+            state = breakers[name]
+            reason = paused_reason(state)
+            logger.warning("Skipping source %s: %s", name, reason)
+            stats.by_source[name] = {
+                "collected": 0, "accepted": 0, "errors": 0, "status": "paused", "reason": reason,
+                "paused_until": state.paused_until.isoformat() if state.paused_until else None,
+                "consecutive_failures": state.consecutive_failures,
+            }
+        active_sources = [s for s in active_sources if s["name"] not in paused_names]
+
         all_jobs: list[Job] = []
 
         def _run_source(source_cfg: dict[str, Any]) -> tuple[str, list[Job], dict[str, Any], list[str]]:
@@ -457,9 +488,13 @@ def run_pipeline(
             if src_type in all_partition_vocabularies:
                 merged_cfg["partition_vocabulary"] = all_partition_vocabularies[src_type]
             if src_type == "france_travail_web" and early_profile is not None:
-                # What to read: the profile's domains and its departement locations.
+                # What to read: the profile's domains and its départements — with a home,
+                # those within the maximum distance (plus home's); else the v1 list.
+                from src.pipeline.location_distance import distance_config, ft_departments
+
                 merged_cfg.setdefault("target_domains", list(early_profile.target_domains))
-                merged_cfg.setdefault("departments", [
+                distance_cfg = distance_config(early_profile)
+                merged_cfg.setdefault("departments", ft_departments(distance_cfg) if distance_cfg else [
                     p.value for p in early_profile.geography.location_preferences
                     if p.type == "department" and p.status != "excluded"])
             # Registered collectors all take ``config=``; the abstract
@@ -482,6 +517,7 @@ def run_pipeline(
                 if result.metadata.get("per_query_status"):
                     source_stats["per_query_status"] = result.metadata["per_query_status"]
                 errors = [f"{name}: {e}" for e in result.errors]
+                _apply_source_contract(collector, source_stats, errors, name)
                 logger.info("  Collected %d jobs from %s", len(normalized), name)
                 return name, normalized, source_stats, errors
             except Exception as exc:
@@ -520,6 +556,33 @@ def run_pipeline(
                 stats.collected = len(all_jobs)
                 _collect_reporter(_sources_done)
 
+        # Each source that ran moves its breaker: a success closes it, a failure counts,
+        # the third failure in a row pauses the source (its row says until when).
+        # A run where (nearly) every source got no HTTP answer at all is this machine's
+        # outage, not the sources' failure: no breaker moves.
+        ran_rows = [stats.by_source.get(cfg["name"], {}) for cfg in active_sources]
+        if is_network_outage(ran_rows):
+            for row in ran_rows:
+                row["network_outage"] = True
+            stats.errors.append("No source could be reached (network down?): failed sources are not counted "
+                                "towards their circuit breaker this run")
+            active_sources_for_breaker: list[dict[str, Any]] = []
+        else:
+            active_sources_for_breaker = active_sources
+        updated_breakers = []
+        for cfg in active_sources_for_breaker:
+            name = cfg["name"]
+            row = stats.by_source.get(name, {})
+            state = next_breaker_state(breakers.get(name) or BreakerState(source=name),
+                                       row.get("status"), row.get("reason"), breaker_now)
+            if state.consecutive_failures:
+                row["consecutive_failures"] = state.consecutive_failures
+            if state.paused_until is not None:
+                row["paused_until"] = state.paused_until.isoformat()
+            if name in breakers or state.consecutive_failures:
+                updated_breakers.append(state)
+        save_breaker_states(db_path, updated_breakers)
+
         # Inject pre-collected LinkedIn jobs from the staging snapshot.
         # These arrive as proper Job objects, bypassing the collector executor,
         # so the pipeline never waits for LinkedIn collection.
@@ -554,6 +617,19 @@ def run_pipeline(
                 "HelloWork: injected %d pre-collected job(s) from staging snapshot.",
                 len(prefetched_hellowork_jobs),
             )
+
+        # A source whose yield suddenly dropped (to 0, or far below its recent baseline)
+        # gets a yield_anomaly in its row (plan F1.3). Observability only: never raises.
+        try:
+            _health_rs = RunStorage(db_path=db_path)
+            _health_rs.init_db()
+            try:
+                _history = [r for r in _health_rs.list_runs(limit=7) if r.get("id") != run_id]
+            finally:
+                _health_rs.close()
+            annotate_yield_anomalies(stats.by_source, _history)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Source yield check failed (non-fatal): %s", exc)
 
         stats.collected = len(all_jobs)
         stats.stage_times["collect"] = time.perf_counter() - _t_collect
@@ -675,7 +751,7 @@ def run_pipeline(
         stats.requirements_gate_input = len(filtered_jobs)
         stats.requirements_gate_passed = len(filtered_jobs)
         stats.stage_times["filter"] = time.perf_counter() - _t_filter
-        stats.profile_hash = _hash_file(str(profile_path))
+        stats.profile_hash = early_profile_hash if early_profile is not None else _hash_file(str(profile_path))
         _notify(progress_callback, "filter", stats)
 
         # =================================================================
@@ -1280,6 +1356,32 @@ def collection_status(collected: int, errors: int) -> str:
     if not errors:
         return "completed"
     return "partial" if collected else "failed"
+
+
+def _apply_source_contract(
+    collector: BaseCollector, source_stats: dict[str, Any], errors: list[str], name: str
+) -> None:
+    """Add what the source plug-in contract reports to one source's row (plan F6.1):
+    its access class, a reached request cap, and the parser canary — a collector that
+    returned nothing although its pages were served gets ``canary: "parser_changed"``
+    and an error saying so, which makes the source ``failed`` instead of a silent 0.
+    Never raises: a collector without the contract's state is simply not annotated."""
+    from src.collectors.canary import canary_message, parser_canary
+
+    try:
+        source_stats["access_class"] = collector.access_class
+        health = collector.health()
+        if health.get("request_cap_reached"):
+            source_stats["request_cap_reached"] = True
+        if health.get("network_errors") and not health.get("responses"):
+            source_stats["network_unreachable"] = True  # no HTTP answer at all (DNS, connect, timeout)
+        canary = parser_canary(collector, source_stats["collected"])
+        if canary:
+            source_stats["canary"] = canary
+            source_stats["errors"] += 1
+            errors.insert(0, f"{name}: {canary_message(collector)}")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Source contract check failed for %s (non-fatal): %s", name, exc)
 
 
 def _build_collector_config(source_config: dict[str, Any]) -> dict[str, Any]:

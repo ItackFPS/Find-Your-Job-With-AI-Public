@@ -544,19 +544,37 @@ def test_status_reports_a_stale_lock(tmp_path):
 def test_second_launch_reuses_the_running_instance(tmp_path, monkeypatch):
     first = _launcher(tmp_path, 0, monkeypatch)
     first.window = "app"
-    opened: list[str] = []
-    monkeypatch.setattr(run, "open_dashboard", lambda url, window, out: opened.append(url))
+    opened: list[tuple[int, str, bool]] = []
+    monkeypatch.setattr(run, "open_app_window",
+                        lambda root, port, token, out, job=None: opened.append((port, token, job is not None)))
+    monkeypatch.setattr(run, "open_dashboard", lambda *a, **k: pytest.fail("not the app window"))
     result: dict[str, int] = {}
 
     def second_launch() -> None:
         second = _launcher(tmp_path, 0, monkeypatch, patch=False)
+        second.window = "app"
         result["code"] = second.run()
         result["children"] = len(second.children)
 
     _until_ready(first, second_launch)
     assert first.run() == 0
     assert result == {"code": 0, "children": 0}                # nothing started twice
-    assert len(opened) == 2 and opened[0] == opened[1]         # the second launch opened the first's backend
+    # both launches open the app window on the first launcher's backend and token; only the
+    # first one owns it (kill-on-close job), the second launch exits right away
+    assert opened == [(first.state.components["backend"].port, first.token, True),
+                      (first.state.components["backend"].port, first.token, False)]
+
+
+def test_window_none_and_browser_open_no_app_window(tmp_path, monkeypatch):
+    launcher = _launcher(tmp_path, 0, monkeypatch)
+    launcher.port = 51234
+    monkeypatch.setattr(run, "open_app_window", lambda *a, **k: pytest.fail("app window opened"))
+    seen: list[tuple[str, str]] = []
+    monkeypatch.setattr(run, "open_dashboard", lambda url, window, out: seen.append((url, window)))
+    for window in ("browser", "none"):
+        launcher.window = window
+        launcher.open_window()
+    assert seen == [("http://127.0.0.1:51234", "browser"), ("http://127.0.0.1:51234", "none")]
 
 
 @windows_only

@@ -1,8 +1,10 @@
 """Scheduler status and control API routes.
 
-GET  /api/scheduler/status          — current status of all schedules
+GET  /api/scheduler/status          — current status of all schedules (+ source breakers)
 GET  /api/scheduler/executions      — recent execution history
 POST /api/scheduler/run/{id}        — manually trigger a schedule
+POST /api/scheduler/pause           — pause scheduled runs and running scans (the tray's "Pause scans")
+POST /api/scheduler/resume          — resume them
 """
 
 from __future__ import annotations
@@ -22,8 +24,13 @@ def get_scheduler_status(request: Request) -> dict[str, Any]:
     """Return the current status of the scheduler and all defined schedules."""
     scheduler = getattr(request.app.state, "scheduler", None)
     if scheduler is None:
-        return {"schedules": [], "note": "Scheduler not initialized"}
-    status: dict[str, Any] = scheduler.get_status()
+        status: dict[str, Any] = {"schedules": [], "note": "Scheduler not initialized"}
+    else:
+        status = scheduler.get_status()
+    # Per-source circuit breakers (plan F6.1), for Settings' source health.
+    from src.api.routes.sources import breaker_rows
+
+    status["source_breakers"] = breaker_rows(request.app.state.db_path)
     return status
 
 
@@ -42,6 +49,24 @@ def list_executions(
         return storage.list_executions(definition_id=definition_id, limit=limit)
     finally:
         storage.close()
+
+
+@router.post("/pause")
+def pause_scheduler(request: Request) -> dict[str, Any]:
+    """Stop scheduled dispatches; running scans stop at their next checkpoint."""
+    scheduler = getattr(request.app.state, "scheduler", None)
+    if scheduler is None:
+        raise HTTPException(status_code=503, detail="Scheduler not available")
+    return {"paused": True, "pausing": scheduler.pause_all()}
+
+
+@router.post("/resume")
+def resume_scheduler(request: Request) -> dict[str, Any]:
+    """Dispatch scheduled runs again; paused scans resume from their checkpoint."""
+    scheduler = getattr(request.app.state, "scheduler", None)
+    if scheduler is None:
+        raise HTTPException(status_code=503, detail="Scheduler not available")
+    return {"paused": False, "resumed": scheduler.resume_all()}
 
 
 @router.post("/run/{definition_id}")
