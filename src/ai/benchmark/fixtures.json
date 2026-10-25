@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "note": "Synthetic job postings and a synthetic profile for the local model benchmark (plan F8.3). Invented text: no real company, person or posting. Each offer's expected list holds the key requirement phrases used for the recall metric.",
+  "profile": {
+    "entries": [
+      {"id": "exp-1", "text": "2 ans de développement Python (FastAPI, SQLAlchemy) dans une PME de logistique : API REST, tests pytest, intégration continue GitLab."},
+      {"id": "exp-2", "text": "Stage de 6 mois en analyse de données : tableaux de bord Power BI, requêtes SQL sur PostgreSQL, nettoyage de données avec pandas."},
+      {"id": "edu-1", "text": "Master informatique (bac+5), spécialité science des données, obtenu en 2024."},
+      {"id": "skill-1", "text": "Docker et docker-compose au quotidien ; notions de Kubernetes ; Linux en ligne de commande."},
+      {"id": "lang-1", "text": "Français langue maternelle ; anglais professionnel (TOEIC 880)."},
+      {"id": "pref-1", "text": "Recherche un CDI ou un poste en télétravail partiel, région Auvergne-Rhône-Alpes ou à distance."}
+    ]
+  },
+  "offers": [
+    {
+      "id": "fr-backend-python",
+      "language": "fr",
+      "title": "Développeur Python backend (H/F)",
+      "expected": ["2 ans d'expérience", "SQL", "Docker", "Kubernetes", "Anglais technique"],
+      "text": "Nous recherchons un développeur Python backend pour renforcer notre équipe produit à Lyon (CDI, 2 jours de télétravail par semaine).\n\nVos missions :\n- Concevoir et maintenir nos API REST avec FastAPI.\n- Écrire des tests automatisés et participer aux revues de code.\n- Optimiser les requêtes vers notre base PostgreSQL.\n\nProfil recherché :\n- Minimum 2 ans d'expérience en développement Python.\n- Bonne maîtrise de SQL et des bases de données relationnelles.\n- Une première expérience avec Docker est indispensable.\n- La connaissance de Kubernetes serait un plus.\n- Anglais technique lu et écrit.\n\nRémunération : 40 à 46 k€ brut annuel selon expérience. Tickets restaurant et mutuelle prise en charge à 70 %."
+    },
+    {
+      "id": "fr-data-analyst-alternance",
+      "language": "fr",
+      "title": "Data analyst en alternance (H/F)",
+      "expected": ["bac+4 ou bac+5", "SQL", "Excel", "Power BI", "Rigueur"],
+      "text": "Rejoignez notre direction financière à Paris pour une alternance de 12 mois à partir de septembre.\n\nAu quotidien, vous construirez des tableaux de bord pour les équipes commerciales et automatiserez les reportings mensuels.\n\nCe que nous attendons :\n- Être inscrit(e) dans une formation de niveau bac+4 ou bac+5 en statistiques, informatique ou école de commerce.\n- Savoir écrire des requêtes SQL.\n- Maîtriser Excel (tableaux croisés dynamiques, RECHERCHEX).\n- Une expérience de Power BI ou Tableau est appréciée.\n- Rigueur, curiosité et sens de la pédagogie pour présenter vos analyses.\n\nRythme : 3 jours en entreprise, 2 jours en école. Poste basé à La Défense, accessible en RER A."
+    },
+    {
+      "id": "fr-support-technicien",
+      "language": "fr",
+      "title": "Technicien support informatique niveau 2 (H/F)",
+      "expected": ["bac+2", "au moins un an", "TCP/IP", "permis B"],
+      "text": "Notre centre de services de Nantes recrute un technicien support niveau 2 en CDD de 6 mois, renouvelable.\n\nMissions principales :\n- Prendre en charge les incidents escaladés par le niveau 1 via l'outil de ticketing.\n- Administrer les postes Windows 10/11 et les comptes Active Directory.\n- Déployer les mises à jour et rédiger les procédures internes.\n\nCompétences requises :\n- Formation bac+2 en informatique (BTS SIO ou équivalent).\n- Expérience d'au moins un an sur un poste similaire.\n- Connaissances réseau : TCP/IP, DHCP, DNS.\n- Le permis B est obligatoire pour les interventions sur site.\n\nHoraires : du lundi au vendredi, astreinte un samedi par mois."
+    },
+    {
+      "id": "fr-devops-toulouse",
+      "language": "fr",
+      "title": "Ingénieur DevOps confirmé (H/F)",
+      "expected": ["5 ans d'expérience", "Kubernetes", "Python ou en Bash", "AWS", "Habilitation défense"],
+      "text": "Éditeur de logiciels spécialisé dans l'aéronautique, nous cherchons un ingénieur DevOps confirmé pour notre site de Toulouse. Poste en CDI, télétravail possible jusqu'à 3 jours par semaine.\n\nVous serez responsable de nos chaînes d'intégration et de déploiement continus et de l'exploitation de nos clusters Kubernetes.\n\nVotre profil :\n- 5 ans d'expérience minimum sur des fonctions DevOps ou SRE.\n- Expertise Kubernetes, Helm et Terraform.\n- Scripting en Python ou en Bash.\n- Expérience d'un cloud public (AWS de préférence).\n- Habilitation défense ou capacité à l'obtenir (nationalité de l'Union européenne requise).\n\nSalaire : 55 à 65 k€ selon profil, intéressement et RTT."
+    },
+    {
+      "id": "fr-charge-recrutement",
+      "language": "fr",
+      "title": "Chargé(e) de recrutement (H/F)",
+      "expected": ["Bac+3", "expérience réussie en recrutement", "relationnel", "ATS"],
+      "text": "Cabinet de conseil en ressources humaines implanté à Bordeaux, nous accompagnons des PME de la région dans leurs recrutements.\n\nRattaché(e) à la responsable d'agence, vous gérez le processus de recrutement de bout en bout : rédaction des annonces, sourcing sur les jobboards et LinkedIn, entretiens téléphoniques et physiques, présentation des candidats aux clients.\n\nProfil :\n- Bac+3 minimum en ressources humaines ou en psychologie du travail.\n- Une première expérience réussie en recrutement, idéalement en cabinet.\n- Excellent relationnel et aisance au téléphone.\n- La maîtrise d'un ATS est un atout.\n\nContrat : CDI à temps plein, prime sur objectifs, véhicule de service pour les déplacements clients."
+    },
+    {
+      "id": "en-junior-data-engineer",
+      "language": "en",
+      "title": "Junior Data Engineer (Remote, EU)",
+      "expected": ["degree in computer science", "Python and SQL", "Git", "Airflow", "Fluent English"],
+      "text": "We are a fully remote analytics start-up helping retailers forecast demand. We are hiring a Junior Data Engineer to join our data platform team; you can work from anywhere in the EU.\n\nWhat you will do:\n- Build and maintain batch pipelines in Python and SQL.\n- Model data in our warehouse (BigQuery) with dbt.\n- Monitor data quality and fix broken jobs.\n\nWhat we are looking for:\n- A degree in computer science, statistics or a related field.\n- Solid Python and SQL skills.\n- Familiarity with Git and code review.\n- Experience with Airflow or another orchestrator is a nice to have.\n- Fluent English; our team works in English.\n\nWe offer a yearly learning budget, flexible hours and a home-office allowance."
+    },
+    {
+      "id": "en-frontend-react",
+      "language": "en",
+      "title": "Frontend Developer (React)",
+      "expected": ["3 years", "TypeScript", "automated testing", "right to work in the Netherlands", "Dutch"],
+      "text": "Our product team in Amsterdam is looking for a Frontend Developer to build the customer dashboard of our energy-management platform. Hybrid role: three days a week in the office.\n\nResponsibilities:\n- Develop new features in React and TypeScript.\n- Work closely with designers to turn Figma prototypes into accessible components.\n- Write unit and end-to-end tests.\n\nRequirements:\n- At least 3 years of professional experience with React.\n- Strong knowledge of TypeScript, HTML and CSS.\n- Experience with automated testing (Jest, Playwright or Cypress).\n- You must already have the right to work in the Netherlands; we cannot sponsor visas.\n- Dutch is a plus but not required.\n\nSalary range: EUR 55,000 to 68,000 per year plus a 30% ruling where eligible."
+    },
+    {
+      "id": "en-ml-intern",
+      "language": "en",
+      "title": "Machine Learning Intern (6 months)",
+      "expected": ["enrolment in a Master's", "PyTorch", "linear algebra", "Publications"],
+      "text": "Join our research lab in Berlin for a six-month internship on document understanding models, starting in March.\n\nYou will:\n- Fine-tune transformer models on our annotated document corpus.\n- Run experiments and report results to the team every week.\n- Contribute to our internal evaluation tooling.\n\nYou have:\n- Current enrolment in a Master's programme in machine learning, computer science or mathematics (the internship must be part of your studies).\n- Hands-on experience with PyTorch.\n- A good understanding of linear algebra and probability.\n- Publications or open-source contributions are a bonus.\n\nThe internship is paid EUR 1,800 per month. Relocation support is available for students moving to Berlin."
+    }
+  ]
+}
