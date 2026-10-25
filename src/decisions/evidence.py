@@ -18,10 +18,11 @@ from typing import Any
 
 from src.decisions.models import ConflictItem, Dimension, EvidenceItem, SourceRef, SpanRef
 from src.pipeline.filter import explain_filter_checks, filter_expected, filter_observed, freshness_reference
+from src.pipeline.location_distance import assess
 from src.requirements.models import GateResult, HardRejectionReason
 
 FILTER_DIMENSION: dict[str, Dimension] = {
-    "location": "location", "remote": "work_mode", "work_mode": "work_mode", "seniority": "seniority",
+    "location": "location", "distance": "location", "remote_policy": "location", "remote": "work_mode", "work_mode": "work_mode", "seniority": "seniority",
     "published_age": "freshness", "salary": "salary", "title_keywords": "domain", "contract_type": "contract",
 }
 GATE_DIMENSION: dict[str, Dimension] = {
@@ -59,6 +60,16 @@ def applicability(code: str, job: Any, config: dict[str, Any]) -> str:
         if not has("locations", "include"):
             return "not_applicable"
         return "satisfied" if (job.location or job.countries) else "unknown"
+    if code in ("distance", "remote_policy"):
+        cfg = config.get("location_distance")
+        if not cfg or (code == "distance" and not cfg.get("strict_distance")):
+            return "not_applicable"            # no home, or not strict: the check cannot reject
+        a = assess(job, cfg)
+        if code == "distance":
+            return "satisfied" if a.road_km is not None else "unknown"
+        if a.remote.kind in ("onsite", "hybrid"):
+            return "not_applicable"            # not a remote offer: the remote policy does not apply
+        return "unknown" if a.remote.kind == "unknown" else "satisfied"
     if code == "remote":
         return "satisfied" if has("remote", "allowed") else "not_applicable"
     if code == "work_mode":
@@ -101,7 +112,8 @@ def filter_failure_items(
     items = [EvidenceItem(
         dimension=FILTER_DIMENSION.get(code, "other"), polarity="negative", state="violated",
         source=_src("filter", f"filter.{code}", evidence="rule"),
-        message=f"Rejected by hard filter: {code}", observed=filter_observed(code, job), expected=exp.get(code))]
+        message=f"Rejected by hard filter: {code}", observed=filter_observed(code, job, config),
+        expected=exp.get(code))]
     if all_failing:
         for o in explain_filter_checks(job, config):
             if not o.passed and o.code != code:
@@ -131,7 +143,7 @@ def filter_pass_items(
             state="satisfied" if known else "unknown", source=_src("filter", f"filter.{code}", evidence="rule"),
             message=(f"Passes hard filter: {code}" if known else
                      f"No data for {code}; hard filter accepts by default (unknown is not a rejection)"),
-            observed=filter_observed(code, job), expected=exp.get(code)))
+            observed=filter_observed(code, job, config), expected=exp.get(code)))
     return items
 
 
@@ -241,11 +253,15 @@ def score_items(expl: Any) -> list[EvidenceItem]:
             source=_src("score", f"score.{factor}", evidence="rule"),
             message=f"{factor} = {value:.2f} (weight share {share:.2f}){extra}",
             observed=f"{value:.3f}", weight=round(share, 4)))
+    detail = getattr(expl, "location_detail", None)
+    if detail:
+        items.extend(location_detail_items(detail))
     if expl.top_location_bonus:
+        label = "Close to home" if detail else "Top preferred location"
         items.append(EvidenceItem(
             dimension="location", polarity="positive", state="satisfied",
             source=_src("score", "score.top_location_bonus", evidence="rule"),
-            message=f"Top preferred location: +{expl.top_location_bonus:.2f} added before the gates",
+            message=f"{label}: +{expl.top_location_bonus:.2f} added before the gates",
             observed=f"+{expl.top_location_bonus:.2f}"))
     if expl.domain_gate_fired:
         effect = (f"composite capped at {expl.domain_cap}" if expl.domain_cap_applied
@@ -269,6 +285,47 @@ def score_items(expl: Any) -> list[EvidenceItem]:
                 message=f"{name.capitalize()} penalty: score multiplied by {1 - fraction:.2f}",
                 observed=f"x{1 - fraction:.2f}"))
     return items
+
+
+def location_detail_items(detail: dict[str, Any]) -> list[EvidenceItem]:
+    """Distance and remote-eligibility evidence (distance model, ``location_distance.describe``).
+    Score-stage evidence: "beyond the radius" lowers the score, it never rejects (the only
+    distance exclusion is the filter's strict check). An unknown distance stays UNKNOWN."""
+    version = detail.get("rule_version")
+    place = detail.get("place")
+    where = "unknown place" if place is None else f"{place['name']} ({place['precision']})"
+    km, radius = detail.get("road_km"), detail.get("max_distance_km")
+    expected = f"home {detail.get('home')}, max {radius} km"
+    if km is None:
+        dist = EvidenceItem(
+            dimension="location", polarity="unknown", state="unknown",
+            source=_src("score", "score.location.distance", version, "metadata"),
+            message=f"Distance unknown ({where}): never a reason to exclude", observed=where, expected=expected)
+    else:
+        inside = bool(detail.get("within_radius"))
+        dist = EvidenceItem(
+            dimension="location", polarity="positive" if inside else "negative",
+            state="satisfied" if inside else "violated",
+            source=_src("score", "score.location.distance", version, "metadata"),
+            message=(f"{where}: ~{km} km by road from home, "
+                     + ("within" if inside else "beyond") + f" the {radius} km maximum"),
+            observed=f"{where}, ~{km} km", expected=expected)
+    kind, accepted = detail.get("remote_kind"), bool(detail.get("remote_accepted"))
+    area = f" ({detail['remote_area']})" if detail.get("remote_area") else ""
+    if accepted:
+        polarity, state, msg = "positive", "satisfied", f"Remote offer of an accepted kind: {kind}{area}"
+    elif kind == "unknown":
+        polarity, state, msg = "unknown", "unknown", "Remote eligibility unknown: never a preferred match"
+    elif kind in ("onsite", "hybrid"):
+        polarity, state, msg = "unknown", "unknown", f"Work mode {kind}: judged on distance"
+    else:
+        polarity, state, msg = "negative", "violated", f"Remote kind not accepted by the profile: {kind}{area}"
+    remote = EvidenceItem(
+        dimension="location", polarity=polarity, state=state,  # type: ignore[arg-type]
+        source=_src("score", "score.location.remote_eligibility", version,
+                    "heuristic" if detail.get("remote_strength") == "explicit" else "metadata"),
+        message=msg, observed=f"{kind}{area} [{detail.get('remote_strength')}: {detail.get('remote_evidence')}]")
+    return [dist, remote]
 
 
 def hard_reject_sources(evidence: list[EvidenceItem], stage: str) -> tuple[str, ...]:

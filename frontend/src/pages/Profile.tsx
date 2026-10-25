@@ -2,8 +2,9 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getProfile, updateProfile, searchEscoSkills, searchEscoOccupations,
-  getAllDepartments,
+  getAllDepartments, searchPlaces,
   type Profile, type EscoEntry, type EscoSuggestion, type FrenchDepartment, type LocationPreference,
+  type HomePlace, type PlaceSuggestion, type RemotePolicy,
 } from '../api/client'
 import { useTranslation } from 'react-i18next'
 import { Card, LoadingState, Switch } from '../components'
@@ -871,6 +872,77 @@ function LocationPreferencesEditor({ values, onChange }: {
 // CheckboxGroup
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// HomePicker — offline commune autocomplete for profile.geography.home
+// ---------------------------------------------------------------------------
+
+function HomePicker({ value, onChange }: { value: HomePlace | null; onChange: (v: HomePlace | null) => void }) {
+  const { t } = useTranslation()
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<PlaceSuggestion[]>([])
+  const searchable = query.trim().length >= 2
+  const shown = searchable ? results : []
+  useEffect(() => {
+    if (!searchable) return
+    let cancelled = false
+    const timer = setTimeout(() => {
+      searchPlaces(query.trim()).then(r => { if (!cancelled) setResults(r) }).catch(() => { if (!cancelled) setResults([]) })
+    }, 200)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [query, searchable])
+  const pick = (p: PlaceSuggestion) => {
+    onChange({ name: p.name, insee: p.insee, lat: p.lat, lon: p.lon, department: p.department, precision: 'commune' })
+    setQuery('')
+    setResults([])
+  }
+  return (
+    <div>
+      <div style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+        {value
+          ? <>{value.name}{value.department ? ` (${value.department})` : ''}
+              {value.precision === 'department' && (
+                <span style={{ color: 'var(--color-muted)' }}> — {t('profile.fields.homeDepartmentCentre')}</span>
+              )}
+              <button
+                type="button"
+                onClick={() => onChange(null)}
+                style={{ marginLeft: '0.6rem', background: 'none', border: '1px solid var(--color-border)',
+                         borderRadius: '6px', padding: '0.1rem 0.5rem', color: 'var(--color-muted)',
+                         cursor: 'pointer', fontSize: '0.8rem' }}
+              >
+                {t('profile.fields.homeClear')}
+              </button></>
+          : <span style={{ color: 'var(--color-muted)' }}>{t('profile.fields.homeNotSet')}</span>}
+      </div>
+      <input
+        style={inputStyle}
+        value={query}
+        onChange={e => setQuery(e.target.value)}
+        placeholder={t('profile.fields.homePlaceholder')}
+        aria-label={t('profile.fields.home')}
+      />
+      {shown.length > 0 && (
+        <div role="listbox" style={{ border: '1px solid var(--color-border)', borderRadius: '7px', marginTop: '0.3rem' }}>
+          {shown.map(p => (
+            <button
+              key={p.insee}
+              role="option"
+              aria-selected={false}
+              onClick={() => pick(p)}
+              style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none',
+                       padding: '0.4rem 0.8rem', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.87rem' }}
+            >
+              {p.name} <span style={{ color: 'var(--color-muted)' }}>{p.department_name ?? p.department}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const REMOTE_POLICY_KEYS: (keyof RemotePolicy)[] = ['remote_france', 'remote_eu', 'remote_worldwide', 'hybrid']
+
 // `labelFor` translates an option code; without it the code is shown as is, marked translate="no"
 // (the excluded-seniority keywords are matched literally in job titles).
 function CheckboxGroup({ options, values, onChange, labelFor }: {
@@ -1075,11 +1147,54 @@ export default function ProfilePage() {
         </div>
 
         <div style={fieldGroup}>
+          <span style={label}>{t('profile.fields.home')}</span>
+          <HomePicker value={profile.geography.home} onChange={v => setGeo('home', v)} />
+        </div>
+
+        <div style={fieldGroup}>
+          <span style={label}>{t('profile.fields.maxDistance', { km: profile.geography.max_distance_km })}</span>
+          <div style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginBottom: '0.5rem' }}>
+            {t('profile.fields.maxDistanceHint')}
+          </div>
+          <input
+            type="range" min={5} max={300} step={5}
+            value={profile.geography.max_distance_km}
+            onChange={e => setGeo('max_distance_km', Number(e.target.value))}
+            aria-label={t('profile.fields.maxDistance', { km: profile.geography.max_distance_km })}
+            style={{ width: '100%' }}
+          />
+          <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.87rem', marginTop: '0.5rem' }}>
+            <input
+              type="checkbox"
+              checked={profile.geography.strict_distance}
+              onChange={e => setGeo('strict_distance', e.target.checked)}
+            />
+            {t('profile.fields.strictDistance')}
+          </label>
+        </div>
+
+        <div style={fieldGroup}>
+          <span style={label}>{t('profile.fields.remoteAccepted')}</span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.9rem' }}>
+            {REMOTE_POLICY_KEYS.map(key => (
+              <label key={key} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', fontSize: '0.87rem' }}>
+                <input
+                  type="checkbox"
+                  checked={profile.geography.remote_policy[key]}
+                  onChange={e => setGeo('remote_policy', { ...profile.geography.remote_policy, [key]: e.target.checked })}
+                />
+                {t(`profile.fields.remotePolicy.${key}`)}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div style={fieldGroup}>
           <span style={label}>
             {t('profile.fields.locationPriorities')}<CountBadge count={profile.geography.location_preferences.length} />
           </span>
           <div style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginBottom: '0.5rem' }}>
-            {t('profile.fields.locationHint')}
+            {t('profile.fields.locationHomeNote')} {t('profile.fields.locationHint')}
           </div>
           <LocationPreferencesEditor
             values={profile.geography.location_preferences}

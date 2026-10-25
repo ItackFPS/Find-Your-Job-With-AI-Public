@@ -425,7 +425,8 @@ class DecisionRecorder:
                             "pre_gate_score": expl.pre_gate_score, "top_location_bonus": expl.top_location_bonus,
                             "domain_cap": expl.domain_cap, "domain_cap_applied": expl.domain_cap_applied,
                             "seniority_multiplier": expl.seniority_multiplier, "composite": expl.composite,
-                            "penalties": expl.penalties, "final": expl.final, "location_match": expl.location_match}
+                            "penalties": expl.penalties, "final": expl.final, "location_match": expl.location_match,
+                            "location_detail": expl.location_detail}
                 except Exception as exc:  # noqa: BLE001 — the record is still written, without score evidence
                     self._skipped += 1
                     logger.warning("Score explanation skipped for job %s (non-fatal): %s", job_id, exc)

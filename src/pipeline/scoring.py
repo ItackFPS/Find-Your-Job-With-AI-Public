@@ -16,6 +16,9 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from src.models.job import Job
 from src.pipeline.departments import PACA_NEIGHBOR_DEPARTMENTS, extract_department_code
+from src.pipeline.location_distance import assess as assess_location
+from src.pipeline.location_distance import describe as describe_location
+from src.pipeline.location_distance import distance_config
 from src.pipeline.location_match import LocationMatch, resolve_job_location
 from src.requirements.models import GateResult
 
@@ -612,6 +615,10 @@ def build_scoring_config(
     location_cfg["location_preferences"] = [
         p.model_dump() for p in profile.geography.location_preferences
     ]
+    # Distance + remote-policy model (F4.3, src/pipeline/location_distance.py): when the
+    # profile has a home, it replaces the priority list above for location_fit and the
+    # location bonus. None keeps the v1 behaviour exactly.
+    location_cfg["distance"] = distance_config(profile)
 
     # Inject user's target skills so the scorer can compute real skill overlap
     # instead of returning the hardcoded 0.5 constant.
@@ -750,10 +757,12 @@ def _compute_factors(
     )
 
     domain_relevance = _score_domain_relevance(job.title, job.description, config)
+    distance_cfg = _distance_cfg(config)
 
     return {
-        "location_fit": _score_location_fit(
-            job.location, job.countries, job.work_mode, job.remote, job.department, config
+        "location_fit": (
+            assess_location(job, distance_cfg).score if distance_cfg else _score_location_fit(
+                job.location, job.countries, job.work_mode, job.remote, job.department, config)
         ),
         "domain_relevance": domain_relevance,
         "skills_match": _score_skills_match(job, config, domain_relevance),
@@ -795,10 +804,30 @@ def _scoring_weights(config: dict[str, Any]) -> dict[str, float]:
     }
 
 
+def _distance_cfg(config: dict[str, Any]) -> dict[str, Any] | None:
+    """The distance model's settings (``build_scoring_config``), or None for the v1 model."""
+    cfg = config.get("scoring", {}).get("location_fit", {}).get("distance")
+    return cfg if isinstance(cfg, dict) and cfg.get("home") else None
+
+
+def _location_bonus(job: Job, config: dict[str, Any]) -> float:
+    """The location bonus added before the gates. v1: ``top_location_bonus`` for the single
+    top-preferred location. Distance model: ``top_location_bonus × (1 − d/R)`` for on-site/
+    hybrid offers inside the radius (see src/pipeline/location_distance.py)."""
+    bonus = _get_float(config, "scoring.gates.top_location_bonus", 0.08)
+    distance_cfg = _distance_cfg(config)
+    if distance_cfg:
+        return bonus * assess_location(job, distance_cfg).proximity
+    is_top = _is_top_preferred_location(
+        job.location, job.countries, job.work_mode, job.remote, job.department, config)
+    return bonus if is_top else 0.0
+
+
 def _apply_weights(
     factors: dict[str, float],
     config: dict[str, Any],
     is_top_preferred_location: bool = False,
+    location_bonus: float | None = None,
 ) -> float:
     """Combine the 5 factor scores into a single 0-1 score.
 
@@ -816,6 +845,9 @@ def _apply_weights(
     multiplier along with the rest of ``base`` — it can only ever raise the
     score, never rescue a confirmed dealbreaker. See
     ``scoring.gates.top_location_bonus`` in config/scoring.yaml.
+
+    ``location_bonus``, when given, is the bonus itself (``_location_bonus``, which also
+    covers the distance model) and replaces the ``is_top_preferred_location`` flag.
     """
     weights = _scoring_weights(config)
     total = sum(weights.values())
@@ -823,9 +855,11 @@ def _apply_weights(
         return 0.5
     base = sum(factors[k] * weights[k] for k in factors) / total
 
-    if is_top_preferred_location:
-        top_location_bonus = _get_float(config, "scoring.gates.top_location_bonus", 0.08)
-        base = base + top_location_bonus
+    if location_bonus is None:
+        location_bonus = (
+            _get_float(config, "scoring.gates.top_location_bonus", 0.08) if is_top_preferred_location else 0.0)
+    if location_bonus:
+        base = base + location_bonus
 
     if _domain_gate_fired(factors, config):
         domain_cap = _get_float(config, "scoring.gates.domain_cap", 0.40)
@@ -962,12 +996,9 @@ def score_job(
     for this job — see ``_apply_gate_and_language_penalties`` for how its
     soft penalties are applied.
     """
-    is_top_preferred_location = _is_top_preferred_location(
-        job.location, job.countries, job.work_mode, job.remote, job.department, config
-    )
     raw = _apply_weights(
         _compute_factors(job, config, gate_result), config,
-        is_top_preferred_location=is_top_preferred_location,
+        location_bonus=_location_bonus(job, config),
     )
     return _apply_gate_and_language_penalties(raw, job, config, gate_result)
 
@@ -990,6 +1021,8 @@ class ScoreExplanation:
     penalties: dict[str, float]          # education / skill / experience / language (fractions)
     final: float                         # == score_job(...)
     location_match: dict[str, Any] | None  # the resolved location preference, if any
+    # Distance model only (location_distance.describe): place, road km, remote eligibility.
+    location_detail: dict[str, Any] | None = None
 
 
 def explain_score(
@@ -1003,22 +1036,22 @@ def explain_score(
     passed in when already computed (avoids recomputing them)."""
     if factors is None:
         factors = _compute_factors(job, config, gate_result)
-    is_top = _is_top_preferred_location(
-        job.location, job.countries, job.work_mode, job.remote, job.department, config
-    )
+    location_bonus = _location_bonus(job, config)
     weights = _scoring_weights(config)
     total = sum(weights.values())
     base = sum(factors[k] * weights[k] for k in factors) / total if total else None
     domain_fired = _domain_gate_fired(factors, config)
     seniority_fired = _seniority_gate_fired(factors)
-    composite = _apply_weights(factors, config, is_top_preferred_location=is_top)
-    bonus = _get_float(config, "scoring.gates.top_location_bonus", 0.08) if is_top and total else 0.0
+    composite = _apply_weights(factors, config, location_bonus=location_bonus)
+    bonus = location_bonus if total else 0.0
     pre_gate = None if base is None else base + bonus
     cap = _get_float(config, "scoring.gates.domain_cap", 0.40)
     final = _apply_gate_and_language_penalties(composite, job, config, gate_result)
     prefs = config.get("scoring", {}).get("location_fit", {}).get("location_preferences") or []
     match = None
-    if prefs:
+    distance_cfg = _distance_cfg(config)
+    detail = describe_location(assess_location(job, distance_cfg), distance_cfg) if distance_cfg else None
+    if prefs and not distance_cfg:
         dept = job.department or extract_department_code(job.location or "", job.countries)
         is_remote = (job.work_mode == "remote") or (job.work_mode is None and job.remote)
         m = resolve_job_location(dept, is_remote, job.countries, prefs)
@@ -1040,7 +1073,7 @@ def explain_score(
             "experience": gate_result.experience_penalty if gate_result else 0.0,
             "language": _detect_language_penalty(job, config),
         },
-        final=final, location_match=match,
+        final=final, location_match=match, location_detail=detail,
     )
 
 
@@ -1089,10 +1122,7 @@ def score_jobs_with_breakdown(
     for i, job in enumerate(jobs, start=1):
         gate_result = gate_results.get(job.id)
         factors = _compute_factors(job, config, gate_result)
-        is_top_preferred_location = _is_top_preferred_location(
-            job.location, job.countries, job.work_mode, job.remote, job.department, config
-        )
-        raw = _apply_weights(factors, config, is_top_preferred_location=is_top_preferred_location)
+        raw = _apply_weights(factors, config, location_bonus=_location_bonus(job, config))
         score = _apply_gate_and_language_penalties(raw, job, config, gate_result)
         result.append((job, score, factors))
         if progress_callback is not None:
