@@ -11,6 +11,11 @@
 # personal configuration.
 #
 # Do not edit to make a benchmark result change; update the labels instead.
+#
+# 2026-10-24 (F4.3): geography.home / max_distance_km / strict_distance /
+# remote_policy added exactly as src/geo/profile_migration.py converts the v1
+# location_preferences below (kept unchanged), so the benchmark measures the
+# distance model a migrated v1 user gets. Golden re-recorded in the same PR.
 target_domains:
 - software_development
 - web_development
@@ -79,6 +84,20 @@ geography:
   - France
   allowed_regions:
   - Europe
+  home:
+    name: Var
+    insee: null
+    lat: 43.28103
+    lon: 6.17463
+    department: '83'
+    precision: department
+  max_distance_km: 150
+  strict_distance: false
+  remote_policy:
+    remote_france: true
+    remote_eu: false
+    remote_worldwide: false
+    hybrid: true
   location_preferences:
   - type: department
     value: '83'
