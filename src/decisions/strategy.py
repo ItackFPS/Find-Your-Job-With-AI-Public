@@ -46,7 +46,10 @@ def rule_versions() -> dict[str, str]:
 
     from src.pipeline.filter import FRESHNESS_RULE_VERSION
 
-    out = {"requirements_gate": GateResult(passes=True).rule_version, "freshness": FRESHNESS_RULE_VERSION}
+    from src.models.profile import PROFILE_SCHEMA_VERSION
+
+    out = {"requirements_gate": GateResult(passes=True).rule_version, "freshness": FRESHNESS_RULE_VERSION,
+           "profile_schema": str(PROFILE_SCHEMA_VERSION)}
     try:
         from src.ai.prompt import ELIGIBILITY_PROMPT_VERSION, PERSONALIZED_PROMPT_VERSION, PROMPT_VERSION
 

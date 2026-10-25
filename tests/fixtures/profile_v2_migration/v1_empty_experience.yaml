@@ -1,0 +1,5 @@
+# Synthetic v1 profile: no level preference, no education, one unknown label.
+target_domains: [web_development]
+experience:
+  preferred_levels: [wizard]
+  excluded_seniority: []

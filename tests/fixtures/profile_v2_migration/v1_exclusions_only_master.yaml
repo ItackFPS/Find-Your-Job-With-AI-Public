@@ -1,0 +1,7 @@
+# Synthetic v1 profile: no preferred level, only seniors excluded, a master.
+target_domains: [data]
+experience:
+  preferred_levels: []
+  max_years: null
+  excluded_seniority: [senior]
+max_education: Master

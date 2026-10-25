@@ -1,0 +1,16 @@
+# Synthetic v1 profile (no personal data): junior targets, bac+3, two départements.
+target_domains: [software_development]
+target_skills: [python, SQL]
+geography:
+  preferred_countries: [France]
+  location_preferences:
+  - {type: department, value: '69', status: preferred, label: Lyon}
+  - {type: department, value: '38', status: acceptable, label: null}
+  - {type: department, value: '13', status: excluded, label: null}
+work_modes: [remote, hybrid, on-site]
+contract_types: [cdi]
+experience:
+  preferred_levels: [junior, entry_level, graduate]
+  max_years: 3
+  excluded_seniority: [senior, director, vp, lead, manager, executive, principal, staff, c_suite]
+max_education: bac+3
