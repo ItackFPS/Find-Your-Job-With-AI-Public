@@ -15,6 +15,7 @@ import json
 import logging
 import os
 import shutil
+import threading
 from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 from typing import Any
@@ -188,26 +189,73 @@ def pull(model: str, *, base_url: str | None = None,
 def chat(model: str, messages: list[dict[str, str]], *, base_url: str | None = None,
          format_schema: dict[str, Any] | None = None, think: bool | str | None = False,
          options: dict[str, Any] | None = None,
-         timeout: tuple[float, float] = (2.0, 600.0)) -> dict[str, Any]:
-    """One non-streamed ``POST /api/chat``; returns Ollama's JSON reply (with its timings)."""
+         timeout: tuple[float, float] = (2.0, 600.0),
+         cancelled: Callable[[], bool] | None = None) -> dict[str, Any]:
+    """One ``POST /api/chat``; returns Ollama's final reply with the whole message and timings.
+
+    The reply is streamed so that ``cancelled`` takes effect at once: the call returns
+    (raising :class:`JobCancelled`) within ~0.1 s, and the connection is closed, which makes
+    Ollama stop generating, instead of waiting for the answer to finish.
+    """
     base = checked_base(base_url)
-    payload: dict[str, Any] = {"model": model, "messages": messages, "stream": False,
+    payload: dict[str, Any] = {"model": model, "messages": messages, "stream": True,
                                "options": options or {}}
     if format_schema is not None:
         payload["format"] = format_schema
     if think is not None:
         payload["think"] = think
+    if cancelled is None:
+        return _chat_stream(f"{base}/api/chat", payload, timeout, threading.Event(), {})
+
+    stop = threading.Event()
+    held: dict[str, Any] = {}
+    outcome: dict[str, Any] = {}
+    finished = threading.Event()
+
+    def run() -> None:
+        try:
+            outcome["value"] = _chat_stream(f"{base}/api/chat", payload, timeout, stop, held)
+        except BaseException as exc:  # noqa: BLE001 - handed back to the caller's thread
+            outcome["error"] = exc
+        finally:
+            finished.set()
+
+    threading.Thread(target=run, daemon=True, name="ollama-chat").start()
+    while not finished.wait(0.1):
+        if cancelled():
+            stop.set()
+            resp = held.get("resp")
+            if resp is not None:
+                try:
+                    resp.close()  # unblocks the reader; Ollama sees the closed connection
+                except Exception:  # noqa: BLE001 - best effort from another thread
+                    logger.debug("Closing the chat stream failed", exc_info=True)
+            raise JobCancelled()
+    if "error" in outcome:
+        raise outcome["error"]
+    result: dict[str, Any] = outcome["value"]
+    return result
+
+
+def _chat_stream(url: str, payload: dict[str, Any], timeout: tuple[float, float],
+                 stop: threading.Event, held: dict[str, Any]) -> dict[str, Any]:
     session = _session()
     try:
-        resp = _post(session, f"{base}/api/chat", payload, timeout, stream=False)
-        try:
-            data = resp.json()
-        except ValueError as exc:
-            raise JobFailed(ERR_MALFORMED) from exc
-        if not isinstance(data, dict):
-            raise JobFailed(ERR_MALFORMED)
-        if isinstance(data.get("error"), str):
-            raise JobFailed(ERR_OLLAMA, message=data["error"][:500])
-        return data
+        resp = _post(session, url, payload, timeout, stream=True)
+        held["resp"] = resp
+        parts: list[str] = []
+        with resp:
+            for item in _lines(resp, stop.is_set):
+                if isinstance(item.get("error"), str):
+                    raise JobFailed(ERR_OLLAMA, message=item["error"][:500])
+                message = item.get("message")
+                if isinstance(message, dict) and isinstance(message.get("content"), str):
+                    parts.append(message["content"])
+                if item.get("done") is True:
+                    item["message"] = {"role": "assistant", "content": "".join(parts)}
+                    return item
+        if stop.is_set():
+            raise JobCancelled()
+        raise JobFailed(ERR_MALFORMED, message="stream ended without done")
     finally:
         session.close()
