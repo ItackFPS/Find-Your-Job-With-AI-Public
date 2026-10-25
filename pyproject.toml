@@ -67,6 +67,8 @@ include = ["src*"]
 # The bundled commune and département tables (scripts/build_geo_data.py).
 [tool.setuptools.package-data]
 "src.geo" = ["data/*"]
+# The local model catalogue (plan F8.2).
+"src.ai.catalogue" = ["models.json"]
 
 [tool.ruff]
 # Pinned explicitly so the rules don't drift with the installed Ruff version
