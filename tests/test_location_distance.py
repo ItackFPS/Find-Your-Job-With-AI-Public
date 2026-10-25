@@ -190,6 +190,12 @@ def test_a_guessed_homonym_never_drives_a_strict_rejection():
     (dict(location="Remote", remote=True, description="Télétravail possible. Clients US only."), False),
     (dict(location="Berlin", description="You must be eligible to work in Germany."), False),   # on-site
     (dict(location="Remote", remote=True, description="Must reside in the US or the EU."), False),
+    # owner-DB review: "only" qualifying a perk or a pay range says nothing about who may apply
+    (dict(location="Remote", remote=True, description="Benefits: Federal Holidays (US Only) + volunteer days."), False),
+    (dict(location="Remote", remote=True,
+          description="Pay for residents of the United States only. This range reflects the role."), False),
+    (dict(location="Remote", remote=True, description="US based applicants only $114,297-$235,319 USD."), False),
+    (dict(location="Remote", remote=True, description="This role is fully remote - USA Only. About us."), True),
 ])
 def test_remote_policy_excludes_only_explicit_restrictions_elsewhere(fields, excluded):
     job = _job(**fields)

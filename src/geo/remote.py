@@ -175,6 +175,18 @@ def _restriction(text: str) -> RemoteEligibility | None:
 _EXPLICIT_RESTRICTION_RES = _RESTRICTION_RES[:5]
 _AREA_WORD_RE = re.compile(rf"(?<![\w.])({_AREA_ALT})(?![\w])", re.I)
 _SENTENCE_END_RE = re.compile(r"[.;!?\n]")
+_ONLY_PATTERNS = (2, 4)  # "X only" and "X-based (candidates) only" in _RESTRICTION_RES
+_PERK_OR_PAY_RE = re.compile(
+    r"holiday|salary|compensation|\bpay\b|\brange\b|benefit|health|insurance|401k|\bpto\b|bonus|equity"
+    r"|employees|\busd\b|\$", re.I)
+
+
+def _is_perk_or_pay(text: str, m: re.Match[str]) -> bool:
+    """An "X only" that qualifies a perk or a pay range, or sits in parentheses, says nothing
+    about who may apply."""
+    before = text[max(0, m.start() - 1): m.start()]
+    window = text[max(0, m.start() - 80): min(len(text), m.end() + 80)]
+    return before == "(" or bool(_PERK_OR_PAY_RE.search(window))
 
 
 def explicit_restriction_areas(
@@ -190,8 +202,10 @@ def explicit_restriction_areas(
     text = _HEADQUARTERS_RE.sub(" ", f"{title or ''}\n{location or ''}\n{description or ''}")
     areas: set[str] = set()
     quote: str | None = None
-    for regex in _EXPLICIT_RESTRICTION_RES:
+    for i, regex in enumerate(_EXPLICIT_RESTRICTION_RES):
         for m in regex.finditer(text):
+            if i in _ONLY_PATTERNS and _is_perk_or_pay(text, m):
+                continue  # "Federal Holidays (US only)", "salary range for US residents only"
             group = m.group(1) if m.groups() else None
             first = _area(group) if group else None
             areas.add(first or "?")
