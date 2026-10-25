@@ -11,7 +11,6 @@ rewritten by the UI.
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 import yaml
