@@ -46,6 +46,10 @@ class RemoteOKCollector(BaseCollector):
                            One request per tag. Falls back to unfiltered when absent.
     """
 
+    # official: RemoteOK's public JSON API (remoteok.com/api), offered for reuse with a
+    # link back; robots.txt (checked 2026-10-24) allows it.
+    access_class = "official"
+
     def __init__(self, config: dict[str, Any] | None = None, **_: Any) -> None:
         super().__init__(timeout=30, retries=3, rate_limit_delay=2.0)
         cfg = config or {}

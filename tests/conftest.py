@@ -182,6 +182,22 @@ def _restore_environment():
             os.environ[key] = value
 
 
+@pytest.fixture(autouse=True)
+def _offline_collectors(monkeypatch):
+    """Collectors never wait or fetch robots.txt from the network in tests.
+
+    The rate limiter's sleep is a no-op (``BaseCollector._sleep``), and robots.txt is a
+    fake that allows everything. Tests about pacing or robots.txt install their own
+    (tests/test_source_contract.py drives the real fetcher through a fake transport).
+    """
+    from src.collectors import robots
+    from src.collectors.base import BaseCollector
+
+    monkeypatch.setattr(BaseCollector, "_sleep", lambda _seconds: None)
+    monkeypatch.setattr(robots, "fetch_robots_txt",
+                        lambda _url, **_kw: (200, "User-agent: *\nAllow: /\n"))
+
+
 @pytest.fixture
 def isolated_app(tmp_path, monkeypatch):
     """The FastAPI app with everything its lifespan uses pointed at tmp paths.

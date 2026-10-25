@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic job-board RSS feed (no real offer). -->
+<rss version="2.0">
+  <channel>
+    <title>We Work Remotely: Remote Jobs</title>
+    <link>https://weworkremotely.com</link>
+    <item>
+      <title>Acme Corp: Senior Backend Engineer</title>
+      <link>https://weworkremotely.com/remote-jobs/view/11111-senior-backend-engineer#job-11111</link>
+      <guid>https://weworkremotely.com/remote-jobs/view/11111-senior-backend-engineer#job-11111</guid>
+      <description>&lt;p&gt;We are looking for a backend engineer skilled in Python.&lt;/p&gt;</description>
+      <category>Programming</category>
+      <category>Back-End</category>
+    </item>
+    <item>
+      <title>Beta Inc: JavaScript Developer</title>
+      <link>https://weworkremotely.com/remote-jobs/view/22222-javascript-developer#job-22222</link>
+      <guid>https://weworkremotely.com/remote-jobs/view/22222-javascript-developer#job-22222</guid>
+      <description>&lt;p&gt;Build our React frontend.&lt;/p&gt;</description>
+      <category>JavaScript</category>
+    </item>
+    <item>
+      <title>Listing Without A Colon Separator</title>
+      <link>https://weworkremotely.com/remote-jobs/view/33333-some-role#job-33333</link>
+      <guid>https://weworkremotely.com/remote-jobs/view/33333-some-role#job-33333</guid>
+      <description>A remote role.</description>
+    </item>
+  </channel>
+</rss>

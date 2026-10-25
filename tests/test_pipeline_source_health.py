@@ -188,3 +188,12 @@ class TestAlertDeduplicationNoisePrevention:
         result = detect_source_yield_anomalies(current, history)
         assert len(result) == 1
         assert result[0].is_new is True
+
+
+def test_history_rows_of_runs_where_the_source_did_not_run_are_ignored() -> None:
+    """Review #58: a paused or skipped row's 0 is not a yield and must not drag the baseline."""
+    history = _healthy_history("eures", [40, 40, 40])
+    history.insert(0, _completed_run({"eures": {"collected": 0, "accepted": 0, "errors": 0, "status": "paused"}}))
+    history.insert(0, _completed_run({"eures": {"collected": 0, "accepted": 0, "errors": 0, "status": "skipped"}}))
+    result = detect_source_yield_anomalies({"eures": {"collected": 0, "accepted": 0, "errors": 1}}, history)
+    assert len(result) == 1 and result[0].baseline_yield == 40.0 and result[0].baseline_run_count == 3

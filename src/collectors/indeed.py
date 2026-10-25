@@ -36,6 +36,7 @@ Indeed Terms of Service:
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
@@ -44,7 +45,7 @@ from typing import Any
 
 import httpx
 
-from src.collectors.base import BaseCollector, CollectorResult
+from src.collectors.base import BaseCollector, CollectorResult, RatePolicy, RecordedFixture
 
 logger = logging.getLogger(__name__)
 
@@ -196,6 +197,17 @@ class IndeedCollector(BaseCollector):
         rate_limit_delay    Seconds between page requests (default: 0.5).
         timeout             Per-request timeout in seconds (default: 20).
     """
+
+    # unofficial: Indeed's mobile-app GraphQL endpoint, called with the app's key. Indeed
+    # has no public API (the Publisher API ended), so this is opt-in once consent exists
+    # (plan F6.5). No robots.txt check: it is an app endpoint, not a crawled page.
+    access_class = "unofficial"
+    # The shipped config runs ~25 queries x 5 pages; its 0.5 s delay is the floor.
+    rate_policy = RatePolicy(min_delay_seconds=0.5, max_requests_per_run=500)
+
+    def fixture(self) -> RecordedFixture:
+        return RecordedFixture("indeed_graphql.json", self._load_fixture("indeed_graphql.json"),
+                               parse_graphql_response)
 
     def __init__(self, config: dict[str, Any] | None = None):
         cfg = config or {}
@@ -376,6 +388,7 @@ class IndeedCollector(BaseCollector):
             date_filter_hours=self.date_filter_hours,
         )
         last_error: str | None = None
+        self._before_request(_API_URL)  # the per-run request cap
 
         for attempt in range(1, self.retries + 1):
             try:
@@ -389,6 +402,7 @@ class IndeedCollector(BaseCollector):
                     json={"query": query},
                     timeout=self.timeout,
                 )
+                self._observe_response(resp)
             except (httpx.TimeoutException, httpx.ConnectError) as exc:
                 last_error = f"network error: {exc}"
                 if attempt < self.retries:
@@ -439,6 +453,8 @@ class IndeedCollector(BaseCollector):
 
             job_search = (data.get("data") or {}).get("jobSearch") or {}
             results = job_search.get("results") or []
+            if not results and "results" in job_search:
+                self._note_empty_result()  # a well-formed answer with no match
             next_cursor: str | None = (
                 (job_search.get("pageInfo") or {}).get("nextCursor") or None
             )
@@ -450,6 +466,8 @@ class IndeedCollector(BaseCollector):
             ]
             return raw_jobs, next_cursor, None
 
+        if last_error is not None and last_error.startswith("network error"):
+            self._note_network_error()
         return [], None, f"indeed: all {self.retries} attempts failed: {last_error}"
 
 
@@ -604,6 +622,14 @@ def _parse_published_at(date_published_ms: int | float | None) -> str | None:
         return dt.isoformat()
     except (TypeError, ValueError, OSError):
         return None
+
+
+def parse_graphql_response(text: str) -> list[dict[str, Any]]:
+    """The offers in one jobSearch GraphQL answer, mapped like _fetch_page() maps them."""
+    data = json.loads(text)
+    job_search = ((data.get("data") or {}).get("jobSearch") or {}) if isinstance(data, dict) else {}
+    return [_map_job_to_raw(r["job"]) for r in job_search.get("results") or []
+            if isinstance(r, dict) and isinstance(r.get("job"), dict)]
 
 
 def _map_job_to_raw(job: dict[str, Any]) -> dict[str, Any]:

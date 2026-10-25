@@ -169,6 +169,20 @@ class RunStorage:
                 last_known_count INTEGER,
                 updated_at TEXT NOT NULL
             );
+
+            -- Per-source circuit breaker (plan F6.1; src/pipeline/circuit_breaker.py).
+            -- One row per source name; consecutive_failures counts failed runs in a
+            -- row, trips how many pauses this failure streak has caused (drives the
+            -- exponential backoff), paused_until is when the source runs again.
+            CREATE TABLE IF NOT EXISTS source_breakers (
+                source TEXT PRIMARY KEY,
+                consecutive_failures INTEGER NOT NULL DEFAULT 0,
+                trips INTEGER NOT NULL DEFAULT 0,
+                paused_until TEXT,
+                last_failure_reason TEXT,
+                last_failure_at TEXT,
+                updated_at TEXT NOT NULL
+            );
         """)
 
         # Migration: add pid/heartbeat_at columns for restart-safe stale-run
@@ -602,6 +616,36 @@ class RunStorage:
             "SELECT * FROM source_checkpoints ORDER BY last_success_at DESC"
         ).fetchall()
         return [dict(r) for r in rows]
+
+    # -- source_breakers CRUD (plan F6.1) ----------------------------------------
+
+    def list_source_breakers(self) -> list[dict[str, Any]]:
+        """Every source's circuit-breaker row (see src/pipeline/circuit_breaker.py)."""
+        conn = self._get_conn()
+        return [dict(r) for r in conn.execute("SELECT * FROM source_breakers ORDER BY source")]
+
+    def save_source_breakers(self, rows: list[dict[str, Any]]) -> None:
+        """Insert or replace breaker rows (keys: the table's columns but updated_at)."""
+        if not rows:
+            return
+        now = datetime.now(UTC).isoformat()
+        conn = self._get_conn()
+        conn.executemany(
+            """INSERT INTO source_breakers
+                   (source, consecutive_failures, trips, paused_until,
+                    last_failure_reason, last_failure_at, updated_at)
+               VALUES (:source, :consecutive_failures, :trips, :paused_until,
+                       :last_failure_reason, :last_failure_at, :updated_at)
+               ON CONFLICT(source) DO UPDATE SET
+                   consecutive_failures=excluded.consecutive_failures,
+                   trips=excluded.trips,
+                   paused_until=excluded.paused_until,
+                   last_failure_reason=excluded.last_failure_reason,
+                   last_failure_at=excluded.last_failure_at,
+                   updated_at=excluded.updated_at""",
+            [{**row, "updated_at": now} for row in rows],
+        )
+        conn.commit()
 
     # -- retention (Phase LATER / I13) ------------------------------------------
 

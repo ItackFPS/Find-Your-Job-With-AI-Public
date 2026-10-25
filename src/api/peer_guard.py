@@ -213,6 +213,35 @@ def _is_loopback(host: str) -> bool:
     return ip is not None and ip.is_loopback
 
 
+def peer_is_owner(scope: Scope, owner_of: Callable[[Address, Address], str | None],
+                  self_owner: str) -> bool:
+    """True only when the request's peer is a loopback process of the account ``self_owner`` (fails closed)."""
+    client, server = scope.get("client"), scope.get("server")
+    if not client or not server or not _is_loopback(str(client[0])):
+        return False
+    if any(name.lower() in FORWARDING_HEADERS for name, _ in scope.get("headers") or ()):
+        return False                      # the client address may not be the connection's (module docstring)
+    try:
+        owner = owner_of((str(client[0]), int(client[1])), (str(server[0]), int(server[1])))
+    except (OSError, ValueError):
+        return False
+    return owner is not None and owner == self_owner
+
+
+def is_same_account_peer(scope: Scope) -> bool:
+    """Whether this request comes from a process of the account running this server, on loopback.
+
+    Independent of ``API_SAME_USER_ONLY``: used to decide what a response may disclose (the launcher's
+    instance token in ``/api/health``). False wherever the peer's account cannot be identified."""
+    if connection_owner is None or current_owner is None:
+        return False
+    try:
+        me = current_owner()
+    except OSError:
+        return False
+    return bool(me) and peer_is_owner(scope, connection_owner, str(me))
+
+
 # -- the middleware ----------------------------------------------------------------------------------------
 
 class SameUserPeerGuardMiddleware:
@@ -234,16 +263,7 @@ class SameUserPeerGuardMiddleware:
         self.self_owner: str = me
 
     def allowed(self, scope: Scope) -> bool:
-        client, server = scope.get("client"), scope.get("server")
-        if not client or not server or not _is_loopback(str(client[0])):
-            return False
-        if any(name.lower() in FORWARDING_HEADERS for name, _ in scope.get("headers") or ()):
-            return False                  # the client address may not be the connection's (module docstring)
-        try:
-            owner = self.owner_of((str(client[0]), int(client[1])), (str(server[0]), int(server[1])))
-        except (OSError, ValueError):
-            return False
-        return owner is not None and owner == self.self_owner
+        return peer_is_owner(scope, self.owner_of, self.self_owner)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if not self.enabled or scope["type"] not in ("http", "websocket") or self.allowed(scope):
