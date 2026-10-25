@@ -13,12 +13,16 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Callable, Iterator
+import os
+import shutil
+from collections.abc import Callable, Iterator, Mapping
+from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import requests
 
-from src.ai.endpoint import RemoteLLMRefused, require_local_endpoint
+from src.ai.endpoint import RemoteLLMRefused, is_loopback_endpoint, require_local_endpoint
 from src.ai.runtime.detect import OLLAMA_URL
 from src.ai.runtime.jobs import JobCancelled, JobFailed
 
@@ -42,6 +46,34 @@ def checked_base(base_url: str | None) -> str:
     except RemoteLLMRefused as exc:
         raise JobFailed(ERR_NOT_LOCAL) from exc
     return base
+
+
+def endpoint_key(base: str) -> str:
+    """One key per server: ``localhost``, ``127.0.0.1`` and ``[::1]`` on a port are the same."""
+    parts = urlsplit(base)
+    port = parts.port or (443 if parts.scheme == "https" else 80)
+    host = (parts.hostname or "").lower()
+    return f"loopback:{port}" if is_loopback_endpoint(base) else f"{host}:{port}"
+
+
+def models_dir(env: Mapping[str, str] | None = None) -> Path:
+    """Where Ollama stores models: ``OLLAMA_MODELS``, else ``~/.ollama/models``."""
+    env = os.environ if env is None else env
+    if custom := env.get("OLLAMA_MODELS", "").strip():
+        return Path(custom)
+    home = env.get("USERPROFILE") or env.get("HOME")
+    return (Path(home) if home else Path.home()) / ".ollama" / "models"
+
+
+def free_disk_bytes(path: Path) -> int | None:
+    """Free bytes on the drive holding ``path`` (its nearest existing parent), or ``None``."""
+    for candidate in (path, *path.parents):
+        try:
+            if candidate.exists():
+                return shutil.disk_usage(candidate).free
+        except OSError:
+            return None
+    return None
 
 
 def _session() -> requests.Session:
