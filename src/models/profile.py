@@ -92,10 +92,14 @@ class GeographyPreferences(BaseModel):
     # ``location_preferences`` below is no longer read for scoring (kept, read-only,
     # for v1 compatibility until the profile v2 migration removes it).
     home: HomePlace | None = None
-    max_distance_km: int = Field(default=50, ge=1, le=1000)
+    # Same bounds as the Profile page slider (validated on both sides).
+    max_distance_km: int = Field(default=50, ge=5, le=300)
     # The ONLY hard location exclusion: on-site, beyond max_distance_km, and this ticked.
     strict_distance: bool = False
     remote_policy: RemotePolicy = RemotePolicy()
+    # v1 ``status: excluded`` départements carried over by the migration, with their v1
+    # meaning: no location credit there (never a rejection), and not read by France Travail.
+    excluded_departments: list[str] = []
     preferred_countries: list[str] = []
     allowed_regions: list[str] = []
     # v1 (ADR 0005). Ordered list of department/remote preferences — the source of

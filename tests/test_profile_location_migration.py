@@ -38,6 +38,23 @@ def test_departments_and_remote_profile():
                                     "remote_worldwide": False, "hybrid": True}
     # v1 fields are kept untouched (F5.1 removes them)
     assert geo["location_preferences"] == _load("v1_departments_remote.yaml")["geography"]["location_preferences"]
+    # the explicit v1 exclusion is honoured, and every preference that changes meaning is noted
+    assert geo["excluded_departments"] == ["13"]
+    assert any("excluded départements kept" in n and "13" in n for n in notes)
+    assert any(n.startswith("acceptable département 69") and "beyond 150 km" in n for n in notes)
+    assert not any("département 04" in n for n in notes)      # 04 lies within the radius
+
+
+def test_excluded_departments_still_count_after_migration():
+    from src.pipeline.location_distance import assess, distance_config
+    from src.models.job import Job
+
+    profile = JobSearchProfile(**migrate_profile_data(_load("v1_departments_remote.yaml"))[0])
+    cfg = distance_config(profile)
+    assert cfg is not None
+    marseille = assess(Job(id="m", title="Dev", location="13 - Marseille"), cfg)
+    toulon = assess(Job(id="t", title="Dev", location="83 - Toulon"), cfg)
+    assert marseille.score <= 0.5 < toulon.score
 
 
 def test_town_label_becomes_a_commune_home_and_radius_covers_the_list():
@@ -85,6 +102,25 @@ def test_file_migration_writes_a_backup_once(tmp_path):
     backup.write_text("first backup", encoding="utf-8")
     assert migrate_profile_file(p)
     assert backup.read_text(encoding="utf-8") == "first backup"
+
+
+def test_migration_never_overwrites_a_save_made_meanwhile(tmp_path, monkeypatch):
+    import src.geo.profile_migration as pm
+
+    p = tmp_path / "profile.local.yaml"
+    shutil.copy(FIX / "v1_departments_remote.yaml", p)
+    real = pm.migrate_profile_data
+
+    def racing(data):
+        out = real(data)
+        p.write_text("target_domains:\n- data\n", encoding="utf-8")    # a PUT lands meanwhile
+        return out
+
+    monkeypatch.setattr(pm, "migrate_profile_data", racing)
+    assert pm.migrate_profile_file(p) == []
+    assert p.read_text(encoding="utf-8") == "target_domains:\n- data\n"
+    assert not (tmp_path / BACKUP_NAME).exists()
+    assert not [f for f in tmp_path.iterdir() if f.suffix == ".tmp"]
 
 
 def test_only_the_personal_profile_is_rewritten(tmp_path):

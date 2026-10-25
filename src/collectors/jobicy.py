@@ -66,6 +66,9 @@ class JobicyCollector(BaseCollector):
                            Falls back to a single unfiltered request when absent.
     """
 
+    # official: Jobicy's documented free public API (jobi.cy/apidocs), meant for reuse.
+    access_class = "official"
+
     def __init__(self, config: dict[str, Any] | None = None, **_: Any) -> None:
         super().__init__(timeout=30, retries=3, rate_limit_delay=2.0)
         cfg = config or {}

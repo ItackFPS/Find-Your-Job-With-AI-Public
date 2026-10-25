@@ -11,18 +11,17 @@ rewritten by the UI.
 
 from __future__ import annotations
 
-import logging
+import shutil
 from pathlib import Path
 
 import yaml
 from fastapi import APIRouter, HTTPException
 
 from src.api.schemas import ProfileIn, ProfileOut
-from src.config_files import local_config_path, resolve_config_path
-from src.geo.profile_migration import migrate_profile_data, migrate_profile_file
+from src.config_files import PROFILE_WRITE_LOCK, local_config_path, resolve_config_path, write_yaml_atomic
+from src.geo.profile_migration import BACKUP_NAME, migrate_profile_data
 from src.models.profile import JobSearchProfile
 
-logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/profile", tags=["profile"])
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -46,13 +45,8 @@ def get_profile() -> ProfileOut:
     if not read_path.exists():
         raise HTTPException(status_code=404, detail="profile.yaml not found")
     # A v1 location profile is shown converted to the distance model (home, radius,
-    # remote policy). The file itself is rewritten (after a one-time backup) only when
-    # it is the file saves go to, so the tracked default is never touched.
-    if read_path == _write_path():
-        try:
-            migrate_profile_file(read_path)
-        except Exception as exc:  # noqa: BLE001 — still serve the profile, unconverted on disk
-            logger.warning("Profile migration to the distance model skipped: %s", exc)
+    # remote policy), in memory only: a read never writes. The file is converted at
+    # pipeline start (src/geo/profile_migration.py) or when the user saves.
     with open(read_path, encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
     data, _notes = migrate_profile_data(data)
@@ -90,39 +84,33 @@ def update_profile(payload: ProfileIn) -> ProfileOut:
     Without this, any client (UI build, script, or future field) that isn't
     yet aware of a given profile field would silently wipe it on every save.
     """
-    existing_data: dict = {}
-    read_path = _read_path()
-    if read_path.exists():
-        with open(read_path, encoding="utf-8") as f:
-            existing_data = yaml.safe_load(f) or {}
+    # One lock with the migration: read-merge-write never interleaves with another write.
+    with PROFILE_WRITE_LOCK:
+        existing_data: dict = {}
+        read_path = _read_path()
+        if read_path.exists():
+            with open(read_path, encoding="utf-8") as f:
+                existing_data = yaml.safe_load(f) or {}
 
-    updates = payload.model_dump(exclude_unset=True)
-    merged = _merge_profile_updates(existing_data, updates)
+        updates = payload.model_dump(exclude_unset=True)
+        merged = _merge_profile_updates(existing_data, updates)
 
-    try:
-        # Validate through the canonical domain model.
-        profile = JobSearchProfile(**merged)
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        try:
+            # Validate through the canonical domain model.
+            profile = JobSearchProfile(**merged)
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    # Atomic write: write to a temp file in the same directory, then rename.
-    # The first save seeds profile.local.yaml from the profile in effect
-    # (``existing_data`` above), so no current value is lost.
-    write_path = _write_path()
-    write_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = write_path.with_suffix(".yaml.tmp")
-    try:
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            yaml.safe_dump(
-                profile.model_dump(),
-                f,
-                allow_unicode=True,
-                sort_keys=False,
-                default_flow_style=False,
-            )
-        tmp_path.replace(write_path)
-    except OSError as exc:
-        tmp_path.unlink(missing_ok=True)
-        raise HTTPException(status_code=500, detail=f"Could not write {write_path.name}: {exc}") from exc
+        # The first save seeds profile.local.yaml from the profile in effect
+        # (``existing_data`` above), so no current value is lost. Saving over a v1
+        # personal profile keeps a one-time backup of it, as the migration does.
+        write_path = _write_path()
+        if (read_path == write_path and read_path.exists() and isinstance(existing_data, dict)
+                and migrate_profile_data(existing_data)[1] and not (write_path.with_name(BACKUP_NAME)).exists()):
+            shutil.copy2(read_path, write_path.with_name(BACKUP_NAME))
+        try:
+            write_yaml_atomic(write_path, profile.model_dump())
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=f"Could not write {write_path.name}: {exc}") from exc
 
     return ProfileOut(**profile.model_dump())

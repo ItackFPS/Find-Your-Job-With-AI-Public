@@ -76,7 +76,7 @@ NOW = datetime(2026, 10, 23, 12, 0, tzinfo=UTC)
 def _no_sleep(monkeypatch) -> list[float]:  # noqa: ANN001
     """The collector waits at least 1 s between requests; tests record, not wait."""
     slept: list[float] = []
-    monkeypatch.setattr(base_module.time, "sleep", slept.append)
+    monkeypatch.setattr(base_module.BaseCollector, "_sleep", slept.append)
     return slept
 
 

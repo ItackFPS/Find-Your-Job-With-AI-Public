@@ -751,6 +751,7 @@
       "homeNotSet": "Non renseigné : le classement par lieu utilise vos priorités de lieu ci-dessous",
       "homeDepartmentCentre": "centre du département ; choisissez votre commune pour l’affiner",
       "homePlaceholder": "Tapez votre commune ou votre code postal…",
+      "homeClear": "Effacer",
       "maxDistance": "Distance maximale : {km} km",
       "maxDistanceHint": "Estimée par la route depuis votre domicile. Les offres proches sont mieux classées ; les plus lointaines sont moins bien classées mais restent visibles.",
       "strictDistance": "Strict : masquer les offres sur site au-delà de cette distance",

@@ -29,6 +29,7 @@ from typing import Any
 
 import yaml
 
+from src.config_files import PROFILE_WRITE_LOCK, write_yaml_atomic
 from src.geo.places import COMMUNE, department_place, distance_km, resolve_place
 
 logger = logging.getLogger(__name__)
@@ -90,6 +91,17 @@ def migrate_profile_data(data: dict[str, Any]) -> tuple[dict[str, Any], list[str
         radius = MAX_RADIUS_KM
     else:
         notes.append(f"maximum distance {radius} km covers your listed départements")
+    for p in depts:
+        c = department_place(str(p["value"]))
+        if c is not None and c.lat is not None and c.lon is not None:
+            km = distance_km(origin, (c.lat, c.lon)) * ROAD_FACTOR
+            if km > radius:
+                notes.append(f"{p.get('status', 'preferred')} département {p['value']} is ~{km:.0f} km away, "
+                             f"beyond {radius} km: its offers stay visible but rank lower")
+    excluded = sorted({str(p.get("value")) for p in prefs
+                       if p.get("type") == "department" and p.get("status") == "excluded"})
+    if excluded:
+        notes.append(f"excluded départements kept as exclusions: {', '.join(excluded)}")
 
     modes = _norm_modes(data.get("work_modes"))
     remote_prefs = [p for p in prefs if p.get("type") == "remote"]
@@ -103,6 +115,8 @@ def migrate_profile_data(data: dict[str, Any]) -> tuple[dict[str, Any], list[str
                  f"{'accepted' if policy['hybrid'] else 'not accepted'}")
 
     geo.update(home=home, max_distance_km=radius, strict_distance=False, remote_policy=policy)
+    if excluded:
+        geo["excluded_departments"] = excluded
     migrated = dict(data)
     migrated["geography"] = geo
     return migrated, notes
@@ -115,23 +129,23 @@ def migrate_profile_file(path: str | Path) -> list[str]:
     from src.models.profile import JobSearchProfile
 
     p = Path(path)
-    data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    original = p.read_text(encoding="utf-8")
+    data = yaml.safe_load(original) or {}
     if not isinstance(data, dict):
         return []
     migrated, notes = migrate_profile_data(data)
     if not notes:
         return []
     JobSearchProfile(**migrated)  # never write a profile the app cannot load
-    backup = p.with_name(BACKUP_NAME)
-    if not backup.exists():
-        shutil.copy2(p, backup)
-    tmp = p.with_suffix(".yaml.tmp")
-    try:
-        with open(tmp, "w", encoding="utf-8") as f:
-            yaml.safe_dump(migrated, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
-        tmp.replace(p)
-    finally:
-        tmp.unlink(missing_ok=True)
+    with PROFILE_WRITE_LOCK:
+        # A save (PUT /api/profile) may have landed since the read: never overwrite it.
+        if p.read_text(encoding="utf-8") != original:
+            logger.info("Profile %s changed during migration; left for the next run", p.name)
+            return []
+        backup = p.with_name(BACKUP_NAME)
+        if not backup.exists():
+            shutil.copy2(p, backup)
+        write_yaml_atomic(p, migrated)
     logger.info("Profile %s migrated to the distance model (backup: %s): %s", p.name, backup.name, "; ".join(notes))
     return notes
 

@@ -42,6 +42,8 @@ export interface Geography {
   // The only hard location exclusion: on-site, beyond max_distance_km, and this ticked.
   strict_distance: boolean
   remote_policy: RemotePolicy
+  // v1 "excluded" départements kept by the migration (no location credit there; not editable here yet).
+  excluded_departments?: string[]
   preferred_countries: string[]
   allowed_regions: string[]
   // The SOLE source of truth for location_fit scoring's priority tiers —

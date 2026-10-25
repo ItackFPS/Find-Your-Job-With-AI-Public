@@ -148,14 +148,71 @@ def test_department_precision_needs_a_margin_before_excluding():
     assert ld.strict_distance_exclusion(far, cfg) is True
 
 
+def test_home_known_only_at_department_precision_widens_the_margin():
+    var_centre = {"name": "Var", "insee": None, "lat": 43.28103, "lon": 6.17463, "department": "83",
+                  "precision": "department"}
+    cfg = _cfg(strict_distance=True, home=var_centre, max_distance_km=60)
+    marseille = ld.assess(_job(location="13 - Marseille"), cfg)      # ~80 km road from the Var centre
+    assert marseille.road_km is not None and marseille.road_km > 60
+    assert ld.strict_distance_exclusion(marseille, cfg) is False     # within 60 km + the home's margin
+    lyon = ld.assess(_job(location="69 - Lyon"), cfg)
+    assert ld.strict_distance_exclusion(lyon, cfg) is True
+
+
+def test_department_column_overrides_a_disagreeing_town_resolution():
+    # "Saint-Denis" alone is a homonym; the canonical column says Réunion (974), not the 93
+    a = ld.assess(_job(location="Saint-Denis", department="974"), _cfg())
+    assert a.place is not None and a.place.department == "974"
+    # a town that does not exist in the stated département falls back to its centre
+    b = ld.assess(_job(location="Lyon", department="83"), _cfg())
+    assert b.place is not None and b.place.department == "83" and b.place.precision == "department"
+
+
+def test_a_guessed_homonym_never_drives_a_strict_rejection():
+    cfg = _cfg(strict_distance=True)
+    a = ld.assess(_job(location="Bagneux"), cfg)                # largest homonym picked as "likely"
+    assert a.place is not None and a.place.confidence == "likely" and a.road_km is not None
+    assert a.road_km > 60
+    assert ld.strict_distance_exclusion(a, cfg) is False
+
+
 @pytest.mark.parametrize("fields,excluded", [
-    (dict(location="Remote - US", remote=True, description="Must reside in the US."), True),   # explicit
+    (dict(location="Remote - US", remote=True, description="Must reside in the US."), True),   # explicit, US only
+    (dict(location="Remote", remote=True, description="You must be authorized to work in the USA."), True),
     (dict(location="USA", remote=True, work_mode="remote"), False),                           # inferred only
     (dict(location="75 - Paris", remote=True, description="Must reside in the US."), False),  # placed in France
     (dict(location="France", remote=True, description="Télétravail complet"), False),
+    # review #56, item 1: every case below was rejected before the fix
+    (dict(location="Remote (US or EU)", remote=True, description="Python developer."), False),
+    (dict(location="Remote", remote=True, description="Candidates must be located in the US or France."), False),
+    (dict(location="Remote", remote=True, description="You will overlap with EST business hours."), False),
+    (dict(location="Remote", remote=True, description="You must work some EST hours each day."), False),
+    (dict(location="Remote", remote=True, description="Télétravail possible. Clients US only."), False),
+    (dict(location="Berlin", description="You must be eligible to work in Germany."), False),   # on-site
+    (dict(location="Remote", remote=True, description="Must reside in the US or the EU."), False),
+    # owner-DB review: "only" qualifying a perk or a pay range says nothing about who may apply
+    (dict(location="Remote", remote=True, description="Benefits: Federal Holidays (US Only) + volunteer days."), False),
+    (dict(location="Remote", remote=True,
+          description="Pay for residents of the United States only. This range reflects the role."), False),
+    (dict(location="Remote", remote=True, description="US based applicants only $114,297-$235,319 USD."), False),
+    (dict(location="Remote", remote=True, description="This role is fully remote - USA Only. About us."), True),
 ])
 def test_remote_policy_excludes_only_explicit_restrictions_elsewhere(fields, excluded):
-    assert ld.remote_policy_exclusion(ld.assess(_job(**fields), _cfg())) is excluded
+    job = _job(**fields)
+    assert ld.remote_policy_exclusion(job, ld.assess(job, _cfg())) is excluded
+    # ticking more remote kinds never turns a kept offer into a rejection
+    wide = _cfg(remote_policy={"remote_france": True, "remote_eu": True, "remote_worldwide": True})
+    assert ld.remote_policy_exclusion(job, ld.assess(job, wide)) is excluded
+
+
+def test_excluded_departments_keep_their_v1_meaning():
+    cfg = _cfg(excluded_departments=["13"])
+    marseille = ld.assess(_job(location="13 - Marseille"), cfg)
+    plain = ld.assess(_job(location="13 - Marseille"), _cfg())
+    assert marseille.score <= ld.FRANCE_ONLY_SCORE < plain.score and marseille.proximity == 0.0
+    assert "13" not in ld.ft_departments(cfg) and "13" in ld.ft_departments(_cfg())
+    strict = _cfg(excluded_departments=["13"], strict_distance=True)
+    assert ld.strict_distance_exclusion(ld.assess(_job(location="83 - Hyères"), strict), strict) is False
 
 
 def test_filter_jobs_uses_the_new_checks_and_v1_profiles_are_unchanged():
@@ -225,5 +282,5 @@ def test_ft_departments_cover_home_and_radius():
     assert "83" in codes and "13" in codes and "06" not in codes and "69" not in codes
     wide = ld.ft_departments(_cfg(max_distance_km=150))
     assert {"04", "06", "13", "83", "84"} <= set(wide)
-    centre_only = ld.ft_departments(_cfg(max_distance_km=1))
+    centre_only = ld.ft_departments(_cfg(max_distance_km=5))
     assert centre_only == ["83"]                              # the home département is always read

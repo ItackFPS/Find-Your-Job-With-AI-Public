@@ -15,11 +15,16 @@ uncertainty never rejects):
 * ``distance``: on-site work — an offer with no remote signal at all counts as on-site,
   as in v1 — (hybrid too when the policy does not accept hybrid),
   beyond ``max_distance_km``, and only when the user ticked ``strict_distance``.
-  The place must be a resolved commune, or a département whose nearest plausible
-  point (centre − ``DEPARTMENT_MARGIN_KM``) is still beyond the radius. Unknown
-  places are never excluded.
-* ``remote_policy``: an offer explicitly restricted to residents of another area
-  ("must reside in the US") that is not itself placed in France.
+  The place must be an exactly resolved commune (a homonym picked as "likely" is not),
+  and each end known only at département precision (offer or home) widens the margin by
+  ``DEPARTMENT_MARGIN_KM``. Unknown places are never excluded.
+* ``remote_policy``: an offer that is actually remote and states explicitly that it is
+  restricted to residents/authorised workers of areas that are ALL outside France and the
+  EU ("must reside in the US"). Never when any area named is France or the EU, never on
+  time-zone wording, never for an offer with a French place or French remote wording.
+
+Excluded départements (carried over from v1 ``status: excluded``) keep their v1 meaning:
+an offer placed there earns no distance credit (capped at 0.50, no bonus), never a rejection.
 
 Location factor (0–1), with R = ``max_distance_km`` and d = estimated road km:
 
@@ -39,13 +44,13 @@ Location factor (0–1), with R = ``max_distance_km`` and d = estimated road km:
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
 from src.geo.places import COMMUNE, COUNTRY, DEPARTMENT, REGION, Place, department_place, distance_km, resolve_place
 from src.geo.remote import (
-    EXPLICIT,
     HYBRID,
     ONSITE,
     REMOTE_EU,
@@ -55,6 +60,7 @@ from src.geo.remote import (
     UNKNOWN,
     RemoteEligibility,
     classify_remote,
+    explicit_restriction_areas,
 )
 
 ROAD_FACTOR = 1.25
@@ -65,7 +71,7 @@ FRANCE_ONLY_SCORE = 0.50
 UNKNOWN_PLACE_SCORE = 0.40
 REMOTE_ACCEPTED_SCORE = 0.90
 REMOTE_UNKNOWN_SCORE = 0.55
-RULE_VERSION = "location-distance.v1"
+RULE_VERSION = "location-distance.v2"
 
 _POLICY_KEY = {REMOTE_FRANCE: "remote_france", REMOTE_EU: "remote_eu", REMOTE_WORLDWIDE: "remote_worldwide"}
 
@@ -81,6 +87,7 @@ def distance_config(profile: Any) -> dict[str, Any] | None:
         "max_distance_km": geo.max_distance_km,
         "strict_distance": geo.strict_distance,
         "remote_policy": geo.remote_policy.model_dump(),
+        "excluded_departments": list(geo.excluded_departments),
     }
 
 
@@ -111,9 +118,17 @@ def _classify(title: str | None, description: str | None, location: str | None,
 
 @lru_cache(maxsize=8192)
 def _place(location: str | None, countries: tuple[str, ...], department: str | None) -> Place | None:
+    """The offer's place. The canonical ``department`` column wins over a text resolution that
+    disagrees with it: the text is re-resolved within that département, else its centre."""
     place = resolve_place(location, list(countries) or None)
-    if (place is None or place.precision in (REGION, COUNTRY)) and department:
-        place = department_place(str(department)) or place
+    dept = str(department).upper() if department else None
+    if dept and place is not None and place.department and place.department != dept:
+        within = resolve_place(f"{location} ({dept})", list(countries) or None) if location else None
+        if within is not None and within.department == dept and within.precision == COMMUNE:
+            return within
+        return department_place(dept) or place
+    if (place is None or place.precision in (REGION, COUNTRY)) and dept:
+        place = department_place(dept) or place
     return place
 
 
@@ -135,8 +150,12 @@ def assess(job: Any, cfg: dict[str, Any]) -> LocationAssessment:
     if place is not None and place.precision in (COMMUNE, DEPARTMENT) and place.lat is not None:
         road_km = distance_km((home["lat"], home["lon"]), (place.lat, place.lon)) * ROAD_FACTOR  # type: ignore[arg-type]
 
+    excluded = bool(place is not None and place.department
+                    and place.department in set(cfg.get("excluded_departments") or ()))
     if road_km is not None:
         place_score = distance_score(road_km, radius)
+        if excluded:  # v1 "excluded": no location credit there (never a rejection)
+            place_score = min(place_score, FRANCE_ONLY_SCORE)
     elif place is not None:  # region or country: only known to be in France
         place_score = FRANCE_ONLY_SCORE
     else:
@@ -153,7 +172,7 @@ def assess(job: Any, cfg: dict[str, Any]) -> LocationAssessment:
 
     within = None if road_km is None else road_km <= radius
     proximity = 0.0
-    if road_km is not None and within and remote.kind not in _POLICY_KEY:
+    if road_km is not None and within and remote.kind not in _POLICY_KEY and not excluded:
         proximity = max(0.0, 1.0 - road_km / radius)
     return LocationAssessment(place, road_km, within, remote, accepted, round(score, 6), proximity)
 
@@ -168,15 +187,42 @@ def strict_distance_exclusion(a: LocationAssessment, cfg: dict[str, Any]) -> boo
     no_remote_signal = a.remote.kind == UNKNOWN and a.remote.evidence is None
     if a.remote.kind not in (ONSITE, HYBRID) and not no_remote_signal:
         return False
+    if a.place.precision == COMMUNE and a.place.confidence != "exact":
+        return False  # a homonym chosen as "likely" is a guess: never a reason to reject
     radius = float(cfg["max_distance_km"])
-    if a.place.precision == COMMUNE:
-        return a.road_km > radius
-    return a.road_km - DEPARTMENT_MARGIN_KM > radius
+    margin = DEPARTMENT_MARGIN_KM if a.place.precision == DEPARTMENT else 0.0
+    if cfg["home"].get("precision") == "department":
+        margin += DEPARTMENT_MARGIN_KM
+    return a.road_km - margin > radius
 
 
-def remote_policy_exclusion(a: LocationAssessment) -> bool:
-    """True only for an EXPLICIT restriction to another area, on an offer not placed in France."""
-    return a.remote.kind == REMOTE_RESTRICTED and a.remote.strength == EXPLICIT and a.place is None
+_FRENCH_REMOTE_MARKER_RE = re.compile(
+    r"t[ée]l[ée]\s?travail|[àa] distance|travail hybride|en distanciel|full remote france", re.I)
+_REMOTE_LOCATION_RE = re.compile(r"\bremote\b|t[ée]l[ée]travail|anywhere|worldwide", re.I)
+
+
+def remote_policy_exclusion(job: Any, a: LocationAssessment) -> bool:
+    """True only when every condition holds (ADR 0004: uncertainty never rejects):
+
+    * the offer is actually remote (remote flag, ``work_mode == "remote"`` or "remote" in its
+      location) and the typed eligibility is a restriction;
+    * it has no French place and no French remote wording ("télétravail", "à distance");
+    * explicit residency/authorisation wording names areas, every one of them a known area
+      outside France and the EU (time-zone wording never counts).
+    """
+    if a.remote.kind != REMOTE_RESTRICTED or a.place is not None:
+        return False
+    actually_remote = bool(job.remote) or (job.work_mode or "").lower() == "remote" or bool(
+        _REMOTE_LOCATION_RE.search(job.location or ""))
+    if not actually_remote:
+        return False
+    text = " ".join((job.title or "", job.location or "", job.description or ""))
+    if _FRENCH_REMOTE_MARKER_RE.search(text):
+        return False
+    areas, _quote = explicit_restriction_areas(title=job.title, description=job.description, location=job.location)
+    if not areas or "?" in areas or areas & {"FR", "EU"}:
+        return False
+    return True
 
 
 _STRUCTURED_EVIDENCE = ("location:", "countries:", "work_mode=", "remote, no stated area")
@@ -206,11 +252,12 @@ def describe(a: LocationAssessment, cfg: dict[str, Any]) -> dict[str, Any]:
 
 def ft_departments(cfg: dict[str, Any]) -> list[str]:
     """Départements the France Travail web collector should read: those whose centre or any
-    commune lies within the radius (road estimate), plus the home département."""
+    commune lies within the radius (road estimate), plus the home département, minus the
+    départements the user excluded (as in v1)."""
     from src.geo.places import departments_within
 
     home = cfg["home"]
     codes = set(departments_within((home["lat"], home["lon"]), float(cfg["max_distance_km"]), ROAD_FACTOR))
     if home.get("department"):
         codes.add(str(home["department"]))
-    return sorted(codes)
+    return sorted(codes - set(cfg.get("excluded_departments") or ()))
