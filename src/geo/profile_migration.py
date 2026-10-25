@@ -138,10 +138,23 @@ def migrate_profile_all(data: dict[str, Any]) -> tuple[dict[str, Any], list[str]
     return migrated, geo_notes, v2_notes
 
 
+def backup_profile(path: Path, location: bool, v2: bool) -> None:
+    """Copy ``path`` before a conversion rewrites it; an existing backup is never overwritten.
+
+    The first conversion fills the v1 backup; a later one (the v2 conversion of a file
+    already on the distance model) fills the pre-v2 backup. A plain v1 file is copied once."""
+    v1 = path.with_name(BACKUP_NAME)
+    if location and not v1.exists():
+        shutil.copy2(path, v1)
+        return
+    pre_v2 = path.with_name(V2_BACKUP_NAME)
+    if (location or v2) and not pre_v2.exists():
+        shutil.copy2(path, pre_v2)
+
+
 def migrate_profile_file(path: str | Path) -> list[str]:
     """Migrate a profile YAML file in place. Before the first rewrite the original is copied
-    to ``profile.v1-backup.local.yaml`` next to it, and before the v2 conversion to
-    ``profile.pre-v2-backup.local.yaml`` (neither is ever overwritten). Returns the notes
+    next to it (``backup_profile``). Returns the notes
     (empty: nothing to do). Raises on unreadable/invalid data; callers decide to fail open."""
     from src.models.profile import JobSearchProfile
 
@@ -160,10 +173,7 @@ def migrate_profile_file(path: str | Path) -> list[str]:
         if p.read_text(encoding="utf-8") != original:
             logger.info("Profile %s changed during migration; left for the next run", p.name)
             return []
-        for wanted, name in ((geo_notes, BACKUP_NAME), (v2_notes, V2_BACKUP_NAME)):
-            backup = p.with_name(name)
-            if wanted and not backup.exists():
-                shutil.copy2(p, backup)
+        backup_profile(p, bool(geo_notes), bool(v2_notes))
         write_yaml_atomic(p, migrated)
     logger.info("Profile %s migrated (backups next to it): %s", p.name, "; ".join(notes))
     return notes

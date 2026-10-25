@@ -329,6 +329,9 @@ export interface JobExplanation {
 
 export const getProfile = () => api.get<Profile>('/profile').then(r => r.data)
 export const updateProfile = (p: Profile) => api.put<Profile>('/profile', p).then(r => r.data)
+// Saves only the review flag (the PUT merges), so confirming never saves unsaved edits.
+export const confirmProfileReview = (review: ProfileReview) =>
+  api.put<Profile>('/profile', { review: { ...review, pending: false } }).then(r => r.data)
 
 export const searchEscoSkills = (q: string, lang: 'en' | 'fr' = 'en', limit = 8): Promise<EscoSuggestion[]> =>
   api.get<EscoSuggestion[]>('/esco/skills', { params: { q, lang, limit } }).then(r => r.data)

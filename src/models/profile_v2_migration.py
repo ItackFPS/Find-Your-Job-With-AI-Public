@@ -82,8 +82,9 @@ def _location_notes(data: dict[str, Any]) -> list[str]:
     if home and radius is not None:
         notes.append(f"home {home.get('name')}, maximum distance {radius} km")
         if radius == MAX_RADIUS_KM:
-            notes.append(f"maximum distance is the {MAX_RADIUS_KM} km cap: farther départements "
-                         "stay visible but rank lower")
+            beyond = ("on-site offers farther away are excluded (strict distance)" if geo.get("strict_distance")
+                      else "farther départements stay visible but rank lower")
+            notes.append(f"maximum distance is the {MAX_RADIUS_KM} km cap: {beyond}")
     excluded = geo.get("excluded_departments") or []
     if excluded:
         notes.append(f"excluded départements kept as exclusions: {', '.join(map(str, excluded))}")
@@ -92,15 +93,21 @@ def _location_notes(data: dict[str, Any]) -> list[str]:
 
 def migrate_v2_data(data: dict[str, Any], *, now: datetime | None = None) -> tuple[dict[str, Any], list[str]]:
     """Return ``(migrated copy, notes)``; ``notes`` is empty when nothing changed."""
-    version = data.get("profile_version", 1)
-    if isinstance(version, int) and version >= PROFILE_SCHEMA_VERSION:
+    try:
+        version = int(data.get("profile_version") or 1)
+    except (TypeError, ValueError):
+        return data, []          # malformed: left for the profile validation to report
+    if version >= PROFILE_SCHEMA_VERSION:
         return data, []
     exp = data.get("experience") or {}
     if not isinstance(exp, dict):
         return data, []          # malformed: left for the profile validation to report
     notes: list[str] = []
     targets = dict(data.get("targets") or {}) if isinstance(data.get("targets"), dict) else {}
-    targets.setdefault("levels", _target_levels(exp, notes))
+    # A v1 file can carry the v2 defaults (a v1 profile saved by this version): empty
+    # levels there were never chosen, so they are derived like a missing field.
+    if not targets.get("levels"):
+        targets["levels"] = _target_levels(exp, notes)
     if exp.get("max_years") is not None:
         notes.append(f"offers asking more than {exp['max_years']} years of experience stay excluded")
     education = data.get("education") or _education(data, notes)

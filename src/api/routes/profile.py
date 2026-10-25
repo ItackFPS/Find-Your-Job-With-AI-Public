@@ -19,7 +19,7 @@ from fastapi import APIRouter, HTTPException
 
 from src.api.schemas import ProfileIn, ProfileOut
 from src.config_files import PROFILE_WRITE_LOCK, local_config_path, resolve_config_path, write_yaml_atomic
-from src.geo.profile_migration import BACKUP_NAME, V2_BACKUP_NAME, migrate_profile_all
+from src.geo.profile_migration import backup_profile, migrate_profile_all
 from src.models.profile import JobSearchProfile
 
 router = APIRouter(prefix="/api/profile", tags=["profile"])
@@ -93,8 +93,15 @@ def update_profile(payload: ProfileIn) -> ProfileOut:
             with open(read_path, encoding="utf-8") as f:
                 existing_data = yaml.safe_load(f) or {}
 
+        # The update lands on the converted view (the one GET shows), so a client
+        # unaware of the v2 fields never writes a v1 profile without them.
+        geo_notes: list[str] = []
+        v2_notes: list[str] = []
+        base = existing_data
+        if isinstance(existing_data, dict):
+            base, geo_notes, v2_notes = migrate_profile_all(existing_data)
         updates = payload.model_dump(exclude_unset=True)
-        merged = _merge_profile_updates(existing_data, updates)
+        merged = _merge_profile_updates(base, updates)
 
         try:
             # Validate through the canonical domain model.
@@ -106,11 +113,8 @@ def update_profile(payload: ProfileIn) -> ProfileOut:
         # (``existing_data`` above), so no current value is lost. Saving over a v1
         # personal profile keeps one-time backups of it, as the migration does.
         write_path = _write_path()
-        if read_path == write_path and read_path.exists() and isinstance(existing_data, dict):
-            _, geo_notes, v2_notes = migrate_profile_all(existing_data)
-            for wanted, name in ((geo_notes, BACKUP_NAME), (v2_notes, V2_BACKUP_NAME)):
-                if wanted and not write_path.with_name(name).exists():
-                    shutil.copy2(read_path, write_path.with_name(name))
+        if read_path == write_path and read_path.exists():
+            backup_profile(write_path, bool(geo_notes), bool(v2_notes))
         try:
             write_yaml_atomic(write_path, profile.model_dump())
         except OSError as exc:

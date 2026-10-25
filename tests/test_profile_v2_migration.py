@@ -140,6 +140,42 @@ def test_api_shows_the_pending_review_and_saving_dismisses_it(api_v1_profile):
     body["review"]["pending"] = False
     saved = client.put("/api/profile", json=body)
     assert saved.status_code == 200 and saved.json()["review"]["pending"] is False
-    assert (p.parent / V2_BACKUP_NAME).read_text(encoding="utf-8") == original
+    # a plain v1 file is backed up once, before both conversions
+    assert (p.parent / BACKUP_NAME).read_text(encoding="utf-8") == original
+    assert not (p.parent / V2_BACKUP_NAME).exists()
     after = client.get("/api/profile").json()
     assert after["review"]["pending"] is False and after["targets"]["levels"] == ["graduate", "junior"]
+
+
+def test_partial_save_over_a_v1_profile_keeps_the_converted_levels(api_v1_profile):
+    client, p = api_v1_profile
+    saved = client.put("/api/profile", json={"review": {"pending": False, "notes": [], "migrated_at": None}})
+    assert saved.status_code == 200
+    on_disk = yaml.safe_load(p.read_text(encoding="utf-8"))
+    assert on_disk["profile_version"] == 2 and on_disk["targets"]["levels"] == ["graduate", "junior"]
+    assert on_disk["review"]["pending"] is False and on_disk["education"][0]["level"] == 6
+
+
+def test_a_v1_profile_dumped_with_v2_defaults_still_gets_its_levels():
+    dumped = JobSearchProfile(**_load("v1_junior_bac3.yaml")).model_dump()
+    assert dumped["profile_version"] == 1 and dumped["targets"]["levels"] == []
+    migrated, notes = migrate_v2_data(dumped)
+    assert migrated["targets"]["levels"] == ["graduate", "junior"]
+    assert "target levels: graduate, junior" in notes
+
+
+def test_kept_levels_are_not_reported_as_converted():
+    data = {**_load("v1_junior_bac3.yaml"), "targets": {"levels": ["mid"]}}
+    migrated, notes = migrate_v2_data(data)
+    assert migrated["targets"]["levels"] == ["mid"] and not any(n.startswith("target levels") for n in notes)
+
+
+def test_a_quoted_version_is_not_migrated_again():
+    data = {**_load("v1_junior_bac3.yaml"), "profile_version": "2"}
+    assert migrate_v2_data(data) == (data, [])
+
+
+def test_cap_note_follows_strict_distance():
+    geo = {"home": {"name": "Brest", "lat": 48.39, "lon": -4.49}, "max_distance_km": 150, "strict_distance": True}
+    notes = migrate_v2_data({"geography": geo})[1]
+    assert any("150 km cap: on-site offers farther away are excluded" in n for n in notes)

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  getProfile, updateProfile, searchEscoSkills, searchEscoOccupations,
+  getProfile, updateProfile, confirmProfileReview, searchEscoSkills, searchEscoOccupations,
   getAllDepartments, searchPlaces,
   type Profile, type EscoEntry, type EscoSuggestion, type FrenchDepartment, type LocationPreference,
   type HomePlace, type PlaceSuggestion, type RemotePolicy,
@@ -1046,6 +1046,15 @@ export default function ProfilePage() {
     },
   })
 
+  const { mutate: confirmReview, isPending: confirming } = useMutation({
+    mutationFn: confirmProfileReview,
+    onSuccess: (updated) => {
+      // Keep the page's unsaved edits; only the review state comes from the server.
+      setProfile(p => p ? { ...p, review: updated.review ?? null } : p)
+      queryClient.invalidateQueries({ queryKey: ['profile'] })
+    },
+  })
+
   if (isLoading) return <LoadingState />
   if (error) return <div style={{ color: 'var(--color-red)', padding: '2rem' }}>{t('profile.loadError')}</div>
   if (!profile) return null
@@ -1100,8 +1109,8 @@ export default function ProfilePage() {
 
       <ProfileReviewCard
         profile={profile}
-        saving={isPending}
-        onConfirm={() => save({ ...profile, review: profile.review ? { ...profile.review, pending: false } : null })}
+        saving={confirming}
+        onConfirm={() => { if (profile.review) confirmReview(profile.review) }}
       />
 
       <Card style={{ marginBottom: '1rem' }} title={t('profile.sections.targets')} subtitle={t('profile.sections.targetsSubtitle')}>
