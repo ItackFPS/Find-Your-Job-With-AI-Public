@@ -58,7 +58,6 @@ feedback, evaluation, lab) · [ADRs](docs/adr/README.md) · [Windows app](docs/w
 | Evaluation harness (labelled datasets, metrics, comparisons; [ADR 0007](docs/adr/0007-evaluation-harness-outside-production-path.md)) | 🧪 developer tooling, outside the production path |
 | Experiment lab with human-approved promotion ([ADR 0011](docs/adr/0011-experiment-lab.md)) | 🧪 experimental; the lab agent is OS-isolated only when you run it in its sandbox (`python -m src.lab sandbox`, Windows AppContainer) |
 | Greenhouse, Lever, SmartRecruiters, WorkingNomads collectors | ⚙️ implemented, no source configured |
-| Welcome to the Jungle collector | ⚠️ implemented, disabled — blocked by the site's bot protection |
 | macOS / Linux | ⚠️ backend, CLI and tests run (CI is Linux); the launcher and startup scripts are Windows-only |
 | Docker | ⚠️ the image runs the CLI pipeline only, not the web UI |
 | Windows installer: per-user, bundled Python, desktop + Start Menu shortcuts ([docs](docs/windows-installer.md)) | ✅ 1.0.0, not code-signed |
@@ -140,9 +139,10 @@ Then:
 ### Run
 
 Double-click **`FindYourJob.cmd`**. It checks the installation, rebuilds the dashboard
-if needed, starts the backend on `127.0.0.1:8000` and opens the dashboard. Press
-**Ctrl+C** or close the window to stop everything it started; a backend that was already
-running (for example the logon task) is reused and left running.
+if needed, starts the backend on `127.0.0.1` at a free port and opens the dashboard. Press
+**Ctrl+C** or close the window to stop everything it started. A second launch opens the
+running instance; a backend the launcher did not start (for example the logon task) is never
+connected to: it does not know this instance's token.
 
 ```bat
 FindYourJob.cmd status        :: what is running, who owns it
@@ -235,7 +235,7 @@ the internet):
 
 | Outbound connection | When | What is sent |
 |---|---|---|
-| Job sources — France Travail (its public occupation pages, robots.txt respected; the API when you have credentials), RemoteOK, Jobicy, We Work Remotely, Indeed (its mobile app's API), EURES, APEC; LinkedIn (via `python-jobspy`) and HelloWork scanners | pipeline runs, scheduled scans | search queries built from your profile (keywords, locations); never your profile file, feedback or database |
+| Job sources — France Travail (its public occupation pages, robots.txt respected; the API when you have credentials), RemoteOK, Jobicy, We Work Remotely, Indeed (its mobile app's API), EURES; LinkedIn (via `python-jobspy`) and HelloWork scanners | pipeline runs, scheduled scans | search queries built from your profile (keywords, locations); never your profile file, feedback or database |
 | Hugging Face Hub | first use of the embedding model; each later model load checks for updates unless `HF_HUB_OFFLINE=1` | model file requests (Hub telemetry is turned off) |
 | `PHASE2_LLM_ENDPOINT` (default `http://localhost:1234`); `--llm-endpoint` of the evaluation/lab tools | only AI-enabled runs, or those tools when you pass the flag | job text and profile summary. It is whatever you configure — keep it local; the launcher warns if it is not (its `status` check sends only a `GET /v1/models`) |
 | ESCO API (European Commission) | only when you run `scripts/setup_esco.py` | skill search terms |
@@ -319,7 +319,7 @@ Copy `.env.example` to `.env`; every variable is optional.
 | `PHASE2_LLM_PROVIDER`, `PHASE2_LLM_ENDPOINT`, `PHASE2_LLM_MODEL_NAME`, … | local LLM, see [Local AI](#local-ai) |
 | `API_ALLOWED_HOSTS` | extra `Host` names the backend accepts (e.g. `host.docker.internal`) |
 | `API_SAME_USER_ONLY` | `1` serves only processes of the account running the backend |
-| `FYJ_PORT` | backend port used by the launcher (default 8000) |
+| `FYJ_PORT` | fixed backend port for the launcher (default: a free port chosen at each start; `dev` mode: 8000) |
 | `HF_HUB_OFFLINE` | `1` once the model is cached: no Hugging Face requests at all |
 
 `AI_ENABLED`, `AI_MODEL`, `DATABASE_URL` and `LOG_LEVEL` in older `.env` files are
@@ -396,12 +396,11 @@ issue for a security problem.
 - Some collectors use unofficial endpoints or scraping (Indeed's mobile API, LinkedIn via
   `python-jobspy`, HelloWork pages). Sites change, block automated access, or forbid it
   in their terms: check each site's terms before enabling a source.
-- Welcome to the Jungle is blocked by bot protection; several registered collectors have
-  no configured source.
-- APEC answers automated requests with HTTP 403 and a CAPTCHA (bot protection, seen
-  since October 2026). It stays active in the shipped config, so each run lists it as
-  *failed* after one request with that reason; set `active: false` on `apec` in
-  `config/sources.yaml` to stop trying. The app never tries to get round a CAPTCHA.
+- APEC and Welcome to the Jungle were removed in 2.0: their bot protection (a CAPTCHA,
+  a firewall) blocks automated requests, and the app never tries to get round it. Offers
+  they collected before stay in your history. A `config/sources.yaml` from 1.x that still
+  lists `apec` or `wttj` is skipped with that reason on each run; delete those entries.
+- Several registered collectors have no configured source.
 - The Docker image runs the CLI pipeline only.
 - The lab agent is OS-isolated only when it runs in the lab sandbox (Windows AppContainer:
   `python -m src.lab sandbox grant --apply`, then `sandbox run -- …`; see

@@ -19,7 +19,31 @@ export interface LocationPreference {
   label?: string | null
 }
 
+// Distance model (F4.3, src/pipeline/location_distance.py): where the user lives.
+export interface HomePlace {
+  name: string
+  insee: string | null
+  lat: number
+  lon: number
+  department: string | null
+  precision: 'commune' | 'department'
+}
+
+export interface RemotePolicy {
+  remote_france: boolean
+  remote_eu: boolean
+  remote_worldwide: boolean
+  hybrid: boolean
+}
+
 export interface Geography {
+  home: HomePlace | null
+  max_distance_km: number
+  // The only hard location exclusion: on-site, beyond max_distance_km, and this ticked.
+  strict_distance: boolean
+  remote_policy: RemotePolicy
+  // v1 "excluded" départements kept by the migration (no location credit there; not editable here yet).
+  excluded_departments?: string[]
   preferred_countries: string[]
   allowed_regions: string[]
   // The SOLE source of truth for location_fit scoring's priority tiers —
@@ -280,6 +304,19 @@ export const getAllDepartments = (): Promise<FrenchDepartment[]> =>
 export const searchFrenchDepartments = (q: string, limit = 8): Promise<FrenchDepartment[]> =>
   api.get<FrenchDepartment[]>('/departments', { params: { q, limit } }).then(r => r.data)
 
+export interface PlaceSuggestion {
+  name: string
+  insee: string
+  department: string | null
+  department_name: string | null
+  lat: number
+  lon: number
+}
+
+// Offline commune autocomplete (bundled table; nothing leaves the machine).
+export const searchPlaces = (q: string, limit = 8): Promise<PlaceSuggestion[]> =>
+  api.get<PlaceSuggestion[]>('/geo/places', { params: { q, limit } }).then(r => r.data)
+
 export interface CountryFacet { name: string; count: number }
 export interface CountriesResponse { total: number; facets: CountryFacet[] }
 
@@ -508,6 +545,43 @@ export const getLabExperiments = () => api.get<{ experiments: LabExperiment[] }>
 export const getLabMemory = () => api.get<{ items: LabMemoryItem[] }>('/lab/memory').then(r => r.data)
 export const getActiveStrategy = () => api.get<ActiveStrategy>('/lab/active-strategy').then(r => r.data)
 export const getSelfCheck = () => api.get<SelfCheckResponse>('/lab/self-check').then(r => r.data)
+
+// ---- Quality page: background self-check / evaluation jobs (src/api/routes/quality.py) ----
+// Summaries are codes and numbers only; the page words them in the user's language.
+export type QualityJobKind = 'self_check' | 'evaluation'
+export type QualityJobStatus = 'running' | 'completed' | 'failed' | 'cancelled'
+export type QualityPhase = 'starting' | 'running' | 'summarising'
+export type QualityFlag =
+  | 'synthetic_benchmark' | 'few_suitable_labels' | 'labels_not_independent' | 'review_insufficient_evidence'
+  | 'baseline_missing' | 'baseline_mismatch'
+export interface QualityDatasetSummary {
+  id: string | null; version: string | null; kind: string | null; n_jobs: number | null; suitable: number | null
+  status: SelfCheckStatus | null; unsafe_rejections: number; rejections_without_reason: number | null
+  false_positives: number | null; precision: number | null; recall: number | null; ranking: string
+  review: string | null; baseline: string | null; flips: { fixed: number; broken: number } | null
+  flags: QualityFlag[]; warnings?: number
+}
+export type QualityFeedbackSummary =
+  | { status: 'not_requested' | 'unavailable' }
+  | { status: 'measured'; answered: number | null; decided: number | null; coverage: number | null; contradictions: number }
+export interface QualitySummary {
+  kind: QualityJobKind; status: SelfCheckStatus | 'measured' | null; created_at: string | null
+  datasets: QualityDatasetSummary[]; feedback: QualityFeedbackSummary; report_file: string | null
+}
+export interface QualityJob {
+  id: string; kind: QualityJobKind; status: QualityJobStatus; phase: QualityPhase | null
+  options: Record<string, unknown>; created_at: string; finished_at: string | null
+  summary: QualitySummary | null; error_code: string | null
+}
+export interface QualityHealth { self_check: QualitySummary | null; evaluation: QualitySummary | null }
+export const getQualityHealth = () => api.get<QualityHealth>('/quality/health').then(r => r.data)
+export const listQualityJobs = (limit = 20) =>
+  api.get<{ active_id: string | null; jobs: QualityJob[] }>(`/quality/jobs?limit=${limit}`).then(r => r.data)
+export const getQualityJob = (id: string) => api.get<QualityJob>(`/quality/jobs/${id}`).then(r => r.data)
+export const startQualityJob = (kind: QualityJobKind) =>
+  api.post<QualityJob>('/quality/jobs', { kind }).then(r => r.data)
+export const cancelQualityJob = (id: string) =>
+  api.post<{ id: string; cancelling: boolean }>(`/quality/jobs/${id}/cancel`).then(r => r.data)
 
 // ---- Feedback journal (append-only; see docs/adr/0009-feedback-journal.md) ----
 export interface FeedbackEvent {

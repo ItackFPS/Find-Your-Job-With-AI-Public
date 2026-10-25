@@ -552,7 +552,7 @@ class TestExpandAll:
         assert "architecture microservices" in queries
 
     def test_llm_called_once_per_source(self) -> None:
-        # expand_all expands 4 sources (france_travail, apec, jobicy, remoteok),
+        # expand_all expands 3 sources (france_travail, jobicy, remoteok),
         # each of which calls the LLM endpoint once.
         expander = DiscoveryQueryExpander(
             llm_endpoint="http://localhost:1234",
@@ -563,14 +563,15 @@ class TestExpandAll:
         with patch("requests.post", return_value=resp) as mock_post:
             expander.expand_all(_FULL_PROFILE)
 
-        assert mock_post.call_count == 4
+        assert mock_post.call_count == 3
 
     # --- New sources added by Phase 2 ---
 
-    def test_expand_all_returns_apec_key(self) -> None:
+    def test_expand_all_has_no_removed_apec_key(self) -> None:
+        # APEC was removed in 2.0: no queries are built for it any more.
         expander = DiscoveryQueryExpander(llm_endpoint=None)
         result = expander.expand_all(_FULL_PROFILE)
-        assert "apec" in result
+        assert "apec" not in result
 
     def test_expand_all_returns_jobicy_key(self) -> None:
         expander = DiscoveryQueryExpander(llm_endpoint=None)
@@ -582,11 +583,6 @@ class TestExpandAll:
         result = expander.expand_all(_FULL_PROFILE)
         assert "remoteok" in result
 
-    def test_expand_all_apec_baseline_non_empty(self) -> None:
-        expander = DiscoveryQueryExpander(llm_endpoint=None)
-        result = expander.expand_all(_EMPTY_PROFILE)
-        assert len(result["apec"]) > 0
-
     def test_expand_all_jobicy_baseline_non_empty(self) -> None:
         expander = DiscoveryQueryExpander(llm_endpoint=None)
         result = expander.expand_all(_EMPTY_PROFILE)
@@ -596,13 +592,6 @@ class TestExpandAll:
         expander = DiscoveryQueryExpander(llm_endpoint=None)
         result = expander.expand_all(_EMPTY_PROFILE)
         assert len(result["remoteok"]) > 0
-
-    def test_expand_all_apec_includes_baseline_terms(self) -> None:
-        _APEC_BASELINE = ["informatique", "développeur", "data", "devops"]
-        expander = DiscoveryQueryExpander(llm_endpoint=None)
-        result = expander.expand_all(_EMPTY_PROFILE)
-        for q in _APEC_BASELINE:
-            assert q in result["apec"]
 
     def test_expand_all_jobicy_includes_baseline_slugs(self) -> None:
         _JOBICY_BASELINE = ["engineering", "cybersecurity", "admin"]  # data-science removed (returns 0 jobs)
@@ -618,10 +607,10 @@ class TestExpandAll:
         for tag in _REMOTEOK_BASELINE:
             assert tag in result["remoteok"]
 
-    def test_expand_all_returns_all_four_keys(self) -> None:
+    def test_expand_all_returns_all_three_keys(self) -> None:
         expander = DiscoveryQueryExpander(llm_endpoint=None)
         result = expander.expand_all(_EMPTY_PROFILE)
-        assert set(result.keys()) >= {"france_travail", "apec", "jobicy", "remoteok"}
+        assert set(result.keys()) >= {"france_travail", "jobicy", "remoteok"}
 
     def test_expand_all_remoteok_adds_skill_tags_from_profile(self) -> None:
         profile = _make_profile(skills=["golang", "rust"])
@@ -748,8 +737,8 @@ class TestAdaptiveReorderingWiring:
         }
         result = expander.expand_all(_EMPTY_PROFILE, yield_history_by_source=history_by_source)
         assert result["france_travail"][0] == "data"
-        # apec/jobicy/remoteok had no history entry -> unaffected, original order.
-        assert result["apec"] == list(expander._static_fallback("apec"))
+        # jobicy/remoteok had no history entry -> unaffected, original order.
+        assert result["jobicy"] == list(expander._static_fallback("jobicy"))
 
     def test_adaptive_promoted_is_recorded_in_expansion_metadata(self) -> None:
         from src.discovery.adaptive import QueryYieldStats

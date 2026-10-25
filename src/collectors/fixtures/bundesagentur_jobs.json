@@ -1,0 +1,24 @@
+{
+ "ergebnisliste": [
+  {
+   "referenznummer": "10000-1234567-S",
+   "stellenangebotsTitel": "Softwareentwickler (m/w/d)",
+   "firma": "TechFirma GmbH",
+   "stellenlokationen": [
+    {
+     "adresse": {
+      "ort": "Berlin",
+      "region": "Berlin"
+     }
+    }
+   ],
+   "homeofficemoeglich": true,
+   "arbeitszeitVollzeit": true,
+   "externeURL": "https://example.com/job/1",
+   "datumErsteVeroeffentlichung": "2026-08-01"
+  }
+ ],
+ "maxErgebnisse": 1,
+ "page": 1,
+ "size": 50
+}

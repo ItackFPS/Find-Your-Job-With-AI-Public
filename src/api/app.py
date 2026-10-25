@@ -31,7 +31,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -47,7 +47,11 @@ from src.logging_config import configure_logging
 configure_logging()
 
 from src.api.origin_guard import LocalHostGuardMiddleware, OriginGuardMiddleware
-from src.api.peer_guard import SameUserPeerGuardMiddleware, enabled_from_env as same_user_only
+from src.api.peer_guard import (
+    SameUserPeerGuardMiddleware,
+    enabled_from_env as same_user_only,
+    is_same_account_peer,
+)
 from src.api.routes import (
     ai,
     dashboard,
@@ -55,18 +59,23 @@ from src.api.routes import (
     departments,
     esco,
     feedback,
+    geo,
     hellowork,
     jobs,
     lab,
     linkedin,
     pipeline,
     profile,
+    quality,
     scheduler as scheduler_routes,
+    settings as settings_routes,
     skills,
+    sources,
 )
 from src.api.progress_stream import ProgressBus
 from src.api.runner import PipelineRunner
 from src.hellowork.scanner import HelloWorkScanner
+from src.launcher.core import INSTANCE_TOKEN_ENV
 from src.hellowork.staging import HelloWorkStagingStorage
 from src.linkedin.scanner import LinkedInConfig, LinkedInScanner
 from src.linkedin.staging import LinkedInStagingStorage
@@ -304,6 +313,8 @@ _ESCO_DB_PATH = str(_PROJECT_ROOT / "data" / "esco.db")
 _CONFIG_DIR = str(_PROJECT_ROOT / "config")
 
 app.state.db_path = _DB_PATH
+# Application settings outside the profile (src/app_settings.py): notification categories.
+app.state.settings_path = str(_PROJECT_ROOT / "data" / "settings.json")
 app.state.config_dir = _CONFIG_DIR
 # Read by _lifespan's ESCO auto-seed step so a test can point it at an
 # isolated tmp db before triggering lifespan via `with TestClient(app)`.
@@ -331,22 +342,38 @@ app.include_router(decisions.router)
 app.include_router(dashboard.router)
 app.include_router(esco.router)
 app.include_router(departments.router)
+app.include_router(geo.router)
 app.include_router(linkedin.router)
 app.include_router(hellowork.router)
 app.include_router(scheduler_routes.router)
+app.include_router(settings_routes.router)
 app.include_router(skills.router)
 app.include_router(lab.router)
+app.include_router(quality.router)
 app.include_router(ai.router)
+app.include_router(sources.router)
 
 # Must match src/launcher/core.py APP_ID: the launcher recognises this backend by it.
 APP_ID = "find-your-job-with-ai"
 
 
+# The launcher's instance token (src/launcher/core.py). Taken out of the environment at import so
+# nothing this process starts inherits it; never logged.
+_INSTANCE_TOKEN = os.environ.pop(INSTANCE_TOKEN_ENV, "")
+
+
 @app.get("/api/health")
-def health() -> dict[str, str | int]:
+def health(request: Request) -> dict[str, str | int]:
     """Liveness for the launcher and monitors. Touches no database and no network.
-    ``pid`` lets the launcher tell the backend it started from one started elsewhere."""
-    return {"status": "ok", "app": APP_ID, "version": app.version, "pid": os.getpid()}
+    ``pid`` lets the launcher tell the backend it started from one started elsewhere.
+
+    ``instance_token`` (only when the launcher set one) is what the launcher, the tray and the window
+    check before they connect: it is returned only to a loopback process of the account running this
+    server (``peer_guard.is_same_account_peer``), never to another account or a remote peer."""
+    body: dict[str, str | int] = {"status": "ok", "app": APP_ID, "version": app.version, "pid": os.getpid()}
+    if _INSTANCE_TOKEN and is_same_account_peer(request.scope):
+        body["instance_token"] = _INSTANCE_TOKEN
+    return body
 
 
 # ---------------------------------------------------------------------------

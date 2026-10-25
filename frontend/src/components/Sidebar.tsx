@@ -1,10 +1,15 @@
 import { NavLink } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { getHealth } from '../api/client'
+import { AppLogo } from './AppLogo'
+import { ThemePicker } from './ThemePicker'
+import { LanguagePicker } from './LanguagePicker'
 
+// `label` is a translation key under app.nav.
 const NAV_ITEMS: { to: string; label: string; icon: React.ReactNode; end?: boolean }[] = [
   {
-    to: '/', label: 'Dashboard', end: true,
+    to: '/', label: 'dashboard', end: true,
     icon: (
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6">
         <rect x="2" y="2" width="6" height="7" rx="1.2" />
@@ -15,7 +20,7 @@ const NAV_ITEMS: { to: string; label: string; icon: React.ReactNode; end?: boole
     ),
   },
   {
-    to: '/jobs', label: 'Jobs',
+    to: '/jobs', label: 'jobs',
     icon: (
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6">
         <rect x="2.5" y="5" width="13" height="9.5" rx="1.4" />
@@ -25,7 +30,7 @@ const NAV_ITEMS: { to: string; label: string; icon: React.ReactNode; end?: boole
     ),
   },
   {
-    to: '/review', label: 'Review',
+    to: '/review', label: 'review',
     icon: (
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6">
         <path d="M3 4.5h12M3 9h7M3 13.5h5" strokeLinecap="round" />
@@ -35,7 +40,7 @@ const NAV_ITEMS: { to: string; label: string; icon: React.ReactNode; end?: boole
     ),
   },
   {
-    to: '/profile', label: 'Profile',
+    to: '/profile', label: 'profile',
     icon: (
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6">
         <circle cx="9" cy="6" r="3" />
@@ -44,7 +49,7 @@ const NAV_ITEMS: { to: string; label: string; icon: React.ReactNode; end?: boole
     ),
   },
   {
-    to: '/stats', label: 'Stats',
+    to: '/stats', label: 'stats',
     icon: (
       <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor" stroke="none">
         <rect x="2" y="8" width="3.4" height="8" rx="0.8" />
@@ -54,7 +59,7 @@ const NAV_ITEMS: { to: string; label: string; icon: React.ReactNode; end?: boole
     ),
   },
   {
-    to: '/skills', label: 'Skills',
+    to: '/skills', label: 'skills',
     icon: (
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6">
         <circle cx="4.5" cy="4.5" r="2" />
@@ -65,16 +70,16 @@ const NAV_ITEMS: { to: string; label: string; icon: React.ReactNode; end?: boole
     ),
   },
   {
-    to: '/lab', label: 'Lab',
+    to: '/quality', label: 'quality',
     icon: (
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6">
-        <path d="M7 2.5h4M7.8 2.5v4.6L3.6 14a1.2 1.2 0 0 0 1 1.8h8.8a1.2 1.2 0 0 0 1-1.8l-4.2-6.9V2.5" strokeLinejoin="round" />
-        <path d="M5.3 11h7.4" strokeLinecap="round" />
+        <path d="M9 2 3.5 4v4.6c0 3.3 2.3 6.1 5.5 7.4 3.2-1.3 5.5-4.1 5.5-7.4V4L9 2Z" strokeLinejoin="round" />
+        <path d="m6.5 9 1.8 1.8L11.8 7.3" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     ),
   },
   {
-    to: '/pipeline', label: 'Pipeline',
+    to: '/pipeline', label: 'pipeline',
     icon: (
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6">
         <circle cx="4" cy="4" r="2.2" />
@@ -98,6 +103,7 @@ function StatusRow({ label, connected }: { label: string; connected: boolean | u
 }
 
 export function Sidebar() {
+  const { t } = useTranslation()
   const { data: health, isError } = useQuery({
     queryKey: ['backend-health'],
     queryFn: getHealth,
@@ -119,11 +125,12 @@ export function Sidebar() {
       position: 'sticky',
       top: 0,
     }}>
-      <div style={{ padding: '1.25rem 1.25rem 1rem', fontWeight: 'var(--font-weight-bold)', color: 'var(--color-accent)', fontSize: 'var(--font-size-lg)' }}>
-        Find Your Job
+      <div style={{ padding: '1.25rem 1.25rem 1rem', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontWeight: 'var(--font-weight-bold)', color: 'var(--color-accent)', fontSize: 'var(--font-size-lg)' }}>
+        <AppLogo size={24} />
+        {t('app.name')}
       </div>
 
-      <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', padding: '0 0.75rem', flex: 1 }}>
+      <nav aria-label={t('app.nav.label')} style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', padding: '0 0.75rem', flex: 1 }}>
         {NAV_ITEMS.map(({ to, label, icon, end }) => (
           <NavLink
             key={to}
@@ -137,22 +144,24 @@ export function Sidebar() {
               borderRadius: 'var(--radius-md)',
               textDecoration: 'none',
               fontSize: 'var(--font-size-base)',
-              color: isActive ? '#fff' : 'var(--color-muted)',
+              color: isActive ? 'var(--color-on-accent)' : 'var(--color-muted)',
               background: isActive ? 'var(--color-accent)' : 'transparent',
               fontWeight: isActive ? 'var(--font-weight-semibold)' : 'var(--font-weight-normal)',
-              transition: 'all 0.1s',
+              transition: 'background-color var(--motion-duration-fast), color var(--motion-duration-fast)',
             })}
           >
             {icon}
-            {label}
+            {t(`app.nav.${label}`)}
           </NavLink>
         ))}
       </nav>
 
       <div style={{ padding: '0.75rem', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
         <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: '0.6rem 0.75rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-          <StatusRow label={backendConnected ? 'Backend connected' : 'Backend offline'} connected={backendConnected} />
+          <StatusRow label={backendConnected ? t('app.backend.connected') : t('app.backend.offline')} connected={backendConnected} />
         </div>
+        <LanguagePicker />
+        <ThemePicker />
       </div>
     </div>
   )

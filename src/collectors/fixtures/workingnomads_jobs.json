@@ -1,0 +1,22 @@
+[
+ {
+  "url": "https://www.workingnomads.com/job/go/999/",
+  "title": "Full Stack Developer",
+  "company_name": "RemoteStartup",
+  "description": "Build our platform remotely",
+  "category_name": "development",
+  "tags": "python, javascript, react",
+  "location": "Worldwide",
+  "pub_date": "2026-08-01T00:00:00Z"
+ },
+ {
+  "url": "https://www.workingnomads.com/job/go/1000/",
+  "title": "Backend Engineer",
+  "company_name": "Example Remote",
+  "description": "Build our platform remotely",
+  "category_name": "development",
+  "tags": "go, postgresql",
+  "location": "Worldwide",
+  "pub_date": "2026-08-01T00:00:00Z"
+ }
+]

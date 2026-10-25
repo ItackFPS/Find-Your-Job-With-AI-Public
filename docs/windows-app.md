@@ -6,14 +6,29 @@ sources changed, starts the backend, opens the dashboard, and stops everything i
 started when you press **Ctrl+C** or close its window.
 
 The window is the application's control panel: it shows each component's state and
-where the logs are. The dashboard opens in a chrome-less app window when Microsoft Edge
-or Google Chrome is installed, otherwise in your default browser.
+where the logs are. The dashboard opens in the app's own window (pywebview on Microsoft
+Edge WebView2, built into Windows 11), titled and iconed as the app. That window is a
+separate process: closing it ends only the window, while the backend, its scheduler and
+running scans continue (the tray icon's **Open** focuses or reopens it, **Pause scans** /
+**Resume scans** stop and restart scheduled and running scans at their next checkpoint,
+**Quit** stops everything). The window loads nothing until the backend has returned this
+instance's token. Without pywebview or the WebView2 runtime it falls back to a chrome-less
+Edge/Chrome window, then to your default browser.
+
+Windows notifications from the tray app cover only the categories you opted into, stored in
+`data\settings.json` (not in the profile) and changed through `PUT /api/settings/notifications`:
+`strong_matches` (on: a search found offers rated "strong" or better), `search_failed` (on: a
+search or a LinkedIn/HelloWork scan failed), `source_paused` (off: a scan paused or hit a rate
+limit) and `saved_expiring` (off; not available until saved offers carry an expiry date).
+
+After a crash or a reboot, a scan resumes from its last checkpoint without duplicating offers,
+and the scheduler runs at most one catch-up scan, however many days were missed.
 
 ## What runs, and who manages it
 
 | Component | Role | Required? | What the launcher does |
 |---|---|---|---|
-| Backend (FastAPI, `src/api`) | API, pipeline runs, scanners, scheduler; serves the dashboard | yes | starts it on `127.0.0.1:8000`, or reuses one that is already running |
+| Backend (FastAPI, `src/api`) | API, pipeline runs, scanners, scheduler; serves the dashboard | yes | starts it on `127.0.0.1` at a free port chosen at start (`FYJ_PORT` fixes one); connects only to the backend that returns this instance's token |
 | Dashboard (`frontend/dist`) | the web UI, built once with Vite | yes | rebuilds it when `frontend/` sources are newer than the build (needs Node.js and `frontend/node_modules`) |
 | SQLite (`data/jobs.db`, `data/esco.db`) | all application data | yes | nothing: the backend opens and migrates it; the launcher never touches data |
 | LM Studio / Ollama | local LLM, only for AI-enabled runs (`use_ai`) | no | never starts it; reports whether it answers at `PHASE2_LLM_ENDPOINT` and warns if that address is not local |
@@ -35,7 +50,8 @@ FindYourJob.cmd tray             :: the installed app's mode: no console, an ico
 FindYourJob.cmd autostart on     :: installed app only: start it (tray) when you sign in;
                                  ::   "off", "status"
 FindYourJob.cmd start --window browser   :: default browser instead of an app window
-FindYourJob.cmd start --port 8100        :: another backend port (or FYJ_PORT in .env)
+FindYourJob.cmd start --port 8100        :: a fixed backend port (or FYJ_PORT in .env);
+                                 ::   default: a free port at each start (dev: 8000)
 FindYourJob.cmd status           :: what is running and who owns it; starts nothing
 FindYourJob.cmd stop             :: ask the running launcher to stop what it started
 FindYourJob.cmd dev              :: development: backend + Vite dev server (hot reload)
@@ -110,7 +126,8 @@ There is no installer: the app runs from its folder (which may contain spaces).
 |---|---|
 | `[XX] packages ... missing` | run `.venv\Scripts\python -m pip install -e .` |
 | `[XX] dashboard is not built` | install Node.js 22 LTS (or 20.19+), then `cd frontend && npm ci && npm run build` |
-| `port 8000 is already used by another program` | something that is not this app holds the port: stop it, or `FindYourJob.cmd --port 8100` |
+| `port 8100 is already used by another program` | only with a fixed port (`FYJ_PORT`, `--port`): stop that program, choose another port, or remove `FYJ_PORT` to let the launcher pick a free one |
+| `port ... is used by another copy of Find Your Job With AI` | a backend this launcher did not start (another install, a terminal, the startup task) answers on the fixed port without this instance's token: the launcher never connects to it. Stop it, or remove `FYJ_PORT` |
 | `backend exited during startup` | the printed log lines say why (often a broken `.env` value or a locked database); full output in `logs\launcher\backend.log` |
 | `backend did not become ready within 180s` | startup on a large database can be slow: `--timeout 600` |
 | `PHASE2_LLM_ENDPOINT points to a non-local address` | AI-enabled runs refuse that host and run without AI; point it at LM Studio/Ollama on this machine, or set `FYJ_ALLOW_REMOTE_LLM=1` for a server you control |

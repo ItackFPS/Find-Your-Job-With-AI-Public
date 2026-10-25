@@ -78,7 +78,7 @@ export function ProgressBar({ value, indeterminate = false, label, rightLabel, h
               // Slower, decelerating transition so a big jump between two
               // SSE updates (e.g. a stage that reports rarely) reads as a
               // smooth ramp rather than an instant snap.
-              transition: 'width 0.8s cubic-bezier(0.22, 1, 0.36, 1)',
+              transition: 'width 0.8s var(--motion-ease)',
             }}
           />
         )}

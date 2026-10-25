@@ -35,7 +35,7 @@ from src.lab.bundle import BundleError, create_bundle
 from src.lab.experiment import run_experiment
 from src.lab.guard import GuardViolation, guard_installed, install_write_guard, lab_writable_roots
 from src.lab import sandbox
-from src.lab.isolation import API_PORTS, RELAY_PORTS, check_isolation
+from src.lab.isolation import API_PORTS, RELAY_PORTS, check_isolation, live_api_ports
 from src.lab.promotion import PromotionError, approve, current_pointer, deactivate, rollback
 from src.lab.store import LabStore
 
@@ -194,7 +194,8 @@ def main(argv: list[str] | None = None) -> int:
                    help="refuse to run unless this OS account cannot write production state (isolation-check)")
     for p in (i, g):
         p.add_argument("--api-port", type=int, action="append", default=None,
-                       help=f"API port that must refuse this account (default {', '.join(map(str, API_PORTS))})")
+                       help=f"API port that must refuse this account (default {', '.join(map(str, API_PORTS))}; "
+                            "the running app's live port, data/state/api-port.json, is always added)")
         p.add_argument("--relay-port", type=int, action="append", default=None,
                        help=f"port that must not answer (default {', '.join(map(str, RELAY_PORTS))})")
         p.add_argument("--exec-path", action="append", default=[],
@@ -221,6 +222,8 @@ def main(argv: list[str] | None = None) -> int:
     ns = ap.parse_args(argv)
     if ns.cmd in ("isolation-check", "agent"):
         api_ports, relay_ports = tuple(ns.api_port or API_PORTS), tuple(ns.relay_port or RELAY_PORTS)
+        # the launcher's dynamic port is probed too, whatever was asked (it changes at every start)
+        api_ports = tuple(dict.fromkeys(api_ports + live_api_ports(PROJECT_ROOT)))
         for listing in ns.exec_paths_file:
             try:
                 ns.exec_path += [line.strip() for line in Path(listing).read_text(encoding="utf-8-sig").splitlines()

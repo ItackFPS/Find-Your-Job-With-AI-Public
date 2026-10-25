@@ -1,0 +1,15 @@
+# v1 location profile with no département at all (Remote France only): there is no place
+# to derive a home from, so the migration leaves it as it is. Synthetic test data.
+target_domains:
+- devops
+geography:
+  preferred_countries:
+  - France
+  location_preferences:
+  - type: remote
+    value: remote_france
+    status: preferred
+    label: Remote France
+work_modes:
+- remote
+freshness_days: 30

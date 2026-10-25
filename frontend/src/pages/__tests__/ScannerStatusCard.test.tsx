@@ -202,7 +202,7 @@ describe('ScannerStatusCard — before any scan', () => {
     const neverScanned = { enabled: true, is_scanning: false, state: 'idle', progress: null, last_scan: null }
     render(<QueryClientProvider client={client}>{card(neverScanned, vi.fn())}</QueryClientProvider>)
     expect(screen.getByText('No scans yet.')).toBeTruthy()
-    expect(screen.queryByText('completed')).toBeNull()
-    expect(screen.getByText('idle')).toBeTruthy()
+    expect(screen.queryByText('Completed')).toBeNull()
+    expect(screen.getByText('Idle')).toBeTruthy()
   })
 })

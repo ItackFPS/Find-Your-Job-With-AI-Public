@@ -1,0 +1,155 @@
+/*
+ * Styles for the design-system primitives that need states inline styles cannot express
+ * (:hover, :active, :disabled, :focus-visible). Everything here reads the tokens in
+ * tokens.css; nothing here hard-codes a colour.
+ */
+
+/* ---- Button ------------------------------------------------------------------------ */
+.fyj-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--target-min);
+  min-width: var(--target-min);
+  padding: 0 var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-duration-fast) var(--motion-ease),
+    border-color var(--motion-duration-fast) var(--motion-ease),
+    color var(--motion-duration-fast) var(--motion-ease);
+}
+.fyj-btn:disabled,
+.fyj-btn[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.fyj-btn--full { width: 100%; }
+
+.fyj-btn--primary {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+.fyj-btn--primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-accent) 88%, var(--color-text));
+}
+
+.fyj-btn--secondary {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+.fyj-btn--secondary:hover:not(:disabled) {
+  background: var(--color-surface-elevated);
+}
+
+.fyj-btn--ghost {
+  background: transparent;
+  color: var(--color-accent);
+}
+.fyj-btn--ghost:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+
+.fyj-btn--danger {
+  background: var(--color-surface);
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+.fyj-btn--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-danger) 10%, var(--color-surface));
+}
+
+/* ---- Stepper ----------------------------------------------------------------------- */
+.fyj-stepper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.fyj-stepper__step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+}
+.fyj-stepper__step + .fyj-stepper__step::before {
+  content: '';
+  width: var(--space-6);
+  height: 1px;
+  background: var(--color-border-strong);
+}
+.fyj-stepper__marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-xs);
+}
+.fyj-stepper__step--complete .fyj-stepper__marker {
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+.fyj-stepper__step--current {
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+}
+.fyj-stepper__step--current .fyj-stepper__marker {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+/* ---- Toast region ------------------------------------------------------------------ */
+.fyj-toast-region {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: min(26rem, calc(100vw - 2 * var(--space-4)));
+  pointer-events: none;
+}
+.fyj-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--toast-tone, var(--color-info));
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-base);
+  animation: fyj-toast-in var(--motion-duration-base) var(--motion-ease);
+}
+.fyj-toast__body { flex: 1; padding-top: 0.6rem; }
+.fyj-toast--success { --toast-tone: var(--color-success); }
+.fyj-toast--warning { --toast-tone: var(--color-warning); }
+.fyj-toast--danger { --toast-tone: var(--color-danger); }
+.fyj-toast--info { --toast-tone: var(--color-info); }
+
+@keyframes fyj-toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}

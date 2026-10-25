@@ -25,7 +25,31 @@ class LocationPreferenceIn(BaseModel):
     label: str | None = None
 
 
+class HomePlaceIn(BaseModel):
+    """Mirrors ``src.models.profile.HomePlace``."""
+    name: str
+    insee: str | None = None
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    department: str | None = None
+    precision: Literal["commune", "department"] = "commune"
+
+
+class RemotePolicyIn(BaseModel):
+    """Mirrors ``src.models.profile.RemotePolicy``."""
+    remote_france: bool = True
+    remote_eu: bool = False
+    remote_worldwide: bool = False
+    hybrid: bool = True
+
+
 class GeographyIn(BaseModel):
+    # Distance model (F4.3) — mirrors GeographyPreferences; see src/pipeline/location_distance.py.
+    home: HomePlaceIn | None = None
+    max_distance_km: int = Field(default=50, ge=5, le=300)
+    strict_distance: bool = False
+    remote_policy: RemotePolicyIn = RemotePolicyIn()
+    excluded_departments: list[str] = []
     preferred_countries: list[str] = []
     allowed_regions: list[str] = []
     # Mirrors GeographyPreferences.location_preferences — ordered
@@ -81,6 +105,16 @@ class ProfileIn(BaseModel):
 ProfileOut = ProfileIn  # same shape; alias for clarity
 
 
+class PlaceOut(BaseModel):
+    """One commune from the offline autocomplete (GET /api/geo/places)."""
+    name: str
+    insee: str
+    department: str | None = None
+    department_name: str | None = None
+    lat: float
+    lon: float
+
+
 # ---------------------------------------------------------------------------
 # Pipeline runs
 # ---------------------------------------------------------------------------
@@ -89,10 +123,26 @@ class SourceStats(BaseModel):
     collected: int = 0
     accepted: int = 0
     errors: int = 0
-    # completed | partial | failed | skipped (absent on runs recorded before it existed)
+    # completed | partial | failed | skipped | paused (absent on runs recorded before it existed)
     status: str | None = None
-    # why a source was skipped (and what to set up), failed or only partly collected
+    # why a source was skipped (and what to set up), paused, failed or only partly collected
     reason: str | None = None
+    # Source plug-in contract (plan F6.1); all absent on older runs.
+    # official | public_page | unofficial
+    access_class: str | None = None
+    # "parser_changed": pages were served (HTTP 200) but no offer could be read from them
+    canary: str | None = None
+    # failed runs in a row (circuit breaker); paused_until: when a paused source runs again
+    consecutive_failures: int | None = None
+    paused_until: str | None = None
+    request_cap_reached: bool | None = None
+    # no HTTP answer at all (DNS, connect, timeout); network_outage: the whole run was
+    # unreachable, so no circuit breaker moved
+    network_unreachable: bool | None = None
+    network_outage: bool | None = None
+    # sudden drop of the source's yield: severity (zero | drop), current_yield,
+    # baseline_yield, baseline_run_count, is_new (src/pipeline/source_health.py)
+    yield_anomaly: dict[str, Any] | None = None
 
 
 class RunStats(BaseModel):

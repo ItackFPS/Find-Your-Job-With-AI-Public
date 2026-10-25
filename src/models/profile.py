@@ -47,13 +47,63 @@ class LocationPreference(BaseModel):
     label: str | None = None
 
 
+class HomePlace(BaseModel):
+    """Where the candidate lives: a resolved French place (update plan §C2).
+
+    Normally a commune picked from the offline autocomplete (``precision="commune"``,
+    with its INSEE code). A profile migrated from v1 département priorities gets the
+    population-weighted centre of its top département instead (``precision="department"``,
+    no INSEE code) until the user picks a town. See src/geo/profile_migration.py.
+    """
+
+    model_config = _STRICT_PROFILE_CONFIG
+
+    name: str
+    insee: str | None = None
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    department: str | None = None
+    precision: Literal["commune", "department"] = "commune"
+
+
+class RemotePolicy(BaseModel):
+    """Which remote offers the candidate accepts (update plan §C2, src/geo/remote.py kinds).
+
+    An accepted remote kind scores as a good location match wherever the offer is
+    based. A kind left unticked is never rejected for it: it scores like any other
+    offer away from home. ``hybrid``: hybrid offers beyond ``max_distance_km`` stay
+    acceptable even with ``strict_distance`` (the strict exclusion targets on-site
+    work only). An offer whose remote area is ``unknown`` is never a preferred match.
+    """
+
+    model_config = _STRICT_PROFILE_CONFIG
+
+    remote_france: bool = True
+    remote_eu: bool = False
+    remote_worldwide: bool = False
+    hybrid: bool = True
+
+
 class GeographyPreferences(BaseModel):
     model_config = _STRICT_PROFILE_CONFIG
 
+    # Distance model (F4.3). Active when ``home`` is set: location scoring then decays
+    # with the distance from home (src/pipeline/location_distance.py) and
+    # ``location_preferences`` below is no longer read for scoring (kept, read-only,
+    # for v1 compatibility until the profile v2 migration removes it).
+    home: HomePlace | None = None
+    # Same bounds as the Profile page slider (validated on both sides).
+    max_distance_km: int = Field(default=50, ge=5, le=300)
+    # The ONLY hard location exclusion: on-site, beyond max_distance_km, and this ticked.
+    strict_distance: bool = False
+    remote_policy: RemotePolicy = RemotePolicy()
+    # v1 ``status: excluded`` départements carried over by the migration, with their v1
+    # meaning: no location credit there (never a rejection), and not read by France Travail.
+    excluded_departments: list[str] = []
     preferred_countries: list[str] = []
     allowed_regions: list[str] = []
-    # Ordered list of department/remote preferences — the SOLE source of
-    # truth for location_fit scoring's priority tiers (see
+    # v1 (ADR 0005). Ordered list of department/remote preferences — the source of
+    # truth for location_fit scoring's priority tiers when no ``home`` is set (see
     # src/pipeline/scoring.py::_score_location_fit, fed via
     # src/pipeline/location_match.py). A ranking preference only: a
     # job outside this list is never rejected for it, and remains fully

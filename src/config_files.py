@@ -14,7 +14,32 @@ tracked defaults are never rewritten by the application.
 
 from __future__ import annotations
 
+import os
+import tempfile
+import threading
 from pathlib import Path
+from typing import Any
+
+# One lock for every in-process write of the profile file (PUT /api/profile and the
+# distance-model migration), so a save and a migration never interleave.
+PROFILE_WRITE_LOCK = threading.RLock()
+
+
+def write_yaml_atomic(path: str | Path, data: Any) -> None:
+    """Write ``data`` as YAML to ``path`` atomically: a uniquely named temp file in the same
+    directory, then a rename (concurrent writers never share a temp file)."""
+    import yaml
+
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=f".{p.name}.", suffix=".tmp", dir=p.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
+        os.replace(tmp, p)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
 
 
 def local_config_path(config_dir: str | Path, name: str) -> Path:

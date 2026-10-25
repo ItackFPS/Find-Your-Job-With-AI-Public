@@ -7,8 +7,8 @@
   "kind": "synthetic",
   "label_scheme_version": 1,
   "labels_sha256": "b0380d57f124ef25cbef64b08790f6d0731eaf6516aa4044954e09a7b200e2b3",
-  "notes": "50 synthetic French postings, hand-labelled; pinned profile snapshot 2026-09-17.",
-  "profile_sha256": "db4ca9639efa5cbe2d8455864dda0a0ddaed04858d649edfa9982643bba401d2",
+  "notes": "50 synthetic French postings, hand-labelled; pinned profile snapshot 2026-09-17, location migrated to the distance model 2026-10-24.",
+  "profile_sha256": "a400944aeecec3ffd16fffe4e6998b66f3f9deb216ee13d53e449883da057bfa",
   "schema_version": 1,
   "version": "1"
 }

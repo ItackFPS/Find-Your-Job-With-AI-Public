@@ -20,7 +20,7 @@ from typing import Any
 import feedparser
 import httpx
 
-from src.collectors.base import BaseCollector, CollectorResult
+from src.collectors.base import BaseCollector, CollectorResult, RatePolicy, RecordedFixture
 from src.models.job import Job
 
 logger = logging.getLogger(__name__)
@@ -28,6 +28,16 @@ logger = logging.getLogger(__name__)
 
 class RemoteCollector(BaseCollector):
     """Collects jobs from remote job boards (RSS feeds or JSON APIs)."""
+
+    # public_page: a job board's RSS feed or JSON endpoint whose URL the user configures
+    # (careers_url). Nothing says it is meant for reuse, so robots.txt is checked live.
+    access_class = "public_page"
+    robots_policy = True
+    # One feed or endpoint per run.
+    rate_policy = RatePolicy(min_delay_seconds=1.0, max_requests_per_run=20)
+
+    def fixture(self) -> RecordedFixture:
+        return RecordedFixture("remote_feed.rss", self._load_fixture("remote_feed.rss"), parse_rss_feed)
 
     def __init__(self, config: dict[str, Any] | None = None):
         super().__init__()
@@ -89,6 +99,8 @@ class RemoteCollector(BaseCollector):
             errors.append(f"Failed to parse RSS feed from {self.careers_url}: {bozo_exc}")
             return jobs, errors
 
+        if not parsed.entries:
+            self._note_empty_result()  # a well-formed feed with no item
         for entry in parsed.entries:
             jobs.append(self._rss_entry_to_raw_job(entry))
 
@@ -252,3 +264,8 @@ if __name__ == "__main__":
     collector = RemoteCollector()
     result = collector.collect()
     print(f"Collected {len(result.jobs)} jobs from Remote")
+
+
+def parse_rss_feed(text: str) -> list[dict[str, Any]]:
+    """The offers in one RSS feed, mapped like the RSS mode of collect() maps them."""
+    return [RemoteCollector._rss_entry_to_raw_job(entry) for entry in feedparser.parse(text).entries]

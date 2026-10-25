@@ -40,6 +40,8 @@ dependencies = [
     # The notification-area app (src/launcher/tray.py); Windows only.
     "pystray>=0.19.5,<1.0.0; sys_platform == 'win32'",
     "Pillow>=11.0.0,<14.0.0; sys_platform == 'win32'",
+    # The app's own window (src/launcher/window.py) on Edge WebView2; pythonnet comes with it.
+    "pywebview>=6.0,<7.0; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
@@ -51,9 +53,6 @@ dev = [
     "mypy>=1.5.0",
     "types-requests>=2.31.0",
     "types-PyYAML>=6.0.0",
-]
-browser = [
-    "crawl4ai>=0.6.0",
 ]
 linkedin = [
     # >=1.3.0: older releases pin markdownify<0.14 (PYSEC-2026-1604, unbounded memory on
@@ -69,6 +68,8 @@ include = ["src*"]
 "src.geo" = ["data/*"]
 # The local model catalogue (plan F8.2).
 "src.ai.catalogue" = ["models.json"]
+# Recorded pages the collectors' parser canary reads (src/collectors/canary.py).
+"src.collectors" = ["fixtures/*"]
 
 [tool.ruff]
 # Pinned explicitly so the rules don't drift with the installed Ruff version
@@ -99,7 +100,7 @@ ignore_missing_imports = true
 # pystray ships no type information, and neither it nor Pillow is installed on
 # Linux (Windows-only dependencies of src/launcher/tray.py).
 [[tool.mypy.overrides]]
-module = ["pystray.*", "PIL.*"]
+module = ["pystray.*", "PIL.*", "webview.*"]
 ignore_missing_imports = true
 
 # feedparser ships no py.typed marker / stubs either. Used only in
@@ -117,12 +118,6 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "pandas.*"
-ignore_missing_imports = true
-
-# crawl4ai (optional `browser` extra) ships no py.typed marker; it is imported
-# lazily by src/collectors/base_browser.py and src/collectors/wttj.py.
-[[tool.mypy.overrides]]
-module = "crawl4ai.*"
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

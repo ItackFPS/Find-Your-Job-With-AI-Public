@@ -134,10 +134,8 @@ orchestrator loads collectors dynamically based on the `type` field in
 | `weworkremotely` | `weworkremotely.py` | Active — RSS/Atom feeds |
 | `indeed` | `indeed.py` | Active — unofficial mobile GraphQL API, cursor-based pagination |
 | `eures` | `eures.py` | Active — public REST API |
-| `apec` | `apec.py` | Active — public REST search endpoint |
 | `bundesagentur` | `bundesagentur.py` | Disabled — Germany-only, fails this project's location filter |
 | `arbetsformedlingen` | `arbetsformedlingen.py` | Disabled — Sweden-only, same reason |
-| `wttj` | `wttj.py` | Disabled — Crawl4AI/Playwright-based; blocked by AWS WAF bot protection as of the last live check (2026-08-27) |
 | `hellowork` | `hellowork.py` | Disabled in the registry — production HelloWork collection uses the separate scanner below |
 | `greenhouse` | `greenhouse.py` | Registered, working, not configured — needs a `board_identifier` |
 | `lever` | `lever.py` | Registered, working, not configured — needs a company slug |
@@ -293,6 +291,11 @@ Both stages cache results keyed by job content hash + profile version
   experiments with verdicts, guardrails, metric deltas and a recommended next action, the lab
   agent's memory and the `active_strategy` pointer history. It reads those files with read-only
   SQLite URIs and plain JSON and imports neither `src.evaluation` nor `src.lab`.
+- `/api/quality/*` (`src/api/routes/quality.py`, **Quality** page) runs the existing self-check or an
+  evaluation run on the committed benchmark as a background job: `src/api/quality_jobs.py` starts
+  `python -m src.evaluation ...` in a child process (one job at a time, cancellable), reads the report it
+  writes and keeps a summary of codes and numbers in the additive `quality_jobs` table of `jobs.db`.
+  It cannot approve or promote anything: promotion stays a human, CLI-only action (ADR 0011).
 
 `src/api/runner.py` runs the pipeline on a background daemon thread (one run at a time),
 writing progress to the run's database row and mirroring it over Server-Sent Events for

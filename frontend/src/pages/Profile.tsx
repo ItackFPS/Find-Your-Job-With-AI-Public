@@ -2,10 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getProfile, updateProfile, searchEscoSkills, searchEscoOccupations,
-  getAllDepartments,
+  getAllDepartments, searchPlaces,
   type Profile, type EscoEntry, type EscoSuggestion, type FrenchDepartment, type LocationPreference,
+  type HomePlace, type PlaceSuggestion, type RemotePolicy,
 } from '../api/client'
+import { useTranslation } from 'react-i18next'
 import { Card, LoadingState, Switch } from '../components'
+import i18n from '../i18n'
 
 // Prevents "Docker" and "docker" (or "French"/"french") coexisting as two
 // separate entries — an exact-string check alone lets that through.
@@ -63,7 +66,7 @@ const sectionDivider: React.CSSProperties = {
 type TagTone = 'language' | 'default'
 
 const TAG_TONE_STYLES: Record<TagTone, { border: string }> = {
-  language: { border: 'var(--color-info)66' },
+  language: { border: 'color-mix(in srgb, var(--color-info) 40%, transparent)' },
   default: { border: 'var(--color-border)' },
 }
 
@@ -84,7 +87,7 @@ function mergeFieldStyle(focused: boolean): React.CSSProperties {
     gap: '0.5rem',
     alignItems: 'center',
     minHeight: '48px',
-    boxShadow: focused ? '0 0 0 3px var(--color-accent)22' : undefined,
+    boxShadow: focused ? '0 0 0 3px color-mix(in srgb, var(--color-accent) 13%, transparent)' : undefined,
     transition: 'border-color 0.15s, box-shadow 0.15s',
     position: 'relative',
   }
@@ -126,7 +129,7 @@ const dropdownStyle: React.CSSProperties = {
   background: 'var(--color-surface)',
   border: '1px solid var(--color-border)',
   borderRadius: '9px',
-  boxShadow: '0 8px 20px rgba(0,0,0,0.35)',
+  boxShadow: 'var(--shadow-lg)',
   zIndex: 100,
   overflow: 'hidden',
 }
@@ -135,9 +138,10 @@ const dropdownStyle: React.CSSProperties = {
 // TagList — plain comma / Enter tag entry (for languages, preferred countries)
 // ---------------------------------------------------------------------------
 
-function TagList({ values, onChange, tone = 'default', placeholder = 'Add and press Enter…' }: {
+function TagList({ values, onChange, tone = 'default', placeholder }: {
   values: string[]; onChange: (v: string[]) => void; tone?: TagTone; placeholder?: string
 }) {
+  const { t } = useTranslation()
   const [draft, setDraft] = useState('')
   const [focused, setFocused] = useState(false)
   const toneStyle = TAG_TONE_STYLES[tone]
@@ -164,7 +168,7 @@ function TagList({ values, onChange, tone = 'default', placeholder = 'Add and pr
           gap: '0.5rem',
         }}>
           {v}
-          <button onClick={() => onChange(values.filter(x => x !== v))} aria-label={`Remove ${v}`} style={chipRemoveStyle}>×</button>
+          <button onClick={() => onChange(values.filter(x => x !== v))} aria-label={t('profile.remove', { item: v })} style={chipRemoveStyle}>×</button>
         </span>
       ))}
       <input
@@ -173,7 +177,7 @@ function TagList({ values, onChange, tone = 'default', placeholder = 'Add and pr
         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        placeholder={placeholder}
+        placeholder={placeholder ?? t('profile.addPlaceholder')}
         style={mergeInputStyle}
       />
     </div>
@@ -196,6 +200,7 @@ interface AutocompleteTagListProps {
 }
 
 function AutocompleteTagList({ state, onChange, lang = 'en' }: AutocompleteTagListProps) {
+  const { t } = useTranslation()
   const { skills, escoEntries } = state
   const [draft, setDraft] = useState('')
   const [suggestions, setSuggestions] = useState<EscoSuggestion[]>([])
@@ -314,7 +319,7 @@ function AutocompleteTagList({ state, onChange, lang = 'en' }: AutocompleteTagLi
           return (
             <span key={keyword} style={{
               background: 'var(--color-surface-elevated)',
-              border: `1px solid ${isEsco ? 'var(--color-accent)66' : 'var(--color-border)'}`,
+              border: `1px solid ${isEsco ? 'color-mix(in srgb, var(--color-accent) 40%, transparent)' : 'var(--color-border)'}`,
               borderRadius: '7px',
               padding: '0.35rem 0.45rem 0.35rem 0.8rem',
               fontSize: '0.86rem',
@@ -324,17 +329,17 @@ function AutocompleteTagList({ state, onChange, lang = 'en' }: AutocompleteTagLi
             }}>
               {keyword}
               {isEsco && (
-                <span title="Matched to ESCO taxonomy" style={{
+                <span title={t('profile.skills.escoTitle')} style={{
                   fontSize: '0.68rem',
                   background: 'var(--color-accent)',
-                  color: '#fff',
+                  color: 'var(--color-on-accent)',
                   borderRadius: '10px',
                   padding: '0.05rem 0.35rem',
                   fontWeight: 700,
                   lineHeight: '1.4',
                 }}>ESCO</span>
               )}
-              <button onClick={() => removeSkill(keyword)} aria-label={`Remove ${keyword}`} style={chipRemoveStyle}>×</button>
+              <button onClick={() => removeSkill(keyword)} aria-label={t('profile.remove', { item: keyword })} style={chipRemoveStyle}>×</button>
             </span>
           )
         })}
@@ -344,7 +349,7 @@ function AutocompleteTagList({ state, onChange, lang = 'en' }: AutocompleteTagLi
           onKeyDown={onKeyDown}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          placeholder="Search ESCO skills, or press Enter to add custom…"
+          placeholder={t('profile.skills.placeholder')}
           style={mergeInputStyle}
         />
         {loading && <span style={{ fontSize: '0.78rem', color: 'var(--color-muted)', flex: 'none' }}>…</span>}
@@ -360,7 +365,7 @@ function AutocompleteTagList({ state, onChange, lang = 'en' }: AutocompleteTagLi
                   padding: '0.6rem 0.85rem',
                   cursor: 'pointer',
                   background: i === activeIndex ? 'var(--color-accent)' : 'transparent',
-                  color: i === activeIndex ? '#fff' : 'var(--color-text)',
+                  color: i === activeIndex ? 'var(--color-on-accent)' : 'var(--color-text)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -373,7 +378,7 @@ function AutocompleteTagList({ state, onChange, lang = 'en' }: AutocompleteTagLi
                   {s.keyword !== s.label && (
                     <span style={{
                       fontSize: '0.78rem',
-                      color: i === activeIndex ? 'rgba(255,255,255,0.75)' : 'var(--color-muted)',
+                      color: i === activeIndex ? 'color-mix(in srgb, var(--color-on-accent) 80%, transparent)' : 'var(--color-muted)',
                       marginLeft: '0.45rem',
                     }}>
                       {s.label}
@@ -383,8 +388,8 @@ function AutocompleteTagList({ state, onChange, lang = 'en' }: AutocompleteTagLi
                 {s.is_esco && (
                   <span style={{
                     fontSize: '0.68rem',
-                    background: i === activeIndex ? 'rgba(255,255,255,0.25)' : 'var(--color-accent)',
-                    color: '#fff',
+                    background: i === activeIndex ? 'color-mix(in srgb, var(--color-on-accent) 25%, transparent)' : 'var(--color-accent)',
+                    color: 'var(--color-on-accent)',
                     borderRadius: '10px',
                     padding: '0.05rem 0.4rem',
                     fontWeight: 700,
@@ -401,7 +406,7 @@ function AutocompleteTagList({ state, onChange, lang = 'en' }: AutocompleteTagLi
               borderTop: '1px solid var(--color-border)',
               fontStyle: 'italic',
             }}>
-              Press Enter to add &ldquo;{draft.trim()}&rdquo; as a custom skill
+              {t('profile.skills.addCustom', { value: draft.trim() })}
             </div>
           </div>
         )}
@@ -430,33 +435,36 @@ function AutocompleteTagList({ state, onChange, lang = 'en' }: AutocompleteTagLi
 // Either way, this stays a pure search box: nothing is pinned/always-visible.
 // ---------------------------------------------------------------------------
 
-const CURATED_DOMAINS: { value: string; label: string }[] = [
-  { value: 'software_development', label: 'Software Development' },
-  { value: 'web_development', label: 'Web Development' },
-  { value: 'qa_testing', label: 'QA & Testing' },
-  { value: 'automation', label: 'Automation' },
-  { value: 'data', label: 'Data & AI' },
-  { value: 'it_support', label: 'IT Support' },
-  { value: 'systems', label: 'Systems' },
-  { value: 'networking', label: 'Networking' },
-  { value: 'cybersecurity', label: 'Cybersecurity' },
-  { value: 'devops', label: 'DevOps' },
-  { value: 'cloud', label: 'Cloud' },
-  { value: 'sales', label: 'Sales' },
-  { value: 'cleaning', label: 'Cleaning' },
-  { value: 'healthcare', label: 'Healthcare' },
-  { value: 'accounting', label: 'Accounting & Finance' },
-  { value: 'legal', label: 'Legal' },
-  { value: 'trades', label: 'Skilled Trades' },
-  { value: 'manual_labor', label: 'Manual Labor & Warehouse' },
-  { value: 'hospitality', label: 'Hospitality' },
-  { value: 'logistics', label: 'Logistics & Transport' },
-  { value: 'recruitment', label: 'HR & Recruitment' },
-  { value: 'procurement', label: 'Procurement' },
-  { value: 'marketing', label: 'Marketing' },
+// Labels: profile.domains.labels.<value>
+const CURATED_DOMAIN_VALUES = [
+  'software_development',
+  'web_development',
+  'qa_testing',
+  'automation',
+  'data',
+  'it_support',
+  'systems',
+  'networking',
+  'cybersecurity',
+  'devops',
+  'cloud',
+  'sales',
+  'cleaning',
+  'healthcare',
+  'accounting',
+  'legal',
+  'trades',
+  'manual_labor',
+  'hospitality',
+  'logistics',
+  'recruitment',
+  'procurement',
+  'marketing',
 ]
 
-const DOMAIN_LABELS: Record<string, string> = Object.fromEntries(CURATED_DOMAINS.map(d => [d.value, d.label]))
+const CURATED_DOMAINS = new Set(CURATED_DOMAIN_VALUES)
+const domainLabel = (value: string): string | undefined =>
+  CURATED_DOMAINS.has(value) ? i18n.t(`profile.domains.labels.${value}`) : undefined
 
 interface DomainSuggestion {
   value: string
@@ -465,6 +473,7 @@ interface DomainSuggestion {
 }
 
 function DomainPicker({ values, onChange }: { values: string[]; onChange: (v: string[]) => void }) {
+  const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const trimmedQuery = query.trim()
   const [escoResults, setEscoResults] = useState<EscoSuggestion[]>([])
@@ -506,9 +515,10 @@ function DomainPicker({ values, onChange }: { values: string[]; onChange: (v: st
   }, [trimmedQuery])
 
   const curatedMatches: DomainSuggestion[] = trimmedQuery.length >= 1
-    ? CURATED_DOMAINS
+    ? CURATED_DOMAIN_VALUES
+        .map(value => ({ value, label: domainLabel(value)! }))
         .filter(d => d.label.toLowerCase().includes(trimmedQuery.toLowerCase()) && !values.includes(d.value))
-        .map(d => ({ value: d.value, label: d.label, badge: 'Curated' as const }))
+        .map(d => ({ ...d, badge: 'Curated' as const }))
     : []
 
   // Skip an ESCO result whose label is basically the same word as a curated
@@ -556,7 +566,7 @@ function DomainPicker({ values, onChange }: { values: string[]; onChange: (v: st
         {values.map(v => (
           <span key={v} style={{
             background: 'var(--color-surface-elevated)',
-            border: `1px solid ${DOMAIN_LABELS[v] ? 'var(--color-accent)66' : 'var(--color-border)'}`,
+            border: `1px solid ${domainLabel(v) ? 'color-mix(in srgb, var(--color-accent) 40%, transparent)' : 'var(--color-border)'}`,
             borderRadius: '7px',
             padding: '0.35rem 0.45rem 0.35rem 0.8rem',
             fontSize: '0.86rem',
@@ -564,8 +574,8 @@ function DomainPicker({ values, onChange }: { values: string[]; onChange: (v: st
             alignItems: 'center',
             gap: '0.5rem',
           }}>
-            {DOMAIN_LABELS[v] ?? v}
-            <button onClick={() => removeValue(v)} aria-label={`Remove ${v}`} style={chipRemoveStyle}>×</button>
+            {domainLabel(v) ?? v}
+            <button onClick={() => removeValue(v)} aria-label={t('profile.remove', { item: v })} style={chipRemoveStyle}>×</button>
           </span>
         ))}
         <input
@@ -574,7 +584,7 @@ function DomainPicker({ values, onChange }: { values: string[]; onChange: (v: st
           onKeyDown={onKeyDown}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          placeholder="Search any domain or occupation (e.g. software development, seller, cleaner)…"
+          placeholder={t('profile.domains.placeholder')}
           style={mergeInputStyle}
         />
         {escoLoading && <span style={{ fontSize: '0.78rem', color: 'var(--color-muted)', flex: 'none' }}>…</span>}
@@ -590,7 +600,7 @@ function DomainPicker({ values, onChange }: { values: string[]; onChange: (v: st
                   padding: '0.6rem 0.85rem',
                   cursor: 'pointer',
                   background: i === activeIndex ? 'var(--color-accent)' : 'transparent',
-                  color: i === activeIndex ? '#fff' : 'var(--color-text)',
+                  color: i === activeIndex ? 'var(--color-on-accent)' : 'var(--color-text)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -602,13 +612,13 @@ function DomainPicker({ values, onChange }: { values: string[]; onChange: (v: st
                 {s.badge && (
                   <span style={{
                     fontSize: '0.68rem',
-                    background: i === activeIndex ? 'rgba(255,255,255,0.25)' : (s.badge === 'Curated' ? 'var(--color-info)' : 'var(--color-accent)'),
-                    color: '#fff',
+                    background: i === activeIndex ? 'color-mix(in srgb, var(--color-on-accent) 25%, transparent)' : (s.badge === 'Curated' ? 'var(--color-info)' : 'var(--color-accent)'),
+                    color: 'var(--color-on-accent)',
                     borderRadius: '10px',
                     padding: '0.05rem 0.4rem',
                     fontWeight: 700,
                     whiteSpace: 'nowrap',
-                  }}>{s.badge}</span>
+                  }}>{s.badge === 'Curated' ? t('profile.domains.curated') : s.badge}</span>
                 )}
               </div>
             ))}
@@ -619,14 +629,14 @@ function DomainPicker({ values, onChange }: { values: string[]; onChange: (v: st
               borderTop: '1px solid var(--color-border)',
               fontStyle: 'italic',
             }}>
-              No match? Press Enter to add &ldquo;{trimmedQuery}&rdquo; as a custom domain
+              {t('profile.domains.addCustomHint', { value: trimmedQuery })}
             </div>
           </div>
         )}
 
         {trimmedQuery.length >= 2 && !escoLoading && suggestions.length === 0 && (
           <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, fontSize: '0.82rem', color: 'var(--color-muted)' }}>
-            No match for &ldquo;{trimmedQuery}&rdquo; — press Enter to add it as a custom domain.
+            {t('profile.domains.noMatch', { value: trimmedQuery })}
           </div>
         )}
       </div>
@@ -647,11 +657,8 @@ function DomainPicker({ values, onChange }: { values: string[]; onChange: (v: st
 // the Jobs page's department filter (fetched once, filtered locally).
 // ---------------------------------------------------------------------------
 
-const STATUS_LABEL: Record<LocationPreference['status'], string> = {
-  preferred: 'Preferred',
-  acceptable: 'Acceptable',
-  excluded: 'Excluded',
-}
+// Labels: profile.location.status.<status>
+const LOCATION_STATUSES: LocationPreference['status'][] = ['preferred', 'acceptable', 'excluded']
 
 const iconButtonStyle: React.CSSProperties = {
   background: 'var(--color-bg)',
@@ -666,18 +673,21 @@ const iconButtonStyle: React.CSSProperties = {
 }
 
 function locationPreferenceLabel(p: LocationPreference, byCode: Map<string, FrenchDepartment>): string {
+  // The remote entry is stored with an English label; show it in the UI language.
+  if (p.type === 'remote') return i18n.t('profile.location.remoteFrance')
   if (p.label) return p.label
   if (p.type === 'department') {
     const name = byCode.get(p.value)?.name
     return name ? `${name} (${p.value})` : p.value
   }
-  return 'Remote France'
+  return i18n.t('profile.location.remoteFrance')
 }
 
 function LocationPreferencesEditor({ values, onChange }: {
   values: LocationPreference[]
   onChange: (v: LocationPreference[]) => void
 }) {
+  const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(-1)
   const [focused, setFocused] = useState(false)
@@ -787,13 +797,13 @@ function LocationPreferencesEditor({ values, onChange }: {
                 onChange={e => setStatus(idx, e.target.value as LocationPreference['status'])}
                 style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: '6px', padding: '0.3rem 0.5rem', fontSize: '0.8rem', color: 'var(--color-text)' }}
               >
-                {(Object.keys(STATUS_LABEL) as LocationPreference['status'][]).map(s => (
-                  <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+                {LOCATION_STATUSES.map(s => (
+                  <option key={s} value={s}>{t(`profile.location.status.${s}`)}</option>
                 ))}
               </select>
-              <button onClick={() => moveBy(idx, -1)} disabled={idx === 0} aria-label="Move up" style={iconButtonStyle}>↑</button>
-              <button onClick={() => moveBy(idx, 1)} disabled={idx === values.length - 1} aria-label="Move down" style={iconButtonStyle}>↓</button>
-              <button onClick={() => removeAt(idx)} aria-label={`Remove ${locationPreferenceLabel(p, byCode)}`} style={chipRemoveStyle}>×</button>
+              <button onClick={() => moveBy(idx, -1)} disabled={idx === 0} aria-label={t('profile.location.moveUp')} style={iconButtonStyle}>↑</button>
+              <button onClick={() => moveBy(idx, 1)} disabled={idx === values.length - 1} aria-label={t('profile.location.moveDown')} style={iconButtonStyle}>↓</button>
+              <button onClick={() => removeAt(idx)} aria-label={t('profile.remove', { item: locationPreferenceLabel(p, byCode) })} style={chipRemoveStyle}>×</button>
             </div>
           ))}
         </div>
@@ -806,7 +816,7 @@ function LocationPreferencesEditor({ values, onChange }: {
           onKeyDown={onKeyDown}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          placeholder="Search a department to add (e.g. 83 or Var)…"
+          placeholder={t('profile.location.placeholder')}
           style={mergeInputStyle}
         />
 
@@ -821,7 +831,7 @@ function LocationPreferencesEditor({ values, onChange }: {
                   padding: '0.6rem 0.85rem',
                   cursor: 'pointer',
                   background: i === activeIndex ? 'var(--color-accent)' : 'transparent',
-                  color: i === activeIndex ? '#fff' : 'var(--color-text)',
+                  color: i === activeIndex ? 'var(--color-on-accent)' : 'var(--color-text)',
                   fontSize: '0.88rem',
                 }}
               >
@@ -833,7 +843,7 @@ function LocationPreferencesEditor({ values, onChange }: {
 
         {trimmedQuery.length >= 1 && suggestions.length === 0 && (
           <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, fontSize: '0.82rem', color: 'var(--color-muted)' }}>
-            No department matches &ldquo;{query.trim()}&rdquo;.
+            {t('profile.location.noMatch', { value: query.trim() })}
           </div>
         )}
       </div>
@@ -852,7 +862,7 @@ function LocationPreferencesEditor({ values, onChange }: {
           cursor: hasRemote ? 'default' : 'pointer',
         }}
       >
-        🌍 {hasRemote ? 'Remote France added' : 'Add Remote France'}
+        {hasRemote ? t('profile.location.remoteAdded') : t('profile.location.addRemote')}
       </button>
     </div>
   )
@@ -862,7 +872,82 @@ function LocationPreferencesEditor({ values, onChange }: {
 // CheckboxGroup
 // ---------------------------------------------------------------------------
 
-function CheckboxGroup({ options, values, onChange }: { options: string[]; values: string[]; onChange: (v: string[]) => void }) {
+// ---------------------------------------------------------------------------
+// HomePicker — offline commune autocomplete for profile.geography.home
+// ---------------------------------------------------------------------------
+
+function HomePicker({ value, onChange }: { value: HomePlace | null; onChange: (v: HomePlace | null) => void }) {
+  const { t } = useTranslation()
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<PlaceSuggestion[]>([])
+  const searchable = query.trim().length >= 2
+  const shown = searchable ? results : []
+  useEffect(() => {
+    if (!searchable) return
+    let cancelled = false
+    const timer = setTimeout(() => {
+      searchPlaces(query.trim()).then(r => { if (!cancelled) setResults(r) }).catch(() => { if (!cancelled) setResults([]) })
+    }, 200)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [query, searchable])
+  const pick = (p: PlaceSuggestion) => {
+    onChange({ name: p.name, insee: p.insee, lat: p.lat, lon: p.lon, department: p.department, precision: 'commune' })
+    setQuery('')
+    setResults([])
+  }
+  return (
+    <div>
+      <div style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+        {value
+          ? <>{value.name}{value.department ? ` (${value.department})` : ''}
+              {value.precision === 'department' && (
+                <span style={{ color: 'var(--color-muted)' }}> — {t('profile.fields.homeDepartmentCentre')}</span>
+              )}
+              <button
+                type="button"
+                onClick={() => onChange(null)}
+                style={{ marginLeft: '0.6rem', background: 'none', border: '1px solid var(--color-border)',
+                         borderRadius: '6px', padding: '0.1rem 0.5rem', color: 'var(--color-muted)',
+                         cursor: 'pointer', fontSize: '0.8rem' }}
+              >
+                {t('profile.fields.homeClear')}
+              </button></>
+          : <span style={{ color: 'var(--color-muted)' }}>{t('profile.fields.homeNotSet')}</span>}
+      </div>
+      <input
+        style={inputStyle}
+        value={query}
+        onChange={e => setQuery(e.target.value)}
+        placeholder={t('profile.fields.homePlaceholder')}
+        aria-label={t('profile.fields.home')}
+      />
+      {shown.length > 0 && (
+        <div role="listbox" style={{ border: '1px solid var(--color-border)', borderRadius: '7px', marginTop: '0.3rem' }}>
+          {shown.map(p => (
+            <button
+              key={p.insee}
+              role="option"
+              aria-selected={false}
+              onClick={() => pick(p)}
+              style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none',
+                       padding: '0.4rem 0.8rem', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.87rem' }}
+            >
+              {p.name} <span style={{ color: 'var(--color-muted)' }}>{p.department_name ?? p.department}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const REMOTE_POLICY_KEYS: (keyof RemotePolicy)[] = ['remote_france', 'remote_eu', 'remote_worldwide', 'hybrid']
+
+// `labelFor` translates an option code; without it the code is shown as is, marked translate="no"
+// (the excluded-seniority keywords are matched literally in job titles).
+function CheckboxGroup({ options, values, onChange, labelFor }: {
+  options: string[]; values: string[]; onChange: (v: string[]) => void; labelFor?: (opt: string) => string
+}) {
   const toggle = (opt: string) => {
     if (values.includes(opt)) onChange(values.filter(x => x !== opt))
     else onChange([...values, opt])
@@ -872,6 +957,7 @@ function CheckboxGroup({ options, values, onChange }: { options: string[]; value
       {options.map(opt => (
         <button
           key={opt}
+          translate={labelFor ? undefined : 'no'}
           onClick={() => toggle(opt)}
           style={{
             background: values.includes(opt) ? 'var(--color-accent)' : 'var(--color-bg)',
@@ -879,12 +965,12 @@ function CheckboxGroup({ options, values, onChange }: { options: string[]; value
             borderRadius: '20px',
             padding: '0.4rem 1.05rem',
             fontSize: '0.87rem',
-            color: values.includes(opt) ? '#fff' : 'var(--color-muted)',
+            color: values.includes(opt) ? 'var(--color-on-accent)' : 'var(--color-muted)',
             cursor: 'pointer',
             transition: 'all 0.15s',
           }}
         >
-          {opt}
+          {labelFor ? labelFor(opt) : opt}
         </button>
       ))}
     </div>
@@ -912,7 +998,7 @@ function SegmentedControl<T extends string>({ options, value, onChange }: {
             borderRadius: '16px',
             padding: '0.42rem 1.05rem',
             fontSize: '0.86rem',
-            color: value === opt.value ? '#fff' : 'var(--color-muted)',
+            color: value === opt.value ? 'var(--color-on-accent)' : 'var(--color-muted)',
             cursor: 'pointer',
             fontWeight: value === opt.value ? 600 : 400,
             transition: 'all 0.15s',
@@ -933,6 +1019,8 @@ const EDUCATION_LEVELS = ['bac', 'bac+1', 'bac+2', 'bac+3', 'bac+4', 'bac+5', 'b
 // ---------------------------------------------------------------------------
 
 export default function ProfilePage() {
+  const { t } = useTranslation()
+  const optionLabel = (opt: string) => t(`profile.options.${opt}`)
   const queryClient = useQueryClient()
 
   const { data: serverProfile, isLoading, error } = useQuery({
@@ -958,7 +1046,7 @@ export default function ProfilePage() {
   })
 
   if (isLoading) return <LoadingState />
-  if (error) return <div style={{ color: 'var(--color-red)', padding: '2rem' }}>Could not load profile.</div>
+  if (error) return <div style={{ color: 'var(--color-red)', padding: '2rem' }}>{t('profile.loadError')}</div>
   if (!profile) return null
 
   const set = <K extends keyof Profile>(key: K, value: Profile[K]) =>
@@ -986,16 +1074,16 @@ export default function ProfilePage() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-        <h1 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 700 }}>Profile</h1>
+        <h1 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 700 }}>{t('profile.title')}</h1>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          {saved && <span style={{ color: 'var(--color-green)', fontSize: '0.85rem' }}>Saved!</span>}
-          {saveError && <span style={{ color: 'var(--color-red)', fontSize: '0.85rem' }}>Save failed.</span>}
+          {saved && <span style={{ color: 'var(--color-green)', fontSize: '0.85rem' }}>{t('profile.saved')}</span>}
+          {saveError && <span style={{ color: 'var(--color-red)', fontSize: '0.85rem' }}>{t('profile.saveFailed')}</span>}
           <button
             onClick={() => save(profile)}
             disabled={isPending}
             style={{
               background: isPending ? 'var(--color-border)' : 'var(--color-accent)',
-              color: '#fff',
+              color: 'var(--color-on-accent)',
               border: 'none',
               borderRadius: '7px',
               padding: '0.45rem 1.1rem',
@@ -1004,19 +1092,19 @@ export default function ProfilePage() {
               cursor: isPending ? 'not-allowed' : 'pointer',
             }}
           >
-            {isPending ? 'Saving…' : 'Save profile'}
+            {isPending ? t('profile.saving') : t('profile.save')}
           </button>
         </div>
       </div>
 
-      <Card style={{ marginBottom: '1rem' }} title="Target domains & skills" subtitle="What the pipeline searches for and matches jobs against">
+      <Card style={{ marginBottom: '1rem' }} title={t('profile.sections.targets')} subtitle={t('profile.sections.targetsSubtitle')}>
         <div style={{ marginTop: 'var(--space-4)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.5rem' }}>
-            <span style={{ ...label, marginBottom: 0 }}>Target domains<CountBadge count={profile.target_domains.length} /></span>
+            <span style={{ ...label, marginBottom: 0 }}>{t('profile.fields.targetDomains')}<CountBadge count={profile.target_domains.length} /></span>
             <Switch
               checked={profile.focus_domain}
               onChange={v => set('focus_domain', v)}
-              label={profile.focus_domain ? 'Focus on domain' : 'Focus on skills'}
+              label={profile.focus_domain ? t('profile.fields.focusDomain') : t('profile.fields.focusSkills')}
             />
           </div>
           <DomainPicker values={profile.target_domains} onChange={v => set('target_domains', v)} />
@@ -1025,50 +1113,88 @@ export default function ProfilePage() {
         <hr style={sectionDivider} />
 
         <div>
-          <span style={label}>Target skills<CountBadge count={profile.target_skills.length} /></span>
+          <span style={label}>{t('profile.fields.targetSkills')}<CountBadge count={profile.target_skills.length} /></span>
           <AutocompleteTagList state={skillsState} onChange={setSkillsState} />
         </div>
 
         <hr style={sectionDivider} />
 
         <div>
-          <span style={label}>Languages<CountBadge count={profile.languages.length} /></span>
-          <TagList values={profile.languages} onChange={v => set('languages', v)} tone="language" placeholder="Add a language and press Enter…" />
+          <span style={label}>{t('profile.fields.languages')}<CountBadge count={profile.languages.length} /></span>
+          <TagList values={profile.languages} onChange={v => set('languages', v)} tone="language" placeholder={t('profile.fields.languagesPlaceholder')} />
         </div>
       </Card>
 
-      <Card style={{ marginBottom: '1rem' }} title="Geography">
+      <Card style={{ marginBottom: '1rem' }} title={t('profile.sections.geography')}>
         <div style={{ ...fieldGroup, marginTop: 'var(--space-4)' }}>
-          <span style={label}>Preferred countries</span>
-          <TagList values={profile.geography.preferred_countries} onChange={v => setGeo('preferred_countries', v)} placeholder="Add a country and press Enter…" />
+          <span style={label}>{t('profile.fields.countries')}</span>
+          <TagList values={profile.geography.preferred_countries} onChange={v => setGeo('preferred_countries', v)} placeholder={t('profile.fields.countriesPlaceholder')} />
         </div>
 
         <div style={fieldGroup}>
-          <span style={label}>Remote scope</span>
+          <span style={label}>{t('profile.fields.remoteScope')}</span>
           <div style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginBottom: '0.5rem' }}>
-            How far outside your preferred countries a remote job may be based
+            {t('profile.fields.remoteScopeHint')}
           </div>
           <SegmentedControl
             value={profile.geography.allowed_regions.includes('Europe') ? 'europe' : 'same_country'}
             onChange={v => setGeo('allowed_regions', v === 'europe' ? ['Europe'] : [])}
             options={[
-              { value: 'same_country', label: 'Same country only' },
-              { value: 'europe', label: 'Europe' },
+              { value: 'same_country', label: t('profile.fields.sameCountry') },
+              { value: 'europe', label: t('profile.fields.europe') },
             ]}
           />
         </div>
 
         <div style={fieldGroup}>
+          <span style={label}>{t('profile.fields.home')}</span>
+          <HomePicker value={profile.geography.home} onChange={v => setGeo('home', v)} />
+        </div>
+
+        <div style={fieldGroup}>
+          <span style={label}>{t('profile.fields.maxDistance', { km: profile.geography.max_distance_km })}</span>
+          <div style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginBottom: '0.5rem' }}>
+            {t('profile.fields.maxDistanceHint')}
+          </div>
+          <input
+            type="range" min={5} max={300} step={5}
+            value={profile.geography.max_distance_km}
+            onChange={e => setGeo('max_distance_km', Number(e.target.value))}
+            aria-label={t('profile.fields.maxDistance', { km: profile.geography.max_distance_km })}
+            style={{ width: '100%' }}
+          />
+          <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.87rem', marginTop: '0.5rem' }}>
+            <input
+              type="checkbox"
+              checked={profile.geography.strict_distance}
+              onChange={e => setGeo('strict_distance', e.target.checked)}
+            />
+            {t('profile.fields.strictDistance')}
+          </label>
+        </div>
+
+        <div style={fieldGroup}>
+          <span style={label}>{t('profile.fields.remoteAccepted')}</span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.9rem' }}>
+            {REMOTE_POLICY_KEYS.map(key => (
+              <label key={key} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', fontSize: '0.87rem' }}>
+                <input
+                  type="checkbox"
+                  checked={profile.geography.remote_policy[key]}
+                  onChange={e => setGeo('remote_policy', { ...profile.geography.remote_policy, [key]: e.target.checked })}
+                />
+                {t(`profile.fields.remotePolicy.${key}`)}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div style={fieldGroup}>
           <span style={label}>
-            Location priorities<CountBadge count={profile.geography.location_preferences.length} />
+            {t('profile.fields.locationPriorities')}<CountBadge count={profile.geography.location_preferences.length} />
           </span>
           <div style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginBottom: '0.5rem' }}>
-            Departments and/or remote work you'd especially like, ordered by priority (drag with
-            ↑/↓ — position #1 is your strongest preference). This drives job ranking.
-            "Acceptable" ranks lower than "Preferred"; "Excluded" stops a location from earning
-            a priority boost. None of these is a hard filter: jobs outside this list (including
-            other departments and remote) remain fully eligible and can still rank highly on
-            domain, skills, and other factors.
+            {t('profile.fields.locationHomeNote')} {t('profile.fields.locationHint')}
           </div>
           <LocationPreferencesEditor
             values={profile.geography.location_preferences}
@@ -1077,19 +1203,19 @@ export default function ProfilePage() {
         </div>
       </Card>
 
-      <Card style={{ marginBottom: '1rem' }} title="Work preferences">
+      <Card style={{ marginBottom: '1rem' }} title={t('profile.sections.work')}>
         <div style={{ ...fieldGroup, marginTop: 'var(--space-4)' }}>
-          <span style={label}>Work modes</span>
-          <CheckboxGroup options={workModeOptions} values={profile.work_modes} onChange={v => set('work_modes', v)} />
+          <span style={label}>{t('profile.fields.workModes')}</span>
+          <CheckboxGroup options={workModeOptions} values={profile.work_modes} onChange={v => set('work_modes', v)} labelFor={optionLabel} />
         </div>
 
         <div style={fieldGroup}>
-          <span style={label}>Contract types</span>
-          <CheckboxGroup options={contractOptions} values={profile.contract_types} onChange={v => set('contract_types', v)} />
+          <span style={label}>{t('profile.fields.contractTypes')}</span>
+          <CheckboxGroup options={contractOptions} values={profile.contract_types} onChange={v => set('contract_types', v)} labelFor={optionLabel} />
         </div>
 
         <div style={fieldGroup}>
-          <span style={label}>Freshness (days)</span>
+          <span style={label}>{t('profile.fields.freshness')}</span>
           <input
             type="number"
             value={profile.freshness_days}
@@ -1101,42 +1227,42 @@ export default function ProfilePage() {
         </div>
       </Card>
 
-      <Card style={{ marginBottom: '1rem' }} title="Experience">
+      <Card style={{ marginBottom: '1rem' }} title={t('profile.sections.experience')}>
         <div style={{ ...fieldGroup, marginTop: 'var(--space-4)' }}>
-          <span style={label}>Preferred levels</span>
-          <CheckboxGroup options={levelOptions} values={profile.experience.preferred_levels} onChange={v => setExp('preferred_levels', v)} />
+          <span style={label}>{t('profile.fields.preferredLevels')}</span>
+          <CheckboxGroup options={levelOptions} values={profile.experience.preferred_levels} onChange={v => setExp('preferred_levels', v)} labelFor={optionLabel} />
         </div>
 
         <div style={fieldGroup}>
-          <span style={label}>Excluded seniority keywords</span>
+          <span style={label}>{t('profile.fields.excludedSeniority')}</span>
           <CheckboxGroup options={seniorityOptions} values={profile.experience.excluded_seniority} onChange={v => setExp('excluded_seniority', v)} />
         </div>
 
         <div style={fieldGroup}>
-          <span style={label}>Max years of experience (optional)</span>
+          <span style={label}>{t('profile.fields.maxYears')}</span>
           <input
             type="number"
             value={profile.experience.max_years ?? ''}
             min={0}
             max={50}
-            placeholder="No limit"
+            placeholder={t('profile.fields.noLimit')}
             onChange={e => setExp('max_years', e.target.value === '' ? null : parseInt(e.target.value))}
             style={{ ...inputStyle, width: '120px' }}
           />
         </div>
       </Card>
 
-      <Card title="Education">
+      <Card title={t('profile.sections.education')}>
         <div style={{ ...fieldGroup, marginTop: 'var(--space-4)' }}>
-          <span style={label}>Maximum education level (Bac+N)</span>
+          <span style={label}>{t('profile.fields.maxEducation')}</span>
           <select
             value={profile.max_education ?? ''}
             onChange={e => set('max_education', e.target.value === '' ? null : e.target.value)}
             style={{ ...inputStyle, width: '160px' }}
           >
-            <option value="">No limit</option>
+            <option value="">{t('profile.fields.noLimit')}</option>
             {EDUCATION_LEVELS.map(lvl => (
-              <option key={lvl} value={lvl}>{lvl}</option>
+              <option key={lvl} value={lvl} translate="no">{lvl}</option>
             ))}
           </select>
         </div>

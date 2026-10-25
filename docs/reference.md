@@ -128,10 +128,8 @@ class. A shared retry/backoff/rate-limit layer lives in `src/collectors/base.py`
 | We Work Remotely | `weworkremotely` | RSS/Atom | None | **Active** |
 | Indeed | `indeed` | Unofficial mobile GraphQL API | `INDEED_API_KEY` (Indeed's iOS app key, not shipped; without it the source is skipped) | **Active** — cursor-based pagination |
 | EURES | `eures` | Public REST API | None | **Active** |
-| APEC | `apec` | Public REST search endpoint | None | **Active** |
 | Bundesagentur für Arbeit | `bundesagentur` | REST API | None | Disabled — Germany-only; every result fails this project's location filter |
 | Arbetsförmedlingen | `arbetsformedlingen` | REST API | None | Disabled — Sweden-only, same reason |
-| Welcome to the Jungle | `wttj` | Browser scraping (Crawl4AI/Playwright) | None | Disabled — blocked by AWS WAF bot protection as of the last live check |
 | HelloWork | `hellowork` | HTML + JSON-LD scraping | None | Disabled in the main registry — production HelloWork collection happens through the separate scanner below |
 
 ### Registered but not configured (no `sources.yaml` entry)
@@ -227,6 +225,8 @@ grouped by route module in `src/api/routes/`:
 - **skills** — `GET /api/skills/graph`
 - **lab** (read-only) — `GET /api/lab/runs`, `/experiments` (each with a recommended `next_action`), `/memory`,
   `/active-strategy`, `/self-check` (latest self-check report and earlier statuses)
+- **quality** — `GET /api/quality/health`, `POST /api/quality/jobs` (`{kind: self_check | evaluation}`, one at a
+  time, 409 while one runs), `GET /api/quality/jobs`, `GET /api/quality/jobs/{id}`, `POST /api/quality/jobs/{id}/cancel`
 - **health** — `GET /api/health` (no database access; used by the launcher)
 
 At startup, `src/api/app.py` initializes/recovers the databases, seeds the bundled ESCO

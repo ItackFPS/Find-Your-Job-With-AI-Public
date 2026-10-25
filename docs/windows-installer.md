@@ -52,9 +52,7 @@ Then:
    `config\profile.local.yaml`.
 2. **Sources.** These work without any account: RemoteOK, Jobicy, We Work Remotely and
    EURES (pipeline run), HelloWork and LinkedIn (**Scan now** on their dashboard cards).
-   APEC also needs no account but currently refuses automated access (HTTP 403 with a
-   CAPTCHA), so runs list it as *failed*; see the README's known limitations. Two
-   sources need credentials and are *skipped* until you add them:
+   Two sources need credentials and are *skipped* until you add them:
 
    | Source | What to set in `.env` | Where to get it |
    |---|---|---|
@@ -80,8 +78,8 @@ see the README's [Local AI](../README.md#local-ai) section to opt in to a local 
 - **Restart:** the same shortcut again. Launching while the app already runs only opens the
   dashboard again; it never starts a second backend. Launching while it is still stopping
   waits until it has stopped, then starts it.
-- If port 8000 is taken by another program, `logs\launcher\launcher.log` says so. Set another port: add
-  `FYJ_PORT=8010` to `.env`.
+- The backend listens on `127.0.0.1` at a free port chosen at each start, so another program on
+  port 8000 no longer matters. `FYJ_PORT=8010` in `.env` fixes a port instead.
 
 ## Self-check and the Lab
 
@@ -134,7 +132,7 @@ The install folder holds both the application and your data:
 | Symptom | What to do |
 |---|---|
 | The console shows `[XX] packages` or `[XX] dashboard` | the installation is damaged: run the installer again (data is kept) |
-| `port 8000 is already used by another program` | close that program, or set `FYJ_PORT` in `.env` |
+| `port 8010 is already used by another program` | only with `FYJ_PORT` set: close that program, or remove `FYJ_PORT` from `.env` |
 | The window closes at once | run **Find Your Job With AI** from the Start Menu; if it still closes, open `logs\launcher\launcher.log` |
 | `backend exited during startup` | the last log lines are printed; the full output is `logs\launcher\backend.log` |
 | A source shows *failed* | its error is listed under the run (e.g. a site answering HTTP 403 blocks automated access); the other sources are unaffected |
