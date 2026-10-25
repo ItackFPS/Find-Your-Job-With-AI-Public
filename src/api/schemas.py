@@ -46,9 +46,10 @@ class RemotePolicyIn(BaseModel):
 class GeographyIn(BaseModel):
     # Distance model (F4.3) — mirrors GeographyPreferences; see src/pipeline/location_distance.py.
     home: HomePlaceIn | None = None
-    max_distance_km: int = Field(default=50, ge=1, le=1000)
+    max_distance_km: int = Field(default=50, ge=5, le=300)
     strict_distance: bool = False
     remote_policy: RemotePolicyIn = RemotePolicyIn()
+    excluded_departments: list[str] = []
     preferred_countries: list[str] = []
     allowed_regions: list[str] = []
     # Mirrors GeographyPreferences.location_preferences — ordered
