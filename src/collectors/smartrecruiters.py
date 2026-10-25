@@ -34,6 +34,9 @@ _JOB_URL_TEMPLATE = "https://jobs.smartrecruiters.com/{company}/{posting_id}"
 class SmartRecruitersCollector(BaseCollector):
     """Collects jobs from a single company's SmartRecruiters postings feed."""
 
+    # official: SmartRecruiters' documented public Posting API, enabled per customer.
+    access_class = "official"
+
     def __init__(self, config: dict[str, Any] | None = None):
         super().__init__()
         self.config = config or {}

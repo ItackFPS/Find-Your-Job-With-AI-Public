@@ -68,6 +68,7 @@ from src.api.routes import (
     scheduler as scheduler_routes,
     settings as settings_routes,
     skills,
+    sources,
 )
 from src.api.progress_stream import ProgressBus
 from src.api.runner import PipelineRunner
@@ -346,6 +347,7 @@ app.include_router(settings_routes.router)
 app.include_router(skills.router)
 app.include_router(lab.router)
 app.include_router(ai.router)
+app.include_router(sources.router)
 
 # Must match src/launcher/core.py APP_ID: the launcher recognises this backend by it.
 APP_ID = "find-your-job-with-ai"

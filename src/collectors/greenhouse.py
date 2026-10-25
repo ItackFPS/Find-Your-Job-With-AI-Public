@@ -46,6 +46,10 @@ class GreenhouseCollector(BaseCollector):
         max_jobs           Optional hard cap across all boards.
     """
 
+    # official: Greenhouse's documented public Job Board API (boards-api.greenhouse.io),
+    # published so employers' boards can be embedded and reused.
+    access_class = "official"
+
     def __init__(self, config: dict[str, Any] | None = None):
         cfg = config or {}
         super().__init__(

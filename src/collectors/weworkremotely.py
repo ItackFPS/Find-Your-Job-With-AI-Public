@@ -44,7 +44,7 @@ from typing import Any
 import feedparser
 import httpx
 
-from src.collectors.base import BaseCollector, CollectorResult
+from src.collectors.base import BaseCollector, CollectorResult, RatePolicy, RecordedFixture
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +93,20 @@ class WeWorkRemotelyCollector(BaseCollector):
     Combines the global RSS feed with category-specific RSS feeds to
     discover substantially more unique jobs than the global feed alone.
     """
+
+    # public_page: public RSS feeds (global and per category). robots.txt (checked
+    # 2026-10-24) allows / except account and admin paths; no terms grant reuse
+    # explicitly, so the feeds are read as public pages with robots.txt checked live.
+    access_class = "public_page"
+    robots_policy = True
+    robots_agent = "job-aggregator"  # product token of the User-Agent sent
+    robots_user_agent = _RSS_HEADERS["User-Agent"]
+    # 1 global + 6 category feeds per run by default.
+    rate_policy = RatePolicy(min_delay_seconds=1.0, max_requests_per_run=100)
+
+    def fixture(self) -> RecordedFixture:
+        return RecordedFixture("weworkremotely_feed.rss", self._load_fixture("weworkremotely_feed.rss"),
+                               parse_feed)
 
     def __init__(self, config: dict[str, Any] | None = None) -> None:
         cfg = config or {}
@@ -185,6 +199,8 @@ class WeWorkRemotelyCollector(BaseCollector):
             )
             return jobs, errors
 
+        if not feed.entries:
+            self._note_empty_result()  # a well-formed feed with no item
         new_count = 0
         for entry in feed.entries:
             raw = _rss_entry_to_raw(entry)
@@ -206,6 +222,11 @@ class WeWorkRemotelyCollector(BaseCollector):
 # ---------------------------------------------------------------------------
 # Pure helpers — no network, fully testable
 # ---------------------------------------------------------------------------
+
+def parse_feed(text: str) -> list[dict[str, Any]]:
+    """The offers in one WWR RSS feed, as raw dicts (no cross-feed dedup)."""
+    return [_rss_entry_to_raw(entry) for entry in feedparser.parse(text).entries]
+
 
 def _extract_job_id(url_or_path: str) -> str:
     """Return the numeric job ID embedded in a WWR URL/path, or ''."""
