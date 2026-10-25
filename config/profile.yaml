@@ -30,22 +30,6 @@ target_skills_esco:
   keyword: Docker
   custom: true
 geography:
-  # Distance model: offers are matched on the distance from home (road estimate) and on
-  # the remote policy. location_preferences below is the v1 list, kept for compatibility.
-  home:
-    name: Paris
-    insee: '75056'
-    lat: 48.8589
-    lon: 2.347
-    department: '75'
-    precision: commune
-  max_distance_km: 50
-  strict_distance: false
-  remote_policy:
-    remote_france: true
-    remote_eu: false
-    remote_worldwide: false
-    hybrid: true
   preferred_countries:
   - France
   allowed_regions:

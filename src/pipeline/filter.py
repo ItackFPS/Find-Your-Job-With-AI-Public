@@ -788,7 +788,7 @@ def matches_remote_policy(job: Job, config: dict[str, Any]) -> bool:
     cfg = config.get("location_distance")
     if not cfg:
         return True
-    return not remote_policy_exclusion(assess(job, cfg))
+    return not remote_policy_exclusion(job, assess(job, cfg))
 
 
 _FILTER_CHECKS: list[tuple[str, Callable[[Job, dict[str, Any]], bool]]] = [
