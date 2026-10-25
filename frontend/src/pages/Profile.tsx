@@ -876,7 +876,7 @@ function LocationPreferencesEditor({ values, onChange }: {
 // HomePicker — offline commune autocomplete for profile.geography.home
 // ---------------------------------------------------------------------------
 
-function HomePicker({ value, onChange }: { value: HomePlace | null; onChange: (v: HomePlace) => void }) {
+function HomePicker({ value, onChange }: { value: HomePlace | null; onChange: (v: HomePlace | null) => void }) {
   const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<PlaceSuggestion[]>([])
@@ -902,7 +902,16 @@ function HomePicker({ value, onChange }: { value: HomePlace | null; onChange: (v
           ? <>{value.name}{value.department ? ` (${value.department})` : ''}
               {value.precision === 'department' && (
                 <span style={{ color: 'var(--color-muted)' }}> — {t('profile.fields.homeDepartmentCentre')}</span>
-              )}</>
+              )}
+              <button
+                type="button"
+                onClick={() => onChange(null)}
+                style={{ marginLeft: '0.6rem', background: 'none', border: '1px solid var(--color-border)',
+                         borderRadius: '6px', padding: '0.1rem 0.5rem', color: 'var(--color-muted)',
+                         cursor: 'pointer', fontSize: '0.8rem' }}
+              >
+                {t('profile.fields.homeClear')}
+              </button></>
           : <span style={{ color: 'var(--color-muted)' }}>{t('profile.fields.homeNotSet')}</span>}
       </div>
       <input

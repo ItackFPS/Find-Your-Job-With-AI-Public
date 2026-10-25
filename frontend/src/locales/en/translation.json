@@ -751,6 +751,7 @@
       "homeNotSet": "Not set: location ranking uses your location priorities below",
       "homeDepartmentCentre": "centre of the département; pick your town to refine it",
       "homePlaceholder": "Type your town or postcode…",
+      "homeClear": "Clear",
       "maxDistance": "Maximum distance: {km} km",
       "maxDistanceHint": "Estimated by road from home. Closer jobs rank higher; jobs further away rank lower but stay visible.",
       "strictDistance": "Strict: hide on-site jobs beyond this distance",
