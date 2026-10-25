@@ -20,6 +20,7 @@ from src.ai.runtime.jobs import Job, JobFailed, JobRegistry
 from src.ai.runtime.ollama_install import InstallerInfo, install_worker, resolve_installer
 from src.api.routes import ai as ai_routes
 
+REAL_SUBJECT = "CN=Ollama Inc., O=Ollama Inc., L=Toronto, S=Ontario, C=CA, SERIALNUMBER=2713355, OID.2.5.4.15=Private Organization"
 GITHUB_DL = "https://github.com/ollama/ollama/releases/download/v9.9.9/OllamaSetup.exe"
 ASSET_URL = "https://release-assets.githubusercontent.com/asset/123?sig=x"
 PAYLOAD = b"MZ" + b"\x00" * 1000
@@ -99,9 +100,29 @@ def test_resolve_follows_allowed_redirects_and_reads_published_hash():
     assert all(not follow for _, _, follow in session.calls)  # redirects followed by hand
 
 
-def test_resolve_without_published_hash():
-    info = resolve_installer(_Session(_chain(digest=None)))  # type: ignore[arg-type]
-    assert info.sha256 is None and info.size_bytes == len(PAYLOAD)
+def test_resolve_fails_closed_without_a_published_hash():
+    with pytest.raises(JobFailed) as exc:
+        resolve_installer(_Session(_chain(digest=None)))  # type: ignore[arg-type]
+    assert exc.value.code == "sha256_unpublished"
+
+
+def test_resolve_fails_closed_when_the_release_api_is_unreachable():
+    table = _chain()
+    del table[("GET", ollama_install.RELEASE_API.format(version="v9.9.9"))]
+    with pytest.raises(JobFailed) as exc:
+        resolve_installer(_Session(table))  # type: ignore[arg-type]
+    assert exc.value.code == "sha256_unpublished"
+
+
+def test_resolve_refuses_another_repositorys_github_asset():
+    """github.com and its asset hosts serve every repository: the ollama/ollama path counts."""
+    other = "https://github.com/someone/ollama/releases/download/v9.9.9/OllamaSetup.exe"
+    table = _chain()
+    table[("HEAD", ollama_install.OFFICIAL_URL)] = _Resp(307, {"Location": other})
+    table[("HEAD", other)] = _Resp(302, {"Location": ASSET_URL})
+    with pytest.raises(JobFailed) as exc:
+        resolve_installer(_Session(table))  # type: ignore[arg-type]
+    assert exc.value.code == "not_an_ollama_release"
 
 
 def test_resolve_refuses_a_redirect_to_another_host():
@@ -140,7 +161,7 @@ def test_resolve_reports_http_errors_and_unreachable():
 # --- download ----------------------------------------------------------------------------
 
 
-def _info(size: int = len(PAYLOAD), sha: str | None = PAYLOAD_SHA) -> InstallerInfo:
+def _info(size: int = len(PAYLOAD), sha: str = PAYLOAD_SHA) -> InstallerInfo:
     return InstallerInfo(url=ollama_install.OFFICIAL_URL, final_url_host="x", size_bytes=size,
                          version="v9.9.9", sha256=sha)
 
@@ -163,6 +184,18 @@ def test_download_rejects_a_hash_mismatch_and_leaves_nothing(tmp_path):
     assert list(tmp_path.iterdir()) == []
 
 
+def test_download_refuses_a_chain_that_left_the_ollama_release(tmp_path):
+    table = _chain()
+    other = "https://github.com/someone/ollama/releases/download/v9.9.9/OllamaSetup.exe"
+    table[("GET", ollama_install.OFFICIAL_URL)] = _Resp(307, {"Location": other})
+    table[("GET", other)] = _Resp(302, {"Location": ASSET_URL})
+    with pytest.raises(JobFailed) as exc:
+        ollama_install.download(_info(), tmp_path / "x.exe", Job(id="j", kind="install"),
+                                _Session(table))  # type: ignore[arg-type]
+    assert exc.value.code == "not_an_ollama_release"
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_download_rejects_a_size_mismatch(tmp_path):
     with pytest.raises(JobFailed) as exc:
         ollama_install.download(_info(size=len(PAYLOAD) + 5), tmp_path / "x.exe",
@@ -177,7 +210,7 @@ def test_download_rejects_a_size_mismatch(tmp_path):
 
 class _Steps:
     def __init__(self, size: int = len(PAYLOAD), signature: tuple[str, str] = (
-            "Valid", "CN=\"Ollama, Inc.\", O=\"Ollama, Inc.\"")) -> None:
+            "Valid", REAL_SUBJECT)) -> None:
         self.size = size
         self.signature = signature
         self.launched: list[Path] = []
@@ -219,14 +252,65 @@ def test_worker_needs_the_confirmed_size_before_downloading(tmp_path):
     assert not steps.fetched and not steps.launched
 
 
-@pytest.mark.parametrize("signature", [("NotSigned", ""), ("HashMismatch", "CN=Ollama"),
-                                       ("Valid", "CN=Someone Else")])
+@pytest.mark.parametrize("signature", [
+    ("NotSigned", ""), ("HashMismatch", REAL_SUBJECT), ("UnknownError", REAL_SUBJECT),
+    ("Valid", "CN=Someone Else"),
+    ("Valid", "CN=Ollama Inc. Evil, O=Ollama Inc."),  # a substring is not the publisher
+    ("Valid", "CN=ollama-fan, O=Ollama Inc."),
+    ("Valid", "CN=Ollama Inc., O=Evil Corp, OU=Ollama Inc."),
+    ("Valid", "CN=Evil, O=Evil, CN=Ollama Inc., O=Ollama Inc."),  # first CN/O count
+])
 def test_worker_never_launches_an_unverified_installer(tmp_path, signature):
     steps = _Steps(signature=signature)
     with pytest.raises(JobFailed) as exc:
         install_worker(Job(id="j", kind="install"), len(PAYLOAD), tmp_path, **steps.kwargs())
     assert exc.value.code == "signature_invalid"
     assert not steps.launched and list(tmp_path.iterdir()) == []
+
+
+def test_subject_fields_parses_quoted_values():
+    fields = ollama_install.subject_fields(
+        'CN=DigiCert G5 CS ECC SHA384 2021 CA1, O="DigiCert, Inc.", C=US')
+    assert fields == {"CN": "DigiCert G5 CS ECC SHA384 2021 CA1", "O": "DigiCert, Inc.",
+                      "C": "US"}
+    assert ollama_install.is_ollama_publisher("Valid", REAL_SUBJECT)
+
+
+def test_worker_removes_leftover_installers_before_downloading(tmp_path):
+    old = tmp_path / "OllamaSetup-v0.1.0.exe"
+    old.write_bytes(b"old")
+    keep = tmp_path / "notes.txt"
+    keep.write_text("x")
+    steps = _Steps()
+    install_worker(Job(id="j", kind="install"), len(PAYLOAD), tmp_path, **steps.kwargs())
+    assert not old.exists() and keep.exists()
+
+
+def test_launch_deletes_the_installer_after_it_exits(tmp_path, monkeypatch):
+    import threading
+
+    installer = tmp_path / "OllamaSetup-v9.9.9.exe"
+    installer.write_bytes(PAYLOAD)
+    exited = threading.Event()
+    deleted = threading.Event()
+
+    class _Proc:
+        def wait(self):
+            exited.wait(5)
+            return 0
+
+    monkeypatch.setattr(ollama_install.subprocess, "Popen", lambda *a, **k: _Proc())
+    real_unlink = Path.unlink
+
+    def _unlink(self, missing_ok=False):
+        real_unlink(self, missing_ok=missing_ok)
+        deleted.set()
+
+    monkeypatch.setattr(Path, "unlink", _unlink)
+    ollama_install.launch(installer)
+    assert installer.exists()  # still running
+    exited.set()
+    assert deleted.wait(5) and not installer.exists()
 
 
 def test_worker_refuses_other_platforms_and_an_existing_install(tmp_path):
