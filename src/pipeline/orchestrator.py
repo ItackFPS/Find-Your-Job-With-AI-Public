@@ -342,6 +342,7 @@ def run_pipeline(
         # =================================================================
         profile_path = resolve_config_path(config_dir, "profile.yaml")
         early_profile = None
+        early_profile_hash = ""
         if profile_path.exists():
             # A v1 personal profile (département priorities) is converted to the distance
             # model once, with a backup (src/geo/profile_migration.py). Fail-open.
@@ -350,6 +351,9 @@ def run_pipeline(
             migrate_personal_profile(profile_path)
             try:
                 from src.pipeline.filter import load_profile as _load_profile_fn
+                # Hash read right after the (post-migration) load: stats.profile_hash then
+                # names the profile this run actually uses, not a later save.
+                early_profile_hash = _hash_file(str(profile_path))
                 early_profile = _load_profile_fn(str(profile_path))
             except Exception as exc:
                 logger.warning("Could not load profile for discovery expansion: %s", exc)
@@ -747,7 +751,7 @@ def run_pipeline(
         stats.requirements_gate_input = len(filtered_jobs)
         stats.requirements_gate_passed = len(filtered_jobs)
         stats.stage_times["filter"] = time.perf_counter() - _t_filter
-        stats.profile_hash = _hash_file(str(profile_path))
+        stats.profile_hash = early_profile_hash if early_profile is not None else _hash_file(str(profile_path))
         _notify(progress_callback, "filter", stats)
 
         # =================================================================
