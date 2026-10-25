@@ -32,7 +32,9 @@ Verify (F8.3):
 POST /api/ai/benchmark {"model": tag, "offers": 3, "offers_per_day": 30}
     Background job: load the model, analyse bundled synthetic offers, and return metrics
     (valid JSON, grounded quotes, French, seconds per offer, tokens/s) and a plain verdict
-    code with its parameters.
+    code with its parameters. The model must be a catalogue tag or installed in that
+    Ollama (404 ``model_not_available``); one benchmark runs at a time (409
+    ``benchmark_busy``); cancelling closes the in-flight request at once.
 
 Every job has ``GET .../{job_id}`` (status) and ``DELETE .../{job_id}`` (cancel). Jobs are
 kept in memory only: a backend restart forgets them.
@@ -40,6 +42,7 @@ kept in memory only: a backend restart forgets them.
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -55,7 +58,7 @@ from src.ai.catalogue import (
     load_catalogue,
     recommend,
 )
-from src.ai.runtime import ollama, ollama_install
+from src.ai.runtime import detect, ollama, ollama_install
 from src.ai.runtime.detect import RuntimeReport, detect_runtimes
 from src.ai.runtime.hardware import HardwareProbe, probe_hardware
 from src.ai.runtime.jobs import Job, JobFailed, JobRegistry
@@ -221,10 +224,21 @@ class BenchmarkRequest(BaseModel):
                                  description="Ollama on this machine; default 127.0.0.1:11434")
 
 
+_BENCHMARK_START = threading.Lock()
+
+
+def _installed_models(base: str) -> set[str]:
+    """Model names the Ollama at ``base`` reports (``foo`` also matches ``foo:latest``)."""
+    names = {m.name for m in detect.probe_ollama(base).models}
+    return names | {n.removesuffix(":latest") for n in names}
+
+
 @router.post("/benchmark", status_code=202)
 def start_benchmark(body: BenchmarkRequest) -> dict[str, Any]:
     base = _local_base(body.base_url)
     entry = load_catalogue().find(body.model)
+    if entry is None and body.model not in _installed_models(base):
+        raise HTTPException(status_code=404, detail={"error": "model_not_available"})
     offers = min(body.offers, len(load_fixtures()["offers"]))
 
     def worker(job: Job) -> None:
@@ -235,9 +249,14 @@ def start_benchmark(body: BenchmarkRequest) -> dict[str, Any]:
             on_progress=lambda s: job.update(**s), cancelled=job.cancel_event.is_set)
         job.update(result=result)
 
-    job, _ = BENCHMARK_JOBS.start(worker, key=f"{base}|{body.model}", model=body.model,
-                                  phase="queued", offers_done=0, offers_total=offers,
-                                  result=None)
+    # One benchmark at a time on this machine: two would share the GPU and skew both.
+    with _BENCHMARK_START:
+        running = [j for j in BENCHMARK_JOBS.list() if j.status == "running"]
+        if running:
+            raise HTTPException(status_code=409, detail={"error": "benchmark_busy",
+                                                         "job_id": running[0].id})
+        job, _ = BENCHMARK_JOBS.start(worker, model=body.model, phase="queued",
+                                      offers_done=0, offers_total=offers, result=None)
     return job.snapshot()
 
 

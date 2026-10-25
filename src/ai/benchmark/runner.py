@@ -97,7 +97,8 @@ def run_benchmark(model: str, *, base_url: str | None = None, offers: int = DEFA
     started = time.monotonic()
     on_progress({"phase": "loading", "offers_done": 0, "offers_total": len(chosen)})
     ollama.chat(model, [{"role": "user", "content": "Réponds OK."}], base_url=base_url,
-                think=think, options={**CHAT_OPTIONS, "num_predict": 8})  # same options: no reload
+                think=think, options={**CHAT_OPTIONS, "num_predict": 8},  # same: no reload
+                cancelled=cancelled)
     load_seconds = time.monotonic() - started
 
     scores: list[OfferScore] = []
@@ -109,7 +110,7 @@ def run_benchmark(model: str, *, base_url: str | None = None, offers: int = DEFA
         try:
             reply = ollama.chat(model, build_messages(offer, profile), base_url=base_url,
                                 format_schema=ANALYSIS_SCHEMA, think=think,
-                                options=CHAT_OPTIONS)
+                                options=CHAT_OPTIONS, cancelled=cancelled)
         except JobFailed as exc:
             if exc.code in (ollama.ERR_NOT_LOCAL, ollama.ERR_UNREACHABLE):
                 raise

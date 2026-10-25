@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 from fastapi.testclient import TestClient
@@ -23,8 +26,9 @@ from src.ai.benchmark.scoring import (
 )
 from src.ai.catalogue import load_catalogue
 from src.ai.endpoint import ALLOW_REMOTE_ENV
-from src.ai.runtime import ollama
-from src.ai.runtime.jobs import JobFailed, JobRegistry
+from src.ai.runtime import detect, ollama
+from src.ai.runtime.detect import RuntimeDetection, RuntimeModel
+from src.ai.runtime.jobs import JobCancelled, JobFailed, JobRegistry
 from src.api.routes import ai as ai_routes
 
 OFFER = ("Profil recherché :\n- Minimum 2 ans  d'expérience en développement Python.\n"
@@ -192,7 +196,7 @@ class _FakeChat:
         self.calls: list[dict] = []
 
     def __call__(self, model, messages, *, base_url=None, format_schema=None, think=False,
-                 options=None, timeout=None):
+                 options=None, timeout=None, cancelled=None):
         self.calls.append({"model": model, "format": format_schema, "think": think,
                            "base_url": base_url})
         if format_schema is None:  # the warm-up load
@@ -261,6 +265,9 @@ def test_run_benchmark_stops_when_ollama_is_unreachable(monkeypatch):
 def client(isolated_app, monkeypatch):
     monkeypatch.delenv(ALLOW_REMOTE_ENV, raising=False)
     monkeypatch.setattr(ai_routes, "BENCHMARK_JOBS", JobRegistry("benchmark"))
+    monkeypatch.setattr(detect, "probe_ollama", lambda base: RuntimeDetection(
+        runtime="ollama", base_url=base, status="running", reachable=True,
+        models=[RuntimeModel(name="m:1"), RuntimeModel(name="mine:latest")]))
     return TestClient(isolated_app)
 
 
@@ -311,3 +318,130 @@ def test_benchmark_route_cancel(client, monkeypatch):
 def test_benchmark_status_unknown_job(client):
     assert client.get("/api/ai/benchmark/nope").status_code == 404
     assert client.delete("/api/ai/benchmark/nope").status_code == 404
+
+
+def test_benchmark_route_only_for_catalogue_or_installed_models(client, monkeypatch):
+    calls = []
+    monkeypatch.setattr(ollama, "chat", lambda *a, **k: calls.append(a) or {})
+    resp = client.post("/api/ai/benchmark", json={"model": "not-installed:7b"})
+    assert resp.status_code == 404 and resp.json()["detail"]["error"] == "model_not_available"
+    assert calls == []
+    fake = _FakeChat()
+    monkeypatch.setattr(ollama, "chat", fake)
+    job_id = client.post("/api/ai/benchmark", json={"model": "mine", "offers": 1}).json()["id"]
+    ai_routes.BENCHMARK_JOBS.wait(job_id, 5)
+    assert client.get(f"/api/ai/benchmark/{job_id}").json()["status"] == "succeeded"
+
+
+def test_benchmark_route_one_job_at_a_time(client, monkeypatch):
+    gate = threading.Event()
+    fake = _FakeChat()
+
+    def slow(*a, **k):
+        gate.wait(5)
+        return fake(*a, **k)
+
+    monkeypatch.setattr(ollama, "chat", slow)
+    first = client.post("/api/ai/benchmark", json={"model": "m:1", "offers": 1}).json()["id"]
+    small = load_catalogue().default("small")
+    resp = client.post("/api/ai/benchmark", json={"model": small.ollama_tag})
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == {"error": "benchmark_busy", "job_id": first}
+    gate.set()
+    ai_routes.BENCHMARK_JOBS.wait(first, 5)
+    resp = client.post("/api/ai/benchmark", json={"model": small.ollama_tag, "offers": 1})
+    assert resp.status_code == 202
+    ai_routes.BENCHMARK_JOBS.wait(resp.json()["id"], 5)
+
+
+# --- streamed chat with cancel against a fake Ollama ------------------------------------
+
+
+class _ChatServer:
+    """``/api/chat`` that waits ``delay`` s (a model load), then streams ``lines``."""
+
+    def __init__(self, lines: list[dict], delay: float = 0.0, line_delay: float = 0.0) -> None:
+        self.closed = threading.Event()
+        server = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self) -> None:  # noqa: N802
+                self.rfile.read(int(self.headers.get("Content-Length", 0)))
+                time.sleep(delay)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/x-ndjson")
+                self.end_headers()
+                try:
+                    for line in lines:
+                        self.wfile.write(json.dumps(line).encode() + b"\n")
+                        self.wfile.flush()
+                        time.sleep(line_delay)
+                except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                    server.closed.set()
+
+            def log_message(self, *args) -> None:
+                pass
+
+        self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.httpd.daemon_threads = True
+        self.url = f"http://127.0.0.1:{self.httpd.server_address[1]}"
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+
+    def close(self) -> None:
+        self.httpd.shutdown()
+        self.httpd.server_close()
+
+
+@pytest.fixture()
+def _local(monkeypatch):
+    monkeypatch.delenv(ALLOW_REMOTE_ENV, raising=False)
+
+
+def test_chat_assembles_the_streamed_message_and_timings(_local):
+    srv = _ChatServer([{"message": {"content": '{"a": '}, "done": False},
+                       {"message": {"content": "1}"}, "done": False},
+                       {"message": {"content": ""}, "done": True, "eval_count": 7,
+                        "eval_duration": 1000}])
+    try:
+        reply = ollama.chat("m:1", [{"role": "user", "content": "x"}], base_url=srv.url,
+                            cancelled=lambda: False)
+    finally:
+        srv.close()
+    assert reply["message"]["content"] == '{"a": 1}' and reply["eval_count"] == 7
+
+
+def test_chat_reports_an_error_line(_local):
+    srv = _ChatServer([{"error": "model 'm:1' not found"}])
+    try:
+        with pytest.raises(JobFailed) as exc:
+            ollama.chat("m:1", [], base_url=srv.url)
+    finally:
+        srv.close()
+    assert exc.value.code == "ollama_error"
+
+
+def test_chat_cancel_returns_at_once_while_the_model_loads(_local):
+    srv = _ChatServer([{"done": True}], delay=5.0)
+    started = time.monotonic()
+    try:
+        with pytest.raises(JobCancelled):
+            ollama.chat("m:1", [], base_url=srv.url,
+                        cancelled=lambda: time.monotonic() - started > 0.3)
+    finally:
+        elapsed = time.monotonic() - started
+        srv.close()
+    assert elapsed < 2.0
+
+
+def test_chat_cancel_closes_the_stream_mid_answer(_local):
+    lines = [{"message": {"content": "x"}, "done": False}] * 200 + [{"done": True}]
+    srv = _ChatServer(lines, line_delay=0.02)
+    started = time.monotonic()
+    try:
+        with pytest.raises(JobCancelled):
+            ollama.chat("m:1", [], base_url=srv.url,
+                        cancelled=lambda: time.monotonic() - started > 0.3)
+        assert time.monotonic() - started < 2.0
+        assert srv.closed.wait(3)  # the server saw the connection go away
+    finally:
+        srv.close()
