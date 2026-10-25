@@ -17,7 +17,7 @@
       "think": false,
       "licence": "Apache-2.0",
       "licence_url": "https://ollama.com/library/qwen3.5",
-      "why": "Best small model measured: 100% valid JSON, 100% of quotes grounded, 97% recall of key requirements, French labels on every offer, about 9 s per offer on GPU. Fits a 4 GB GPU (3.3 GB loaded). ministral-3:3b was faster but grounded only 87% of its quotes.",
+      "why": "Best small model measured: 100% valid JSON, 100% of quotes grounded, 97% recall of key requirements, French labels on every offer, about 9 s per offer on GPU. Fits a 4 GB GPU (3.3 GB loaded). On CPU only (16 threads) it stays valid and grounded but takes 83-103 s per offer, so the benchmark verdict there is too slow. ministral-3:3b was faster but grounded only 87% of its quotes.",
       "benchmark": {"measured_on": "2026-10-24", "json_valid_rate": 1.0, "grounding_rate": 1.0, "french_rate": 1.0, "seconds_per_offer": 8.9, "tokens_per_second": 59.8}
     },
     {
@@ -30,11 +30,11 @@
       "download_bytes": 2953840294,
       "min_ram_bytes": 8589934592,
       "min_vram_bytes": 3784604384,
-      "runs_on_cpu": false,
+      "runs_on_cpu": true,
       "think": false,
       "licence": "Apache-2.0",
       "licence_url": "https://ollama.com/library/ministral-3",
-      "why": "Alternative: fastest model measured (about 7 s per offer) but only 87% of quotes grounded and 89% recall. Its CPU-only load failed on Ollama 0.32.12, so it is not offered without a GPU.",
+      "why": "Alternative: fastest model measured (about 7 s per offer on GPU, 64 s on CPU only) but only 87% of quotes grounded and 89% recall.",
       "benchmark": {"measured_on": "2026-10-24", "json_valid_rate": 1.0, "grounding_rate": 0.87, "french_rate": 1.0, "seconds_per_offer": 7.2, "tokens_per_second": 80.2}
     },
     {
