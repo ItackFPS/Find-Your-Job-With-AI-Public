@@ -291,6 +291,11 @@ Both stages cache results keyed by job content hash + profile version
   experiments with verdicts, guardrails, metric deltas and a recommended next action, the lab
   agent's memory and the `active_strategy` pointer history. It reads those files with read-only
   SQLite URIs and plain JSON and imports neither `src.evaluation` nor `src.lab`.
+- `/api/quality/*` (`src/api/routes/quality.py`, **Quality** page) runs the existing self-check or an
+  evaluation run on the committed benchmark as a background job: `src/api/quality_jobs.py` starts
+  `python -m src.evaluation ...` in a child process (one job at a time, cancellable), reads the report it
+  writes and keeps a summary of codes and numbers in the additive `quality_jobs` table of `jobs.db`.
+  It cannot approve or promote anything: promotion stays a human, CLI-only action (ADR 0011).
 
 `src/api/runner.py` runs the pipeline on a background daemon thread (one run at a time),
 writing progress to the run's database row and mirroring it over Server-Sent Events for

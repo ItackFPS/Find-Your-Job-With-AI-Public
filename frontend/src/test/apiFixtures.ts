@@ -4,7 +4,7 @@ import type {
   ActiveStrategy, Dashboard, DecisionRecord, EvalRunSummary, FeedbackEvent, FeedbackVocabulary, FrenchDepartment,
   HelloWorkScanRun, HelloWorkStatus, Job, JobExplanation, JobStats, LabExperiment, LabMemoryItem,
   LinkedInScanRun, LinkedInStatus, PipelineRun, Profile, ReviewQueuePage, RunStats, SelfCheckResponse, SkillGraph,
-  CountriesResponse,
+  CountriesResponse, QualityHealth, QualityJob, QualitySummary,
 } from '../api/client'
 
 const NOW = '2026-10-20T09:30:00+00:00'
@@ -170,6 +170,32 @@ export const activeStrategy: ActiveStrategy = {
 
 export const selfCheck: SelfCheckResponse = { latest: null, unreadable: 0, history: [] }
 
+export const qualitySummary: QualitySummary = {
+  kind: 'self_check', status: 'pass', created_at: NOW, report_file: 'r.json',
+  datasets: [{
+    id: 'synthetic-ai-filter-50', version: '1', kind: 'synthetic', n_jobs: 50, suitable: 22, status: 'pass',
+    unsafe_rejections: 0, rejections_without_reason: 0, false_positives: 3, precision: 0.88, recall: 1,
+    ranking: 'not_measured', review: 'insufficient_evidence', baseline: 'identical', flips: { fixed: 0, broken: 0 },
+    flags: ['synthetic_benchmark', 'few_suitable_labels', 'review_insufficient_evidence'],
+  }],
+  feedback: { status: 'measured', answered: 5, decided: 50, coverage: 0.1, contradictions: 1 },
+}
+
+export const qualityHealth: QualityHealth = {
+  self_check: qualitySummary,
+  evaluation: { ...qualitySummary, kind: 'evaluation', status: 'measured', feedback: { status: 'not_requested' } },
+}
+
+export const qualityJobs: { active_id: string | null; jobs: QualityJob[] } = {
+  active_id: null,
+  jobs: [
+    { id: 'qj-2', kind: 'evaluation', status: 'failed', phase: null, options: {}, created_at: NOW, finished_at: NOW,
+      summary: null, error_code: 'tool_failed' },
+    { id: 'qj-1', kind: 'self_check', status: 'completed', phase: null, options: {}, created_at: EARLIER,
+      finished_at: EARLIER, summary: qualitySummary, error_code: null },
+  ],
+}
+
 // `satisfies` rather than a type annotation: the annotated form trips a gitleaks rule
 // (see .gitleaksignore).
 export const linkedInScan = {
@@ -218,6 +244,9 @@ export function resolveFixture(path: string): unknown {
     [/^\/lab\/memory$/, labMemory],
     [/^\/lab\/active-strategy$/, activeStrategy],
     [/^\/lab\/self-check$/, selfCheck],
+    [/^\/quality\/health$/, qualityHealth],
+    [/^\/quality\/jobs$/, qualityJobs],
+    [/^\/quality\/jobs\/[^/]+$/, qualityJobs.jobs[1]],
     [/^\/linkedin\/status$/, linkedInStatus],
     [/^\/linkedin\/scans$/, [linkedInScan]],
     [/^\/hellowork\/status$/, helloWorkStatus],

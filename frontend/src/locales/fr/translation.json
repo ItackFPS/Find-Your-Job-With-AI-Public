@@ -168,7 +168,7 @@
       "profile": "Profil",
       "stats": "Statistiques",
       "skills": "Compétences",
-      "lab": "Labo",
+      "quality": "Qualité",
       "pipeline": "Pipeline",
       "label": "Navigation principale"
     },
@@ -586,6 +586,158 @@
       "exploratoryTitle": "Approuvé en reconnaissant explicitement que les étiquettes humaines indépendantes ne suffisent pas à le soutenir",
       "unrecorded": "preuves d’approbation non enregistrées",
       "unrecordedTitle": "Cette approbation est antérieure à l’enregistrement des preuves d’approbation"
+    }
+  },
+  "quality": {
+    "title": "Qualité",
+    "intro": "Le tri est-il sûr, et s’améliore-t-il ou se dégrade-t-il ? Lancez une vérification ici, sans terminal.",
+    "checkedAt": "Vérifié le {date}",
+    "health": {
+      "title": "Santé",
+      "subtitle": "La dernière vérification, en clair",
+      "empty": "Aucune vérification n’a encore été lancée. Elle prend quelques secondes.",
+      "error": "Le résumé de santé n’a pas pu être chargé.",
+      "latestEvaluation": "Dernière évaluation"
+    },
+    "status": {
+      "pass": {
+        "label": "En bonne santé",
+        "text": "Rien n’a évolué dans le mauvais sens depuis la référence enregistrée."
+      },
+      "measured": {
+        "label": "Mesuré",
+        "text": "Mesuré sur le jeu de test intégré."
+      },
+      "changed": {
+        "label": "Modifié",
+        "text": "Certaines décisions ont changé depuis la référence enregistrée : vérifiez-les."
+      },
+      "regression": {
+        "label": "Dégradé",
+        "text": "Des offres traitées correctement auparavant sont maintenant mal traitées."
+      },
+      "baseline_mismatch": {
+        "label": "Comparaison impossible",
+        "text": "La référence enregistrée porte sur d’autres données : aucune comparaison n’est possible."
+      },
+      "safety_violation": {
+        "label": "Risqué",
+        "text": "Des offres adaptées sont rejetées : à corriger avant de se fier aux résultats."
+      }
+    },
+    "sentences": {
+      "safe": "Le tri est sûr : 0 offre adaptée rejetée sur le jeu de test.",
+      "unsafe": "{count, plural, one {# offre adaptée a été rejetée sur le jeu de test.} other {# offres adaptées ont été rejetées sur le jeu de test.}}",
+      "precision": "Parmi les offres retenues, {precision, number, percent} étaient vraiment adaptées ({falsePositives, plural, one {# offre inadaptée retenue} other {# offres inadaptées retenues}}).",
+      "recall": "Le tri a retenu {recall, number, percent} des offres adaptées.",
+      "noReason": "{count, plural, one {# rejet n’indique aucune raison et ne peut pas être vérifié.} other {# rejets n’indiquent aucune raison et ne peuvent pas être vérifiés.}}",
+      "flips": "Depuis la référence : {fixed} décisions corrigées, {broken} cassées.",
+      "rankingNotMeasured": "La qualité du classement n’est pas encore mesurée : le jeu de test dit seulement si une offre est adaptée, pas à quel point."
+    },
+    "flags": {
+      "synthetic_benchmark": "Les offres du jeu de test sont rédigées à la main, pas de vraies annonces : cela ne dit rien de la justesse sur de vraies offres.",
+      "few_suitable_labels": "{count, plural, one {Seulement # offre adaptée} other {Seulement # offres adaptées}} dans ce jeu de test : pas encore assez d’éléments pour conclure.",
+      "labels_not_independent": "Certaines réponses de ce jeu de test n’ont pas été données de façon indépendante par une personne : lisez les chiffres avec prudence.",
+      "review_insufficient_evidence": "Pas encore assez d’éléments pour juger si « à vous de juger » repère les bonnes offres.",
+      "baseline_missing": "Aucune référence n’est encore enregistrée : les changements ne peuvent pas être détectés.",
+      "baseline_mismatch": "La référence a été enregistrée sur d’autres données."
+    },
+    "feedback": {
+      "measured": "Vous avez donné votre avis sur {answered} des {decided} offres décidées ({coverage, number, percent}) ; {contradictions, plural, one {# réponse contredit} other {# réponses contredisent}} la décision de l’application. Un avis est un signal, pas une étiquette vérifiée.",
+      "unavailable": "La couverture des avis n’est pas encore disponible : aucune décision n’est enregistrée."
+    },
+    "actions": {
+      "title": "Lancer une vérification",
+      "subtitle": "S’exécute en arrière-plan : vous pouvez quitter cette page.",
+      "runSelfCheck": "Lancer la vérification",
+      "runEvaluation": "Lancer l’évaluation",
+      "running": {
+        "self_check": "Vérification en cours…",
+        "evaluation": "Évaluation en cours…"
+      },
+      "progressLabel": "Progression",
+      "cancel": "Annuler",
+      "cancelling": "Annulation…",
+      "note": "Les deux utilisent le jeu de test intégré et ne modifient jamais vos réglages ni vos offres. Une seule vérification à la fois."
+    },
+    "phases": {
+      "starting": "Démarrage",
+      "running": "Rejeu du jeu de test",
+      "summarising": "Synthèse"
+    },
+    "kinds": {
+      "self_check": "Vérification",
+      "evaluation": "Évaluation"
+    },
+    "jobStatus": {
+      "running": "En cours",
+      "completed": "Terminée",
+      "failed": "Échec",
+      "cancelled": "Annulée"
+    },
+    "history": {
+      "title": "Vérifications passées",
+      "empty": "Aucune vérification n’a encore été lancée d’ici.",
+      "error": "Les vérifications passées n’ont pas pu être chargées.",
+      "columns": {
+        "when": "Quand",
+        "what": "Quoi",
+        "status": "État",
+        "result": "Résultat"
+      },
+      "result": "{unsafe, plural, one {# adaptée rejetée} other {# adaptées rejetées}} · précision {precision, number, percent} · rappel {recall, number, percent}"
+    },
+    "runs": {
+      "title": "Exécutions",
+      "subtitle": "Recherches récentes",
+      "funnelLink": "Voir l’entonnoir complet",
+      "empty": "Aucune recherche n’a encore été lancée.",
+      "error": "Les recherches récentes n’ont pas pu être chargées.",
+      "columns": {
+        "when": "Quand",
+        "status": "État",
+        "result": "Résultat"
+      },
+      "result": "{found} trouvées, {kept} retenues"
+    },
+    "errors": {
+      "busy": "Une autre vérification est déjà en cours : attendez qu’elle se termine ou annulez-la.",
+      "tool_failed": "La vérification n’a pas pu s’exécuter. Les détails sont dans le journal du serveur.",
+      "no_report": "La vérification s’est terminée sans écrire de rapport.",
+      "unreadable_report": "Le rapport n’a pas pu être lu.",
+      "timeout": "La vérification a pris trop de temps et a été arrêtée.",
+      "unexpected": "Un problème est survenu pendant la vérification.",
+      "interrupted": "L’application a été fermée pendant cette vérification.",
+      "startFailed": "La vérification n’a pas pu démarrer. Le serveur est-il lancé ?",
+      "cancelFailed": "La vérification n’a pas pu être annulée."
+    },
+    "toast": {
+      "done": {
+        "self_check": "Vérification terminée.",
+        "evaluation": "Évaluation terminée."
+      },
+      "cancelled": "Vérification annulée."
+    },
+    "promotion": {
+      "title": "Promouvoir une stratégie",
+      "why": "Changer la stratégie utilisée par l’application se fait uniquement depuis un terminal, par vous. Cela garantit une chose : rien sur cette page, ni aucun agent automatique, ne peut approuver un changement à votre place.",
+      "noneWaiting": "Aucune expérience n’attend d’approbation. Quand ce sera le cas, sa commande exacte apparaîtra ici.",
+      "exploratory": "Cette expérience repose uniquement sur des éléments exploratoires : la commande vous demandera de le reconnaître explicitement.",
+      "copy": "Copier la commande",
+      "copied": "Commande copiée.",
+      "copyFailed": "Copie impossible : sélectionnez la commande et copiez-la à la main.",
+      "how": "Ouvrez un terminal dans le dossier de l’application, collez la commande, indiquez votre nom et la raison, puis tapez le code de confirmation affiché.",
+      "error": "Les expériences n’ont pas pu être chargées.",
+      "placeholders": {
+        "experiment": "id-experience",
+        "dataset": "dossier-du-jeu",
+        "name": "votre nom",
+        "reason": "pourquoi"
+      }
+    },
+    "advanced": {
+      "label": "Avancé : afficher le labo complet",
+      "description": "Évaluations, expériences et notes du labo. Le texte du labo est affiché en texte brut uniquement."
     }
   },
   "pipeline": {

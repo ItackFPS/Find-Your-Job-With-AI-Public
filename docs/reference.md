@@ -225,6 +225,8 @@ grouped by route module in `src/api/routes/`:
 - **skills** — `GET /api/skills/graph`
 - **lab** (read-only) — `GET /api/lab/runs`, `/experiments` (each with a recommended `next_action`), `/memory`,
   `/active-strategy`, `/self-check` (latest self-check report and earlier statuses)
+- **quality** — `GET /api/quality/health`, `POST /api/quality/jobs` (`{kind: self_check | evaluation}`, one at a
+  time, 409 while one runs), `GET /api/quality/jobs`, `GET /api/quality/jobs/{id}`, `POST /api/quality/jobs/{id}/cancel`
 - **health** — `GET /api/health` (no database access; used by the launcher)
 
 At startup, `src/api/app.py` initializes/recovers the databases, seeds the bundled ESCO

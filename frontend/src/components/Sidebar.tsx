@@ -70,11 +70,11 @@ const NAV_ITEMS: { to: string; label: string; icon: React.ReactNode; end?: boole
     ),
   },
   {
-    to: '/lab', label: 'lab',
+    to: '/quality', label: 'quality',
     icon: (
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6">
-        <path d="M7 2.5h4M7.8 2.5v4.6L3.6 14a1.2 1.2 0 0 0 1 1.8h8.8a1.2 1.2 0 0 0 1-1.8l-4.2-6.9V2.5" strokeLinejoin="round" />
-        <path d="M5.3 11h7.4" strokeLinecap="round" />
+        <path d="M9 2 3.5 4v4.6c0 3.3 2.3 6.1 5.5 7.4 3.2-1.3 5.5-4.1 5.5-7.4V4L9 2Z" strokeLinejoin="round" />
+        <path d="m6.5 9 1.8 1.8L11.8 7.3" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     ),
   },

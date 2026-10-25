@@ -66,6 +66,7 @@ from src.api.routes import (
     linkedin,
     pipeline,
     profile,
+    quality,
     scheduler as scheduler_routes,
     settings as settings_routes,
     skills,
@@ -348,6 +349,7 @@ app.include_router(scheduler_routes.router)
 app.include_router(settings_routes.router)
 app.include_router(skills.router)
 app.include_router(lab.router)
+app.include_router(quality.router)
 app.include_router(ai.router)
 app.include_router(sources.router)
 
