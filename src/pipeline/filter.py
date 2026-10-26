@@ -220,9 +220,16 @@ def build_filter_config(profile: "JobSearchProfile", engine_cfg: dict[str, Any])
     # title_include independent of the contract type.
 
     # Seniority exclusion keywords from the profile's exclusion label list.
+    # Profile v2 with target levels (F5.2): a title word is weak evidence, so the career-stage
+    # check in the requirements gate weighs it with the other signals instead
+    # (src/requirements/career_level.py) and this keyword rejection is off.
+    from src.requirements.career_level import career_config
+
+    career_level = career_config(profile, seniority_excl)
     seniority_exclude: list[str] = []
-    for level in profile.experience.excluded_seniority:
-        seniority_exclude.extend(seniority_excl.get(level, []))
+    if career_level is None:
+        for level in profile.experience.excluded_seniority:
+            seniority_exclude.extend(seniority_excl.get(level, []))
 
     # Location include list: preferred countries + allowed regions.
     locations_include = list(profile.geography.preferred_countries)
@@ -253,6 +260,8 @@ def build_filter_config(profile: "JobSearchProfile", engine_cfg: dict[str, Any])
         "remote": {"allowed": []},  # kept for backward compat; logic moved to work_modes
         "work_modes": {"allowed": list(profile.work_modes)},
         "seniority": {"exclude": seniority_exclude},
+        # Read by the requirements gate (None: v1 profile, the keyword rejection above applies).
+        "career_level": career_level,
         "contract_type": {"exclude_title_keywords": freelance_exclude_keywords},
         "title_keywords": {
             "include": _dedup(title_include),

@@ -129,6 +129,7 @@ class HardConstraintGate:
         principal_skill_gate: bool = True,
         mandatory_skill_gate: bool = True,
         profile_version_hash: str = "",
+        career_level: dict | None = None,
     ):
         self._user_max_edu = user_max_education_level
         self._user_max_years_exp = user_max_years_experience
@@ -136,10 +137,14 @@ class HardConstraintGate:
         self._principal_gate = principal_skill_gate
         self._mandatory_gate = mandatory_skill_gate
         self._profile_version_hash = profile_version_hash
+        # Career-stage check (F5.2, src/requirements/career_level.py): the
+        # ``career_level`` slice of build_filter_config; None for a v1 profile.
+        self._career = career_level
 
     def check(
         self,
         requirements: JobRequirements,
+        job: object | None = None,
     ) -> GateResult:
         """Check one job's requirements against the user's hard constraints.
 
@@ -194,6 +199,17 @@ class HardConstraintGate:
             flags.extend(skill_flags)
             skills_unknown = bool(skill_flags)
 
+        # ── 5. Career stage (profile v2 targets, F5.2) ────────────────────
+        # Needs the job (title, description, contract); a title-only conflict is
+        # UNKNOWN (review), never a rejection.
+        career_state: ConstraintState | None = None
+        if self._career is not None and self._career.get("max_rank") is not None and job is not None:
+            career_reasons, career_state, career_message = self._check_career(requirements, job)
+            reasons.extend(career_reasons)
+            if career_state == ConstraintState.UNKNOWN:
+                has_unknown = True
+                flags.append(f"Career level: {career_message}")
+
         skills_state = (
             ConstraintState.VIOLATED if any(r.type in ("principal_skill", "mandatory_skill") for r in reasons)
             else ConstraintState.UNKNOWN if skills_unknown or not (self._principal_gate or self._mandatory_gate)
@@ -215,8 +231,32 @@ class HardConstraintGate:
             contradictions=contradictions,
             profile_version_hash=self._profile_version_hash,
             rule_version=_RULE_VERSION,
-            states={"education": edu_state, "experience": exp_state, "skills": skills_state},
+            states={"education": edu_state, "experience": exp_state, "skills": skills_state,
+                    **({"seniority": career_state} if career_state is not None else {})},
         )
+
+    def _check_career(
+        self, requirements: JobRequirements, job: object
+    ) -> tuple[list[HardRejectionReason], ConstraintState, str]:
+        from src.requirements.career_level import CAREER_RULE_VERSION, assess_career_level, job_level_signals
+
+        cfg = self._career or {}
+        signals = job_level_signals(
+            getattr(job, "title", None), getattr(job, "description", None),
+            getattr(job, "employment_type", None), requirements.experience, cfg.get("vocabulary") or {},
+        )
+        assessment = assess_career_level(signals, cfg.get("max_rank"))
+        if assessment.state != ConstraintState.VIOLATED:
+            return [], assessment.state, assessment.message
+        return [HardRejectionReason(
+            type="career_level",
+            requirement="; ".join(s.evidence for s in assessment.conflicts),
+            candidate_value=f"targets {', '.join(cfg.get('levels') or [])}",
+            severity="hard",
+            constraint_state=ConstraintState.VIOLATED,
+            rule_version=CAREER_RULE_VERSION,
+            message=assessment.message,
+        )], assessment.state, assessment.message
 
     def _check_education(
         self, requirements: JobRequirements
@@ -558,7 +598,7 @@ def gate_jobs(
 
     for i, job in enumerate(jobs, start=1):
         requirements = requirements_map.get(job.id, JobRequirements())
-        result = gate.check(requirements)
+        result = gate.check(requirements, job)
         results[job.id] = result
 
         if result.passes:
