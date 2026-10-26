@@ -9,7 +9,6 @@ const NO_ACCOUNT = ['RemoteOK', 'Jobicy', 'We Work Remotely', 'EURES']
 const SCANNERS = ['LinkedIn', 'HelloWork']
 const NEEDS_CREDENTIALS = [
   { name: 'France Travail', vars: ['FRANCE_TRAVAIL_CLIENT_ID', 'FRANCE_TRAVAIL_CLIENT_SECRET'] },
-  { name: 'Indeed', vars: ['INDEED_API_KEY'] },
 ]
 
 const item = { marginBottom: 'var(--space-3)', lineHeight: 1.5 }

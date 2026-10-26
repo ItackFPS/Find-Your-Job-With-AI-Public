@@ -52,12 +52,12 @@ Then:
    `config\profile.local.yaml`.
 2. **Sources.** These work without any account: RemoteOK, Jobicy, We Work Remotely and
    EURES (pipeline run), HelloWork and LinkedIn (**Scan now** on their dashboard cards).
-   Two sources need credentials and are *skipped* until you add them:
+   France Travail needs credentials and is *skipped* until you add them (Indeed needs none, but
+   it is an unofficial source and only runs if you choose it):
 
    | Source | What to set in `.env` | Where to get it |
    |---|---|---|
    | France Travail | `FRANCE_TRAVAIL_CLIENT_ID`, `FRANCE_TRAVAIL_CLIENT_SECRET` | free application at <https://developer.francetravail.fr> |
-   | Indeed | `INDEED_API_KEY` | see the comment in `.env.example` |
 
    To add them: in the install folder, copy `.env.example` to `.env`, fill in only those
    lines, then stop and start the app. A run's **Sources** table shows each source as

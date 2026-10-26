@@ -305,7 +305,8 @@ def run_pipeline(
         # skipped entirely when the source is inactive in sources.yaml.
         # =================================================================
         _t_preflight = time.perf_counter()
-        preflight_result = run_preflight(config_dir)
+        # The user's choice of unofficial sources lives next to the database (data/settings.json).
+        preflight_result = run_preflight(config_dir, settings_path=Path(db_path).parent / "settings.json")
         for line in preflight_result.report_lines:
             logger.info(line)
         stats.preflight = preflight_result.to_dict()

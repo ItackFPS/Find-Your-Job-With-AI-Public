@@ -5,6 +5,10 @@ built from, and changing it creates a new strategy version). Today it holds the 
 notification categories the user opted into; the tray app reads them through
 ``GET /api/settings/notifications`` before each Windows notification.
 
+It also holds the user's choice for each *unofficial* source (``unofficial_sources``, plan rule
+I1, F6.3): off on a fresh install. Until the consent screen exists (F6.5), an install that
+already configured the source the old way (``INDEED_API_KEY``) counts as having chosen it.
+
 Categories (default on: the two a user would not want to miss):
 
 =================  =======  ==========================================================================
@@ -81,3 +85,19 @@ def update_notification_settings(path: Path, changes: Mapping[str, Any]) -> dict
         tmp.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
         os.replace(tmp, path)
     return merged
+
+
+# Unofficial sources (plan rule I1): off unless chosen. When no choice is stored, an install
+# that already set the source up the old way (this environment variable) counts as opted in.
+UNOFFICIAL_LEGACY_ENV: dict[str, str] = {"indeed": "INDEED_API_KEY"}
+
+
+def unofficial_source_enabled(path: Path | None, source: str) -> bool:
+    """Whether the user chose to collect from the unofficial ``source``. The stored choice
+    (``unofficial_sources.<source>``, a boolean) wins; else the legacy setup; else off.
+    ``path`` None (no settings file known, e.g. a test): only the legacy setup counts."""
+    stored = _read(path).get("unofficial_sources") if path is not None else None
+    if isinstance(stored, dict) and isinstance(stored.get(source), bool):
+        return bool(stored[source])
+    env = UNOFFICIAL_LEGACY_ENV.get(source)
+    return bool(env and os.environ.get(env, "").strip())
