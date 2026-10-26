@@ -59,7 +59,7 @@ export interface Experience {
   excluded_seniority: string[]
 }
 
-// Profile v2 (F5.1): facts and career targets. Not read by the matching yet.
+// Profile v2: facts and career targets. The matching reads the target levels and held education levels.
 export type CareerLevel = 'internship' | 'alternance' | 'graduate' | 'junior' | 'mid' | 'senior' | 'lead' | 'manager'
 
 export interface ExperienceEntry {

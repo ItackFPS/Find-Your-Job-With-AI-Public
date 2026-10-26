@@ -125,8 +125,10 @@ class ExperiencePreferences(BaseModel):
 
 
 # Profile v2 (update plan §C3, F5.1). The profile stores *facts* (experiences, education)
-# and *targets* (career levels). Until the matching reads them (F5.2/F5.3), the v1
-# ``experience`` and ``max_education`` fields above stay the ones the pipeline uses.
+# and *targets* (career levels). The matching reads the target levels (F5.2,
+# src/requirements/career_level.py) and the held education levels (F5.3,
+# src/requirements/education.py candidate_education); ``experience.max_years`` stays the
+# experience ceiling.
 PROFILE_SCHEMA_VERSION = 2
 
 _YEAR_MONTH = r"^\d{4}-(0[1-9]|1[0-2])$"

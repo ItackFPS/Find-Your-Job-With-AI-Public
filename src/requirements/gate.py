@@ -130,6 +130,8 @@ class HardConstraintGate:
         mandatory_skill_gate: bool = True,
         profile_version_hash: str = "",
         career_level: dict | None = None,
+        user_education_label: str | None = None,
+        user_held_education_level: int | None = None,
     ):
         self._user_max_edu = user_max_education_level
         self._user_max_years_exp = user_max_years_experience
@@ -140,6 +142,14 @@ class HardConstraintGate:
         # Career-stage check (F5.2, src/requirements/career_level.py): the
         # ``career_level`` slice of build_filter_config; None for a v1 profile.
         self._career = career_level
+        # Profile v2 (F5.3): the candidate's French/EQF level, e.g. "level 6 (BUT)". When set,
+        # user_max_education_level is that level's highest Bac+N (level_to_max_bac_plus), so
+        # the Bac+N comparisons below compare levels; messages then name levels too.
+        self._edu_label = user_education_label
+        # Bac+N the candidate surely holds (enrolment needs completed years of study);
+        # defaults to user_max_education_level (v1: the same number).
+        self._user_held_edu = (user_held_education_level if user_held_education_level is not None
+                               else user_max_education_level)
 
     def check(
         self,
@@ -347,8 +357,8 @@ class HardConstraintGate:
         if edu.level_bac_plus <= self._user_max_edu:
             return [], ConstraintState.SATISFIED, None
 
-        candidate_label = f"bac+{self._user_max_edu}"
-        required_label = edu.level_label or f"bac+{edu.level_bac_plus}"
+        candidate_label = self._candidate_education_label()
+        required_label = self._required_education_label(edu.level_bac_plus, edu.level_label)
         # The message names why the level counts as required: a PREFERRED
         # reading only rejects as a stated bar ("Bac+5 ou équivalent"), and
         # calling that "preferred" would contradict the decision it explains.
@@ -371,7 +381,8 @@ class HardConstraintGate:
                 rule_version=_RULE_VERSION,
                 message=(
                     f"Job requires {required_label} ({stated_as}); "
-                    f"candidate maximum is {candidate_label}."
+                    + (f"you declared {candidate_label}." if self._edu_label
+                       else f"candidate maximum is {candidate_label}.")
                 ),
                 span=edu.span,
                 evidence_source=edu.source,
@@ -386,6 +397,16 @@ class HardConstraintGate:
         # Desirable PREFERRED, OPTIONAL, CORE, or a requirement with the hard
         # constraint disabled → at most a soft penalty (gate_jobs).
         return [], ConstraintState.SATISFIED, None
+
+    def _candidate_education_label(self) -> str:
+        return self._edu_label or f"bac+{self._user_max_edu}"
+
+    def _required_education_label(self, bac_plus: int, label: str | None) -> str:
+        if self._edu_label:
+            from src.models.levels import bac_plus_to_level
+
+            return f"level {bac_plus_to_level(bac_plus)}" + (f" ({label})" if label else f" (bac+{bac_plus})")
+        return label or f"bac+{bac_plus}"
 
     def _check_enrolment(
         self, edu: EducationRequirement
@@ -402,18 +423,19 @@ class HardConstraintGate:
         required = edu.enrolment_level_min
         if required is None:
             return [], ConstraintState.UNKNOWN, None
-        if self._user_max_edu >= required - 1 or not self._education_hard_constraint:
+        if self._user_held_edu is None or self._user_held_edu >= required - 1 or not self._education_hard_constraint:
             return [], ConstraintState.SATISFIED, None
-        candidate_label = f"bac+{self._user_max_edu}"
+        candidate_label = self._candidate_education_label()
         reason = HardRejectionReason(
             type="education",
-            requirement=f"enrolled in bac+{required}",
+            requirement=f"enrolled in {self._required_education_label(required, None)}",
             candidate_value=candidate_label,
             severity="hard",
             constraint_state=ConstraintState.VIOLATED,
             rule_version=_RULE_VERSION,
             message=(
-                f"Job targets students currently in bac+{required} ({edu.level_label}); "
+                f"Job targets students currently in {self._required_education_label(required, None)} "
+                f"({edu.level_label}); "
                 f"candidate holds {candidate_label}, so cannot be enrolled at that level yet."
             ),
             span=edu.span,

@@ -964,6 +964,27 @@
         "lead": "Lead",
         "manager": "Manager"
       }
+    },
+    "education": {
+      "empty": "Aucun diplôme pour l'instant.",
+      "entry": "Diplôme {n}",
+      "qualification": "Diplôme",
+      "foreign": "Autre / diplôme étranger",
+      "foreignName": "Intitulé du diplôme",
+      "level": "Niveau",
+      "pickLevel": "Choisir un niveau",
+      "inProgress": "En cours",
+      "remove": "Retirer",
+      "add": "Ajouter un diplôme",
+      "hint": "Les offres sont comparées par niveau uniquement (niveaux nationaux français = niveaux européens CEC 3 à 8) : l'application n'affirme jamais que deux diplômes sont équivalents.",
+      "levelHelp": {
+        "3": "Niveau 3 — CAP/BEP, certificat professionnel",
+        "4": "Niveau 4 — Bac, secondaire",
+        "5": "Niveau 5 — BTS/DUT, bac+2",
+        "6": "Niveau 6 — Licence/BUT/Bachelor, bac+3 ou bac+4",
+        "7": "Niveau 7 — Master/diplôme d'ingénieur, bac+5",
+        "8": "Niveau 8 — Doctorat"
+      }
     }
   },
   "design": {
