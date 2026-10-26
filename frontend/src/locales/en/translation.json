@@ -964,6 +964,27 @@
         "lead": "Lead",
         "manager": "Manager"
       }
+    },
+    "education": {
+      "empty": "No qualification yet.",
+      "entry": "Qualification {n}",
+      "qualification": "Qualification",
+      "foreign": "Other / foreign degree",
+      "foreignName": "Name of the degree",
+      "level": "Level",
+      "pickLevel": "Pick a level",
+      "inProgress": "In progress",
+      "remove": "Remove",
+      "add": "Add a qualification",
+      "hint": "Offers are compared by level only (French national levels = European EQF levels 3–8): the app never claims two degrees are equivalent.",
+      "levelHelp": {
+        "3": "Level 3 — CAP/BEP, vocational certificate",
+        "4": "Level 4 — Bac, upper secondary",
+        "5": "Level 5 — BTS/DUT, 2 years after the Bac",
+        "6": "Level 6 — Licence/BUT/Bachelor, 3–4 years",
+        "7": "Level 7 — Master/engineering degree, 5 years",
+        "8": "Level 8 — Doctorate"
+      }
     }
   },
   "design": {

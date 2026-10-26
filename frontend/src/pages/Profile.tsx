@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next'
 import { Card, LoadingState, Switch } from '../components'
 import i18n from '../i18n'
 import { ProfileReviewCard } from './ProfileReviewCard'
+import { EducationEditor } from './EducationEditor'
 
 // Prevents "Docker" and "docker" (or "French"/"french") coexisting as two
 // separate entries — an exact-string check alone lets that through.
@@ -1080,7 +1081,7 @@ export default function ProfilePage() {
   const contractOptions = ['full-time', 'part-time', 'internship', 'freelance']
   const seniorityOptions = ['junior', 'mid', 'senior', 'lead', 'director', 'executive']
   const levelOptions = ['junior', 'mid', 'senior', 'lead']
-  // Profile v2 (F5.2): target career levels replace the keyword lists above.
+  // Profile v2: target career levels (F5.2) and education levels (F5.3) replace the v1 fields.
   const targets = (profile.profile_version ?? 1) >= 2 ? profile.targets ?? null : null
   const careerLevels: CareerLevel[] = ['internship', 'alternance', 'graduate', 'junior', 'mid', 'senior', 'lead', 'manager']
 
@@ -1290,6 +1291,11 @@ export default function ProfilePage() {
       </Card>
 
       <Card title={t('profile.sections.education')}>
+        {targets ? (
+          <div style={{ ...fieldGroup, marginTop: 'var(--space-4)' }}>
+            <EducationEditor entries={profile.education ?? []} onChange={v => set('education', v)} />
+          </div>
+        ) : (
         <div style={{ ...fieldGroup, marginTop: 'var(--space-4)' }}>
           <span style={label}>{t('profile.fields.maxEducation')}</span>
           <select
@@ -1303,6 +1309,7 @@ export default function ProfilePage() {
             ))}
           </select>
         </div>
+        )}
       </Card>
     </div>
   )

@@ -59,3 +59,22 @@ describe('Profile career targets', () => {
     expect(screen.queryByText('Target career levels')).not.toBeInTheDocument()
   })
 })
+
+describe('Profile education levels', () => {
+  it('derives the level from a French qualification and lets a foreign degree pick one', async () => {
+    net.profile = { ...v2, education: [] }
+    renderPage()
+    await userEvent.click(await screen.findByRole('button', { name: 'Add a qualification' }))
+    await userEvent.selectOptions(screen.getByLabelText('Qualification'), 'BUT')
+    expect(screen.getByText('level 6')).toBeInTheDocument()
+    expect(screen.queryByText('Maximum education level (Bac+N)')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Add a qualification' }))
+    const second = screen.getAllByLabelText('Qualification')[1]
+    await userEvent.selectOptions(second, 'Other / foreign degree')
+    await userEvent.type(screen.getByLabelText('Name of the degree'), 'MSc')
+    await userEvent.selectOptions(screen.getByLabelText('Level'), '7')
+    await userEvent.click(screen.getByRole('button', { name: 'Save profile' }))
+    const saved = net.put.at(-1) as ProfileT
+    expect(saved.education?.map(e => [e.qualification, e.level, e.foreign])).toEqual([['BUT', 6, false], ['MSc', 7, true]])
+  })
+})
