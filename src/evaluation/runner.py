@@ -161,7 +161,7 @@ def run_decisions(
     timings["filter"] = time.perf_counter() - t0
 
     llm = _build_llm(strategy)
-    user_max_edu, user_edu_label = candidate_education(profile)
+    user_max_edu, user_edu_label, user_held_edu = candidate_education(profile)
     user_max_years = None
     if profile.experience is not None:
         user_max_years = getattr(profile.experience, "max_years", None)
@@ -179,6 +179,7 @@ def run_decisions(
         profile_version_hash="evaluation",
         career_level=filters_config.get("career_level"),
         user_education_label=user_edu_label,
+        user_held_education_level=user_held_edu,
     )
     edu_penalty = getattr(profile.matching, "education_preferred_penalty", 0.20)
 

@@ -71,10 +71,23 @@ describe('Profile education levels', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Add a qualification' }))
     const second = screen.getAllByLabelText('Qualification')[1]
     await userEvent.selectOptions(second, 'Other / foreign degree')
-    await userEvent.type(screen.getByLabelText('Name of the degree'), 'MSc')
+    const name = screen.getByLabelText('Name of the degree')
+    expect(name).toHaveValue('Licence')               // never left empty
+    await userEvent.clear(name)
+    await userEvent.type(name, 'MSc')
     await userEvent.selectOptions(screen.getByLabelText('Level'), '7')
     await userEvent.click(screen.getByRole('button', { name: 'Save profile' }))
     const saved = net.put.at(-1) as ProfileT
     expect(saved.education?.map(e => [e.qualification, e.level, e.foreign])).toEqual([['BUT', 6, false], ['MSc', 7, true]])
+  })
+})
+
+describe('Profile education levels (migrated entry)', () => {
+  it('recognises a migrated lower-case qualification name', async () => {
+    net.profile = { ...v2, education: [{ id: 'edu-1', qualification: 'master', level: 7, field: null,
+      institution: null, year: null, in_progress: false, foreign: false }] }
+    renderPage()
+    expect(await screen.findByLabelText('Qualification')).toHaveValue('Master')
+    expect(screen.queryByLabelText('Name of the degree')).not.toBeInTheDocument()
   })
 })

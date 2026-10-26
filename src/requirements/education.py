@@ -146,8 +146,8 @@ _EDUCATION_PATTERNS: list[tuple[re.Pattern[str], int, str]] = [
     (re.compile(r"\bhnc\b", re.I), 2, "HNC"),
     (re.compile(r"\bdeug\b", re.I), 2, "DEUG"),
 
-    # BUT (bachelor universitaire de technologie, level 6 = Bac+3). Upper case only:
-    # "but" is an English word.
+    # BUT (bachelor universitaire de technologie, level 6 = Bac+3). Upper case and a
+    # degree cue only: "but" is an English word, "BUT DU POSTE" a French heading.
     (re.compile(r"\bB\.?U\.?T\b\.?"), 3, "BUT"),
 
     # CAP / BEP (level 3, below the Bac = -1). Upper case and a degree cue only
@@ -637,8 +637,9 @@ def find_level_evidence(text: str, level_bac_plus: int) -> EvidenceSpan | None:
     for pattern, level, label in _EDUCATION_PATTERNS:
         if level != level_bac_plus:
             continue
-        m = pattern.search(text)
-        if m:
+        for m in pattern.finditer(text):
+            if label in _DEGREE_CUE_REQUIRED and not _has_degree_cue(text, m.start()):
+                continue
             raw_snippet = text[max(0, m.start() - 30): m.end() + 30].strip()
             return EvidenceSpan(
                 text=raw_snippet,
@@ -655,7 +656,7 @@ def find_level_evidence(text: str, level_bac_plus: int) -> EvidenceSpan | None:
 # Maîtrise degree was discontinued with the LMD reform. It therefore counts as
 # an education mention only when a degree cue precedes it in the same sentence:
 # "titulaire d'une maîtrise", "diplômé d'un bac et d'une maîtrise" (#51).
-_DEGREE_CUE_REQUIRED = frozenset({"Maîtrise", "CAP", "BEP"})
+_DEGREE_CUE_REQUIRED = frozenset({"Maîtrise", "CAP", "BEP", "BUT"})
 _DEGREE_CUE = re.compile(r"\b(?:titulaire|dipl[oô]m[eé]e?s?|dipl[oô]me)\b", re.I)
 _DEGREE_CUE_LOOKBACK_CHARS = 60
 
@@ -854,19 +855,27 @@ def extract_education(text: str) -> EducationRequirement | None:
     return max(found, key=lambda r: r.level_bac_plus)
 
 
-def candidate_education(profile: object) -> tuple[int | None, str | None]:
-    """``(max Bac+N, display label)`` the requirements gate compares offers against.
+def candidate_education(profile: object) -> tuple[int | None, str | None, int | None]:
+    """``(max Bac+N, display label, held Bac+N)`` the requirements gate compares offers against.
 
-    Profile v2 with a held qualification (F5.3): its highest French/EQF level, as the
-    highest Bac+N that level covers, labelled "level 6 (BUT)". Otherwise the v1
-    ``max_education`` string (no label: the gate words it as Bac+N).
+    Profile v2 (F5.3): the highest held French/EQF level, as the highest Bac+N that level
+    covers (offers are compared by level), labelled "level 6 (BUT)"; ``held Bac+N`` is the
+    lowest Bac+N of that level (the real one for every named qualification: BUT/Licence 3,
+    Master 5), used where years of study matter (enrolment). No held qualification: no
+    education constraint (the v1 field is hidden in a v2 profile, so it is not used).
+    A v1 profile: ``max_education`` for both (no label: the gate words it as Bac+N).
     """
-    from src.models.levels import level_to_max_bac_plus
+    from src.models.levels import level_to_max_bac_plus, level_to_min_bac_plus
 
-    held = [e for e in (getattr(profile, "education", None) or [])
-            if getattr(e, "level", None) is not None and not getattr(e, "in_progress", False)]
-    if int(getattr(profile, "profile_version", 1) or 1) >= 2 and held:
+    if int(getattr(profile, "profile_version", 1) or 1) >= 2:
+        held = [e for e in (getattr(profile, "education", None) or [])
+                if getattr(e, "level", None) is not None and not getattr(e, "in_progress", False)]
+        if not held:
+            return None, None, None
         top = max(held, key=lambda e: e.level)
-        return level_to_max_bac_plus(top.level), f"level {top.level} ({top.qualification})"
+        name = (top.qualification or "").strip()
+        label = f"level {top.level}" + (f" ({name})" if name else "")
+        return level_to_max_bac_plus(top.level), label, level_to_min_bac_plus(top.level)
     raw = getattr(profile, "max_education", None)
-    return (parse_education_level(raw) if raw else None), None
+    level = parse_education_level(raw) if raw else None
+    return level, None, level

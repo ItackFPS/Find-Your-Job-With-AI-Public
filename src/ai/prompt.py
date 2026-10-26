@@ -222,14 +222,25 @@ def _format_compact_profile_line(profile: dict[str, Any]) -> str:
     duplicate or second-guess that work.
     """
     parts: list[str] = []
-    max_education = profile.get("max_education")
-    if max_education:
-        parts.append(f"max education {max_education}")
+    v2 = int(profile.get("profile_version") or 1) >= 2
+    if v2:
+        # Profile v2: the highest held French/EQF level and the target levels, as the
+        # deterministic gate reads them (src/requirements/education.py candidate_education).
+        held = [e for e in (profile.get("education") or [])
+                if isinstance(e, dict) and e.get("level") is not None and not e.get("in_progress")]
+        if held:
+            top = max(held, key=lambda e: e["level"])
+            name = (top.get("qualification") or "").strip()
+            parts.append(f"education level {top['level']} (EQF)" + (f" ({name})" if name else ""))
+    else:
+        max_education = profile.get("max_education")
+        if max_education:
+            parts.append(f"max education {max_education}")
     exp = profile.get("experience") or {}
     max_years = exp.get("max_years")
     if max_years is not None:
         parts.append(f"max {max_years} years experience")
-    levels = exp.get("preferred_levels") or []
+    levels = ((profile.get("targets") or {}).get("levels") or []) if v2 else (exp.get("preferred_levels") or [])
     if levels:
         parts.append("prefers " + "/".join(lvl.replace("_", " ") for lvl in levels))
     return "; ".join(parts) if parts else "no education/experience constraints stated"

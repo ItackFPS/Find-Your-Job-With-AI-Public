@@ -6,12 +6,15 @@ import type { EducationEntry } from '../api/client'
 const QUALIFICATION_LEVELS: Record<string, EducationEntry['level']> = {
   CAP: 3, BEP: 3,
   Bac: 4, 'Bac pro': 4, 'Bac techno': 4,
-  BTS: 5, DUT: 5, DEUST: 5,
+  BTS: 5, DUT: 5, DEUG: 5, DEUST: 5,
   BUT: 6, Licence: 6, 'Licence pro': 6, Bachelor: 6,
   Master: 7, "Diplôme d'ingénieur": 7, MBA: 7,
   Doctorat: 8,
 }
 const LEVELS = [3, 4, 5, 6, 7, 8] as const
+// Case-insensitive: a migrated entry keeps the profile's old text ("master", "bac+3").
+const knownName = (name: string) =>
+  Object.keys(QUALIFICATION_LEVELS).find(q => q.toLowerCase() === name.trim().toLowerCase())
 
 const input = {
   background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: '6px',
@@ -39,15 +42,17 @@ export function EducationEditor({ entries, onChange }: {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
       {entries.length === 0 && <span style={{ color: 'var(--color-muted)', fontSize: '0.85rem' }}>{t('profile.education.empty')}</span>}
       {entries.map((e, i) => {
-        const known = !e.foreign && e.qualification in QUALIFICATION_LEVELS
+        const match = e.foreign ? undefined : knownName(e.qualification)
+        const known = match !== undefined
         return (
           <div key={e.id} role="group" aria-label={t('profile.education.entry', { n: i + 1 })}
             style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
             <select aria-label={t('profile.education.qualification')} style={input}
-              value={known ? e.qualification : '__other__'}
+              value={match ?? '__other__'}
               onChange={ev => {
                 const v = ev.target.value
-                if (v === '__other__') update(i, { foreign: true, qualification: known ? '' : e.qualification })
+                // Keeps the current name until the user types another, so it is never empty.
+                if (v === '__other__') update(i, { foreign: true })
                 else update(i, { foreign: false, qualification: v, level: QUALIFICATION_LEVELS[v] })
               }}>
               {Object.keys(QUALIFICATION_LEVELS).map(q => <option key={q} value={q} translate="no">{q}</option>)}

@@ -17,8 +17,9 @@ def _v2(level: int | None, name: str = "BUT", in_progress: bool = False, **extra
 
 
 def _gate(profile: JobSearchProfile) -> HardConstraintGate:
-    max_bac, label = candidate_education(profile)
-    return HardConstraintGate(user_max_education_level=max_bac, user_education_label=label)
+    max_bac, label, held = candidate_education(profile)
+    return HardConstraintGate(user_max_education_level=max_bac, user_education_label=label,
+                              user_held_education_level=held)
 
 
 def _check(profile: JobSearchProfile, text: str):
@@ -33,16 +34,18 @@ def test_level_threshold_is_the_exact_inverse(level):
 
 def test_profile_names_map_to_the_nomenclature():
     assert [QUALIFICATION_LEVELS[n] for n in ("CAP", "Bac", "BTS", "DUT", "BUT", "Licence", "Licence pro",
-                                              "Master", "Diplôme d'ingénieur", "Doctorat")] == [
-        3, 4, 5, 5, 6, 6, 6, 7, 7, 8]
+                                              "Master", "Diplôme d'ingénieur", "Doctorat", "DEUG")] == [
+        3, 4, 5, 5, 6, 6, 6, 7, 7, 8, 5]
 
 
-def test_candidate_education_prefers_held_v2_levels():
-    assert candidate_education(_v2(6)) == (4, "level 6 (BUT)")
-    # in progress does not count as held; falls back to v1 max_education
-    assert candidate_education(_v2(7, "Master", in_progress=True, max_education="bac+3")) == (3, None)
-    assert candidate_education(JobSearchProfile(max_education="bac+2")) == (2, None)   # v1
-    assert candidate_education(_v2(None)) == (None, None)
+def test_candidate_education_reads_held_v2_levels_only():
+    assert candidate_education(_v2(6)) == (4, "level 6 (BUT)", 3)
+    assert candidate_education(_v2(7, "Master")) == (7, "level 7 (Master)", 5)
+    # in progress is not held, and a v2 profile never falls back to the hidden max_education
+    assert candidate_education(_v2(7, "Master", in_progress=True, max_education="bac+3")) == (None, None, None)
+    assert candidate_education(_v2(None, max_education="bac+2")) == (None, None, None)
+    assert candidate_education(JobSearchProfile(max_education="bac+2")) == (2, None, 2)   # v1
+    assert candidate_education(_v2(6, " "))[1] == "level 6"                             # no empty "()"
 
 
 # ADR 0004 cases, on levels
@@ -90,6 +93,7 @@ def test_foreign_degree_uses_the_level_the_user_picked():
 # New qualification names in offers
 @pytest.mark.parametrize("text,bac_plus,label", [
     ("Titulaire d'un BUT informatique exigé", 3, "BUT"),
+    ("Diplôme DEUG requis", 2, "DEUG"),
     ("Diplôme B.U.T. GEII requis", 3, "BUT"),
     ("DEUG requis", 2, "DEUG"),
     ("Titulaire d'un CAP exigé", -1, "CAP"),
@@ -100,7 +104,9 @@ def test_new_qualification_names_are_extracted(text, bac_plus, label):
     assert edu is not None and (edu.level_bac_plus, edu.level_label) == (bac_plus, label)
 
 
-@pytest.mark.parametrize("text", ["Connaissance du théorème CAP.", "but we also need Rust", "Avoir un bon cap."])
+@pytest.mark.parametrize("text", ["Connaissance du théorème CAP.", "but we also need Rust", "Avoir un bon cap.",
+                                  "BUT DU POSTE : développer l'API. Profil requis : autonome.",
+                                  "NOT REQUIRED BUT NICE TO HAVE"])
 def test_ambiguous_words_are_not_degrees(text):
     edu = extract_education(text)
     assert edu is None or edu.level_label not in ("CAP", "BUT")
@@ -109,3 +115,36 @@ def test_ambiguous_words_are_not_degrees(text):
 def test_but_holder_meets_a_licence_requirement_and_not_a_master():
     assert _check(_v2(6), "Licence exigée.").passes
     assert not _check(_v2(6), "Master exigé.").passes
+
+
+def test_enrolment_uses_the_years_of_study_a_level_surely_has():
+    # A Licence/BUT holder (level 6, Bac+3) cannot currently be in Master 2 (Bac+5 needs Bac+4).
+    assert not _check(_v2(6, "Licence"), "Vous êtes actuellement en Master 2.").passes
+    assert _check(_v2(6, "Licence"), "Vous êtes actuellement en Master 1.").passes
+    assert _check(_v2(7, "Master"), "Vous êtes actuellement en Master 2.").passes
+
+
+def test_llm_corroboration_honours_the_degree_cue():
+    from src.requirements.education import find_level_evidence
+
+    assert find_level_evidence("Connaissance du théorème CAP requise.", -1) is None
+    assert find_level_evidence("Titulaire d'un CAP.", -1) is not None
+
+
+def test_frontend_qualification_table_mirrors_the_backend():
+    import re
+    from pathlib import Path
+
+    tsx = Path(__file__).resolve().parents[1] / "frontend" / "src" / "pages" / "EducationEditor.tsx"
+    body = tsx.read_text(encoding="utf-8").split("QUALIFICATION_LEVELS", 1)[1].split("}", 1)[0]
+    pairs = re.findall(r"""(?:'([^']+)'|"([^"]+)"|([A-Za-z]+)):\s*(\d)""", body)
+    table = {(a or b or c): int(n) for a, b, c, n in pairs}
+    assert table == QUALIFICATION_LEVELS
+
+
+def test_llm_prompt_line_uses_v2_levels():
+    from src.ai.prompt import _format_compact_profile_line
+
+    line = _format_compact_profile_line(_v2(6, max_education="bac+2", targets={"levels": ["junior"]}).model_dump())
+    assert "education level 6 (EQF) (BUT)" in line and "bac+2" not in line and "prefers junior" in line
+    assert "max education bac+2" in _format_compact_profile_line(JobSearchProfile(max_education="bac+2").model_dump())

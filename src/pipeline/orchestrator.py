@@ -786,7 +786,7 @@ def run_pipeline(
                 )
 
                 # Profile v2: the highest held French/EQF level (F5.3); v1: max_education.
-                user_max_edu_level, user_edu_label = candidate_education(profile)
+                user_max_edu_level, user_edu_label, user_held_edu = candidate_education(profile)
 
                 # Build LLM provider when enabled in matching config (None otherwise,
                 # or if construction fails — the gate always works heuristic-only).
@@ -810,6 +810,7 @@ def run_pipeline(
                     profile_version_hash=stats.profile_hash,
                     career_level=filters_config.get("career_level"),
                     user_education_label=user_edu_label,
+                    user_held_education_level=user_held_edu,
                 )
                 edu_penalty = getattr(profile.matching, "education_preferred_penalty", 0.20)
 

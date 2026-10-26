@@ -131,6 +131,7 @@ class HardConstraintGate:
         profile_version_hash: str = "",
         career_level: dict | None = None,
         user_education_label: str | None = None,
+        user_held_education_level: int | None = None,
     ):
         self._user_max_edu = user_max_education_level
         self._user_max_years_exp = user_max_years_experience
@@ -145,6 +146,10 @@ class HardConstraintGate:
         # user_max_education_level is that level's highest Bac+N (level_to_max_bac_plus), so
         # the Bac+N comparisons below compare levels; messages then name levels too.
         self._edu_label = user_education_label
+        # Bac+N the candidate surely holds (enrolment needs completed years of study);
+        # defaults to user_max_education_level (v1: the same number).
+        self._user_held_edu = (user_held_education_level if user_held_education_level is not None
+                               else user_max_education_level)
 
     def check(
         self,
@@ -418,7 +423,7 @@ class HardConstraintGate:
         required = edu.enrolment_level_min
         if required is None:
             return [], ConstraintState.UNKNOWN, None
-        if self._user_max_edu >= required - 1 or not self._education_hard_constraint:
+        if self._user_held_edu is None or self._user_held_edu >= required - 1 or not self._education_hard_constraint:
             return [], ConstraintState.SATISFIED, None
         candidate_label = self._candidate_education_label()
         reason = HardRejectionReason(

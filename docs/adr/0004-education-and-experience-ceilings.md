@@ -97,8 +97,10 @@ Licence/Licence pro/BUT and the maîtrise 6, Master/ingénieur 7, Doctorat 8. A 
 the level the user picks. Offers keep their `bac+N` reading and map it to a level (Bac+1 → 4,
 Bac+4 → 6, Bac+6/+7 → 7). The gate receives the highest Bac+N the candidate's highest held level
 covers (`level_to_max_bac_plus`), so every rule above (mandatory vs preferred vs "or equivalent
-experience", enrolment, soft penalty) is unchanged and compares levels. One consequence is intended:
+experience", soft penalty) is unchanged and compares levels. Enrolment ("currently in Master 2") counts
+years of study, so it uses the lowest Bac+N of the level (`level_to_min_bac_plus`, the real one for every
+named qualification): a Licence holder is not taken for an M1 holder. One consequence is intended:
 "Bac+4 minimum" no longer rejects a Licence or BUT holder, because both are level 6. Messages name
 levels ("level 7 (Bac+5) required; you declared level 6 (BUT)") and never call two qualifications
-equivalent. In-progress qualifications are not held. A v2 profile without a held level, and any v1
-profile, keeps `max_education`.
+equivalent. In-progress qualifications are not held. A v2 profile without a held qualification has no
+education constraint: its hidden `max_education` is not used. A v1 profile keeps `max_education`.
