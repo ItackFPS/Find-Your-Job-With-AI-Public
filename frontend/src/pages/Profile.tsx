@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  getProfile, updateProfile, searchEscoSkills, searchEscoOccupations,
+  getProfile, updateProfile, confirmProfileReview, searchEscoSkills, searchEscoOccupations,
   getAllDepartments, searchPlaces,
   type Profile, type EscoEntry, type EscoSuggestion, type FrenchDepartment, type LocationPreference,
   type HomePlace, type PlaceSuggestion, type RemotePolicy,
@@ -9,6 +9,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import { Card, LoadingState, Switch } from '../components'
 import i18n from '../i18n'
+import { ProfileReviewCard } from './ProfileReviewCard'
 
 // Prevents "Docker" and "docker" (or "French"/"french") coexisting as two
 // separate entries — an exact-string check alone lets that through.
@@ -1045,6 +1046,15 @@ export default function ProfilePage() {
     },
   })
 
+  const { mutate: confirmReview, isPending: confirming } = useMutation({
+    mutationFn: confirmProfileReview,
+    onSuccess: (updated) => {
+      // Keep the page's unsaved edits; only the review state comes from the server.
+      setProfile(p => p ? { ...p, review: updated.review ?? null } : p)
+      queryClient.invalidateQueries({ queryKey: ['profile'] })
+    },
+  })
+
   if (isLoading) return <LoadingState />
   if (error) return <div style={{ color: 'var(--color-red)', padding: '2rem' }}>{t('profile.loadError')}</div>
   if (!profile) return null
@@ -1096,6 +1106,12 @@ export default function ProfilePage() {
           </button>
         </div>
       </div>
+
+      <ProfileReviewCard
+        profile={profile}
+        saving={confirming}
+        onConfirm={() => { if (profile.review) confirmReview(profile.review) }}
+      />
 
       <Card style={{ marginBottom: '1rem' }} title={t('profile.sections.targets')} subtitle={t('profile.sections.targetsSubtitle')}>
         <div style={{ marginTop: 'var(--space-4)' }}>

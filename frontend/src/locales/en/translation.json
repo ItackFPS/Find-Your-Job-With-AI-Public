@@ -938,6 +938,28 @@
       "mid": "mid",
       "senior": "senior",
       "lead": "lead"
+    },
+    "review": {
+      "title": "We updated your profile — please check",
+      "intro": "Your profile was converted to the new format: target career levels and education levels instead of keyword lists. Nothing was deleted, and matching works as before until you change these.",
+      "changes": "What changed",
+      "targetLevels": "Target levels",
+      "noLevels": "none (offers of every level are shown)",
+      "educationLevel": "Highest education level",
+      "noEducation": "not set",
+      "levelValue": "level {level}",
+      "confirm": "Looks right",
+      "confirming": "Saving…",
+      "levels": {
+        "internship": "Internship",
+        "alternance": "Work-study (alternance)",
+        "graduate": "Graduate / entry level",
+        "junior": "Junior",
+        "mid": "Mid-level",
+        "senior": "Senior",
+        "lead": "Lead",
+        "manager": "Manager"
+      }
     }
   },
   "design": {

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from src.models.levels import CareerLevel, EducationLevel
 
 # Phase NEXT / I7: reject unknown keys instead of silently dropping them.
 # profile.yaml is hand-edited by users (and round-tripped by the Profile API
@@ -121,6 +124,102 @@ class ExperiencePreferences(BaseModel):
     excluded_seniority: list[str] = []
 
 
+# Profile v2 (update plan §C3, F5.1). The profile stores *facts* (experiences, education)
+# and *targets* (career levels). Until the matching reads them (F5.2/F5.3), the v1
+# ``experience`` and ``max_education`` fields above stay the ones the pipeline uses.
+PROFILE_SCHEMA_VERSION = 2
+
+_YEAR_MONTH = r"^\d{4}-(0[1-9]|1[0-2])$"
+
+
+class ExperienceEntry(BaseModel):
+    """One job, internship or apprenticeship the candidate held."""
+
+    model_config = _STRICT_PROFILE_CONFIG
+
+    id: str = Field(min_length=1)
+    role: str
+    employer: str | None = None
+    start: str = Field(pattern=_YEAR_MONTH)          # "YYYY-MM"
+    end: str | None = Field(default=None, pattern=_YEAR_MONTH)  # None = ongoing
+    skills: list[str] = []
+    responsibilities: list[str] = []
+    # Counts towards the computed years of experience (unticked for unrelated jobs).
+    relevant: bool = True
+
+
+class EducationEntry(BaseModel):
+    """One qualification, held or in progress. ``level`` is the French/EQF level 3–8."""
+
+    model_config = _STRICT_PROFILE_CONFIG
+
+    id: str = Field(min_length=1)
+    qualification: str
+    level: EducationLevel | None = None
+    field: str | None = None
+    institution: str | None = None
+    year: int | None = Field(default=None, ge=1950, le=2100)
+    in_progress: bool = False
+    # A foreign degree: the user picked ``level`` themselves.
+    foreign: bool = False
+
+
+class CareerTargets(BaseModel):
+    """The career levels the candidate wants (multi-select) and their experience years."""
+
+    model_config = _STRICT_PROFILE_CONFIG
+
+    levels: list[CareerLevel] = []
+    # Also show roles one level above the highest target.
+    stretch: bool = False
+    # Replaces the years computed from ``experiences`` when set.
+    years_override: float | None = Field(default=None, ge=0, le=60)
+
+
+class ProfileReview(BaseModel):
+    """The one-time "we updated your profile, please check" screen (F5.1)."""
+
+    model_config = _STRICT_PROFILE_CONFIG
+
+    pending: bool = True
+    notes: list[str] = []
+    migrated_at: str | None = None
+
+
+def _months(year_month: str) -> int:
+    y, m = year_month.split("-")
+    return int(y) * 12 + int(m) - 1
+
+
+def compute_experience_years(entries: list[ExperienceEntry], today: date | None = None) -> float:
+    """Years covered by the relevant experiences, overlaps counted once, to 0.1 year.
+
+    A month range is inclusive (``2023-01``→``2023-12`` is one year); an ongoing entry runs
+    to the current month; an entry ending before it starts counts nothing.
+    """
+    now = today or date.today()
+    current = now.year * 12 + now.month - 1
+    spans = sorted(
+        (_months(e.start), min(_months(e.end), current) if e.end else current)
+        for e in entries if e.relevant
+    )
+    total = 0
+    cur_start: int | None = None
+    cur_end = -1
+    for start, end in spans:
+        if end < start:
+            continue
+        if cur_start is None or start > cur_end + 1:
+            if cur_start is not None:
+                total += cur_end - cur_start + 1
+            cur_start, cur_end = start, end
+        else:
+            cur_end = max(cur_end, end)
+    if cur_start is not None:
+        total += cur_end - cur_start + 1
+    return round(total / 12, 1)
+
+
 class EscoEntry(BaseModel):
     """An ESCO concept selected by the user for their profile.
 
@@ -232,6 +331,26 @@ class JobSearchProfile(BaseModel):
     # (src/pipeline/semantic_matching.py). Not read by Phase 2 (LLM
     # enrichment) or the deterministic hard filter/requirements gate.
     looking_for: str | None = None
+    # Profile v2 (F5.1). A file without ``profile_version`` is a v1 profile; the
+    # migration (src/models/profile_v2_migration.py) fills the fields below.
+    profile_version: int = Field(default=1, ge=1, le=PROFILE_SCHEMA_VERSION)
+    experiences: list[ExperienceEntry] = []
+    education: list[EducationEntry] = []
+    targets: CareerTargets = CareerTargets()
+    review: ProfileReview | None = None
+
+    def experience_years(self, today: date | None = None) -> float | None:
+        """The user's override, else the years computed from experiences, else None."""
+        if self.targets.years_override is not None:
+            return self.targets.years_override
+        if not self.experiences:
+            return None
+        return compute_experience_years(self.experiences, today)
+
+    def highest_education_level(self) -> int | None:
+        """Highest French/EQF level among held (not in-progress) qualifications."""
+        levels = [e.level for e in self.education if e.level is not None and not e.in_progress]
+        return max(levels) if levels else None
 
     def to_semantic_info(self) -> dict:
         """Build the ``profile_info`` dict expected by ``build_profile_embedding``.

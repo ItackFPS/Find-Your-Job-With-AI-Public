@@ -1,7 +1,7 @@
 """Convert a v1 location profile (ADR 0005 département priorities) to the distance model.
 
 Update plan §C3 / §G: automatic, idempotent, with a backup before the first rewrite.
-The v1 fields are kept untouched (profile v2, F5.1, removes them); this only ADDS
+The v1 fields are kept untouched; this only ADDS
 ``geography.home``, ``max_distance_km``, ``strict_distance`` and ``remote_policy``:
 
 * home: the town named in the top département's label when it resolves to a commune
@@ -17,6 +17,7 @@ The v1 fields are kept untouched (profile v2, F5.1, removes them); this only ADD
 * strict_distance: off (v1 never excluded on location preferences).
 
 A profile that already has a home, or lists no département, is left as it is.
+``migrate_profile_all`` then runs the profile v2 conversion (F5.1) on the result.
 """
 
 from __future__ import annotations
@@ -40,6 +41,9 @@ MIN_RADIUS_KM = 50
 MAX_RADIUS_KM = 150
 PERSONAL_PROFILE = "profile.local.yaml"
 BACKUP_NAME = "profile.v1-backup.local.yaml"   # matches the gitignored config/*.local.yaml
+# Copy taken before the profile v2 conversion (F5.1), for a profile whose v1 backup
+# already holds the pre-distance-model file.
+V2_BACKUP_NAME = "profile.pre-v2-backup.local.yaml"
 
 
 def _norm_modes(modes: list[Any] | None) -> set[str]:
@@ -122,9 +126,35 @@ def migrate_profile_data(data: dict[str, Any]) -> tuple[dict[str, Any], list[str
     return migrated, notes
 
 
+def migrate_profile_all(data: dict[str, Any]) -> tuple[dict[str, Any], list[str], list[str]]:
+    """Run the distance-model then the profile v2 conversion (src/models/profile_v2_migration.py).
+
+    Returns ``(migrated copy, location notes, v2 notes)``; both lists are empty when nothing
+    changed. The v2 step runs second so its review notes describe the converted location."""
+    from src.models.profile_v2_migration import migrate_v2_data
+
+    migrated, geo_notes = migrate_profile_data(data)
+    migrated, v2_notes = migrate_v2_data(migrated)
+    return migrated, geo_notes, v2_notes
+
+
+def backup_profile(path: Path, location: bool, v2: bool) -> None:
+    """Copy ``path`` before a conversion rewrites it; an existing backup is never overwritten.
+
+    The first conversion fills the v1 backup; a later one (the v2 conversion of a file
+    already on the distance model) fills the pre-v2 backup. A plain v1 file is copied once."""
+    v1 = path.with_name(BACKUP_NAME)
+    if location and not v1.exists():
+        shutil.copy2(path, v1)
+        return
+    pre_v2 = path.with_name(V2_BACKUP_NAME)
+    if (location or v2) and not pre_v2.exists():
+        shutil.copy2(path, pre_v2)
+
+
 def migrate_profile_file(path: str | Path) -> list[str]:
     """Migrate a profile YAML file in place. Before the first rewrite the original is copied
-    to ``profile.v1-backup.local.yaml`` next to it (never overwritten). Returns the notes
+    next to it (``backup_profile``). Returns the notes
     (empty: nothing to do). Raises on unreadable/invalid data; callers decide to fail open."""
     from src.models.profile import JobSearchProfile
 
@@ -133,7 +163,8 @@ def migrate_profile_file(path: str | Path) -> list[str]:
     data = yaml.safe_load(original) or {}
     if not isinstance(data, dict):
         return []
-    migrated, notes = migrate_profile_data(data)
+    migrated, geo_notes, v2_notes = migrate_profile_all(data)
+    notes = geo_notes + v2_notes
     if not notes:
         return []
     JobSearchProfile(**migrated)  # never write a profile the app cannot load
@@ -142,11 +173,9 @@ def migrate_profile_file(path: str | Path) -> list[str]:
         if p.read_text(encoding="utf-8") != original:
             logger.info("Profile %s changed during migration; left for the next run", p.name)
             return []
-        backup = p.with_name(BACKUP_NAME)
-        if not backup.exists():
-            shutil.copy2(p, backup)
+        backup_profile(p, bool(geo_notes), bool(v2_notes))
         write_yaml_atomic(p, migrated)
-    logger.info("Profile %s migrated to the distance model (backup: %s): %s", p.name, backup.name, "; ".join(notes))
+    logger.info("Profile %s migrated (backups next to it): %s", p.name, "; ".join(notes))
     return notes
 
 
@@ -159,5 +188,5 @@ def migrate_personal_profile(path: str | Path) -> list[str]:
     try:
         return migrate_profile_file(p)
     except Exception as exc:  # noqa: BLE001 — a failed migration must never stop a run
-        logger.warning("Profile migration to the distance model skipped: %s", exc)
+        logger.warning("Profile migration skipped: %s", exc)
         return []

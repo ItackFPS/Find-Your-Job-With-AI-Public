@@ -81,3 +81,23 @@ matching:
   llm_eligibility_enabled: false
   llm_eligibility_reject_confidence: 0.75
 looking_for: ''
+# Profile v2 (F5.1): facts and career targets. The matching still reads
+# `experience` and `max_education` above until it moves to these fields.
+profile_version: 2
+experiences: []
+education:
+- id: edu-1
+  qualification: Licence
+  level: 6
+  field: null
+  institution: null
+  year: null
+  in_progress: false
+  foreign: false
+targets:
+  levels:
+  - graduate
+  - junior
+  stretch: false
+  years_override: null
+review: null

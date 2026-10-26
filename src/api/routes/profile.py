@@ -11,7 +11,6 @@ rewritten by the UI.
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 import yaml
@@ -19,7 +18,7 @@ from fastapi import APIRouter, HTTPException
 
 from src.api.schemas import ProfileIn, ProfileOut
 from src.config_files import PROFILE_WRITE_LOCK, local_config_path, resolve_config_path, write_yaml_atomic
-from src.geo.profile_migration import BACKUP_NAME, migrate_profile_data
+from src.geo.profile_migration import backup_profile, migrate_profile_all
 from src.models.profile import JobSearchProfile
 
 router = APIRouter(prefix="/api/profile", tags=["profile"])
@@ -44,12 +43,13 @@ def get_profile() -> ProfileOut:
     read_path = _read_path()
     if not read_path.exists():
         raise HTTPException(status_code=404, detail="profile.yaml not found")
-    # A v1 location profile is shown converted to the distance model (home, radius,
-    # remote policy), in memory only: a read never writes. The file is converted at
-    # pipeline start (src/geo/profile_migration.py) or when the user saves.
+    # A v1 profile is shown converted to the distance model (home, radius, remote
+    # policy) and to profile v2 (targets, education levels, a pending review), in
+    # memory only: a read never writes. The file is converted at pipeline start
+    # (src/geo/profile_migration.py) or when the user saves.
     with open(read_path, encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
-    data, _notes = migrate_profile_data(data)
+    data, _geo_notes, _v2_notes = migrate_profile_all(data)
     return ProfileOut(**data)
 
 
@@ -92,8 +92,15 @@ def update_profile(payload: ProfileIn) -> ProfileOut:
             with open(read_path, encoding="utf-8") as f:
                 existing_data = yaml.safe_load(f) or {}
 
+        # The update lands on the converted view (the one GET shows), so a client
+        # unaware of the v2 fields never writes a v1 profile without them.
+        geo_notes: list[str] = []
+        v2_notes: list[str] = []
+        base = existing_data
+        if isinstance(existing_data, dict):
+            base, geo_notes, v2_notes = migrate_profile_all(existing_data)
         updates = payload.model_dump(exclude_unset=True)
-        merged = _merge_profile_updates(existing_data, updates)
+        merged = _merge_profile_updates(base, updates)
 
         try:
             # Validate through the canonical domain model.
@@ -103,11 +110,10 @@ def update_profile(payload: ProfileIn) -> ProfileOut:
 
         # The first save seeds profile.local.yaml from the profile in effect
         # (``existing_data`` above), so no current value is lost. Saving over a v1
-        # personal profile keeps a one-time backup of it, as the migration does.
+        # personal profile keeps one-time backups of it, as the migration does.
         write_path = _write_path()
-        if (read_path == write_path and read_path.exists() and isinstance(existing_data, dict)
-                and migrate_profile_data(existing_data)[1] and not (write_path.with_name(BACKUP_NAME)).exists()):
-            shutil.copy2(read_path, write_path.with_name(BACKUP_NAME))
+        if read_path == write_path and read_path.exists():
+            backup_profile(write_path, bool(geo_notes), bool(v2_notes))
         try:
             write_yaml_atomic(write_path, profile.model_dump())
         except OSError as exc:

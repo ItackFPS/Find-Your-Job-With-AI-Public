@@ -59,6 +59,44 @@ export interface Experience {
   excluded_seniority: string[]
 }
 
+// Profile v2 (F5.1): facts and career targets. Not read by the matching yet.
+export type CareerLevel = 'internship' | 'alternance' | 'graduate' | 'junior' | 'mid' | 'senior' | 'lead' | 'manager'
+
+export interface ExperienceEntry {
+  id: string
+  role: string
+  employer: string | null
+  start: string // "YYYY-MM"
+  end: string | null // null = ongoing
+  skills: string[]
+  responsibilities: string[]
+  relevant: boolean
+}
+
+export interface EducationEntry {
+  id: string
+  qualification: string
+  level: 3 | 4 | 5 | 6 | 7 | 8 | null // French national level = EQF level
+  field: string | null
+  institution: string | null
+  year: number | null
+  in_progress: boolean
+  foreign: boolean
+}
+
+export interface CareerTargets {
+  levels: CareerLevel[]
+  stretch: boolean
+  years_override: number | null
+}
+
+// The one-time "we updated your profile, please check" screen.
+export interface ProfileReview {
+  pending: boolean
+  notes: string[]
+  migrated_at: string | null
+}
+
 export interface EscoEntry {
   concept_uri: string | null
   label: string
@@ -102,6 +140,11 @@ export interface Profile {
   // Stored only — not yet read by any matching logic (a future Phase 2/3
   // semantic-matching input).
   looking_for?: string | null
+  profile_version?: number
+  experiences?: ExperienceEntry[]
+  education?: EducationEntry[]
+  targets?: CareerTargets
+  review?: ProfileReview | null
 }
 
 export interface SourceStats {
@@ -286,6 +329,9 @@ export interface JobExplanation {
 
 export const getProfile = () => api.get<Profile>('/profile').then(r => r.data)
 export const updateProfile = (p: Profile) => api.put<Profile>('/profile', p).then(r => r.data)
+// Saves only the review flag (the PUT merges), so confirming never saves unsaved edits.
+export const confirmProfileReview = (review: ProfileReview) =>
+  api.put<Profile>('/profile', { review: { ...review, pending: false } }).then(r => r.data)
 
 export const searchEscoSkills = (q: string, lang: 'en' | 'fr' = 'en', limit = 8): Promise<EscoSuggestion[]> =>
   api.get<EscoSuggestion[]>('/esco/skills', { params: { q, lang, limit } }).then(r => r.data)

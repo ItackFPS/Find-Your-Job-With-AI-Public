@@ -65,6 +65,47 @@ class ExperienceIn(BaseModel):
     excluded_seniority: list[str] = []
 
 
+CareerLevelIn = Literal["internship", "alternance", "graduate", "junior", "mid", "senior", "lead", "manager"]
+
+
+class ExperienceEntryIn(BaseModel):
+    """Mirrors ``src.models.profile.ExperienceEntry``."""
+    id: str = Field(min_length=1)
+    role: str
+    employer: str | None = None
+    start: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+    end: str | None = Field(default=None, pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+    skills: list[str] = []
+    responsibilities: list[str] = []
+    relevant: bool = True
+
+
+class EducationEntryIn(BaseModel):
+    """Mirrors ``src.models.profile.EducationEntry`` (``level``: French/EQF 3–8)."""
+    id: str = Field(min_length=1)
+    qualification: str
+    level: Literal[3, 4, 5, 6, 7, 8] | None = None
+    field: str | None = None
+    institution: str | None = None
+    year: int | None = Field(default=None, ge=1950, le=2100)
+    in_progress: bool = False
+    foreign: bool = False
+
+
+class CareerTargetsIn(BaseModel):
+    """Mirrors ``src.models.profile.CareerTargets``."""
+    levels: list[CareerLevelIn] = []
+    stretch: bool = False
+    years_override: float | None = Field(default=None, ge=0, le=60)
+
+
+class ProfileReviewIn(BaseModel):
+    """Mirrors ``src.models.profile.ProfileReview`` — the one-time review screen."""
+    pending: bool = True
+    notes: list[str] = []
+    migrated_at: str | None = None
+
+
 class EscoEntryIn(BaseModel):
     """ESCO concept metadata stored alongside a target skill."""
     concept_uri: str | None = None
@@ -100,6 +141,12 @@ class ProfileIn(BaseModel):
     # matching (folded into the profile embedding text); not read by Phase 2
     # or the deterministic filter/requirements gate.
     looking_for: str | None = None
+    # Profile v2 (F5.1) — mirrors JobSearchProfile; not read by the matching yet.
+    profile_version: int = Field(default=1, ge=1, le=2)
+    experiences: list[ExperienceEntryIn] = []
+    education: list[EducationEntryIn] = []
+    targets: CareerTargetsIn = CareerTargetsIn()
+    review: ProfileReviewIn | None = None
 
 
 ProfileOut = ProfileIn  # same shape; alias for clarity
