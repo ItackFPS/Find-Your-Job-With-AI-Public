@@ -82,8 +82,9 @@ With profile v2 target levels (`targets.levels`), a seniority word in the title 
 longer a hard-filter rejection. The requirements gate infers the offer's level from weighted signals
 (`src/requirements/career_level.py`): title word (1), stated years (3 mandatory, 2 otherwise), people
 management in the description (2), internship or apprenticeship contract (3). It compares them with the
-highest target, plus one level with `stretch`. It rejects only when people management conflicts, at
-least one other signal conflicts, and no non-title signal fits. Any other conflict, including a title
+highest target, plus one level with `stretch` (scoring prefers the same levels). It rejects only when
+people management conflicts, the conflicting weight reaches 3, and no non-title signal fits. Any other conflict, including a title
 alone or a title contradicted by the stated years, is `UNKNOWN`: the offer passes with uncertainty and
 a "Career level" flag (review), never a rejection. Years above `max_years` stay with the experience
-ceiling above. A v1 profile without targets keeps the keyword rejection.
+ceiling above. A v2 profile with no target level shows every level. A v1 profile keeps the keyword
+rejection.

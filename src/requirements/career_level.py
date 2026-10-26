@@ -12,8 +12,8 @@ Job side, four kinds of signal, each giving a career rank (``src.models.levels.C
 Against the candidate's target levels (the highest target, one more with ``stretch``):
 
 * SATISFIED — no signal above the targets;
-* VIOLATED (reject) — managing people conflicts, at least one more signal conflicts, and no
-  signal other than a title word fits the targets;
+* VIOLATED (reject) — managing people conflicts, the conflicting weight reaches 3 (so at
+  least one more signal conflicts), and no signal other than a title word fits the targets;
 * UNKNOWN (review) — anything else with a conflict. A title word alone, or a title that
   disagrees with the stated years, is weak evidence: it never rejects (extends ADR 0004).
 
@@ -26,12 +26,15 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Any, Literal
 
-from src.models.levels import CAREER_RANK, V1_EXCLUDED_TO_LEVEL
+from src.models.levels import CAREER_LEVELS, CAREER_RANK, V1_EXCLUDED_TO_LEVEL
 from src.requirements.models import ConstraintState, ExperienceRequirement, Importance
 
 CAREER_RULE_VERSION = "career-level.v1"
+# Conflicting weight needed (with people management among it) to reject.
+REJECT_WEIGHT = 3
 
 SignalKind = Literal["title", "years", "responsibilities", "contract"]
 
@@ -42,6 +45,9 @@ _LOW_TITLE_WORDS: dict[str, str] = {
     "stage": "internship", "stagiaire": "internship", "intern": "internship", "internship": "internship",
     "alternance": "alternance", "alternant": "alternance", "alternante": "alternance", "apprenti": "alternance",
     "apprentie": "alternance", "apprentissage": "alternance", "apprentice": "alternance",
+    # "confirmé" is the French mid level; the v1 "senior" keyword set lists it too, and the
+    # lower rank wins (see title_vocabulary).
+    "confirme": "mid", "confirmee": "mid",
 }
 
 # The description says the role manages people (accent-stripped).
@@ -60,12 +66,18 @@ _CONTRACT_WORDS: tuple[tuple[str, str], ...] = (
 
 
 def _norm(text: str | None) -> str:
-    nfd = unicodedata.normalize("NFD", text or "")
+    nfd = unicodedata.normalize("NFD", (text or "").replace("\u2019", "'"))
     return "".join(c for c in nfd if unicodedata.category(c) != "Mn").lower()
 
 
+@lru_cache(maxsize=1024)
+def _word_re(word: str) -> re.Pattern[str]:
+    # A hyphen joins a compound ("multi-stage"), so it is not a word boundary here.
+    return re.compile(r"(?<![a-z0-9-])" + re.escape(word) + r"(?![a-z0-9-])")
+
+
 def _has_word(text: str, word: str) -> bool:
-    return re.search(r"(?<![a-z0-9])" + re.escape(word) + r"(?![a-z0-9])", text) is not None
+    return _word_re(word).search(text) is not None
 
 
 def years_to_rank(years: int) -> int:
@@ -82,8 +94,9 @@ def years_to_rank(years: int) -> int:
 
 
 def title_vocabulary(seniority_exclusions: dict[str, list[str]]) -> dict[str, int]:
-    """``{accent-stripped keyword: rank}`` from the v1 keyword sets plus entry-level words.
-    A keyword listed under two levels keeps the lower rank (the weaker claim)."""
+    """``{accent-stripped keyword: rank}`` from the v1 keyword sets plus entry-level words,
+    longest keyword first. A keyword listed under two levels keeps the lower rank (the
+    weaker claim)."""
     vocab: dict[str, int] = {word: CAREER_RANK[level] for word, level in _LOW_TITLE_WORDS.items()}
     for label, words in (seniority_exclusions or {}).items():
         level = V1_EXCLUDED_TO_LEVEL.get(label)
@@ -92,7 +105,7 @@ def title_vocabulary(seniority_exclusions: dict[str, list[str]]) -> dict[str, in
         for w in words or []:
             key = _norm(str(w))
             vocab[key] = min(vocab.get(key, CAREER_RANK[level]), CAREER_RANK[level])
-    return vocab
+    return dict(sorted(vocab.items(), key=lambda kv: len(kv[0]), reverse=True))
 
 
 def allowed_max_rank(levels: list[str], stretch: bool) -> int | None:
@@ -129,9 +142,9 @@ def job_level_signals(
     """Every level signal the offer carries (job side only, no profile)."""
     signals: list[LevelSignal] = []
     t = _norm(title)
-    # Longest keywords first, so "tech lead" is reported rather than "lead"; one per rank.
+    # The vocabulary is longest first, so "tech lead" is reported rather than "lead"; one per rank.
     seen_ranks: set[int] = set()
-    for word in sorted(vocabulary, key=len, reverse=True):
+    for word in vocabulary:
         rank = vocabulary[word]
         if rank not in seen_ranks and _has_word(t, word):
             seen_ranks.add(rank)
@@ -154,27 +167,49 @@ def job_level_signals(
 
 def assess_career_level(signals: list[LevelSignal], max_rank: int | None) -> CareerAssessment:
     """Compare the offer's signals with the candidate's highest acceptable rank."""
-    if max_rank is None:
-        return CareerAssessment(ConstraintState.UNKNOWN, signals, [], "no target level set")
+    if max_rank is None:   # no target level: every level is shown (the gate skips the check)
+        return CareerAssessment(ConstraintState.SATISFIED, signals, [], "no target level set")
     conflicts = [s for s in signals if s.rank > max_rank]
     if not conflicts:
         return CareerAssessment(ConstraintState.SATISFIED, signals, [], "level fits the targets")
     fits_beyond_title = [s for s in signals if s.rank <= max_rank and s.kind != "title"]
     manages_people = any(s.kind == "responsibilities" for s in conflicts)
     evidence = "; ".join(s.evidence for s in conflicts)
-    if manages_people and len(conflicts) >= 2 and not fits_beyond_title:
+    if manages_people and sum(s.weight for s in conflicts) >= REJECT_WEIGHT and not fits_beyond_title:
         return CareerAssessment(ConstraintState.VIOLATED, signals, conflicts,
                                 f"level above your targets: {evidence}")
     return CareerAssessment(ConstraintState.UNKNOWN, signals, conflicts,
                             f"level may be above your targets (to review): {evidence}")
 
 
+def uses_career_targets(profile: Any) -> bool:
+    """True for a profile v2: its target levels replace the v1 seniority keyword lists
+    (no target level then means every level is shown)."""
+    try:
+        return int(getattr(profile, "profile_version", 1) or 1) >= 2
+    except (TypeError, ValueError):
+        return False
+
+
+def preferred_levels(profile: Any) -> list[str]:
+    """The levels scoring prefers for a v2 profile: the targets, plus the next level up with
+    ``stretch`` (the gate accepts it, so scoring must not treat it as wrong seniority)."""
+    targets = getattr(profile, "targets", None)
+    levels = [lvl for lvl in (getattr(targets, "levels", None) or []) if lvl in CAREER_RANK]
+    max_rank = allowed_max_rank(levels, bool(getattr(targets, "stretch", False)))
+    if max_rank is None:
+        return []
+    top = max(CAREER_RANK[lvl] for lvl in levels)
+    extra = [lvl for lvl in CAREER_LEVELS if top < CAREER_RANK[lvl] <= max_rank]
+    return levels + [lvl for lvl in extra if lvl not in levels]
+
+
 def career_config(profile: Any, seniority_exclusions: dict[str, list[str]]) -> dict[str, Any] | None:
-    """The gate's career-stage settings for a v2 profile with target levels, else None
-    (v1 behaviour: the hard filter's seniority keywords decide)."""
+    """The gate's career-stage settings for a v2 profile, else None (v1 behaviour: the hard
+    filter's seniority keywords decide). ``max_rank`` None: no target, nothing to check."""
+    if not uses_career_targets(profile):
+        return None
     targets = getattr(profile, "targets", None)
     levels = list(getattr(targets, "levels", []) or [])
-    if getattr(profile, "profile_version", 1) < 2 or not levels:
-        return None
     return {"max_rank": allowed_max_rank(levels, bool(getattr(targets, "stretch", False))),
             "levels": levels, "vocabulary": title_vocabulary(seniority_exclusions)}

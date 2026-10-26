@@ -188,7 +188,7 @@ def gate_items(res: GateResult) -> list[EvidenceItem]:
             items.append(_soft_penalty_item(dim, penalised[dim], res.rule_version))  # type: ignore[arg-type]
     reasoned = {GATE_DIMENSION.get(r.type) for r in res.reasons}
     req = res.requirements
-    for dim_key in ("education", "experience", "skills"):
+    for dim_key in ("education", "experience", "skills", "seniority"):
         state = res.states.get(dim_key)
         if state is None or dim_key in reasoned or state.value == "violated":
             continue
@@ -202,7 +202,7 @@ def gate_items(res: GateResult) -> list[EvidenceItem]:
         elif dim_key == "experience" and req is not None and req.experience is not None:
             x = req.experience
             observed, span = f"{x.min_years} years ({x.importance.value})", x.span
-        absent = observed is None and dim_key != "skills"
+        absent = observed is None and dim_key not in ("skills", "seniority")
         items.append(EvidenceItem(
             dimension=dim_key,  # type: ignore[arg-type]
             polarity="positive" if state.value == "satisfied" else "unknown", state=state.value,  # type: ignore[arg-type]

@@ -70,8 +70,8 @@ def test_lower_level_offer_is_not_a_conflict():
     assert a.state == ConstraintState.SATISFIED
 
 
-def test_no_target_is_not_evaluated():
-    assert _assess("Senior Engineer", max_rank=None).state == ConstraintState.UNKNOWN
+def test_no_target_is_not_a_conflict():
+    assert _assess("Senior Engineer", max_rank=None).state == ConstraintState.SATISFIED
 
 
 # Benchmark (plan F5.2): a title word, alone or contradicted by the stated years, never rejects.
@@ -136,9 +136,12 @@ def test_v2_profile_with_targets_turns_the_title_keyword_rejection_off():
     v2 = _profile(["junior"], experience={"excluded_seniority": ["senior", "lead"]})
     cfg = build_filter_config(v2, ENGINE)
     assert cfg["seniority"]["exclude"] == [] and cfg["career_level"]["max_rank"] == 2
-    # v2 without targets keeps v1 behaviour
-    assert build_filter_config(_profile([], experience={"excluded_seniority": ["senior"]}), ENGINE)[
-        "career_level"] is None
+    # v2 without target levels: every level is shown, no keyword rejection and no career check
+    empty = build_filter_config(_profile([], experience={"excluded_seniority": ["senior"]}), ENGINE)
+    assert empty["seniority"]["exclude"] == [] and empty["career_level"]["max_rank"] is None
+    gate = HardConstraintGate(user_max_education_level=None, career_level=empty["career_level"])
+    result = gate.check(JobRequirements(), _job("Senior dev"))
+    assert "seniority" not in result.states and not result.uncertainty
 
 
 def test_scoring_prefers_the_target_levels_of_a_v2_profile():
@@ -148,3 +151,41 @@ def test_scoring_prefers_the_target_levels_of_a_v2_profile():
     v2 = _profile(["graduate", "junior"], experience={"preferred_levels": ["senior"]})
     kw = lambda p: set(build_scoring_config({}, p, ENGINE)["scoring"]["seniority_match"]["preferred_level_keywords"])  # noqa: E731
     assert kw(v2) == kw(v1) == {"junior", "debutant", "entry level", "graduate"}
+
+
+def test_stretch_level_is_preferred_by_scoring_too():
+    from src.pipeline.scoring import build_scoring_config
+
+    kws = build_scoring_config({}, _profile(["mid"], stretch=True), ENGINE)["scoring"]["seniority_match"][
+        "preferred_level_keywords"]
+    assert "senior" in kws and "mid" in kws
+    assert _assess("Senior Python Developer", max_rank=allowed_max_rank(["mid"], True)).state == \
+        ConstraintState.SATISFIED
+
+
+def test_typographic_apostrophe_still_detects_people_management():
+    a = _assess("Engineering Manager Senior", "Management d\u2019équipe de 6 personnes.")
+    assert a.state == ConstraintState.VIOLATED
+
+
+def test_confirme_is_mid_level():
+    assert VOCAB["confirme"] == 3
+    assert _assess("Développeur Python confirmé", years=3,
+                   max_rank=allowed_max_rank(["mid"], False)).state == ConstraintState.SATISFIED
+
+
+def test_compound_words_are_not_level_signals():
+    assert not job_level_signals("Multi-stage Build Engineer", "", None, None, VOCAB)
+
+
+def test_rejection_carries_the_career_rule_version_and_satisfied_is_journaled():
+    from src.decisions.evidence import gate_items
+    from src.requirements.career_level import CAREER_RULE_VERSION
+
+    cfg = career_config(_profile(["junior"]), ENGINE["seniority_exclusions"])
+    gate = HardConstraintGate(user_max_education_level=None, career_level=cfg)
+    rejected = gate.check(JobRequirements(), _job("Senior Manager", "You will manage a team of 5."))
+    assert rejected.reasons[0].rule_version == CAREER_RULE_VERSION
+    fits = gate.check(JobRequirements(), _job("Développeur junior"))
+    items = [i for i in gate_items(fits) if i.dimension == "seniority"]
+    assert items and items[0].state == "satisfied" and items[0].polarity == "positive"

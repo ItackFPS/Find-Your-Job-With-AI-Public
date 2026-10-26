@@ -203,7 +203,7 @@ class HardConstraintGate:
         # Needs the job (title, description, contract); a title-only conflict is
         # UNKNOWN (review), never a rejection.
         career_state: ConstraintState | None = None
-        if self._career is not None and job is not None:
+        if self._career is not None and self._career.get("max_rank") is not None and job is not None:
             career_reasons, career_state, career_message = self._check_career(requirements, job)
             reasons.extend(career_reasons)
             if career_state == ConstraintState.UNKNOWN:
@@ -238,7 +238,7 @@ class HardConstraintGate:
     def _check_career(
         self, requirements: JobRequirements, job: object
     ) -> tuple[list[HardRejectionReason], ConstraintState, str]:
-        from src.requirements.career_level import assess_career_level, job_level_signals
+        from src.requirements.career_level import CAREER_RULE_VERSION, assess_career_level, job_level_signals
 
         cfg = self._career or {}
         signals = job_level_signals(
@@ -254,7 +254,7 @@ class HardConstraintGate:
             candidate_value=f"targets {', '.join(cfg.get('levels') or [])}",
             severity="hard",
             constraint_state=ConstraintState.VIOLATED,
-            rule_version=_RULE_VERSION,
+            rule_version=CAREER_RULE_VERSION,
             message=assessment.message,
         )], assessment.state, assessment.message
 
