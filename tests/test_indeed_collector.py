@@ -81,7 +81,7 @@ def test_collect_passes_the_query_to_jobspy_and_dedups_across_queries():
     assert (calls[0]["search_term"], calls[0]["location"], calls[0]["country_indeed"]) == ("python", "Lyon", "france")
     assert calls[0]["results_wanted"] == 200 and calls[0]["hours_old"] == 720
     assert calls[1]["search_term"] == "data engineer" and calls[1]["location"] == "France"
-    assert c.health()["requests"] == 4                         # 2 pages budgeted per query
+    assert c.health()["requests"] == 2                         # 1 page per query (2 rows each)
 
 
 def test_jobspy_error_is_reported_and_the_next_query_still_runs():
@@ -91,7 +91,8 @@ def test_jobspy_error_is_reported_and_the_next_query_still_runs():
     result = c.collect()
     assert [j["source_job_id"] for j in result.jobs] == ["c"]
     assert result.errors == ["indeed [a @ France]: response status code 403 (blocked: use a proxy)"]
-    assert c.health()["network_errors"] == 1
+    health = c.health()
+    assert health["network_errors"] == 0 and health["responses"] == 2   # Indeed answered (403), then 200
 
 
 def test_an_exception_in_jobspy_never_stops_the_run():
@@ -107,14 +108,48 @@ def test_empty_answer_is_a_genuine_empty_result():
     assert c.collect().errors == [] and c.health()["empty_results"] == 1
 
 
-def test_page_budget_stops_the_run_before_jobspy_is_called():
+def test_pages_returned_count_against_the_run_budget():
     calls = []
-    c = IndeedCollector({"queries": [{"keyword": f"q{i}"} for i in range(200)]},
-                        scrape=lambda **kw: calls.append(kw) or FakeFrame([]))
+
+    def scrape(**kw):
+        calls.append(kw)
+        return FakeFrame([_row(f"{len(calls)}-{i}") for i in range(250)])   # 3 pages
+
+    c = IndeedCollector({"queries": [{"keyword": f"q{i}"} for i in range(400)]}, scrape=scrape)
     result = c.collect()
-    assert len(calls) == 100                                    # 500 pages / 5 per query
+    assert len(calls) == 167                                    # 166 x 3 pages = 498, then 1 + 2 > 500
     assert result.errors and "request cap of 500" in result.errors[-1]
     assert c.health()["request_cap_reached"] is True
+
+
+def test_proxy_failure_is_no_answer_and_unreadable_rows_raise_the_canary():
+    from src.collectors.canary import parser_canary
+
+    c = _collector(lambda **kw: FakeFrame([], error="ProxyError('Tunnel connection failed: 403 Forbidden')"))
+    c.collect()
+    # "403 Forbidden" from the proxy is not "status code 403" from Indeed
+    assert c.health()["network_errors"] == 1 and c.health()["responses"] == 0
+
+    unreadable = [{"identifier": f"x{i}", "headline": "Dev", "blob": "y" * 600} for i in range(5)]
+    c = _collector(lambda **kw: FakeFrame(unreadable))
+    result = c.collect()
+    assert result.jobs == [] and c.health()["empty_results"] == 0
+    assert parser_canary(c, 0) == "parser_changed"
+
+
+def test_jobspy_13_errors_are_read_from_its_log():
+    import logging
+
+    def scrape(**kw):                                           # 1.3.x: logs, no attrs
+        logging.getLogger("JobSpy:Indeed").error("Indeed response status code 429")
+        frame = FakeFrame([])
+        frame.attrs = {}
+        return frame
+
+    c = _collector(scrape)
+    result = c.collect()
+    assert result.errors == ["indeed [python @ Lyon]: Indeed response status code 429"]
+    assert c.health()["last_status"] is None and c.health()["responses"] == 1 and c.health()["empty_results"] == 0
 
 
 def test_queries_are_spaced_by_the_rate_limit(monkeypatch):
@@ -125,7 +160,7 @@ def test_queries_are_spaced_by_the_rate_limit(monkeypatch):
                         scrape=lambda **kw: FakeFrame([]))
     assert c.rate_limit_delay == 2.0                             # the policy floor
     c.collect()
-    assert waits == [2.0]
+    assert waits == [2.0]                                        # measured from the end of query a
 
 
 def test_no_queries_is_an_error_without_calling_jobspy():

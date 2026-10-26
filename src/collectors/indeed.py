@@ -30,8 +30,10 @@ from __future__ import annotations
 import json
 import logging
 import math
+import re
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import date, datetime, timezone
 from typing import Any, cast
 
@@ -60,6 +62,45 @@ _COUNTRY_CODES: dict[str, str] = {
 
 ScrapeFn = Callable[..., Any]
 
+# jobspy's Indeed loggers: "JobSpy:Indeed" (1.3.x, the version the installer pins) and
+# "jobspy.indeed" (1.4.x). 1.3.x reports a failed page only by logging an ERROR; 1.4.x also
+# fills DataFrame.attrs["errors"].
+_JOBSPY_LOGGERS = ("JobSpy:Indeed", "jobspy.indeed")
+# "response status code 403", "Indeed response status code 429": Indeed answered.
+_STATUS = re.compile(r"status code (\d{3})")
+
+
+class _ErrorCollector(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__(level=logging.ERROR)
+        self.messages: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.messages.append(record.getMessage())
+
+
+@contextmanager
+def _jobspy_errors() -> Iterator[list[str]]:
+    """ERROR messages jobspy's Indeed scraper logs during the block (the same pattern as
+    src/linkedin/scanner.py::_jobspy_errors)."""
+    collector = _ErrorCollector()
+    loggers = [logging.getLogger(name) for name in _JOBSPY_LOGGERS]
+    for lg in loggers:
+        lg.addHandler(collector)
+    try:
+        yield collector.messages
+    finally:
+        for lg in loggers:
+            lg.removeHandler(collector)
+
+
+class _Answer:
+    """What _observe_response reads, for an answer jobspy received on our behalf."""
+
+    def __init__(self, status: int, text: str = "") -> None:
+        self.status_code = status
+        self.text = text
+
 
 def _default_scrape() -> ScrapeFn:
     from jobspy import scrape_jobs  # type: ignore[import-untyped]  # lazy: pandas is heavy
@@ -78,13 +119,16 @@ class IndeedCollector(BaseCollector):
         max_pages_per_query Pages of 100 per query (default: 5).
         max_jobs_per_query  Hard cap per query (default: max_pages_per_query x 100).
         date_filter_hours   Only jobs posted in the last N hours (default: 720 = 30 days).
-        rate_limit_delay    Seconds between queries (floor: rate_policy.min_delay_seconds).
+        rate_limit_delay    Seconds from the end of one query to the start of the next
+                            (floor: rate_policy.min_delay_seconds).
+
+    jobspy uses its own request timeout and retries; this collector sets neither.
     """
 
     # unofficial: the backend of Indeed's iOS app, read through python-jobspy. Opt-in.
     access_class = "unofficial"
     # jobspy fetches a query's pages back to back; queries are spaced by the delay, and
-    # every page counts against the per-run cap (25 shipped queries x 5 pages = 125).
+    # every page a query returned counts against the per-run cap.
     rate_policy = RatePolicy(min_delay_seconds=2.0, max_requests_per_run=500)
 
     def fixture(self) -> RecordedFixture:
@@ -152,30 +196,55 @@ class IndeedCollector(BaseCollector):
 
     def _collect_query(self, scrape: ScrapeFn, keyword: str, location: str) -> tuple[list[dict[str, Any]], str | None]:
         """One jobspy search. Returns ``(raw jobs, error or None)``; never raises except
-        ``RequestBudgetExceeded`` (the run's page budget is spent)."""
-        for _ in range(math.ceil(self.max_jobs_per_query / _JOBS_PER_PAGE)):
-            self._before_request(_API_ORIGIN, check_robots=False)
+        ``RequestBudgetExceeded`` (the run's page budget is spent).
+
+        Budget: the first page is charged before the call, the further pages the query
+        returned (one per 100 rows) after it. Spacing: the delay runs from the end of the
+        previous query, since a query's pages can take several seconds."""
+        self._before_request(_API_ORIGIN, check_robots=False)
         self._enforce_rate_limit()
-        try:
-            df = scrape(
-                site_name=["indeed"], search_term=keyword, location=location, country_indeed=_COUNTRY,
-                results_wanted=self.max_jobs_per_query, hours_old=self.date_filter_hours,
-                description_format="html", verbose=0,
-            )
-        except Exception as exc:  # noqa: BLE001 — one failed query must not stop the others
-            self._note_network_error()
-            logger.warning("IndeedCollector: query %r failed: %s", keyword, exc)
-            return [], str(exc)
+        with _jobspy_errors() as logged:
+            try:
+                df = scrape(
+                    site_name=["indeed"], search_term=keyword, location=location, country_indeed=_COUNTRY,
+                    results_wanted=self.max_jobs_per_query, hours_old=self.date_filter_hours,
+                    description_format="html", verbose=0,
+                )
+            except Exception as exc:  # noqa: BLE001 — one failed query must not stop the others
+                df = None
+                logged.append(str(exc))
+        self._last_request_time = (type(self)._clock or time.time)()
         attrs = getattr(df, "attrs", None) or {}
-        error = (attrs.get("errors") or {}).get("indeed")
-        records = df.to_dict("records") if hasattr(df, "to_dict") else list(df or [])
-        rows = [_map_row(r) for r in records if isinstance(r, dict)]
+        reported = (attrs.get("errors") or {}).get("indeed")
+        errors = [str(reported)] if reported else []
+        errors += [m for m in logged if m not in errors]
+        records = df.to_dict("records") if df is not None and hasattr(df, "to_dict") else []
+        records = [r for r in records if isinstance(r, dict)]
+        for _ in range(max(0, math.ceil(len(records) / _JOBS_PER_PAGE) - 1)):
+            self._before_request(_API_ORIGIN, check_robots=False)
+        rows = [_map_row(r) for r in records]
         rows = [r for r in rows if r["source_job_id"] and r["title"]]
-        if error:
-            self._note_network_error()
-        elif not rows:
+        if errors:
+            self._note_failure(errors[0])
+            logger.warning("IndeedCollector: query %r: %s", keyword, errors[0])
+            return rows, errors[0]
+        if records:
+            # Indeed answered with offers: an answer for the parser canary, which then
+            # speaks up if none of them could be read (a changed row format).
+            self._observe_response(_Answer(200, json.dumps(records, default=str)))
+        else:
+            self._observe_response(_Answer(200), parsed=False)
             self._note_empty_result()
-        return rows, (str(error) if error else None)
+        return rows, None
+
+    def _note_failure(self, message: str) -> None:
+        """A failed query: an HTTP status in the message means Indeed answered (blocked, rate
+        limited); anything else is counted as no answer at all (DNS, proxy, timeout)."""
+        m = _STATUS.search(message)
+        if m:
+            self._observe_response(_Answer(int(m.group(1))), parsed=False)
+        else:
+            self._note_network_error()
 
 
 def _text(value: Any) -> str:

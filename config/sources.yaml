@@ -149,13 +149,12 @@ sources:
     # local, research purposes.
     #
     # Pagination: jobspy fetches up to max_pages_per_query pages of 100 per query,
-    # back to back; queries are spaced by rate_limit_delay (floor 2 s), and every page
-    # counts against the 500-request cap per run.
+    # back to back, with its own timeout; queries are spaced by rate_limit_delay (floor
+    # 2 s, from the end of one query), and every page counts against the 500-request cap.
     config:
       max_pages_per_query: 5      # 5 pages × 100 jobs = 500 max per keyword
       rate_limit_delay: 2.0       # seconds between queries (jobspy pages a query itself)
       date_filter_hours: 720      # jobs posted in the last 30 days (set null to disable)
-      timeout: 20
       default_location: "France"  # used when discovery_queries are injected by orchestrator
       queries:
         # Python / data
