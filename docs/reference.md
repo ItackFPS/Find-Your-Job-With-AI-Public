@@ -15,7 +15,7 @@ Source code is the source of truth: when this page and the code disagree, the co
 | 3 | Normalization | `src/pipeline/normalize.py` | Maps source-specific payloads to the shared `Job` Pydantic model |
 | 4 | Validation | `src/pipeline/validate.py` | Rejects jobs missing required fields or with invalid data |
 | 5 | Deduplication | `src/pipeline/deduplicate.py` | Intra- and cross-source identity resolution (see below) |
-| 6 | Hard filtering | `src/pipeline/filter.py` | Location, remote policy, work mode, seniority, publication age, salary, title-keyword exclusions, contract type — first failing check rejects the job |
+| 6 | Hard filtering | `src/pipeline/filter.py` | Location, remote policy, work mode, seniority (title keywords; off for a v2 profile with target levels, where the requirements gate weighs the career stage, ADR 0004), publication age, salary, title-keyword exclusions, contract type — first failing check rejects the job |
 | 7 | Requirements gate | `src/requirements/gate.py` (`HardConstraintGate`) | Hard/soft rejection based on stated education, years of experience, and principal/mandatory skills vs. your profile (see [Job Scoring](#job-scoring)) |
 | 8 | LLM eligibility gate *(opt-in)* | `src/ai/eligibility.py` (`EligibilityGate`) | Optional local-LLM check for *implicit* mismatches the deterministic gate can't see (e.g. a title that conventionally implies a degree level without stating it). Fail-open; no-op unless enabled |
 | 9 | Deterministic scoring | `src/pipeline/scoring.py` | 5-factor weighted score with domain/seniority hard gates and a tier classification |

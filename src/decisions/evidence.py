@@ -27,7 +27,7 @@ FILTER_DIMENSION: dict[str, Dimension] = {
 }
 GATE_DIMENSION: dict[str, Dimension] = {
     "education": "education", "experience": "experience", "principal_skill": "skills",
-    "mandatory_skill": "skills", "mandatory_secondary_skill": "skills",
+    "mandatory_skill": "skills", "mandatory_secondary_skill": "skills", "career_level": "seniority",
 }
 SCRUBBED_CONFLICT = "Work-mode metadata contradicts the description (quote withheld: job text not stored)"
 
@@ -178,7 +178,8 @@ def gate_items(res: GateResult) -> list[EvidenceItem]:
     items = [reason_item(r, soft=False) for r in res.reasons]
     items += [reason_item(r, soft=True) for r in res.score_penalties]
     items += [EvidenceItem(
-        dimension="skills" if "skill" in flag.lower() or "mandatory" in flag.lower() else "other",
+        dimension=("seniority" if flag.startswith("Career level:")
+                   else "skills" if "skill" in flag.lower() or "mandatory" in flag.lower() else "other"),
         polarity="unknown", state="unknown", source=_src("requirements_gate", "gate.flag", res.rule_version),
         message=flag) for flag in res.flags]
     penalised: dict[str, float] = {"education": res.education_penalty, "experience": res.experience_penalty}

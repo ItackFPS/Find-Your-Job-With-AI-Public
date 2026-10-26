@@ -592,11 +592,17 @@ def build_scoring_config(
     # prioritizes. Confirmed against real production data: 54 jobs
     # were wrongly flagged before this alias was added.
     pref_keywords: list[str] = []
-    for lvl in profile.experience.preferred_levels:
+    # Profile v2 with target levels (F5.2): the targets are the preferred levels.
+    targets = getattr(getattr(profile, "targets", None), "levels", None) or []
+    preferred = (list(targets) if getattr(profile, "profile_version", 1) >= 2 and targets
+                 else profile.experience.preferred_levels)
+    for lvl in preferred:
         pref_keywords.append(lvl.replace("_", " "))
         pref_keywords.extend(SENIORITY_FR_SYNONYMS.get(lvl, []))
         if lvl == "internship":
             pref_keywords.extend(["intern", "trainee"])
+        if lvl == "graduate" and targets:
+            pref_keywords.append("entry level")   # v1 "entry_level" is folded into "graduate"
     seniority_cfg["preferred_level_keywords"] = pref_keywords
 
     # Inject preferred countries so location scoring can

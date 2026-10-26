@@ -809,6 +809,7 @@ def run_pipeline(
                     principal_skill_gate=getattr(profile.matching, "principal_skill_gate", True),
                     mandatory_skill_gate=getattr(profile.matching, "mandatory_central_skill_gate", True),
                     profile_version_hash=stats.profile_hash,
+                    career_level=filters_config.get("career_level"),
                 )
                 edu_penalty = getattr(profile.matching, "education_preferred_penalty", 0.20)
 
