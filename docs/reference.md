@@ -126,7 +126,7 @@ class. A shared retry/backoff/rate-limit layer lives in `src/collectors/base.py`
 | RemoteOK | `remoteok` | REST API | None | **Active** |
 | Jobicy | `jobicy` | REST API | None | **Active** |
 | We Work Remotely | `weworkremotely` | RSS/Atom | None | **Active** |
-| Indeed | `indeed` | Unofficial mobile GraphQL API | `INDEED_API_KEY` (Indeed's iOS app key, not shipped; without it the source is skipped) | **Active** — cursor-based pagination |
+| Indeed | `indeed` | Unofficial (Indeed's mobile API, read through python-jobspy) | none; opt-in: `unofficial_sources.indeed` in `data/settings.json` (an older `INDEED_API_KEY` counts as opted in) | **Active when chosen** — jobspy pages each query |
 | EURES | `eures` | Public REST API | None | **Active** |
 | Bundesagentur für Arbeit | `bundesagentur` | REST API | None | Disabled — Germany-only; every result fails this project's location filter |
 | Arbetsförmedlingen | `arbetsformedlingen` | REST API | None | Disabled — Sweden-only, same reason |

@@ -138,25 +138,22 @@ sources:
     ats: null
     board_identifier: null
     active: true
-    # Indeed mobile GraphQL API — same endpoint as Indeed's iOS app.
-    # No browser required.  Verified 2026-08-31 (Phase 0 benchmark):
-    #   500 jobs collected across 5 pages in 7.1 s, zero blocking, full descriptions.
+    # Read through python-jobspy (MIT), which ships the client of Indeed's iOS app
+    # (src/collectors/indeed.py, plan F6.3). No key to set.
     #
-    # API key: Indeed's iOS app key, read from INDEED_API_KEY (.env); not shipped
-    # in this repository (python-jobspy, MIT, ships a working value). Without it
-    # the collector makes no request and reports one error.
+    # Unofficial source, opt-in (plan rule I1): the preflight skips it unless the user
+    # chose it (data/settings.json, unofficial_sources.indeed: true; an older install
+    # that set INDEED_API_KEY counts as having chosen it).
     #
     # Terms: automated access is prohibited by Indeed ToS.  Use only for personal,
     # local, research purposes.
     #
-    # Stopping conditions: no cursor / empty page / all-duplicate page /
-    # max_pages_per_query / max_jobs_per_query / API error / key revocation.
-    #
-    # Pagination: 100 jobs/page, cursor-based (nextCursor in pageInfo).
-    # Rate limit: 0.5 s between page requests (conservative; no documented limit).
+    # Pagination: jobspy fetches up to max_pages_per_query pages of 100 per query,
+    # back to back; queries are spaced by rate_limit_delay (floor 2 s), and every page
+    # counts against the 500-request cap per run.
     config:
       max_pages_per_query: 5      # 5 pages × 100 jobs = 500 max per keyword
-      rate_limit_delay: 0.5       # seconds between page requests
+      rate_limit_delay: 2.0       # seconds between queries (jobspy pages a query itself)
       date_filter_hours: 720      # jobs posted in the last 30 days (set null to disable)
       timeout: 20
       default_location: "France"  # used when discovery_queries are injected by orchestrator

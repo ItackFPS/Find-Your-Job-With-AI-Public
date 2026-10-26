@@ -315,7 +315,6 @@ Copy `.env.example` to `.env`; every variable is optional.
 | Variable(s) | For |
 |---|---|
 | `FRANCE_TRAVAIL_CLIENT_ID` / `FRANCE_TRAVAIL_CLIENT_SECRET` | the France Travail collector ([developer.francetravail.fr](https://developer.francetravail.fr), scope `o2dsoffre api_offresdemploiv2`) |
-| `INDEED_API_KEY` | the Indeed collector: the API key of Indeed's iOS app, not shipped here (python-jobspy ships one); without it Indeed is skipped |
 | `PHASE2_LLM_PROVIDER`, `PHASE2_LLM_ENDPOINT`, `PHASE2_LLM_MODEL_NAME`, … | local LLM, see [Local AI](#local-ai) |
 | `API_ALLOWED_HOSTS` | extra `Host` names the backend accepts (e.g. `host.docker.internal`) |
 | `API_SAME_USER_ONLY` | `1` serves only processes of the account running the backend |

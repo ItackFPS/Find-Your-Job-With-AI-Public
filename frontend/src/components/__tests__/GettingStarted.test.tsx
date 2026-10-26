@@ -17,7 +17,8 @@ describe('GettingStarted', () => {
     renderGuide()
     expect(screen.getByText('FRANCE_TRAVAIL_CLIENT_ID')).toBeInTheDocument()
     expect(screen.getByText('FRANCE_TRAVAIL_CLIENT_SECRET')).toBeInTheDocument()
-    expect(screen.getByText('INDEED_API_KEY')).toBeInTheDocument()
+    // Indeed needs no key since it goes through python-jobspy (F6.3)
+    expect(screen.queryByText('INDEED_API_KEY')).not.toBeInTheDocument()
   })
 
   it('links to the profile page', () => {
