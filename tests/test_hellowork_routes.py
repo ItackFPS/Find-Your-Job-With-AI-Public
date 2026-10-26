@@ -81,7 +81,7 @@ class TestStatus:
         body = resp.json()
         assert body == {
             "enabled": False, "waiting": 0, "last_scan": None, "is_scanning": False,
-            "state": "idle", "progress": None,
+            "state": "idle", "progress": None, "resume_after": None,
         }
 
     def test_enabled_with_waiting_count(self, staging) -> None:

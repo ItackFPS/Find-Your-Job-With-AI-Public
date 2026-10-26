@@ -6,8 +6,9 @@ notification categories the user opted into; the tray app reads them through
 ``GET /api/settings/notifications`` before each Windows notification.
 
 It also holds the user's choice for each *unofficial* source (``unofficial_sources``, plan rule
-I1, F6.3): off on a fresh install. Until the consent screen exists (F6.5), an install that
-already configured the source the old way (``INDEED_API_KEY``) counts as having chosen it.
+I1, F6.3/F6.4: Indeed, LinkedIn, HelloWork): off on a fresh install. Until the consent screen
+exists (F6.5), an install that already set the source up the old way (``INDEED_API_KEY``) or
+already ran a LinkedIn/HelloWork scan counts as having chosen it.
 
 Categories (default on: the two a user would not want to miss):
 
@@ -92,12 +93,22 @@ def update_notification_settings(path: Path, changes: Mapping[str, Any]) -> dict
 UNOFFICIAL_LEGACY_ENV: dict[str, str] = {"indeed": "INDEED_API_KEY"}
 
 
-def unofficial_source_enabled(path: Path | None, source: str) -> bool:
-    """Whether the user chose to collect from the unofficial ``source``. The stored choice
-    (``unofficial_sources.<source>``, a boolean) wins; else the legacy setup; else off.
-    ``path`` None (no settings file known, e.g. a test): only the legacy setup counts."""
+def unofficial_source_choice(path: Path | None, source: str) -> bool | None:
+    """The stored choice for the unofficial ``source`` (``unofficial_sources.<source>``), or
+    None when the user has not chosen (or ``path`` is None)."""
     stored = _read(path).get("unofficial_sources") if path is not None else None
     if isinstance(stored, dict) and isinstance(stored.get(source), bool):
         return bool(stored[source])
+    return None
+
+
+def unofficial_source_enabled(path: Path | None, source: str, *, used_before: bool = False) -> bool:
+    """Whether the user chose to collect from the unofficial ``source``. The stored choice
+    wins; else the legacy setup (``UNOFFICIAL_LEGACY_ENV``) or ``used_before`` (the caller
+    knows the install already ran this source: an observed choice, plan rule I1); else off.
+    ``path`` None (no settings file known, e.g. a test): only the legacy signals count."""
+    choice = unofficial_source_choice(path, source)
+    if choice is not None:
+        return choice
     env = UNOFFICIAL_LEGACY_ENV.get(source)
-    return bool(env and os.environ.get(env, "").strip())
+    return used_before or bool(env and os.environ.get(env, "").strip())

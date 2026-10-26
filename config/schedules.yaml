@@ -3,17 +3,24 @@
 # Each entry defines one scheduled background job.
 # The scheduler reads this file on startup and upserts definitions into SQLite.
 #
-# Shipped default: both scans are MANUAL (startup_policy: disabled). Nothing
-# is collected until you press "Scan now" on the dashboard, so a first start
-# never sends queries built from the example profile. To scan automatically,
-# set startup_policy: run_once_per_day on an entry and restart the backend.
+# Shipped default: both scans run daily ONLY for a source you chose (startup_policy:
+# when_opted_in, plan rule I1). LinkedIn and HelloWork are unofficial sources: off on a
+# fresh install, so a first start never sends queries built from the example profile.
+# You choose a source in data/settings.json ("unofficial_sources": {"linkedin": true});
+# an install that already ran a scan of a source counts as having chosen it. "Scan now"
+# on the dashboard always works.
 #
 # startup_policy options:
 #   run_once_per_day  — trigger a run on backend startup if no successful run
 #                       has occurred today (UTC midnight boundary).
 #                       Also re-triggers automatically when a UTC day rolls over
 #                       while the backend is running.
+#   when_opted_in     — run_once_per_day for a source the user chose; disabled otherwise.
 #   disabled          — never run automatically (manual trigger only).
+#
+# Rate limits (F6.4): a scan stopped on the source's first 429 waits out a cooldown
+# (1 h, doubled per consecutive rate-limited attempt, at most 24 h), then resumes from
+# its checkpoint, more slowly at first. It is not a failure and uses no retry.
 #
 # Retries (per UTC day, see src/scheduler/service.py):
 #   retry_max            — automatic retries allowed after a FAILED attempt
@@ -31,7 +38,7 @@ schedules:
     source_id: linkedin
     label: "LinkedIn daily scan"
     enabled: true
-    startup_policy: disabled           # manual; run_once_per_day = once per UTC day at startup/rollover
+    startup_policy: when_opted_in      # daily once LinkedIn is chosen; manual before
     retry_max: 0                       # no automatic retry on failure
     retry_delay_seconds: 300
 
@@ -44,7 +51,7 @@ schedules:
     # and src/collectors/hellowork.py). The scheduler auto-triggers a
     # pipeline run after this completes, which snapshots the staged jobs
     # in ~0s (src/api/runner.py) rather than waiting on a live collection.
-    startup_policy: disabled           # manual; run_once_per_day = once per UTC day
+    startup_policy: when_opted_in      # daily once HelloWork is chosen; manual before
     retry_max: 0
     retry_delay_seconds: 300
 

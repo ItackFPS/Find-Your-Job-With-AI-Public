@@ -11,8 +11,11 @@ Compliance notes:
   - It does NOT bypass authentication, CAPTCHAs, or access controls.
   - Configurable request delays (rate_limit_seconds) must be respected.
   - Users are responsible for compliance with LinkedIn's Terms of Service.
-  - 429 / 503 responses cause the current query to abort gracefully; already
-    persisted jobs are safe. The scan continues with the next query.
+  - The first 429 (search page or description fetch) stops the whole scan at a
+    checkpointed boundary; the scheduler resumes it after a cooldown (1 h, doubled
+    per consecutive rate-limited attempt, at most 24 h — src/scan_control.py).
+    Requests are spaced by an AdaptivePacer: slower after a rate-limit resume,
+    back to rate_limit_seconds after clean pages, never a burst (plan F6.4).
 
 Pagination stopping conditions (per query):
   1. JobSpy returns an empty DataFrame → query exhausted.
@@ -43,11 +46,17 @@ from src.linkedin.staging import LinkedInStagingStorage
 from src.requirements.principal_skill import extract_known_technologies
 from src.scan_control import (
     STATE_PAUSED,
+    STATE_RATE_LIMITED,
     STATE_RUNNING,
+    AdaptivePacer,
+    RateLimited,
     StopSignal,
     config_fingerprint,
+    cooling_until,
     interrupted_checkpoint_id,
+    is_rate_limit_message,
     persist_pause,
+    record_rate_limit,
     record_shutdown_stop,
     resumable_scan_id,
     scan_state,
@@ -755,6 +764,10 @@ class LinkedInScanner:
         self._pause_event = threading.Event()
         self._stop = StopSignal(self._shutdown_event, self._pause_event)
         self._last_scan_paused = False
+        self._last_scan_rate_limited = False
+        # Spacing of search pages and of description fetches (F6.4); rebuilt per scan.
+        self._pacer = AdaptivePacer(self.config.rate_limit_seconds)
+        self._desc_pacer = AdaptivePacer(self.config.description_fetch_delay)
         # Running statistics of the logical scan (issue #86): restored from
         # the checkpoint's stats_json when a scan resumes and saved with
         # every page, so they cover all attempts. Active time is measured
@@ -809,6 +822,17 @@ class LinkedInScanner:
     def last_scan_paused(self) -> bool:
         """Whether the most recently finished run_scan() stopped for a user pause."""
         return self._last_scan_paused
+
+    def last_scan_rate_limited(self) -> bool:
+        """Whether the most recently finished run_scan() stopped on a 429 (F6.4)."""
+        return self._last_scan_rate_limited
+
+    def rate_limited_until(self) -> str | None:
+        """ISO time a rate-limited scan may resume, while that is still ahead (F6.4)."""
+        if self.is_scanning():
+            return None
+        until = cooling_until(self.staging.get_scan_checkpoint())
+        return until.isoformat() if until is not None else None
 
     def scan_state(self) -> str:
         """idle | running | pausing | paused | interrupted (see src/scan_control.py)."""
@@ -1020,6 +1044,7 @@ class LinkedInScanner:
 
     def _do_scan(self, scan_id: str) -> None:
         self._last_scan_paused = False
+        self._last_scan_rate_limited = False
         # A previous scan's attempt counters must never feed this scan's
         # live ETA, even before its checkpoint is loaded below.
         self._attempt_started = time.monotonic()
@@ -1095,6 +1120,10 @@ class LinkedInScanner:
             completed_query_keys: set[str] = set()
             resume_query_key: str | None = None
             resume_page = 0
+            # After a rate limit, resume slowly (F6.4: no burst after a resume).
+            after_limit = bool(checkpoint) and (checkpoint or {}).get("state") == STATE_RATE_LIMITED
+            self._pacer = AdaptivePacer(self.config.rate_limit_seconds, resumed=after_limit)
+            self._desc_pacer = AdaptivePacer(self.config.description_fetch_delay, resumed=after_limit)
             if checkpoint:
                 self.staging.set_checkpoint_state(scan_id, "running", create_if_missing=False)
                 completed_query_keys = set(json.loads(checkpoint.get("completed_queries_json") or "[]"))
@@ -1145,12 +1174,10 @@ class LinkedInScanner:
                     )
                     continue
 
-                if i > 0 and self.config.rate_limit_seconds > 0:
-                    logger.debug(
-                        "LinkedIn: waiting %.1fs before next query.",
-                        self.config.rate_limit_seconds,
-                    )
-                    if wait_for_stop(self._stop, self.config.rate_limit_seconds):
+                if i > 0 and self._pacer.base > 0:
+                    wait = self._pacer.delay()
+                    logger.debug("LinkedIn: waiting %.1fs before next query.", wait)
+                    if wait_for_stop(self._stop, wait):
                         stopped_for_shutdown = True
                         break
                 start_page = resume_page if key == resume_query_key else 0
@@ -1160,6 +1187,14 @@ class LinkedInScanner:
                         start_page=start_page,
                         completed_query_keys=completed_query_keys,
                     )
+                except RateLimited as exc:
+                    # LinkedIn answered 429: stop the whole scan now (continuing with the
+                    # next query would keep hitting it) and resume after the cooldown.
+                    # _run_query left the checkpoint at the page to fetch next.
+                    logger.warning("LinkedIn: rate limited during query %r: %s", query.search_term, exc)
+                    self._last_scan_completed = False
+                    self._last_scan_rate_limited = record_rate_limit(self.staging, scan_id, "LinkedIn") is not None
+                    return
                 except Exception as exc:  # noqa: BLE001
                     # Do NOT mark this query complete: a caught transient
                     # failure (network error, jobspy/scraper exception, a DB
@@ -1426,13 +1461,10 @@ class LinkedInScanner:
                 )
                 q_stats.stopped_by = self._stopped_by()
                 break
-            if page > 0 and self.config.rate_limit_seconds > 0:
-                logger.debug(
-                    "LinkedIn: waiting %.1fs before page %d.",
-                    self.config.rate_limit_seconds,
-                    page,
-                )
-                if wait_for_stop(self._stop, self.config.rate_limit_seconds):
+            if page > 0 and self._pacer.base > 0:
+                wait = self._pacer.delay()
+                logger.debug("LinkedIn: waiting %.1fs before page %d.", wait, page)
+                if wait_for_stop(self._stop, wait):
                     q_stats.stopped_by = self._stopped_by()
                     break
 
@@ -1451,11 +1483,17 @@ class LinkedInScanner:
             with _jobspy_errors() as jobspy_errors:
                 df = scrape_jobs(**kwargs)
 
+            rate_limit = next((e for e in jobspy_errors if is_rate_limit_message(e)), None)
+            if (df is None or df.empty) and rate_limit:
+                # The checkpoint already points at this page: the resume re-fetches it.
+                raise RateLimited(rate_limit)
             if (df is None or df.empty) and jobspy_errors:
-                # Rate limited or blocked, not exhausted: fail the query so it is neither
+                # Blocked or failed, not exhausted: fail the query so it is neither
                 # reported nor checkpointed as done (the caller keeps it resumable).
+                self._pacer.penalize()
                 raise RuntimeError(f"python-jobspy returned no rows and reported: {jobspy_errors[0]}")
             if jobspy_errors:
+                self._pacer.penalize()
                 logger.warning(
                     "LinkedIn: query %r page %d returned %d row(s) but python-jobspy reported: %s",
                     query.search_term, page, len(df), "; ".join(jobspy_errors),
@@ -1476,6 +1514,7 @@ class LinkedInScanner:
             now_iso = datetime.now(UTC).isoformat()
             staged_this_page = 0
             page_aborted = False
+            description_limited = False
 
             for _, row in df.iterrows():
                 try:
@@ -1522,8 +1561,8 @@ class LinkedInScanner:
                     ):
                         jid = record.get("linkedin_job_id", "")
                         q_stats.jobs_description_attempted += 1
-                        if self.config.description_fetch_delay > 0 and wait_for_stop(
-                            self._stop, self.config.description_fetch_delay
+                        if self._desc_pacer.base > 0 and wait_for_stop(
+                            self._stop, self._desc_pacer.delay()
                         ):
                             # Stop requested mid-page: abandon the rest of this
                             # page WITHOUT checkpointing it, so a resume
@@ -1532,6 +1571,12 @@ class LinkedInScanner:
                             page_aborted = True
                             break
                         fetched_desc, fetch_status = fetch_linkedin_description_classified(jid)
+                        if fetch_status == "rate_limited":
+                            # Abandon the page without checkpointing it: the resume after
+                            # the cooldown re-fetches it (rows staged so far are upserted).
+                            description_limited = True
+                            break
+                        self._desc_pacer.on_success()
                         if fetched_desc:
                             record["description"] = fetched_desc
                             record["description_fetched"] = 1
@@ -1569,6 +1614,9 @@ class LinkedInScanner:
 
                 except Exception as exc:  # noqa: BLE001
                     logger.warning("LinkedIn: could not process job row: %s", exc)
+
+            if description_limited:
+                raise RateLimited(f"description fetch rate limited on page {page}")
 
             if page_aborted:
                 logger.info(
@@ -1610,6 +1658,11 @@ class LinkedInScanner:
                     "LinkedIn: could not persist scan checkpoint after page %d: %s",
                     page, exc,
                 )
+            if rate_limit:
+                # Rows came back before the 429: they are staged and checkpointed; stop now.
+                raise RateLimited(rate_limit)
+            if not jobspy_errors:
+                self._pacer.on_success()
 
         else:
             # for-loop exhausted max_pages without a break → safety limit reached
