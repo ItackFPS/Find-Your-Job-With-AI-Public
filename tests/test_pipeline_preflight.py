@@ -221,7 +221,7 @@ class TestPipelinePreflightWiring:
         assert "FRANCE_TRAVAIL_CLIENT_ID" in skipped["reason"]
         assert any("France Travail skipped" in e for e in result.stats.errors)
 
-    def test_indeed_without_api_key_is_skipped_visibly_and_never_called(self, tmp_path, monkeypatch):
+    def test_indeed_not_chosen_is_skipped_visibly_and_never_called(self, tmp_path, monkeypatch):
         from src.pipeline.orchestrator import run_pipeline
 
         monkeypatch.delenv("INDEED_API_KEY", raising=False)
@@ -240,9 +240,31 @@ class TestPipelinePreflightWiring:
         mock_collect.assert_not_called()
         assert result.status == "completed", result.error
         assert result.stats.preflight["skipped_source_types"] == ["indeed"]
+        assert result.stats.preflight["status"] == "READY"        # off by choice: not degraded
         assert result.stats.by_source["indeed"]["status"] == "skipped"
-        assert "INDEED_API_KEY" in result.stats.by_source["indeed"]["reason"]
-        assert any(e.startswith("Indeed skipped for this run") for e in result.stats.errors)
+        assert "unofficial source" in result.stats.by_source["indeed"]["reason"]
+
+    def test_indeed_chosen_in_settings_next_to_the_database_runs(self, tmp_path, monkeypatch):
+        from src.collectors.base import CollectorResult
+        from src.pipeline.orchestrator import run_pipeline
+
+        monkeypatch.delenv("INDEED_API_KEY", raising=False)
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "sources.yaml").write_text(
+            "sources:\n  - {name: indeed, type: indeed, active: true}\n", encoding="utf-8")
+        (tmp_path / "settings.json").write_text('{"unofficial_sources": {"indeed": true}}', encoding="utf-8")
+
+        mock_embed = MagicMock()
+        mock_embed.embed.return_value = [0.1] * 384
+        with patch("src.collectors.indeed.IndeedCollector.collect",
+                   return_value=CollectorResult(source_name="indeed", jobs=[], errors=[])) as mock_collect, patch(
+            "src.embeddings.embedding.EmbeddingService", return_value=mock_embed
+        ):
+            result = run_pipeline(db_path=str(tmp_path / "test.db"), config_dir=str(config_dir))
+
+        mock_collect.assert_called_once()
+        assert result.stats.preflight["skipped_source_types"] == []
 
     def test_preflight_runs_exactly_once_per_run(self, tmp_path):
         from src.pipeline import preflight as preflight_module
@@ -292,19 +314,18 @@ class TestIndeedPreflight:
         (config_dir / "sources.yaml").write_text(
             f"sources:\n  - {{name: indeed, type: indeed, active: {str(active).lower()}}}\n", encoding="utf-8")
 
-    def test_active_indeed_without_key_is_skipped(self, tmp_path, monkeypatch):
+    def test_active_indeed_not_chosen_is_skipped(self, tmp_path, monkeypatch):
         monkeypatch.delenv("INDEED_API_KEY", raising=False)
         self._sources(tmp_path, active=True)
         result = run_preflight(str(tmp_path))
-        assert (result.status, result.ready) == ("DEGRADED", True)
+        assert (result.status, result.ready) == ("READY", True)    # the default, not a degradation
         assert result.skipped_source_types == ["indeed"]
-        assert "INDEED_API_KEY" in result.skip_reasons["indeed"]
-        assert ".env" in result.skip_reasons["indeed"]
+        assert "unofficial source" in result.skip_reasons["indeed"]
         assert any("Indeed skipped" in line for line in result.report_lines)
-        assert not result.errors  # optional source: never blocks the run
+        assert not result.errors and not result.degraded_errors
 
-    def test_indeed_with_key_or_inactive_is_not_skipped(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("INDEED_API_KEY", SECRET)
+    def test_indeed_chosen_legacy_key_or_inactive_is_not_skipped(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("INDEED_API_KEY", SECRET)            # an older install's setup: chosen
         self._sources(tmp_path, active=True)
         result = run_preflight(str(tmp_path))
         assert result.skipped_source_types == [] and result.status == "READY"
@@ -312,6 +333,16 @@ class TestIndeedPreflight:
         monkeypatch.delenv("INDEED_API_KEY")
         self._sources(tmp_path, active=False)
         assert run_preflight(str(tmp_path)).skipped_source_types == []
+
+    def test_stored_choice_wins_over_the_legacy_key(self, tmp_path, monkeypatch):
+        self._sources(tmp_path, active=True)
+        settings = tmp_path / "settings.json"
+        settings.write_text('{"unofficial_sources": {"indeed": true}}', encoding="utf-8")
+        monkeypatch.delenv("INDEED_API_KEY", raising=False)
+        assert run_preflight(str(tmp_path), settings_path=settings).skipped_source_types == []
+        settings.write_text('{"unofficial_sources": {"indeed": false}}', encoding="utf-8")
+        monkeypatch.setenv("INDEED_API_KEY", SECRET)
+        assert run_preflight(str(tmp_path), settings_path=settings).skipped_source_types == ["indeed"]
 
 
 class TestOverallPreflightStatus:

@@ -13,8 +13,10 @@ an inactive source is skipped rather than failing the run.
 France Travail with no credentials at all (a fresh install) is not a broken
 connection but one that was never set up: the run goes ahead DEGRADED without
 that source, the skip named in the report and the run's errors. Credentials
-that are present but fail to authenticate still block the run. Indeed without
-its API key (``INDEED_API_KEY``) is skipped the same way.
+that are present but fail to authenticate still block the run. Indeed is an
+unofficial source, off unless the user chose it (``src.app_settings``, plan rule
+I1): when it is off it is skipped with that reason, which is the intended default
+and does not mark the run degraded.
 
 Never raises: any unexpected error while checking is captured as a failed
 status for that integration, since a preflight that crashes is worse than
@@ -71,7 +73,7 @@ class PreflightResult:
 _READY_LIKE = frozenset({"READY", "SKIPPED"})
 
 
-def run_preflight(config_dir: str = "config") -> PreflightResult:
+def run_preflight(config_dir: str = "config", settings_path: str | Path | None = None) -> PreflightResult:
     """Check France Travail connectivity/auth before collection starts.
 
     France Travail is a collection source: an active source whose credentials
@@ -80,16 +82,19 @@ def run_preflight(config_dir: str = "config") -> PreflightResult:
     active source with no credentials set was never configured: it is skipped
     for this run, visibly (status DEGRADED), so a fresh install can still
     collect from the sources that need no account.
+
+    ``settings_path``: the app settings file (``data/settings.json``) holding the user's
+    choice of unofficial sources; None reads no file (the legacy setup alone decides).
     """
     ft = _check_france_travail(config_dir)
-    indeed_missing = _indeed_key_missing(config_dir)
+    indeed_off = _indeed_not_chosen(config_dir, settings_path)
 
     ft_unconfigured = ft.status == "CONFIG_MISSING"
     ft_ok = ft.status in _READY_LIKE or ft_unconfigured
 
     if not ft_ok:
         status = "FAILED"
-    elif ft_unconfigured or indeed_missing:
+    elif ft_unconfigured:
         status = "DEGRADED"
     else:
         status = "READY"
@@ -101,14 +106,12 @@ def run_preflight(config_dir: str = "config") -> PreflightResult:
     skip_reasons: dict[str, str] = {}
     if ft_unconfigured:
         skip_reasons["france_travail"] = ft.detail or "credentials are not set"
-    if indeed_missing:
-        skip_reasons["indeed"] = _INDEED_MISSING
+    if indeed_off:
+        skip_reasons["indeed"] = _INDEED_OFF
 
     degraded_errors: list[str] = []
     if ft_unconfigured:
         degraded_errors.append(f"France Travail skipped for this run: {ft.detail}")
-    if indeed_missing:
-        degraded_errors.append(f"Indeed skipped for this run: {_INDEED_MISSING}")
 
     result = PreflightResult(
         france_travail=ft, status=status, ready=ft_ok,
@@ -123,15 +126,15 @@ def run_preflight(config_dir: str = "config") -> PreflightResult:
 # Indeed
 # ---------------------------------------------------------------------------
 
-_INDEED_MISSING = (
-    "INDEED_API_KEY is not set. Indeed is optional: the other sources still run. "
-    "To use it, set INDEED_API_KEY in .env (see .env.example)."
+_INDEED_OFF = (
+    "Indeed is off. It is an unofficial source (Indeed has no public API), so it only "
+    "runs if you choose it; the other sources still run."
 )
 
 
-def _indeed_key_missing(config_dir: str) -> bool:
-    """An active Indeed source without its API key: the collector could only fail."""
-    from src.collectors.indeed import _api_key
+def _indeed_not_chosen(config_dir: str, settings_path: str | Path | None) -> bool:
+    """An active Indeed source the user has not chosen (plan rule I1)."""
+    from src.app_settings import unofficial_source_enabled
     from src.discovery.registry import SourceRegistry
 
     try:
@@ -140,7 +143,7 @@ def _indeed_key_missing(config_dir: str) -> bool:
         logger.warning("Preflight: could not read sources.yaml: %s", exc)
         return False
     active = any(s.get("type") == "indeed" and s.get("active", True) for s in registry.all_sources)
-    return active and not _api_key()
+    return active and not unofficial_source_enabled(Path(settings_path) if settings_path else None, "indeed")
 
 
 # ---------------------------------------------------------------------------
