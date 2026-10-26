@@ -143,7 +143,7 @@ def run_decisions(
     (``gate_results``/``filtered``) used by later slices.
     """
     from src.pipeline.filter import build_filter_config, filter_jobs, load_filters, load_profile
-    from src.requirements.education import parse_education_level
+    from src.requirements.education import candidate_education
     from src.requirements.extractor import RequirementExtractor
     from src.requirements.gate import HardConstraintGate, gate_jobs
 
@@ -161,7 +161,7 @@ def run_decisions(
     timings["filter"] = time.perf_counter() - t0
 
     llm = _build_llm(strategy)
-    user_max_edu = parse_education_level(profile.max_education) if profile.max_education else None
+    user_max_edu, user_edu_label = candidate_education(profile)
     user_max_years = None
     if profile.experience is not None:
         user_max_years = getattr(profile.experience, "max_years", None)
@@ -178,6 +178,7 @@ def run_decisions(
         mandatory_skill_gate=getattr(profile.matching, "mandatory_central_skill_gate", True),
         profile_version_hash="evaluation",
         career_level=filters_config.get("career_level"),
+        user_education_label=user_edu_label,
     )
     edu_penalty = getattr(profile.matching, "education_preferred_penalty", 0.20)
 

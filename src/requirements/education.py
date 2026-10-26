@@ -30,6 +30,11 @@ EDUCATION_LEVEL_MAP: dict[str, int] = {
     "bts": 2,
     "dut": 2,
     "deust": 2,
+    "deug": 2,
+    "but": 3,
+    "licence pro": 3,
+    "cap": -1,
+    "bep": -1,
     "bac+3": 3,
     "licence": 3,
     "bachelor": 3,
@@ -139,6 +144,16 @@ _EDUCATION_PATTERNS: list[tuple[re.Pattern[str], int, str]] = [
     (re.compile(r"\bdeust\b", re.I), 2, "DEUST"),
     (re.compile(r"\bhnd\b", re.I), 2, "HND"),
     (re.compile(r"\bhnc\b", re.I), 2, "HNC"),
+    (re.compile(r"\bdeug\b", re.I), 2, "DEUG"),
+
+    # BUT (bachelor universitaire de technologie, level 6 = Bac+3). Upper case only:
+    # "but" is an English word.
+    (re.compile(r"\bB\.?U\.?T\b\.?"), 3, "BUT"),
+
+    # CAP / BEP (level 3, below the Bac = -1). Upper case and a degree cue only
+    # ("titulaire d'un CAP"): "CAP" is also the distributed-systems theorem.
+    (re.compile(r"\bCAP\b"), -1, "CAP"),
+    (re.compile(r"\bBEP\b"), -1, "BEP"),
 ]
 
 # ---------------------------------------------------------------------------
@@ -640,7 +655,7 @@ def find_level_evidence(text: str, level_bac_plus: int) -> EvidenceSpan | None:
 # Maîtrise degree was discontinued with the LMD reform. It therefore counts as
 # an education mention only when a degree cue precedes it in the same sentence:
 # "titulaire d'une maîtrise", "diplômé d'un bac et d'une maîtrise" (#51).
-_DEGREE_CUE_REQUIRED = frozenset({"Maîtrise"})
+_DEGREE_CUE_REQUIRED = frozenset({"Maîtrise", "CAP", "BEP"})
 _DEGREE_CUE = re.compile(r"\b(?:titulaire|dipl[oô]m[eé]e?s?|dipl[oô]me)\b", re.I)
 _DEGREE_CUE_LOOKBACK_CHARS = 60
 
@@ -837,3 +852,21 @@ def extract_education(text: str) -> EducationRequirement | None:
         return max(preparing, key=lambda r: r.level_bac_plus)
 
     return max(found, key=lambda r: r.level_bac_plus)
+
+
+def candidate_education(profile: object) -> tuple[int | None, str | None]:
+    """``(max Bac+N, display label)`` the requirements gate compares offers against.
+
+    Profile v2 with a held qualification (F5.3): its highest French/EQF level, as the
+    highest Bac+N that level covers, labelled "level 6 (BUT)". Otherwise the v1
+    ``max_education`` string (no label: the gate words it as Bac+N).
+    """
+    from src.models.levels import level_to_max_bac_plus
+
+    held = [e for e in (getattr(profile, "education", None) or [])
+            if getattr(e, "level", None) is not None and not getattr(e, "in_progress", False)]
+    if int(getattr(profile, "profile_version", 1) or 1) >= 2 and held:
+        top = max(held, key=lambda e: e.level)
+        return level_to_max_bac_plus(top.level), f"level {top.level} ({top.qualification})"
+    raw = getattr(profile, "max_education", None)
+    return (parse_education_level(raw) if raw else None), None

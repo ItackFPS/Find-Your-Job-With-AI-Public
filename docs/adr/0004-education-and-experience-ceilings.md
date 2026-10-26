@@ -88,3 +88,17 @@ alone or a title contradicted by the stated years, is `UNKNOWN`: the offer passe
 a "Career level" flag (review), never a rejection. Years above `max_years` stay with the experience
 ceiling above. A v2 profile with no target level shows every level. A v1 profile keeps the keyword
 rejection.
+
+## Amendment (2026-10, profile v2 F5.3): education by French/EQF level
+
+A v2 profile declares qualifications at the French national levels 3–8, which share their numbers
+with EQF levels 3–8 (décret n° 2019-14). Examples: CAP 3, Bac 4, BTS/DUT/DEUG 5,
+Licence/Licence pro/BUT and the maîtrise 6, Master/ingénieur 7, Doctorat 8. A foreign degree takes
+the level the user picks. Offers keep their `bac+N` reading and map it to a level (Bac+1 → 4,
+Bac+4 → 6, Bac+6/+7 → 7). The gate receives the highest Bac+N the candidate's highest held level
+covers (`level_to_max_bac_plus`), so every rule above (mandatory vs preferred vs "or equivalent
+experience", enrolment, soft penalty) is unchanged and compares levels. One consequence is intended:
+"Bac+4 minimum" no longer rejects a Licence or BUT holder, because both are level 6. Messages name
+levels ("level 7 (Bac+5) required; you declared level 6 (BUT)") and never call two qualifications
+equivalent. In-progress qualifications are not held. A v2 profile without a held level, and any v1
+profile, keeps `max_education`.
