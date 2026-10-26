@@ -924,7 +924,11 @@
       "excludedSeniority": "Excluded seniority keywords",
       "maxYears": "Max years of experience (optional)",
       "noLimit": "No limit",
-      "maxEducation": "Maximum education level (Bac+N)"
+      "maxEducation": "Maximum education level (Bac+N)",
+      "targetLevels": "Target career levels",
+      "targetLevelsHint": "A seniority word in a job title alone never rejects an offer: it is kept and flagged for review.",
+      "stretch": "Show stretch roles",
+      "stretchHint": "Also match roles one level above your highest target."
     },
     "options": {
       "remote": "remote",

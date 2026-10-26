@@ -924,7 +924,11 @@
       "excludedSeniority": "Mots-clés de séniorité exclus",
       "maxYears": "Années d’expérience maximum (facultatif)",
       "noLimit": "Sans limite",
-      "maxEducation": "Niveau de diplôme maximum (Bac+N)"
+      "maxEducation": "Niveau de diplôme maximum (Bac+N)",
+      "targetLevels": "Niveaux de carrière visés",
+      "targetLevelsHint": "Un mot de séniorité dans le titre d'une offre ne la rejette jamais à lui seul : elle est conservée et signalée pour vérification.",
+      "stretch": "Afficher les postes un cran au-dessus",
+      "stretchHint": "Inclut aussi les postes d'un niveau au-dessus de votre niveau visé le plus élevé."
     },
     "options": {
       "remote": "télétravail",

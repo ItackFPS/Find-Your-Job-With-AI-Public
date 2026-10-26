@@ -4,7 +4,7 @@ import {
   getProfile, updateProfile, confirmProfileReview, searchEscoSkills, searchEscoOccupations,
   getAllDepartments, searchPlaces,
   type Profile, type EscoEntry, type EscoSuggestion, type FrenchDepartment, type LocationPreference,
-  type HomePlace, type PlaceSuggestion, type RemotePolicy,
+  type HomePlace, type PlaceSuggestion, type RemotePolicy, type CareerLevel,
 } from '../api/client'
 import { useTranslation } from 'react-i18next'
 import { Card, LoadingState, Switch } from '../components'
@@ -1080,6 +1080,9 @@ export default function ProfilePage() {
   const contractOptions = ['full-time', 'part-time', 'internship', 'freelance']
   const seniorityOptions = ['junior', 'mid', 'senior', 'lead', 'director', 'executive']
   const levelOptions = ['junior', 'mid', 'senior', 'lead']
+  // Profile v2 (F5.2): target career levels replace the keyword lists above.
+  const targets = (profile.profile_version ?? 1) >= 2 ? profile.targets ?? null : null
+  const careerLevels: CareerLevel[] = ['internship', 'alternance', 'graduate', 'junior', 'mid', 'senior', 'lead', 'manager']
 
   return (
     <div>
@@ -1244,15 +1247,33 @@ export default function ProfilePage() {
       </Card>
 
       <Card style={{ marginBottom: '1rem' }} title={t('profile.sections.experience')}>
-        <div style={{ ...fieldGroup, marginTop: 'var(--space-4)' }}>
-          <span style={label}>{t('profile.fields.preferredLevels')}</span>
-          <CheckboxGroup options={levelOptions} values={profile.experience.preferred_levels} onChange={v => setExp('preferred_levels', v)} labelFor={optionLabel} />
-        </div>
+        {targets ? (
+          <>
+            <div style={{ ...fieldGroup, marginTop: 'var(--space-4)' }}>
+              <span style={label}>{t('profile.fields.targetLevels')}</span>
+              <CheckboxGroup options={careerLevels} values={targets.levels}
+                onChange={v => set('targets', { ...targets, levels: v as CareerLevel[] })}
+                labelFor={l => t(`profile.review.levels.${l}`)} />
+              <span style={{ fontSize: '0.8rem', color: 'var(--color-muted)' }}>{t('profile.fields.targetLevelsHint')}</span>
+            </div>
+            <div style={fieldGroup}>
+              <Switch checked={targets.stretch} onChange={v => set('targets', { ...targets, stretch: v })}
+                label={t('profile.fields.stretch')} description={t('profile.fields.stretchHint')} />
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ ...fieldGroup, marginTop: 'var(--space-4)' }}>
+              <span style={label}>{t('profile.fields.preferredLevels')}</span>
+              <CheckboxGroup options={levelOptions} values={profile.experience.preferred_levels} onChange={v => setExp('preferred_levels', v)} labelFor={optionLabel} />
+            </div>
 
-        <div style={fieldGroup}>
-          <span style={label}>{t('profile.fields.excludedSeniority')}</span>
-          <CheckboxGroup options={seniorityOptions} values={profile.experience.excluded_seniority} onChange={v => setExp('excluded_seniority', v)} />
-        </div>
+            <div style={fieldGroup}>
+              <span style={label}>{t('profile.fields.excludedSeniority')}</span>
+              <CheckboxGroup options={seniorityOptions} values={profile.experience.excluded_seniority} onChange={v => setExp('excluded_seniority', v)} />
+            </div>
+          </>
+        )}
 
         <div style={fieldGroup}>
           <span style={label}>{t('profile.fields.maxYears')}</span>
