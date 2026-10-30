@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from src.decisions.active_strategy import resolve_active_strategy
-from src.evaluation.dataset import DatasetError, load_dataset
+from src.evaluation.dataset import Dataset, DatasetError, load_dataset
 from src.evaluation.models import StrategyRef
 from src.lab.bundle import BundleError, create_bundle
 from src.lab.experiment import run_experiment
@@ -76,6 +76,14 @@ def _confirm(summary: str) -> bool:
     except EOFError:
         return False
     return typed.strip() == code
+
+
+def _split(dataset: Dataset, split: str | None) -> Dataset:
+    """``dataset`` restricted to ``split``; by default a real dataset's tuning part, so exploring and trying
+    variants never touch the held-out labels that judge pre-registered changes (P2.4)."""
+    from src.evaluation.heldout import restrict
+
+    return restrict(dataset, split or ("tuning" if dataset.manifest.kind == "real" else "all"))  # type: ignore[arg-type]
 
 
 def _approval_summary(evidence: dict[str, Any]) -> str:
@@ -166,10 +174,13 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("candidate_id")
     r.add_argument("dataset")
     r.add_argument("--base-config", default=ACTIVE)
+    r.add_argument("--profile", default=None, help="profile to replay with when the dataset pins none")
+    r.add_argument("--split", choices=("all", "heldout", "tuning"), default=None, help="labels to use (src/evaluation/heldout.py); default: tuning for a real dataset, all otherwise")
     a = sub.add_parser("approve", help="HUMAN approval of an eligible experiment")
     a.add_argument("experiment_id")
     a.add_argument("--dataset", required=True, help="the experiment's dataset: its evidence is recomputed from it")
     a.add_argument("--profile", default=None, help="profile the experiment was replayed with, if the dataset pins none")
+    a.add_argument("--split", choices=("all", "heldout", "tuning"), default=None, help="labels to use (src/evaluation/heldout.py); default: tuning for a real dataset, all otherwise")
     a.add_argument("--accept-exploratory-evidence", action="store_true",
                    help="approve although the evidence is not independently validated (recorded)")
     a.add_argument("--by", required=True)
@@ -189,6 +200,8 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("dataset")
     g.add_argument("--base-config", default=ACTIVE)
     g.add_argument("--profile", default=None, help="profile to replay with when the dataset pins none")
+    g.add_argument("--split", choices=("all", "tuning"), default=None,
+                   help="never the held-out part: the agent explores and tunes (default: tuning for a real dataset)")
     g.add_argument("--store", default=DEFAULT_STORE)
     g.add_argument("--max-hypotheses", type=int, default=5)
     g.add_argument("--no-experiments", action="store_true")
@@ -299,8 +312,9 @@ def main(argv: list[str] | None = None) -> int:
                 print(lab.add_candidate(ns.hypothesis_id, digest, str(path), ov))
             elif ns.cmd == "run":
                 cand = lab.get_candidate(ns.candidate_id)
-                ds = load_dataset(ns.dataset, require_complete_labels=False)
-                res = run_experiment(ds, StrategyRef(config_dir=_base_config(ns)), cand["bundle_path"], name=ns.candidate_id)
+                ds = _split(load_dataset(ns.dataset, require_complete_labels=False), ns.split)
+                res = run_experiment(ds, StrategyRef(config_dir=_base_config(ns), profile_path=ns.profile),
+                                     cand["bundle_path"], name=ns.candidate_id)
                 eid = lab.add_experiment(ns.candidate_id, ds.manifest.model_dump(), res)
                 print(json.dumps({"experiment_id": eid, **{k: res[k] for k in
                       ("verdict", "explanation", "eligible_for_approval", "fixed", "broken", "guardrails",
@@ -308,7 +322,7 @@ def main(argv: list[str] | None = None) -> int:
             elif ns.cmd == "agent":
                 from src.lab.agent import render_report, run_agent
 
-                ds = load_dataset(ns.dataset)
+                ds = _split(load_dataset(ns.dataset), ns.split)
                 report = run_agent(lab, ds, StrategyRef(config_dir=_base_config(ns), profile_path=ns.profile),
                                    bundle_store=ns.store, max_hypotheses=ns.max_hypotheses,
                                    experiment=not ns.no_experiments)
@@ -329,7 +343,7 @@ def main(argv: list[str] | None = None) -> int:
                     stale = "" if item["stale"] is None else (" STALE" if item["stale"] else "")
                     print(f"{item['item_id']}  {item['kind']:<11} {item['status']:<10}{stale}  {item['statement'][:160]}")
             elif ns.cmd == "approve":
-                ds = load_dataset(ns.dataset, require_complete_labels=False)
+                ds = _split(load_dataset(ns.dataset, require_complete_labels=False), ns.split)
                 print(f"re-running experiment {ns.experiment_id} on {ds.path} (the lab's stored verdict is not trusted)...",
                       file=sys.stderr)
 
