@@ -5,7 +5,8 @@ Usage:
     python scripts/uninstall_startup.py
 
 What it does:
-    - Deletes the Windows Task Scheduler task created by install_startup.py.
+    - Deletes the Windows Task Scheduler task that scripts/install_startup.py (removed in
+      2.0; use ``FindYourJob.cmd autostart on`` instead) created in 1.x.
     - The backend will no longer start automatically on login.
     - Running the backend manually (scripts/Start_backend.bat) still works.
     - No administrator privileges required.

@@ -243,7 +243,7 @@ enrich, never decide eligibility on their own
 
 | Component | Required | Managed by |
 |---|---|---|
-| Backend + dashboard | yes | the launcher, a logon task (`scripts/install_startup.py`), or you |
+| Backend + dashboard | yes | the launcher (`FindYourJob.cmd autostart on` at sign-in), or you |
 | SQLite databases | yes | the backend (created and upgraded in place) |
 | Embedding model | yes | its ONNX export, downloaded from Hugging Face on first use |
 | LM Studio / Ollama | only for AI-enabled runs | you; the launcher only reports its state |
