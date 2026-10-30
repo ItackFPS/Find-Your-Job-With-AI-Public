@@ -51,8 +51,8 @@ The phase order that supersedes the waves from 2026-10-30 is in the completion p
 |---|---|---|---|
 | F0.1 baselines | R | done #45 | `docs/baselines/v1.0.0.md`; full run duration not measured |
 | F0.2 personal labels | T | owner data exists | `real-v1` 250 labels (K2), not yet read by the self-check; blind real-v2 labelling in the app = completion plan P2.3 |
-| F0.3 FT coverage benchmark | T | ready | needs 7 calendar days of background runs (P1) |
-| F1.1–F1.3 removals | R | merged #40, #58, #74; **no UI** for F1.3 | source health API has no screen yet (P1.2); leftover wording cleaned in #74 (the 5678 probe stays) |
+| F0.3 FT coverage benchmark | T | ready | background collection exists since P1 (#77, #81); 7 calendar days of runs not collected yet (P2.7) |
+| F1.1–F1.3 removals | R | done #40, #58, #74, #83 | source health, last error and breaker reset in Settings › Sources (#83); leftover wording cleaned in #74 (the 5678 probe stays) |
 | F1.4 APEC, WTTJ browser, crawl4ai | R | done #51 | old configs listing them are skipped with a reason |
 | F2.1–F2.5 desktop | R | merged #42, #52, #54, #55 | installer acceptance with window, tray, autostart and quit not run yet (P7) |
 | F3.1 ONNX | R | done #43, #46 | Spearman 1.000 on 1,000 jobs; installer 62.1 MB without the model; first-run download UI = P3.3 |
@@ -65,10 +65,10 @@ The phase order that supersedes the waves from 2026-10-30 is in the completion p
 | F5.5 CV import | T | ready | P3.6 |
 | F6.1 source contract | R | done #58 | access classes, robots, rate caps, breaker + reset API, parser canary |
 | F6.2 FT web | R | merged #44 | F0.3 coverage report pending |
-| F6.3 Indeed via jobspy | R | merged #68 | opt-in only through `data/settings.json` until F6.5 (P1.2) |
-| F6.4 background pacing | R | merged #70 | a 429 stops the scan, cooldown 1 h → 24 h, resumes slower; opted-in sources daily; consent screen = F6.5 (P1.2) |
-| F6.5 consent | R | ready | P1.2 |
-| F6.6 expiry + provenance | R | ready | P1.4 (contract: own plan; migration registry P1.3 first) |
+| F6.3 Indeed via jobspy | R | merged #68, #83 | opt-in in Settings › Sources with its risk sentence and date (#83) |
+| F6.4 background pacing | R | merged #70, #91 | a 429 stops the scan, cooldown 1 h → 24 h, resumes slower; opted-in sources daily; robots.txt `Crawl-delay` honoured (EURES 10 s, #91) |
+| F6.5 consent | R | merged #83, #92 | off by default, risk sentence, choice stored with its date; a scan started by hand is never taken for a choice (#92; a 1.x install's scan history is recorded once as its choice) |
+| F6.6 expiry + provenance | R | merged #85, #87, #88, #90, #89 | provenance "Seen on …"; expiry by end date, user report, or misses counted **only by sources that read their whole listing** (#90: FT web shows 20 of 961 offers per page); Settings › Data cleanup with a safety copy first (#89), rehearsed on a copy of the 3.5 GB DB |
 | F7.1 i18n skeleton | R | merged #53 | EN+FR 780 keys; backend prose → codes still to do |
 | F7.2 EN+FR (R), ES/IT/DE beta (T) | R/T | blocked | P6 |
 | F7.3 posting language | T | ready | P4 |
@@ -81,9 +81,9 @@ The phase order that supersedes the waves from 2026-10-30 is in the completion p
 | F9.2–F9.3 | T | ready | P6 |
 | F10.1 design system | R | done #48 | |
 | F10.2, F10.4 pages | R | ready | P6 (each phase ships its own screens, R-C2) |
-| F10.3 settings | T → **R** | ready | promoted by R-Q3/R-C2/R-C3: Settings › Sources (P1.2), AI (P3.2), Data/Language (P3.5) |
+| F10.3 settings | T → **R** | partly merged | Background, Daily runs, Sources (#81, #83, #92) and Data (#89) done; AI (P3.2), Language (P3.5) to do |
 | F11.1 slim installer | R | blocked | P7 |
-| New: daily pipeline schedule | R | merged #77; **no UI** yet | `pipeline_daily` once per UTC day after the profile is saved, one catch-up run, waits for scans; Settings page = P1.2 |
+| New: daily pipeline schedule | R | merged #77, #79, #81, #83, #92 | `pipeline_daily` once per local day at the chosen time after the profile is saved, one catch-up run, waits for scans, a manual run counts; a run that reached no source is retried (#92); background switch and Daily runs card in Settings |
 | New: embedding first-run download UI | R | ready | audit D8, R-Q4 → P3.3 |
 | New: port evaluation work from the private repo | R | ready | R-Q7 → P2.1 |
 
@@ -95,19 +95,26 @@ next (2026-10-25). Order from the completion plan §P (approved 2026-10-30):
 1. P0 done (2026-10-30): #71 record, #70 merged, #72 CI fix, #73 version `2.0.0.dev0`, #74
    leftovers, local worktree inventory and cleanup (57 merged worktrees removed, the rest kept with
    reasons; inventory kept outside the repo with the owner's data).
-2. P1 (in progress): daily pipeline schedule (#77) → Settings › Sources and background (next) →
-   migration registry → expiry + provenance → source follow-ups.
-3. P2: ports (ranking metrics, sampling cohorts, top-scored stratum, rejected-pool scan, approval
+2. P1 merged (2026-10-30): daily schedule (#77, #79, #81), Settings › Sources and background
+   (#83), migration registry (#85), provenance + expiry (#87, #88, fixed by #90), Settings › Data
+   (#89), D12 source/security follow-ups (#91), scheduler/Settings review fixes (#92). Acceptance
+   still **not verified as stated**: the 24 h window-closed run from a fresh install and the
+   FT web + EURES duplicate with two provenances in a real run (tests cover both mechanisms; see the
+   completion plan, P1 status).
+3. **Next — P2** (no labelling and no change to a candidate production database until the owner
+   confirms which database the everyday app opens, R-A2): ports (ranking metrics, sampling cohorts, top-scored stratum, rejected-pool scan, approval
    diff) → pre-registration → in-app blind calibration (owner labels 100 representative offers) →
    held-out split → personal sets in the self-check and Quality page → FP analysis → FT coverage.
 4. P3 (while labels are collected): profile v2 UI, AI setup UI, embedding download, wizard,
    Settings › Data/Language, CV import.
 5. P4 ranking quality, P5 AI analysis, P6 polish, P7 release qualification (owner approval to release).
 
-Blocked on the owner: confirm which database the everyday app uses (before P1.4/P2.3); 100 blind
-labels (P2.3); usability testers and machines (P7).
+Blocked on the owner: confirm which database the everyday app uses (before P2.3 and before any
+migration runs on it; candidates: the private `data/jobs.db` 3.5 GB, the v1.0.0 install's
+`%LOCALAPPDATA%\Programs\Find Your Job With AI V1\data\jobs.db`, a leftover preview install);
+100 blind labels (P2.3); usability testers and machines (P7).
 
-Follow-ups recorded from reviews: CORS allows the Vite dev origin when `API_SAME_USER_ONLY` is off (pre-existing); installer pins have no hashes (`--require-hashes`); retire `scripts/install_startup.py`; ~~drop 5678 from the lab relay ports~~ (won't do: an n8n left by a pre-2.0 install can still relay to the API, so the probe stays, #74); EURES robots `Crawl-delay: 10` not honoured; backend `apply_url` scheme validation.
+Follow-ups recorded from reviews: the D12 items (dev origins, installer hashes, `install_startup.py`, EURES `Crawl-delay`, link schemes) are closed by #91; the 5678 lab relay probe stays (#74). Open, proposed as issues: per-scope expiry completeness (an offer from a query or board the user removed is still counted missing by a complete source); 463 legacy `status = 'inactive'` rows in the owner's large DB; pre-existing orphan rows in derived tables (3,624 embeddings, 3,722 personalization cache rows, 158 FTS, 60 AI analyses on the owner's DB copy); a startup catch-up run can be followed within the hour by the new period's run.
 
 ## Log
 
@@ -119,3 +126,6 @@ Follow-ups recorded from reviews: CORS allows the Vite dev origin when `API_SAME
 - 2026-10-30: #70 (F6.4) self-reviewed and merged under K1 (owner decision R-Q2). Main 4eb1f03.
 - 2026-10-30: `main` CI turned red after CI picked up pytest 9.2.0 (its `monkeypatch.setattr` deleted Starlette `app.state` attributes on teardown; 78 errors, not caused by #70). Fixed by #72 (tests patch `app.state._state` with `setitem`, regression test).
 - 2026-10-30: #73 (`2.0.0.dev0`) and #74 (n8n/Discord wording; a comment edit in `config/scoring.yaml` was reverted because the strategy fingerprint hashes config bytes) merged. Phase 0 complete. Main 9031f0c.
+- 2026-10-30: P1 merged: #77, #79, #81 (daily pipeline at a local time, manual run counts, background switch), #83 (Settings › Sources and background, consent), #85 (migration registry), #87 (provenance), #88 (expiry), #90 (expiry counts a miss only after a **complete** collection: a France Travail web page lists 20 of 961 offers, so #88 alone would have expired most open FT web offers in 3 days), #89 (Settings › Data cleanup: safety copy first, no search or scan during it; rehearsed on a copy of the 3.5 GB DB: 14,704 offers removed in 71 s, 3.68 → 3.25 GB, integrity ok, protected offers kept), #91 (D12: dev origins in dev mode only, http(s) links only, `Crawl-delay`, `install_startup.py` retired, installer `--require-hashes` verified on CPython 3.12), #92 (a manual scan is never a source choice; a daily run that reached no source is retried; background-off wording).
+- 2026-10-30: live check of a fresh copy of `main` 371cd6d (own empty `data/`, example profile): before the profile was saved nothing ran and LinkedIn/HelloWork showed "not chosen"; once it was saved the scheduler started `pipeline_daily` by itself (trigger `scheduled`), which completed in 8.4 min (FT web 640 collected, EURES 1,824 with its 10 s Crawl-delay, RemoteOK 401, WWR 195, Jobicy 75; 691 offers stored; FT API and Indeed skipped with reasons; no source claimed a complete listing, so no miss was counted). Settings showed the run, its time, the next run (next day 08:00) and each source's result. No cross-source duplicate occurred in that run. Not done: the 24 h window-closed run. UX gap noted: the FT API row shows a raw environment-variable message and "Collected" while skipped.
+- 2026-10-30: final P1 checks on `main` 371cd6d: `pytest -m "not network"` 5396 passed, 9 skipped, 0 failed; frontend lint clean, 294 tests passed, build OK. Phase 1 merged; next: Phase 2.
