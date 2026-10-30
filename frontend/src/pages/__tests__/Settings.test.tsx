@@ -82,6 +82,11 @@ beforeEach(() => {
     'PUT /settings/background': { enabled: false, daily_time: '08:00' },
     'POST /scheduler/run/pipeline_daily': { exec_id: 'e3', status: 'started' },
     'PUT /sources/indeed/choice': { enabled: true, chosen_at: '2026-10-30T09:00:00+00:00' },
+    'GET /settings/data': {
+      database_bytes: 3.5 * 2 ** 30, offers: { active: 1200, expired: 340 },
+      removable_expired: { '30': 300, '90': 120, '180': 40 }, backups: [], cleanup: { state: 'idle' },
+    },
+    'POST /settings/data/cleanup': { state: 'running' },
     'POST /sources/remoteok/breaker/reset': { source: 'remoteok', consecutive_failures: 0, paused: false, paused_until: null, last_failure_reason: null },
   }
 })
@@ -143,6 +148,18 @@ describe('Settings › Sources and background', () => {
     expect(within(remoteok).getByText(/paused after 3 failures in a row/i)).toBeInTheDocument()
     await userEvent.click(within(remoteok).getByRole('button', { name: /try again now/i }))
     expect(calls).toContainEqual({ method: 'POST', url: '/sources/remoteok/breaker/reset', body: undefined })
+  })
+
+  it('removes old expired offers only after a confirmation', async () => {
+    renderPage()
+    const remove = await screen.findByRole('button', { name: 'Remove 120 offers' })
+    expect(screen.getByText(/3\.5 GB/)).toBeInTheDocument()
+    await userEvent.click(remove)
+    expect(calls.some(c => c.url === '/settings/data/cleanup')).toBe(false)
+    const dialog = screen.getByRole('alertdialog', { name: /confirm removal/i })
+    expect(dialog).toHaveTextContent(/cannot be undone/i)
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Remove' }))
+    expect(calls).toContainEqual({ method: 'POST', url: '/settings/data/cleanup', body: { older_than_days: 90 } })
   })
 
   it('reports a section that cannot load', async () => {

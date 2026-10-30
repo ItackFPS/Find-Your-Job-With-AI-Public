@@ -1153,6 +1153,29 @@
         "linkedin": "LinkedIn",
         "hellowork": "HelloWork"
       }
+    },
+    "data": {
+      "title": "Données",
+      "subtitle": "La place occupée par la base de données de l'application, et la suppression des offres clôturées depuis longtemps.",
+      "summary": "Base de données : {size} · {active, number} offres ouvertes · {expired, number} offres expirées",
+      "backups": "{count, plural, one {# copie de sécurité faite} other {# copies de sécurité faites}} avant des mises à jour de la base ({size}), dans le dossier backups.",
+      "olderThan": "Supprimer les offres expirées depuis plus de",
+      "days": "{count, plural, one {# jour} other {# jours}}",
+      "keeps": "Les offres sur lesquelles vous avez donné un avis, postulé ou fait un suivi sont toujours conservées.",
+      "remove": "{count, plural, =0 {Rien à supprimer} one {Supprimer # offre} other {Supprimer # offres}}",
+      "confirmTitle": "Confirmer la suppression",
+      "confirm": "{count, plural, one {Supprimer définitivement # offre expirée ?} other {Supprimer définitivement # offres expirées ?}} Cette action est irréversible.",
+      "confirmYes": "Supprimer",
+      "cancel": "Annuler",
+      "running": "Suppression et compactage en cours… cela peut prendre une minute sur une grosse base.",
+      "done": "{count, plural, one {# offre supprimée} other {# offres supprimées}}. Base de données : {before} → {after}.",
+      "failedRun": "Le nettoyage n'a pas abouti. Rien n'a été perdu ; réessayez plus tard.",
+      "failed": "Impossible de lancer le nettoyage. Réessayez.",
+      "busy": {
+        "search_running": "Une recherche est en cours. Réessayez quand elle sera terminée.",
+        "scan_running": "Une analyse est en cours. Réessayez quand elle sera terminée.",
+        "cleanup_running": "Un nettoyage est déjà en cours."
+      }
     }
   }
 }
