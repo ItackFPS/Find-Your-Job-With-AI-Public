@@ -66,6 +66,29 @@ def test_only_old_expired_offers_nobody_acted_on_are_removed(tmp_path: Path) -> 
     assert "old" not in _ids(db, "job_provenance", "job_id")
     assert "old" not in _ids(db, "job_fts", "id")
     assert result["bytes_after"] > 0
+    assert result["compacted"] is True
+    # a safety copy holding the removed offer was made first
+    backup = tmp_path / "backups" / result["backup"]
+    assert "old" in _ids(backup)
+
+
+def test_nothing_is_removed_without_a_safety_copy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.storage import cleanup
+
+    db = tmp_path / "jobs.db"
+    _seed(db)
+    monkeypatch.setattr(cleanup, "backup_database", lambda *a, **k: None)   # e.g. a full disk
+    with pytest.raises(cleanup.CleanupRefused):
+        remove_expired(db, older_than_days=90, now=NOW)
+    assert "old" in _ids(db)
+
+
+def test_nothing_to_remove_makes_no_copy(tmp_path: Path) -> None:
+    db = tmp_path / "jobs.db"
+    _seed(db)
+    result = remove_expired(db, older_than_days=3000, now=NOW)
+    assert (result["removed"], result["backup"]) == (0, None)
+    assert not (tmp_path / "backups").exists()
 
 
 def test_the_summary_counts_what_each_age_would_remove(tmp_path: Path) -> None:
@@ -124,3 +147,4 @@ def test_the_cleanup_waits_for_a_running_search(client, monkeypatch: pytest.Monk
     r = client.post("/api/settings/data/cleanup", json={"older_than_days": 30})
     assert (r.status_code, r.json()["detail"]) == (409, "search_running")
     assert client.post("/api/settings/data/cleanup", json={"older_than_days": 1}).status_code == 422
+

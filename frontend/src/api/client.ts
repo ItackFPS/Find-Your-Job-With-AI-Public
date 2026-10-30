@@ -927,6 +927,8 @@ export interface DataSettings {
     removed?: number
     bytes_before?: number
     bytes_after?: number
+    backup?: string | null
+    compacted?: boolean
     error?: string
   }
 }

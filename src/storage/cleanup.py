@@ -5,8 +5,11 @@ longer than the chosen age are removed, never an offer the user acted on: one wi
 feedback, an outcome event (applied, viewed…) or an application status is kept, so labels
 and the history built from them stay whole. Data derived from a removed offer goes with it
 (search index, embedding, provenance, AI analysis, personalization cache). Pipeline-run
-history has its own retention (config/retention.yaml). The file is then compacted
-(``VACUUM``), which needs free disk space about the size of the database.
+history has its own retention (config/retention.yaml). Before anything is removed the
+database is copied to ``backups/`` (src/storage/migrations.py ``backup_database``); without
+that copy (not enough free disk space) nothing is removed. The file is then compacted
+(``VACUUM``), which needs free disk space about the size of the database; a compaction that
+fails leaves the removal done and says so (``compacted: False``).
 """
 
 from __future__ import annotations
@@ -15,6 +18,8 @@ import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+from src.storage.migrations import backup_database
 
 # An offer referenced here is the user's record and is never removed.
 PROTECTING_TABLES: tuple[str, ...] = ("job_feedback", "feedback_events", "outcome_events")
@@ -27,6 +32,10 @@ DERIVED_TABLES: tuple[tuple[str, str], ...] = (
     ("personalization_score_cache", "job_id"),
 )
 AGE_CHOICES: tuple[int, ...] = (30, 90, 180)
+
+
+class CleanupRefused(RuntimeError):
+    """Nothing was removed: the database could not be copied first."""
 
 
 def _tables(conn: sqlite3.Connection) -> set[str]:
@@ -76,9 +85,10 @@ def data_summary(db_path: Path, now: datetime | None = None) -> dict[str, Any]:
     }
 
 
-def remove_expired(db_path: Path, older_than_days: int, now: datetime | None = None) -> dict[str, int]:
-    """Remove the expired offers older than ``older_than_days`` (and their derived rows), then
-    compact the file. Returns ``{"removed", "bytes_before", "bytes_after"}``."""
+def remove_expired(db_path: Path, older_than_days: int, now: datetime | None = None) -> dict[str, Any]:
+    """Copy the database, remove the expired offers older than ``older_than_days`` (and
+    their derived rows), then compact the file. Returns ``{"removed", "backup", "compacted",
+    "bytes_before", "bytes_after"}``; raises ``CleanupRefused`` when the copy cannot be made."""
     if older_than_days < 1:
         raise ValueError("older_than_days must be at least 1")
     now = now or datetime.now(UTC)
@@ -90,14 +100,24 @@ def remove_expired(db_path: Path, older_than_days: int, now: datetime | None = N
         conn.execute("CREATE TEMP TABLE removed_offers AS SELECT id FROM jobs WHERE " + _removable_where(conn),
                      (cutoff,))
         removed = conn.execute("SELECT COUNT(*) FROM removed_offers").fetchone()[0]
+        backup = None
+        if removed:
+            backup = backup_database(conn, db_path, "removing expired offers", now)
+            if backup is None:
+                raise CleanupRefused("backup_failed")
         with conn:
             for table, column in DERIVED_TABLES:
                 if table in tables:
                     conn.execute(f"DELETE FROM {table} WHERE {column} IN (SELECT id FROM removed_offers)")
             conn.execute("DELETE FROM jobs WHERE id IN (SELECT id FROM removed_offers)")
         conn.execute("DROP TABLE removed_offers")
-        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        conn.execute("VACUUM")
+        try:
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            conn.execute("VACUUM")
+            compacted = True
+        except sqlite3.OperationalError:  # no disk space for the rewrite, or the file is busy
+            compacted = False
     finally:
         conn.close()
-    return {"removed": removed, "bytes_before": before, "bytes_after": database_bytes(db_path)}
+    return {"removed": removed, "backup": backup.name if backup else None, "compacted": compacted,
+            "bytes_before": before, "bytes_after": database_bytes(db_path)}

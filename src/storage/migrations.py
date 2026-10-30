@@ -73,9 +73,8 @@ def pending_data_migrations(conn: sqlite3.Connection, migrations: Iterable[DataM
 def backup_before_migrating(conn: sqlite3.Connection, db_path: Path, now: datetime | None = None) -> bool:
     """Copy a large database before its data migrations run (issue #86).
 
-    Below ``BACKUP_MIN_BYTES`` nothing is copied. Otherwise the database is copied to
-    ``<folder>/backups/<name>-<UTC time>.db`` with SQLite's backup API, keeping the last
-    ``BACKUPS_KEPT``. Returns False, after logging why, only when the copy cannot be made
+    Below ``BACKUP_MIN_BYTES`` nothing is copied. Otherwise the database is copied with
+    ``backup_database``. Returns False, after logging why, only when the copy cannot be made
     (not enough free disk space, or an error): the caller then leaves the migrations for
     the next start rather than running them without a backup."""
     try:
@@ -84,19 +83,31 @@ def backup_before_migrating(conn: sqlite3.Connection, db_path: Path, now: dateti
         return True  # a new or in-memory database: nothing to keep
     if size < BACKUP_MIN_BYTES:
         return True
+    return backup_database(conn, db_path, "migrating", now) is not None
+
+
+def backup_database(conn: sqlite3.Connection, db_path: Path, purpose: str,
+                    now: datetime | None = None) -> Path | None:
+    """Copy the database to ``<folder>/backups/<name>-<UTC time>.db`` with SQLite's backup
+    API, keeping the last ``BACKUPS_KEPT``, before ``purpose`` (a data migration, a
+    cleanup). Returns the copy, or None after logging why it could not be made (not
+    enough free disk space, or an error)."""
+    try:
+        size = db_path.stat().st_size
+    except OSError as exc:
+        logger.warning("Database backup before %s: cannot read %s (%s).", purpose, db_path, exc)
+        return None
     backups = db_path.parent / "backups"
     try:
         backups.mkdir(parents=True, exist_ok=True)
         free = shutil.disk_usage(backups).free
     except OSError as exc:
-        logger.warning("Database backup before migrating: cannot prepare %s (%s); migrations postponed.", backups, exc)
-        return False
+        logger.warning("Database backup before %s: cannot prepare %s (%s).", purpose, backups, exc)
+        return None
     if free < size * 1.1:
-        logger.warning(
-            "Database backup before migrating: %d MB needed, %d MB free on %s; migrations postponed.",
-            size // 2**20, free // 2**20, backups,
-        )
-        return False
+        logger.warning("Database backup before %s: %d MB needed, %d MB free on %s.",
+                       purpose, size // 2**20, free // 2**20, backups)
+        return None
     stamp = (now or datetime.now(UTC)).strftime("%Y%m%dT%H%M%SZ")
     target = backups / f"{db_path.stem}-{stamp}.db"
     started = time.perf_counter()
@@ -108,14 +119,14 @@ def backup_before_migrating(conn: sqlite3.Connection, db_path: Path, now: dateti
         finally:
             dest.close()
     except sqlite3.Error as exc:
-        logger.warning("Database backup before migrating failed (%s); migrations postponed.", exc)
+        logger.warning("Database backup before %s failed (%s).", purpose, exc)
         target.unlink(missing_ok=True)
-        return False
-    logger.info("Database backed up to %s before migrating (%d MB in %.1f s).",
-                target, size // 2**20, time.perf_counter() - started)
+        return None
+    logger.info("Database backed up to %s before %s (%d MB in %.1f s).",
+                target, purpose, size // 2**20, time.perf_counter() - started)
     for old in sorted(backups.glob(f"{db_path.stem}-*.db"))[:-BACKUPS_KEPT]:
         old.unlink(missing_ok=True)
-    return True
+    return target
 
 
 def apply_data_migrations(conn: sqlite3.Connection, migrations: Iterable[DataMigration]) -> list[str]:

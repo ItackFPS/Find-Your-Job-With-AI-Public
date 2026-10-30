@@ -91,11 +91,13 @@ export function DataCard() {
                 before: size(cleanup.bytes_before ?? 0, i18n.language),
                 after: size(cleanup.bytes_after ?? 0, i18n.language),
               })}
+              {cleanup.backup && <> {t('settings.data.doneBackup', { name: cleanup.backup })}</>}
+              {cleanup.compacted === false && <> {t('settings.data.notCompacted')}</>}
             </p>
           )}
           {cleanup?.state === 'failed' && (
             <p role="alert" style={{ margin: 0, color: 'var(--color-error)' }} title={cleanup.error ?? undefined}>
-              {t('settings.data.failedRun')}
+              {t(cleanup.error === 'backup_failed' ? 'settings.data.failedBackup' : 'settings.data.failedRun')}
             </p>
           )}
         </div>
