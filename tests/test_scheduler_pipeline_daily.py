@@ -225,6 +225,22 @@ def test_a_completed_scan_starts_the_pipeline_through_its_schedule(tmp_path: Pat
     assert pipeline.dispatch_calls == 1
 
 
+def test_a_failed_pipeline_start_leaves_the_scan_completed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pipeline, scan, runner = _Handler(), _Handler(), _IdleRunner()
+    svc = _service(tmp_path, {PIPELINE_SOURCE_ID: pipeline, "scan": scan}, runner=runner)
+
+    def schedule_gone(definition_id: str, trigger: str = "manual") -> str | None:
+        raise ValueError(f"Schedule {definition_id!r} is disabled")
+
+    monkeypatch.setattr(svc, "trigger_manual", schedule_gone)
+    svc._tick(is_startup=True)
+    svc.join_dispatches(timeout=5)
+    assert [r["status"] for r in _executions(tmp_path, "scan_daily")] == ["completed"]
+    assert pipeline.dispatch_calls == 0
+
+
 def test_without_a_pipeline_schedule_a_scan_still_starts_the_runner(tmp_path: Path) -> None:
     scan, runner = _Handler(), _IdleRunner()
     svc = _service(tmp_path, {"scan": scan}, runner=runner)

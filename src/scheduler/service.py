@@ -779,7 +779,9 @@ class SchedulerService:
                                 "Scheduler: auto-triggered pipeline run %s after %s scan %s.",
                                 pipeline_run_id, defn.source_id, run_ref,
                             )
-                        except RuntimeError as exc:
+                        except (RuntimeError, ValueError) as exc:
+                            # ValueError: the pipeline schedule changed meanwhile. Never let
+                            # it reach the handler below, which would mark this scan failed.
                             logger.debug(
                                 "Scheduler: could not auto-trigger pipeline after %s scan %s: %s",
                                 defn.source_id, run_ref, exc,
