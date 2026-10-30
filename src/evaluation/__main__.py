@@ -82,6 +82,8 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--salt", default=None, help="anonymisation salt (default: random, stored in the private sidecar)")
     e.add_argument("--rejected", type=int, default=0,
                    help="also add up to N jobs the pipeline rejected, from the decision journal (survival bias)")
+    e.add_argument("--top-scored", type=int, default=0,
+                   help="also add up to N of the highest-scored stored jobs (more accept labels per job labelled)")
 
     f = sub.add_parser("feedback-dataset", help="derive a frozen dataset from the feedback journal (read-only)")
     f.add_argument("--db", default="data/jobs.db")
@@ -143,7 +145,7 @@ def main(argv: list[str] | None = None) -> int:
 
             info = export_real_dataset(ns.db, ns.out, n=ns.n, seed=ns.seed, dataset_id=ns.dataset_id,
                                        as_of=ns.as_of, anonymize=not ns.no_anonymize, salt=ns.salt,
-                                       rejected=ns.rejected)
+                                       rejected=ns.rejected, top_scored=ns.top_scored)
             print(json.dumps({"n_jobs": info["n_jobs"], "strata": info["strata_counts"],
                               "rejected_pool": info["rejected_pool"]}, indent=2))
             print(f"annotate: {ns.out}/annotations.csv (fill 'expected' = accept|reject|borderline)", file=sys.stderr)

@@ -23,7 +23,7 @@ from typing import Any
 from src.evaluation.dataset import DatasetError, load_dataset
 from src.evaluation.export import (
     _EMAIL, _EMAIL_OBFUSCATED, _PHONE, _TEMPLATE_COLUMNS, _URL, _fold_digits, ANNOTATIONS, EXPORT_META, ExportError, assert_not_committable,
-    REJECTED_STRATUM, export_real_dataset, find_leaks, open_readonly, summarise_leaks,
+    REJECTED_STRATUM, TOP_SCORED_STRATUM, export_real_dataset, find_leaks, open_readonly, summarise_leaks,
 )
 
 _NEEDED_LABEL_MIN = 150
@@ -202,11 +202,14 @@ def audit_dataset(path: str | Path, *, db: str | Path | None = None) -> dict[str
                                                salt=meta["salt"], as_of=ds.manifest.as_of, anonymize=anonymised,
                                                first_seen=bool(meta.get("first_seen_at", False)))
                     else:
-                        n_rejected = sum(1 for s in meta.get("strata", {}).values() if s == REJECTED_STRATUM)
-                        export_real_dataset(db, Path(tmp) / "r", n=ds.manifest.job_count - n_rejected,
+                        # strata added beyond --n are replayed by their own flags, not counted in the sample
+                        added = sum(1 for s in meta.get("strata", {}).values()
+                                    if s in (REJECTED_STRATUM, TOP_SCORED_STRATUM))
+                        export_real_dataset(db, Path(tmp) / "r", n=ds.manifest.job_count - added,
                                             seed=int(meta["seed"]), dataset_id=ds.manifest.dataset_id,
                                             as_of=ds.manifest.as_of, anonymize=anonymised, salt=meta["salt"],
                                             rejected=int(meta.get("rejected_requested", 0)),
+                                            top_scored=int(meta.get("top_scored_requested", 0)),
                                             first_seen=bool(meta.get("first_seen_at", False)))
                     again = load_dataset(Path(tmp) / "r", require_complete_labels=False)
                     same = again.manifest.jobs_sha256 == ds.manifest.jobs_sha256

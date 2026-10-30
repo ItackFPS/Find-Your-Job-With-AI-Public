@@ -287,8 +287,12 @@ assistant-assisted, so its recall and unsafe-rejection rate are agreement with t
 quality, and it has no pipeline-rejected sample, so false negatives outside the accepted pool are not
 measurable. Independent evidence needs a **new** export labelled without any proposal shown:
 
+Accept labels are the scarce ones (about 1 in 16 jobs of a plain sample: 10 of `real-v1`'s 250),
+and the lab needs 30 independent ones. `--top-scored` adds the highest-scored stored jobs, where accepts
+concentrate. It stays blind and the manifest notes the over-representation of high scorers.
+
 ```bash
-python -m src.evaluation export --db data/jobs.db --out data/benchmarks/real-v2 --n 200 --rejected 100
+python -m src.evaluation export --db data/jobs.db --out data/benchmarks/real-v2 --n 150 --top-scored 60 --rejected 100
 # label annotations.csv by hand with NO `annotation_assist add-proposals` for this dataset
 # (or, if proposals exist: `annotation_assist --dataset data/benchmarks/real-v2 show <batch> --blind`
 #  then `record <batch> --blind`; any non-blind `show` makes that batch's labels human_assisted)
