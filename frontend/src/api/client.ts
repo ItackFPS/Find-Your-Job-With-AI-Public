@@ -254,6 +254,10 @@ export interface Provenance {
 
 export interface Job {
   id: string
+  // Expiry (issue #86): the source's end date; when and why the offer was marked expired.
+  valid_through?: string | null
+  expired_at?: string | null
+  expiry_reason?: 'valid_through' | 'not_seen' | 'user_report' | null
   source: string
   title: string | null
   company: string | null
@@ -431,9 +435,15 @@ export const listJobs = (params?: {
   // storage) — 'exceptional' | 'excellent' | 'strong' | 'relevant' |
   // 'low_priority'. Omit to see every scored job.
   min_tier?: string
+  // Also list offers marked expired (issue #86); hidden by default.
+  include_expired?: boolean
   limit?: number
   offset?: number
 }) => api.get<Job[]>('/jobs', { params }).then(r => r.data)
+
+// The user reports an offer as no longer available, or available after all (issue #86).
+export const setJobAvailability = (id: string, available: boolean) =>
+  api.post<Job>(`/jobs/${id}/availability`, { available }).then(r => r.data)
 
 export const getJob = (id: string) => api.get<Job>(`/jobs/${id}`).then(r => r.data)
 export const getJobExplanation = (id: string) =>

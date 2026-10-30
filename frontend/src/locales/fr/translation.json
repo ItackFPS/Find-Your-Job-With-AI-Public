@@ -255,7 +255,8 @@
     "loadError": "Impossible de charger les offres.",
     "empty": "Aucune offre trouvée. Modifiez vos filtres ou lancez le pipeline.",
     "prev": "← Précédent",
-    "next": "Suivant →"
+    "next": "Suivant →",
+    "includeExpired": "Inclure les offres expirées"
   },
   "jobDetail": {
     "overallMatch": "Correspondance globale",
@@ -357,7 +358,18 @@
     "description": "Description",
     "notFound": "Offre introuvable.",
     "backToJobs": "← Retour aux offres",
-    "breadcrumb": "← Offres"
+    "breadcrumb": "← Offres",
+    "availability": {
+      "expired": {
+        "valid_through": "Expirée : sa date de clôture est passée.",
+        "not_seen": "Probablement expirée : elle n'apparaît plus dans les dernières recherches.",
+        "user_report": "Vous avez indiqué que cette offre n'est plus disponible."
+      },
+      "openUntil": "Ouverte jusqu'au {when}",
+      "report": "Plus disponible ?",
+      "undo": "Elle est toujours disponible",
+      "failed": "Enregistrement impossible. Réessayez."
+    }
   },
   "rejectionReasons": {
     "location": "Lieu",

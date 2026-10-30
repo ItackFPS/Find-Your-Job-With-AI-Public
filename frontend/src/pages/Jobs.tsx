@@ -227,6 +227,8 @@ export default function Jobs() {
   const [country, setCountry] = useState('')
   const [department, setDepartment] = useState('')   // e.g. "83" for Var
   const [remote, setRemote] = useState<boolean | undefined>(undefined)
+  // Expired offers (issue #86) are hidden unless asked for.
+  const [includeExpired, setIncludeExpired] = useState(false)
   const [minTier, setMinTier] = useState(DEFAULT_MIN_TIER)
   const [q, setQ] = useState('')         // debounced value sent to API
   const [inputQ, setInputQ] = useState('') // immediate input value
@@ -271,13 +273,14 @@ export default function Jobs() {
   )
 
   const { data: jobs, isLoading, error } = useQuery({
-    queryKey: ['jobs', country, isFrance ? department : '', remote, minTier, q, offset],
+    queryKey: ['jobs', country, isFrance ? department : '', remote, minTier, q, includeExpired, offset],
     queryFn: () => listJobs({
       country: country || undefined,
       department: (isFrance && department) ? department : undefined,
       remote,
       min_tier: minTier !== 'low_priority' ? minTier : undefined,
       q: q || undefined,
+      include_expired: includeExpired || undefined,
       limit: PAGE,
       offset,
     }),
@@ -294,7 +297,7 @@ export default function Jobs() {
   }
 
   const hasActiveFilter = !!(
-    country || remote !== undefined || q || (isFrance && department) || minTier !== DEFAULT_MIN_TIER
+    country || remote !== undefined || q || (isFrance && department) || minTier !== DEFAULT_MIN_TIER || includeExpired
   )
 
   return (
@@ -377,6 +380,15 @@ export default function Jobs() {
           {TIER_ORDER.map(tier => <option key={tier} value={tier}>{t(`jobs.minTier.${tier}`)}</option>)}
         </select>
 
+        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', fontSize: '0.85rem', color: 'var(--color-muted)' }}>
+          <input
+            type="checkbox"
+            checked={includeExpired}
+            onChange={e => { setIncludeExpired(e.target.checked); setOffset(0) }}
+          />
+          {t('jobs.includeExpired')}
+        </label>
+
         {hasActiveFilter && (
           <button
             onClick={() => {
@@ -386,6 +398,7 @@ export default function Jobs() {
               setDepartment('')
               setRemote(undefined)
               setMinTier(DEFAULT_MIN_TIER)
+              setIncludeExpired(false)
               setOffset(0)
             }}
             style={{ ...filterStyle, cursor: 'pointer', color: 'var(--color-muted)' }}

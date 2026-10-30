@@ -18,3 +18,9 @@ retention_days: 30
 # run-history view requests, so retention can never delete a run the UI is
 # currently able to list.
 keep_min_runs: 100
+
+# Offer expiry (issue #86): an active offer no longer listed by a source that was fully
+# collected (completed, not capped) this many runs in a row is marked expired ("no longer
+# listed in recent searches"). It is hidden from the default lists, never deleted here,
+# and active again if seen again. LinkedIn and HelloWork scans never count a miss.
+expire_after_missed_runs: 3

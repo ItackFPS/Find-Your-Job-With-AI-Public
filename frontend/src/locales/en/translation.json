@@ -255,7 +255,8 @@
     "loadError": "Failed to load jobs.",
     "empty": "No jobs found. Try adjusting your filters or running the pipeline.",
     "prev": "← Prev",
-    "next": "Next →"
+    "next": "Next →",
+    "includeExpired": "Include expired offers"
   },
   "jobDetail": {
     "overallMatch": "Overall match",
@@ -357,7 +358,18 @@
     "description": "Description",
     "notFound": "Job not found.",
     "backToJobs": "← Back to jobs",
-    "breadcrumb": "← Jobs"
+    "breadcrumb": "← Jobs",
+    "availability": {
+      "expired": {
+        "valid_through": "Expired: its closing date has passed.",
+        "not_seen": "Probably expired: no longer listed in recent searches.",
+        "user_report": "You marked this offer as no longer available."
+      },
+      "openUntil": "Open until {when}",
+      "report": "No longer available?",
+      "undo": "It is still available",
+      "failed": "Could not save. Try again."
+    }
   },
   "rejectionReasons": {
     "location": "Location",

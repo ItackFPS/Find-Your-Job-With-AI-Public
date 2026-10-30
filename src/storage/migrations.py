@@ -145,6 +145,11 @@ JOBS_COLUMNS: dict[str, str] = {
     "canonical_url": "TEXT",
     "apply_url": "TEXT",
     "application_status": "TEXT",
+    # Expiry (issue #86).
+    "valid_through": "TEXT",
+    "missed_runs": "INTEGER NOT NULL DEFAULT 0",
+    "expired_at": "TEXT",
+    "expiry_reason": "TEXT",
 }
 
 # Where each stored offer was seen (issue #86): one row per (offer, source), so an offer

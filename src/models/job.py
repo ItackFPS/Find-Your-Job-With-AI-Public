@@ -51,12 +51,18 @@ class Job(BaseModel):
     first_seen_at: datetime | None = None
     last_seen_at: datetime | None = None
     status: str = "active"
+    # Expiry (issue #86): the source's end date; when and why the offer was marked
+    # expired (valid_through | not_seen | user_report). status is then "expired".
+    valid_through: datetime | None = None
+    expired_at: datetime | None = None
+    expiry_reason: str | None = None
     application_status: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a serializable dictionary (converts datetimes)."""
         d = self.model_dump()
-        for k in ("published_at", "updated_at", "discovered_at", "first_seen_at", "last_seen_at"):
+        for k in ("published_at", "updated_at", "discovered_at", "first_seen_at", "last_seen_at",
+                  "valid_through", "expired_at"):
             if d[k] is not None:
                 d[k] = d[k].isoformat()
         return d
@@ -64,7 +70,8 @@ class Job(BaseModel):
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Job:
         """Reconstruct a Job from a dictionary (e.g. from SQLite)."""
-        for k in ("published_at", "updated_at", "discovered_at", "first_seen_at", "last_seen_at"):
+        for k in ("published_at", "updated_at", "discovered_at", "first_seen_at", "last_seen_at",
+                  "valid_through", "expired_at"):
             if data.get(k) is not None and isinstance(data[k], str):
                 data[k] = datetime.fromisoformat(data[k])
 

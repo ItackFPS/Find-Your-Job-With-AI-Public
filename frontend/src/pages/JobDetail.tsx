@@ -3,12 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
-  getJob, getJobExplanation, updateJobApplicationStatus, recordJobEvent, getFeedbackVocabulary, getJobFeedback,
+  getJob, getJobExplanation, setJobAvailability, updateJobApplicationStatus, recordJobEvent, getFeedbackVocabulary, getJobFeedback,
   postJobFeedback, getJobDecision,
   type Job, type JobExplanation, type ExplanationReason, type FeedbackEvent, type FeedbackVocabulary, type DecisionRecord, type DecisionEvidence,
 } from '../api/client'
-import { Card, Chip, LoadingState } from '../components'
-import { daysAgo, httpUrl } from '../utils'
+import { Button, Card, Chip, LoadingState, useToast } from '../components'
+import { daysAgo, formatDateTime, httpUrl } from '../utils'
 
 function OverallScore({ score }: { score: number }) {
   const { t } = useTranslation()
@@ -428,6 +428,46 @@ export function SeenOn({ job }: { job: Job }) {
   )
 }
 
+// Whether the offer is still open (issue #86): an expired offer says why, and the user can
+// report an offer as no longer available, or undo that report.
+export function AvailabilitySection({ job }: { job: Job }) {
+  const { t } = useTranslation()
+  const toast = useToast()
+  const queryClient = useQueryClient()
+  const { mutate, isPending } = useMutation({
+    mutationFn: (available: boolean) => setJobAvailability(job.id, available),
+    onSuccess: updated => {
+      queryClient.setQueryData(['job', job.id], updated)
+      void queryClient.invalidateQueries({ queryKey: ['jobs'] })
+    },
+    onError: () => toast.show({ message: t('jobDetail.availability.failed'), tone: 'danger' }),
+  })
+  const expired = job.status === 'expired'
+  return (
+    <div
+      role={expired ? 'status' : undefined}
+      style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', flexWrap: 'wrap',
+        marginBottom: 'var(--space-4)', fontSize: 'var(--font-size-sm)',
+        color: expired ? 'var(--color-warning)' : 'var(--color-muted)',
+      }}
+    >
+      <span>
+        {expired
+          ? t(`jobDetail.availability.expired.${job.expiry_reason ?? 'not_seen'}`, {
+              when: job.expired_at ? formatDateTime(job.expired_at) : '',
+            })
+          : job.valid_through ? t('jobDetail.availability.openUntil', { when: formatDateTime(job.valid_through) }) : null}
+      </span>
+      {(!expired || job.expiry_reason === 'user_report') && (
+        <Button variant="ghost" disabled={isPending} onClick={() => mutate(expired)}>
+          {t(expired ? 'jobDetail.availability.undo' : 'jobDetail.availability.report')}
+        </Button>
+      )}
+    </div>
+  )
+}
+
 function JobHeader({ job, overallScore }: { job: Job; overallScore: number | null }) {
   const { t } = useTranslation()
   const age = daysAgo(job.published_at)
@@ -565,6 +605,8 @@ export default function JobDetail() {
       </div>
 
       <JobHeader job={job} overallScore={overallScore} />
+
+      <AvailabilitySection job={job} />
 
       <ApplicationStatusSection job={job} />
 

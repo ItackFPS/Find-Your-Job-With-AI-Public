@@ -167,6 +167,8 @@ def map_jobposting_ld_to_raw(ld: dict[str, Any], canonical_url: str, source_job_
         "canonical_url": canonical_url,
         "source_job_id": source_job_id,
         "published_at": ld.get("datePosted") or None,
+        # The offer's end date, when the page gives one (issue #86: expiry).
+        "valid_through": ld.get("validThrough") or None,
         "type": employment_type,
         "remote": work_mode == "remote",
         "work_mode": work_mode,

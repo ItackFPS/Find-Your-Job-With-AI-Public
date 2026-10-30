@@ -240,8 +240,8 @@ class Storage:
         # Use ON CONFLICT DO UPDATE (upsert) to avoid replacing the whole row,
         # which would wipe the user-set application_status field.
         conn.execute(
-            """INSERT INTO jobs (id, source, source_job_id, canonical_url, apply_url, company, title, description, location, countries, department, remote, work_mode, employment_type, salary_min, salary_max, salary_currency, published_at, updated_at, discovered_at, skills, raw_payload, content_hash, first_seen_at, last_seen_at, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """INSERT INTO jobs (id, source, source_job_id, canonical_url, apply_url, company, title, description, location, countries, department, remote, work_mode, employment_type, salary_min, salary_max, salary_currency, published_at, updated_at, discovered_at, skills, raw_payload, content_hash, first_seen_at, last_seen_at, status, valid_through)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(id) DO UPDATE SET
                    source=excluded.source, source_job_id=excluded.source_job_id,
                    canonical_url=excluded.canonical_url, apply_url=excluded.apply_url,
@@ -255,7 +255,10 @@ class Storage:
                    discovered_at=excluded.discovered_at, skills=excluded.skills,
                    raw_payload=excluded.raw_payload, content_hash=excluded.content_hash,
                    first_seen_at=excluded.first_seen_at, last_seen_at=excluded.last_seen_at,
-                   status=excluded.status""",
+                   status=CASE WHEN jobs.expiry_reason = 'user_report' THEN jobs.status ELSE excluded.status END,
+                   expired_at=CASE WHEN jobs.expiry_reason = 'user_report' THEN jobs.expired_at ELSE NULL END,
+                   expiry_reason=CASE WHEN jobs.expiry_reason = 'user_report' THEN jobs.expiry_reason ELSE NULL END,
+                   missed_runs=0, valid_through=excluded.valid_through""",
             (
                 job.id, job.source, job.source_job_id, job.canonical_url, job.apply_url,
                 job.company, job.title, job.description, job.location,
@@ -271,6 +274,7 @@ class Storage:
                 job.first_seen_at.isoformat() if job.first_seen_at else None,
                 job.last_seen_at.isoformat() if job.last_seen_at else None,
                 job.status,
+                job.valid_through.isoformat() if job.valid_through else None,
             ),
         )
         # Keep job_fts in sync manually (delete-then-insert handles upserts cleanly)
@@ -345,6 +349,74 @@ class Storage:
                     "first_seen_at": r["first_seen_at"], "last_seen_at": r["last_seen_at"],
                 })
         return out
+
+    def apply_expiry(
+        self, seen_ids: set[str], complete_sources: set[str], now: datetime, max_missed: int,
+    ) -> dict[str, int]:
+        """Mark offers expired after a run (issue #86), and active again when seen.
+
+        ``seen_ids``: every offer this run collected (after deduplication, before the
+        filters). ``complete_sources``: the sources fully collected this run (completed, not
+        capped); only they count a miss. An active offer not seen, listed by one of them,
+        gets one more missed run. It expires (status ``expired``, with ``expired_at`` and
+        ``expiry_reason``) once its end date (``valid_through``) has passed, or after
+        ``max_missed`` missed runs in a row. An offer expired for either reason and seen
+        again is active again; an offer the user reported stays expired.
+        """
+        conn = self._get_conn()
+        when = now.isoformat()
+        conn.execute("CREATE TEMP TABLE IF NOT EXISTS expiry_seen (id TEXT PRIMARY KEY)")
+        conn.execute("DELETE FROM expiry_seen")
+        conn.executemany("INSERT OR IGNORE INTO expiry_seen (id) VALUES (?)", [(i,) for i in seen_ids])
+        seen = "SELECT id FROM expiry_seen"
+        out = {"reactivated": 0, "missed": 0, "expired_valid_through": 0, "expired_not_seen": 0}
+        conn.execute(f"UPDATE jobs SET missed_runs = 0 WHERE missed_runs != 0 AND id IN ({seen})")
+        out["reactivated"] = conn.execute(
+            f"""UPDATE jobs SET status = 'active', expired_at = NULL, expiry_reason = NULL
+                WHERE status = 'expired' AND id IN ({seen})
+                  AND (expiry_reason = 'not_seen'
+                       OR (expiry_reason = 'valid_through' AND (valid_through IS NULL OR valid_through >= ?)))""",
+            (when,),
+        ).rowcount
+        if complete_sources:
+            marks = ",".join("?" * len(complete_sources))
+            out["missed"] = conn.execute(
+                f"""UPDATE jobs SET missed_runs = missed_runs + 1
+                    WHERE status = 'active' AND id NOT IN ({seen})
+                      AND id IN (SELECT job_id FROM job_provenance WHERE source IN ({marks}))""",
+                sorted(complete_sources),
+            ).rowcount
+        out["expired_valid_through"] = conn.execute(
+            """UPDATE jobs SET status = 'expired', expired_at = ?, expiry_reason = 'valid_through'
+               WHERE status = 'active' AND valid_through IS NOT NULL AND valid_through < ?""",
+            (when, when),
+        ).rowcount
+        out["expired_not_seen"] = conn.execute(
+            """UPDATE jobs SET status = 'expired', expired_at = ?, expiry_reason = 'not_seen'
+               WHERE status = 'active' AND missed_runs >= ?""",
+            (when, max_missed),
+        ).rowcount
+        conn.execute("DELETE FROM expiry_seen")
+        conn.commit()
+        return out
+
+    def set_reported_expired(self, job_id: str, expired: bool, now: datetime) -> bool:
+        """The user says an offer is no longer available (``expired`` True), or available
+        after all (False). Returns False when there is no such offer."""
+        conn = self._get_conn()
+        if expired:
+            cur = conn.execute(
+                "UPDATE jobs SET status = 'expired', expired_at = ?, expiry_reason = 'user_report' WHERE id = ?",
+                (now.isoformat(), job_id),
+            )
+        else:
+            cur = conn.execute(
+                "UPDATE jobs SET status = 'active', expired_at = NULL, expiry_reason = NULL, missed_runs = 0 "
+                "WHERE id = ?",
+                (job_id,),
+            )
+        conn.commit()
+        return cur.rowcount > 0
 
     def upsert_jobs_batch(
         self, jobs: list[Job], detect_field_changes: bool = False
@@ -473,8 +545,8 @@ class Storage:
                     employment_type,
                     salary_min, salary_max, salary_currency, published_at, updated_at,
                     discovered_at, skills, raw_payload, content_hash,
-                    first_seen_at, last_seen_at, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    first_seen_at, last_seen_at, status, valid_through
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     source=excluded.source, source_job_id=excluded.source_job_id,
                     canonical_url=excluded.canonical_url, apply_url=excluded.apply_url,
@@ -488,7 +560,10 @@ class Storage:
                     discovered_at=excluded.discovered_at, skills=excluded.skills,
                     raw_payload=excluded.raw_payload, content_hash=excluded.content_hash,
                     first_seen_at=excluded.first_seen_at, last_seen_at=excluded.last_seen_at,
-                    status=excluded.status""",
+                    status=CASE WHEN jobs.expiry_reason = 'user_report' THEN jobs.status ELSE excluded.status END,
+                    expired_at=CASE WHEN jobs.expiry_reason = 'user_report' THEN jobs.expired_at ELSE NULL END,
+                    expiry_reason=CASE WHEN jobs.expiry_reason = 'user_report' THEN jobs.expiry_reason ELSE NULL END,
+                    missed_runs=0, valid_through=excluded.valid_through""",
                 (
                     job.id, job.source, job.source_job_id, job.canonical_url, job.apply_url,
                     job.company, job.title, job.description, job.location,
@@ -504,6 +579,7 @@ class Storage:
                     first_seen,
                     now.isoformat(),
                     job.status,
+                    job.valid_through.isoformat() if job.valid_through else None,
                 ),
             )
 
