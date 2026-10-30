@@ -10,6 +10,10 @@ I1, F6.3/F6.4: Indeed, LinkedIn, HelloWork): off on a fresh install. Until the c
 exists (F6.5), an install that already set the source up the old way (``INDEED_API_KEY``) or
 already ran a LinkedIn/HelloWork scan counts as having chosen it.
 
+And the background collection (``background``, issue #80, owner decision R-Q3): ``enabled``
+(default on) stops every automatic scan and search when false; ``daily_time`` ("HH:MM", local
+time, default 08:00) is when each day's automatic runs become due (src/scheduler/service.py).
+
 Categories (default on: the two a user would not want to miss):
 
 =================  =======  ==========================================================================
@@ -112,3 +116,55 @@ def unofficial_source_enabled(path: Path | None, source: str, *, used_before: bo
         return choice
     env = UNOFFICIAL_LEGACY_ENV.get(source)
     return used_before or bool(env and os.environ.get(env, "").strip())
+
+
+BACKGROUND_DEFAULTS: dict[str, Any] = {"enabled": True, "daily_time": "08:00"}
+
+
+def parse_daily_time(value: Any) -> tuple[int, int] | None:
+    """``(hour, minute)`` for a "HH:MM" string in 00:00..23:59, else None."""
+    if not isinstance(value, str):
+        return None
+    parts = value.strip().split(":")
+    if len(parts) != 2 or not all(p.isdigit() and 1 <= len(p) <= 2 for p in parts):
+        return None
+    hour, minute = int(parts[0]), int(parts[1])
+    return (hour, minute) if 0 <= hour <= 23 and 0 <= minute <= 59 else None
+
+
+def background_settings(path: Path | None) -> dict[str, Any]:
+    """``{"enabled": bool, "daily_time": "HH:MM"}``: the stored values, else the defaults (a
+    missing or unreadable file, or an invalid value, reads as the default)."""
+    stored = _read(path).get("background") if path is not None else None
+    stored = stored if isinstance(stored, dict) else {}
+    enabled = stored.get("enabled")
+    parsed = parse_daily_time(stored.get("daily_time"))
+    return {
+        "enabled": enabled if isinstance(enabled, bool) else BACKGROUND_DEFAULTS["enabled"],
+        "daily_time": f"{parsed[0]:02d}:{parsed[1]:02d}" if parsed else BACKGROUND_DEFAULTS["daily_time"],
+    }
+
+
+def update_background_settings(path: Path, changes: Mapping[str, Any]) -> dict[str, Any]:
+    """Apply ``changes`` (``enabled``: bool, ``daily_time``: "HH:MM") and return the settings.
+    Raises ValueError for an unknown key or an invalid value; nothing is written then. Other
+    settings in the file are kept."""
+    unknown = sorted(set(changes) - set(BACKGROUND_DEFAULTS))
+    if unknown:
+        raise ValueError(f"unknown background settings: {', '.join(unknown)}")
+    if "enabled" in changes and not isinstance(changes["enabled"], bool):
+        raise ValueError("enabled takes true or false")
+    if "daily_time" in changes:
+        parsed = parse_daily_time(changes["daily_time"])
+        if parsed is None:
+            raise ValueError("daily_time takes a time of day as HH:MM, from 00:00 to 23:59")
+        changes = {**changes, "daily_time": f"{parsed[0]:02d}:{parsed[1]:02d}"}
+    with _lock:
+        data = _read(path)
+        merged = {**background_settings(path), **changes}
+        data["background"] = merged
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
+        os.replace(tmp, path)
+    return merged

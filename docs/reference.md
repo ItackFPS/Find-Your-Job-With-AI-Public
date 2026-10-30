@@ -197,6 +197,12 @@ this schedule (trigger `after_scan`), so that run counts for the day. A run star
 30 minutes; a backend shutdown during the run records it as `interrupted`. Background runs do
 not use the local LLM (`use_ai` false).
 
+Every schedule's "day" (issue #80) is the period starting at the latest local
+`background.daily_time` from `data/settings.json` (default 08:00, system clock and its DST
+rules; `period_start` in `src/scheduler/service.py`), and retries count per period.
+`background.enabled: false` stops every automatic run; manual ones still work.
+`GET/PUT /api/settings/background` read and change both.
+
 ## Frontend
 
 React 19 + TypeScript, built with Vite, using React Query for data fetching and
