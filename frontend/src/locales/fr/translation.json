@@ -628,6 +628,19 @@
       "proxy": "Mesuré hors ligne avec le seul score à règles (sans correspondance sémantique), sur la partie réservée qu'aucun réglage n'utilise.",
       "short": "{labels} étiquettes réservées"
     },
+    "coverage": {
+      "title": "Couverture du site France Travail",
+      "subtitle": "Offres trouvées par l'API France Travail ces 7 derniers jours que la lecture du site a aussi trouvées",
+      "share": "La lecture du site a trouvé {found} des {total} offres de l'API ({share}, probablement entre {lo} et {hi}).",
+      "status": {
+        "measured": "Mesuré sur {window} jours où les deux sources ont fonctionné.",
+        "too_early": "Les deux sources ont fonctionné {days} jours sur les {window} nécessaires : ce chiffre n'est pas encore définitif.",
+        "no_api_offers": "L'API France Travail n'a trouvé aucune offre ces 7 derniers jours (elle demande des identifiants). Sans elle, rien à comparer.",
+        "no_web_offers": "La lecture du site France Travail n'a trouvé aucune offre ces 7 derniers jours.",
+        "unexpected": "Résultat inconnu."
+      },
+      "error": "Impossible de mesurer la couverture."
+    },
     "calibration": {
       "title": "Calibrer sur vos propres offres",
       "subtitle": "Indiquez à l'application quelles offres vous conviennent vraiment, quelques-unes à la fois",
