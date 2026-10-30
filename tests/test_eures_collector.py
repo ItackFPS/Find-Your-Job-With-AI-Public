@@ -208,6 +208,7 @@ class TestEURESCollector:
 
         assert len(result.jobs) == 7
         assert mock_post.call_count == 2
+        assert result.listing_complete is True  # every query reached its last page
 
     @patch("src.collectors.eures.httpx.post")
     def test_max_pages_per_query_caps_requests(self, mock_post):
@@ -224,6 +225,7 @@ class TestEURESCollector:
 
         assert mock_post.call_count == 2
         assert len(result.jobs) == 10  # 2 pages × 5 jobs
+        assert result.listing_complete is False  # stopped by the page cap, more remain
 
     @patch("src.collectors.eures.httpx.post")
     def test_duplicate_ids_skipped(self, mock_post):
@@ -344,6 +346,7 @@ class TestEURESCollector:
         assert len(result.errors) == 1
         assert "HTTP 307" in result.errors[0]
         assert mock_post.call_count == len(col.queries) * 2
+        assert result.listing_complete is False
 
     @patch("src.collectors.eures.httpx.post")
     def test_malformed_response_missing_jvs_key(self, mock_post):
