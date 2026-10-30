@@ -23,6 +23,11 @@ could itself change production). Time-dependent checks are frozen to the dataset
 - Real-job datasets exported from `jobs.db` contain only jobs accepted at the time
   (rejected jobs keep no description). They therefore expose false positives but cannot
   measure false negatives; runs on them carry an explicit survival-bias warning.
+- Labels are split once, by a hash of the dataset id and job id (`src/evaluation/heldout.py`): 30 %
+  are **held out** and judge only changes pre-registered beforehand (`docs/lab/preregistered/`); the
+  rest is the **tuning** part. The lab's `run`, `agent` and `approve` use the tuning part of a real
+  dataset unless told otherwise, the agent can never use the held-out part, and a restricted run is
+  recorded as `<dataset_id>@<split>`. Every run states its split (`metrics.split`).
 - Exports are stratified with unequal selection probabilities. `run --sampling` reports the
   uniform cohorts (`random_control` over stored jobs, `pipeline_rejected` over rejected ones) beside the
   pooled metrics. It reads only the strata and pool sizes from the private sidecar, and outputs aggregates.

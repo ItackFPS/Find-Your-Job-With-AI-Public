@@ -306,6 +306,9 @@ def run_evaluation(dataset: Dataset, strategy: StrategyRef, *, assess: bool = Fa
     labels = dataset.labels
     assisted = frozenset(assisted_job_ids(dataset.path))
     metrics = evaluate(decisions, labels, assisted)
+    from src.evaluation.heldout import describe
+
+    metrics["split"] = describe(dataset)          # which labels: every report states it (P2.4)
     pairs = [(labels[d.job_id].expected, d.verdict) for d in decisions if d.job_id in labels]
     metrics["bootstrap_ci_95"] = bootstrap_ci(pairs)
     if assess:

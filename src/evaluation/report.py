@@ -58,6 +58,8 @@ def render_markdown(r: RunResult) -> str:
         f"- code: `{(r.code.get('git_sha') or 'unknown')[:10]}` dirty={r.code.get('dirty')}",
         f"- LLM: {'enabled, %s calls' % r.llm['calls'] if r.llm.get('enabled') else 'disabled (deterministic)'}",
         *_evidence(r),
+        *([f"- labels: `{m['split']['name']}` split ({m['split']['labels']} labels; held out: {m['split']['rule']})"]
+          if m.get("split") else []),
         "",
         "## Accept-class metrics (95% bootstrap CI)",
         "",
