@@ -173,7 +173,8 @@
       "skills": "Compétences",
       "quality": "Qualité",
       "pipeline": "Pipeline",
-      "label": "Navigation principale"
+      "label": "Navigation principale",
+      "settings": "Paramètres"
     },
     "backend": {
       "connected": "Serveur local connecté",
@@ -1047,5 +1048,98 @@
     "errorDetails": "Le serveur local n’a pas répondu.",
     "retrying": "Nouvelle tentative…",
     "toast": "Un message de type {tone}."
+  },
+  "settings": {
+    "title": "Paramètres",
+    "subtitle": "Sources et collecte en arrière-plan : ce que l'application collecte, quand, et comment ça s'est passé.",
+    "loadFailed": "Impossible de charger cette section. L'application est-elle toujours lancée ?",
+    "background": {
+      "title": "Collecte en arrière-plan",
+      "subtitle": "L'application cherche de nouvelles offres une fois par jour, même fenêtre fermée.",
+      "enabled": "Collecter en arrière-plan",
+      "enabledOn": "Activée : les exécutions quotidiennes ci-dessous démarrent seules.",
+      "enabledOff": "Désactivée : rien ne démarre seul. Vous pouvez toujours lancer une exécution vous-même.",
+      "time": "Heure quotidienne (heure locale)",
+      "saveTime": "Enregistrer l'heure",
+      "timeHelp": "Si l'ordinateur est éteint à cette heure-là, l'exécution démarre dès le lancement de l'application. Après plusieurs jours, elle ne s'exécute qu'une fois.",
+      "saved": "Collecte en arrière-plan mise à jour.",
+      "saveFailed": "Enregistrement impossible. Réessayez."
+    },
+    "runs": {
+      "title": "Exécutions quotidiennes",
+      "subtitle": "Ce qui s'exécute seul chaque jour, la dernière exécution et la prochaine.",
+      "labels": {
+        "pipeline_daily": "Recherche quotidienne",
+        "linkedin_daily": "Analyse LinkedIn",
+        "hellowork_daily": "Analyse HelloWork"
+      },
+      "runningNow": "En cours",
+      "notChosen": "Seulement quand vous la lancez : activez la source ci-dessous pour une exécution quotidienne.",
+      "needsProfile": "Démarre une fois votre profil enregistré.",
+      "manualOnly": "Seulement quand vous la lancez.",
+      "dueToday": "L'exécution du jour va démarrer.",
+      "next": "Prochaine exécution : {when}",
+      "never": "Jamais exécutée",
+      "failedHelp": "Elle n'a pas abouti. Elle sera relancée automatiquement, ou relancez-la maintenant.",
+      "interruptedHelp": "Elle a été arrêtée à la fermeture de l'application et reprendra d'elle-même.",
+      "runNow": "Lancer maintenant",
+      "started": "Lancée.",
+      "busy": "Elle est déjà en cours.",
+      "startFailed": "Lancement impossible. Réessayez.",
+      "paused": "Les analyses sont en pause depuis l'icône de la zone de notification : rien ne démarre seul tant que vous ne les reprenez pas."
+    },
+    "sources": {
+      "title": "Sources",
+      "subtitle": "D'où viennent les offres, et le résultat de chaque source lors de la dernière recherche.",
+      "groups": {
+        "official": "Sources officielles et publiques",
+        "unofficial": "Sources non officielles"
+      },
+      "groupHelp": {
+        "official": "Sites d'emploi publics et API officielles, collectés à chaque recherche.",
+        "unofficial": "Sites qui ne proposent pas d'accès pour ce type d'application. Ils restent désactivés tant que vous ne les activez pas."
+      },
+      "access": {
+        "official": "API officielle",
+        "public_page": "Pages publiques",
+        "unofficial": "Non officielle"
+      },
+      "collected": "Collectée",
+      "notCollected": "Non collectée",
+      "choose": "Collecter depuis {name}",
+      "risk": {
+        "linkedin": "LinkedIn n'autorise pas les recherches automatisées : il peut bloquer l'application un temps, et les recherches utilisent les mots-clés de votre profil.",
+        "indeed": "Indeed n'autorise pas les recherches automatisées : il peut bloquer l'application un temps, et les recherches utilisent les mots-clés de votre profil.",
+        "hellowork": "HelloWork ne propose pas d'accès pour les applications : l'application lit ses offres lentement (environ 30 minutes) et le site peut la bloquer.",
+        "default": "Ce site ne propose pas d'accès pour les applications : il peut bloquer l'application un temps."
+      },
+      "chosenOn": "Activée le {when}",
+      "declinedOn": "Désactivée le {when}",
+      "neverChosen": "Désactivée : jamais activée",
+      "unavailable": "non installée sur cet ordinateur",
+      "lastSearch": "Dernière recherche :",
+      "noResult": "pas encore de résultat",
+      "counts": "{collected} trouvées, {accepted} retenues",
+      "paused": "En pause après des échecs répétés.",
+      "pausedUntil": "{count, plural, one {En pause après # échec, jusqu'au {when}.} other {En pause après # échecs consécutifs, jusqu'au {when}.}}",
+      "retryNow": "Réessayer maintenant",
+      "resetDone": "Elle sera essayée lors de la prochaine recherche.",
+      "resetFailed": "Réinitialisation impossible. Réessayez.",
+      "choiceFailed": "Impossible d'enregistrer votre choix. Réessayez.",
+      "names": {
+        "france-travail": "France Travail (API officielle)",
+        "france-travail-web": "France Travail (site web)",
+        "eures": "EURES",
+        "remoteok": "Remote OK",
+        "jobicy": "Jobicy",
+        "weworkremotely": "We Work Remotely",
+        "workingnomads": "Working Nomads",
+        "bundesagentur": "Bundesagentur für Arbeit",
+        "arbetsformedlingen": "Arbetsförmedlingen",
+        "indeed": "Indeed",
+        "linkedin": "LinkedIn",
+        "hellowork": "HelloWork"
+      }
+    }
   }
 }

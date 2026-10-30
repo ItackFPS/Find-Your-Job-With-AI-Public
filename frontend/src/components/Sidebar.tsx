@@ -90,6 +90,16 @@ const NAV_ITEMS: { to: string; label: string; icon: React.ReactNode; end?: boole
       </svg>
     ),
   },
+  {
+    to: '/settings', label: 'settings',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6">
+        <path d="M3 5h12M3 13h12" strokeLinecap="round" />
+        <circle cx="7" cy="5" r="1.8" fill="var(--color-surface)" />
+        <circle cx="11" cy="13" r="1.8" fill="var(--color-surface)" />
+      </svg>
+    ),
+  },
 ]
 
 function StatusRow({ label, connected }: { label: string; connected: boolean | undefined }) {
