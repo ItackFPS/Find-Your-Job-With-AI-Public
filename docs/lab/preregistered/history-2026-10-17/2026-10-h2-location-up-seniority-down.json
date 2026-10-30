@@ -1,0 +1,14 @@
+{
+ "format": "fyj-lab-proposal/1",
+ "author": "claude-code:preregistered-2026-10-17",
+ "statement": "Raise location_fit to 0.40 and lower seniority_match to 0.05 (other weights unchanged); conflicts with ADR 0003's seniority > experience order.",
+ "rationale": "Exploratory winner on real-v1 among four variants tried (AUC 0.736 -> 0.791, paired CI95 [+0.019, +0.103]) on assistant-assisted labels: selected on that data, so only fresh independent labels can confirm it. The seniority gate (seniority_match == 0) is untouched by the weight.",
+ "overrides": {
+  "scoring.yaml": {
+   "scoring": {
+    "location_fit": {"weight": 0.40},
+    "seniority_match": {"weight": 0.05}
+   }
+  }
+ }
+}
