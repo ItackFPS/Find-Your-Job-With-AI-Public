@@ -397,6 +397,7 @@ def _stratify(
 # Journal stages whose rejection can hide a wanted job (validation/dedup drops are not opportunities).
 _OPPORTUNITY_STAGES = ("filter", "requirements_gate", "llm_eligibility", "score", "ranking")
 REJECTED_STRATUM = "pipeline_rejected"
+TOP_SCORED_STRATUM = "top_scored"
 
 
 def _read_snapshot(conn: sqlite3.Connection, h: str | None) -> dict[str, Any] | None:
@@ -418,9 +419,13 @@ def _rejected_candidates(
     Duplicates are not missed opportunities: a rejected copy whose ``content_hash`` (the deduplication
     key: title + description) equals a stored job's was surfaced under that other id, and several rejected
     copies of one listing count once (the smallest job id is kept)."""
-    sql = f"""SELECT job_id, deciding_stage, snapshot_hash, {{h}} AS content_hash FROM (
-                  SELECT *, ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY decided_at DESC, rowid DESC) AS rn
-                  FROM job_decisions)
+    # NOT INDEXED + only the needed columns: walking idx_decisions_job fetches every journal row at a random
+    # position of a multi-GB file (measured: 517 s cold, 1.6 s warm, on a 3.3 GB jobs.db); a scan in file order
+    # reads it sequentially and the window sorts narrow rows in memory
+    sql = f"""SELECT job_id, deciding_stage, snapshot_hash, content_hash FROM (
+                  SELECT job_id, deciding_stage, snapshot_hash, {{h}} AS content_hash, outcome,
+                         ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY decided_at DESC, rowid DESC) AS rn
+                  FROM job_decisions NOT INDEXED)
                 WHERE rn = 1 AND outcome = 'rejected'
                   AND deciding_stage IN ({",".join("?" * len(_OPPORTUNITY_STAGES))})
                 ORDER BY job_id"""
@@ -469,7 +474,7 @@ def _first_seen_before(raw: str | None, as_of: datetime) -> str | None:
 def export_real_dataset(
     db_path: str | Path, out_dir: str | Path, *, n: int = 200, seed: int = 20260917,
     dataset_id: str = "real-v1", as_of: str | None = None, anonymize: bool = True,
-    salt: str | None = None, rejected: int = 0, first_seen: bool = True,
+    salt: str | None = None, rejected: int = 0, first_seen: bool = True, top_scored: int = 0,
 ) -> dict[str, Any]:
     """Export ``n`` jobs. ``seed`` drives the sample; ``salt`` drives the anonymised ids/aliases
     (random by default and stored only in the private sidecar; pass one to reproduce an export
@@ -480,6 +485,11 @@ def export_real_dataset(
     the same anonymisation and leak check; their stratum and stage stay in the private sidecar only, so
     the annotation sheet remains blind. Without a journal the pool is empty and nothing is added.
 
+    ``top_scored`` adds up to that many stored jobs with the highest latest production score that the
+    sample did not already pick (score, then id). Accept labels concentrate there; a uniform sample
+    yields few of them. Their stratum stays in the private sidecar only, so the annotation sheet remains blind,
+    and the manifest notes say the absolute rates over-represent high scorers.
+
     ``first_seen``: stored jobs carry ``first_seen_at`` (when not after ``as_of``) so a replay ages an
     undated listing from its first sighting, as production does (ADR 0012); pipeline-rejected jobs were
     never stored and carry none, as in production. ``False`` reproduces exports made before this field
@@ -488,6 +498,8 @@ def export_real_dataset(
         raise ExportError("--n must be >= 1")
     if rejected < 0:
         raise ExportError("--rejected must be >= 0")
+    if top_scored < 0:
+        raise ExportError("--top-scored must be >= 0")
     out = Path(out_dir)
     assert_not_committable(out)
     if (out / MANIFEST).exists():
@@ -519,6 +531,10 @@ def export_real_dataset(
     if not candidates:
         raise ExportError("no eligible active jobs with a description in the database")
     strata = _stratify(candidates, scores, min(n, len(candidates)), seed)
+    top = sorted((c for c in candidates if c["id"] in scores and c["id"] not in strata),
+                 key=lambda c: (-scores[c["id"]], c["id"]))[:top_scored]
+    for c in top:
+        strata[c["id"]] = TOP_SCORED_STRATUM
     by_id = {c["id"]: c for c in candidates}
     picked = random.Random(f"{seed}:{REJECTED_STRATUM}").sample(rejected_pool, min(rejected, len(rejected_pool)))
     rejected_stage: dict[str, str] = {}
@@ -575,6 +591,9 @@ def export_real_dataset(
     else:
         notes = ("Exported read-only from jobs.db. SURVIVAL BIAS: accepted-at-the-time jobs only; "
                  "false negatives are not measurable. Anonymised: %s." % anonymize)
+    if top:
+        notes += (f" {len(top)} of the stored jobs were added from the highest production scores to enrich accept "
+                  "labels: absolute rates over-represent high scorers.")
     manifest = write_dataset(
         out, dataset_id=dataset_id, version="1", kind="real", created_at=as_of,
         as_of=as_of, jobs=jobs, labels=[], profile_yaml=None, notes=notes,
@@ -583,6 +602,8 @@ def export_real_dataset(
         "WARNING": "PRIVATE: maps anonymised ids back to real jobs; never share or commit",
         "seed": seed, "salt": salt, "anonymized": anonymize, "exported_at": now, "first_seen_at": first_seen,
         "strata": {new: strata[old] for new, old in id_map.items()}, "id_map": id_map}
+    if top_scored:
+        sidecar["top_scored_requested"] = top_scored
     if rejected:
         sidecar["rejected_requested"] = rejected
         sidecar["rejected_pool"] = len(rejected_pool)

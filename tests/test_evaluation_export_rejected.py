@@ -124,3 +124,33 @@ def test_audit_reproduces_and_checks_company_names_of_a_rejected_sample(db, tmp_
     checks = audit_dataset(tmp_path / "o", db=db)["checks"]
     assert checks["reproducible"]["ok"], checks["reproducible"]
     assert checks["company_names"]["ok"] and "checked against the database" in checks["company_names"]["detail"]
+
+
+def test_the_pool_query_reads_the_journal_in_file_order(db):
+    """Through idx_decisions_job every row is a random read: 517 s cold on a 3.3 GB jobs.db. Scan instead."""
+    from src.evaluation.export import _rejected_candidates, open_readonly
+
+    conn = open_readonly(db)
+    seen: list[str] = []
+    conn.set_trace_callback(seen.append)
+    try:
+        assert len(_rejected_candidates(conn, {"id001"})) == 10
+        [sql] = [s for s in seen if "ROW_NUMBER" in s]
+        plan = " | ".join(r[3] for r in conn.execute(f"EXPLAIN QUERY PLAN {sql}"))
+    finally:
+        conn.close()
+    assert "SCAN job_decisions" in plan and "INDEX" not in plan.split("SCAN job_decisions", 1)[1].split("|")[0]
+
+
+def test_a_journal_predating_content_hash_still_gives_the_pool(db):
+    """The fallback query (NULL content_hash) is the same sequential scan and finds the same jobs."""
+    from src.evaluation.export import _rejected_candidates, open_readonly
+
+    with sqlite3.connect(db) as conn:
+        conn.execute("ALTER TABLE job_decisions DROP COLUMN content_hash")
+    conn = open_readonly(db)
+    try:
+        pool = _rejected_candidates(conn, {"id001"})
+    finally:
+        conn.close()
+    assert sorted(p["id"] for p in pool) == sorted(f"rj{i}" for i in range(10))

@@ -82,7 +82,11 @@ filters must stay a measured, reversible, human-approved act.
   review (abstention) rate and confusion counts for baseline and candidate with their deltas,
   recomputed from the judged decisions, plus the label provenance and the comparison's limitations
   (non-independent labels, few accept labels, survival-biased sampling). Reported, never sufficient
-  for approval on its own.
+  for approval on its own. It also carries `ranking` (AUC, precision@k and the `relevant` visibility
+  floor over the accepted jobs; the AUC change and its paired bootstrap CI are computed on the jobs
+  both sides accept, with the jobs only one side accepts counted and the most-moved jobs listed): a `scoring.yaml`-only
+  candidate flips no gate decision, so the verdict is `insufficient_evidence` and only the ranking
+  shows its effect. The ranking does not enter the verdict or eligibility.
 - Promotion: `python -m src.lab approve <experiment> --dataset <its dataset> --by <name> --reason …`
   re-verifies the bundle hash and that it still reproduces from the current `config/`, then **recomputes
   the evidence** instead of reading it from `lab.db`: the dataset must load with its content hashes, be
@@ -90,9 +94,10 @@ filters must stay a measured, reversible, human-approved act.
   now) and candidate are replayed in the approving process; the fresh baseline and candidate fingerprints
   and verdict must match the record (a mismatch means the record was altered or production changed:
   re-run), and the fresh verdict must be an eligible `improvement`. The approver is shown the recomputed
-  verdict, tier and limitations and types back a one-time code; the pointer then stores
-  `approval_evidence` (recomputed verdict, CI, tier, dataset path and hashes, fingerprints, reason,
-  approver name + OS account + host). `rollback` appends a pointer to an earlier bundle, `deactivate` a
+  verdict, tier and limitations and the change itself — a diff of what production runs now against the
+  verified bundle, never the lab's or a proposer's description of it — and types back a one-time code;
+  the pointer then stores `approval_evidence` (recomputed verdict, CI, tier, dataset path and hashes,
+  fingerprints, that diff as `change`, reason, approver name + OS account + host). `rollback` appends a pointer to an earlier bundle, `deactivate` a
   pointer back to `config/`, both confirmed the same way and recorded with the approver's identity. No
   automatic promotion exists.
 - **Production honours the pointer** through `src/decisions/active_strategy.py` (production still never

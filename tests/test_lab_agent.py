@@ -105,6 +105,8 @@ def test_full_cycle_recommends_a_fix_for_human_review_and_remembers_it(tmp_path)
     assert h["verdict"] == "improvement" and h["eligible"] is True
     assert h["delta"]["fn"] < 0 and h["delta"]["unsafe_rejection_rate"] < 0
     assert "approve " + h["experiment_id"] in h["recommendation"] and "HUMAN" in h["recommendation"]
+    # runnable as written: the dataset pins no profile, so approve's replay needs the one the agent used
+    assert f'--profile "{PROFILE}"' in h["recommendation"]
 
     store = LabStore(tmp_path / "lab.db")
     try:
