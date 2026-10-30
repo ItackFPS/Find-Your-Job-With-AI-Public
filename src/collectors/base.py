@@ -185,6 +185,9 @@ class BaseCollector(ABC):
         self._last_status: int | None = None
         self._budget_lock = threading.Lock()
         self._robots: RobotsCache | None = None
+        # robots.txt Crawl-delay: when the last request to each site was sent
+        self._crawl_lock = threading.Lock()
+        self._last_request_at: dict[str, float] = {}
 
     @abstractmethod
     def collect(self) -> CollectorResult:
@@ -248,7 +251,9 @@ class BaseCollector(ABC):
         return self._robots
 
     def _before_request(self, url: str, *, check_robots: bool = True) -> None:
-        """Gate one request (not its retries): robots.txt, then the per-run cap.
+        """Gate one request (not its retries): robots.txt, then the per-run cap, then the
+        site's robots.txt ``Crawl-delay`` (waits until that long after the previous request
+        to the site; concurrent queries of one collector wait in turn).
 
         Raises ``RobotsDisallowed`` or ``RequestBudgetExceeded``; a refused URL is not
         counted.
@@ -268,6 +273,21 @@ class BaseCollector(ABC):
                 raise RequestBudgetExceeded(
                     f"request cap of {cap} per run reached; not requested: {origin(url)}")
             self._requests_made += 1
+        if check_robots and self.honours_robots and not url.endswith("/robots.txt"):
+            self._wait_crawl_delay(url)
+
+    def _wait_crawl_delay(self, url: str) -> None:
+        delay = self._robots_cache().crawl_delay(url)
+        if not delay:
+            return
+        site = origin(url)
+        with self._crawl_lock:
+            last = self._last_request_at.get(site)
+            if last is not None:
+                wait = last + delay - time.monotonic()
+                if wait > 0:
+                    (type(self)._sleep or time.sleep)(wait)
+            self._last_request_at[site] = time.monotonic()
 
     def _note_network_error(self) -> None:
         """A request got no HTTP answer at all (DNS, connection refused, timeout)."""
