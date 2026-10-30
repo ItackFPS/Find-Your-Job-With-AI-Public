@@ -45,10 +45,14 @@ Concurrency
   - handler.is_running() provides an in-process early-exit guard.
   - Each dispatch runs in a dedicated daemon thread so the scheduler loop never blocks.
 
-Timezones
-  All timestamps are UTC.  The "today" boundary is UTC midnight.
-  If you want "once per local day" you would need to convert now() to local time;
-  UTC is used here to avoid DST ambiguity.
+Timezones and the day (issue #80)
+  All timestamps are UTC. With a ``background`` settings reader (the app passes
+  data/settings.json), a schedule's "day" is the period starting at the latest
+  local ``daily_time`` (default 08:00, on the system clock's own DST rules): a run
+  is due when none completed since then, so it stays at the same wall-clock time
+  across a clock change, and days missed give one run. Retries are counted per
+  period. ``enabled: false`` stops every automatic run (manual ones still work).
+  Without a reader (tests, older callers) the day is the UTC day.
 
 Adding a new source
   1. Implement a SourceHandler (is_running / dispatch).
@@ -60,12 +64,13 @@ from __future__ import annotations
 
 import logging
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta, tzinfo
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
+from src.app_settings import BACKGROUND_DEFAULTS, parse_daily_time
 from src.config_files import local_config_path
 from src.scheduler.storage import SchedulerStorage
 from src.scheduler.models import ScheduleDefinition
@@ -289,8 +294,15 @@ class SchedulerService:
         pipeline_runner: Any = None,
         clock: Callable[[], datetime] | None = None,
         opted_in: Callable[[str], bool] | None = None,
+        background: Callable[[], Mapping[str, Any]] | None = None,
+        tz: tzinfo | None = None,
     ) -> None:
         self._db_path = db_path
+        # The background settings (issue #80): ``enabled`` and the local ``daily_time`` that
+        # starts each day's period. None: always enabled, UTC days. ``tz`` None: the system's
+        # local time.
+        self._background = background
+        self._tz = tz
         # Whether the user chose a source (plan rule I1, F6.4): a ``when_opted_in`` schedule
         # runs daily only then. None: nothing is chosen.
         self._opted_in: Callable[[str], bool] = opted_in or (lambda _source: False)
@@ -454,7 +466,7 @@ class SchedulerService:
             # An explicit user action: bypasses the retry budget and backoff,
             # but is numbered after today's failed attempts (issue #68).
             failed_today, _last = storage.get_failed_attempts_since(
-                definition_id, _utc_day_start(self._now())
+                definition_id, self._period_start(self._now())
             )
             exec_id = storage.try_reserve_execution(
                 definition_id, trigger=trigger, no_completed_since=None,
@@ -523,13 +535,16 @@ class SchedulerService:
         # retry bookkeeping, no log line every tick.
         if _flag(handler, "is_paused") or self._paused.is_set():
             return False
+        # Background collection switched off by the user (issue #80): nothing automatic.
+        if not self._background_enabled():
+            return False
         # A source stopped on a 429 waits out its cooldown (F6.4): no daily run, retry or
         # resume before then. Once it has passed, the run below resumes its checkpoint.
         if _marker(handler, "rate_limited_until") is not None:
             return False
 
         trigger = "startup" if is_startup else "scheduled"
-        today_start = _utc_day_start(self._now())
+        today_start = self._period_start(self._now())
         no_completed_since: datetime | None = (
             today_start if self._policy(defn) == "run_once_per_day" else None
         )
@@ -601,7 +616,7 @@ class SchedulerService:
             if defn is None:
                 return None
             failed_today, _last = storage.get_failed_attempts_since(
-                defn.id, _utc_day_start(self._now())
+                defn.id, self._period_start(self._now())
             )
             exec_id = storage.try_reserve_execution(
                 defn.id, trigger="manual", no_completed_since=None, attempt=failed_today + 1,
@@ -631,6 +646,27 @@ class SchedulerService:
                 return self.trigger_manual(defn.id, trigger="after_scan")
         run_id: str = self._pipeline_runner.start_run()
         return run_id
+
+    def _background_settings(self) -> Mapping[str, Any]:
+        if self._background is None:
+            return {}
+        try:
+            return self._background()
+        except Exception as exc:  # noqa: BLE001 — a settings read must never stop the scheduler
+            logger.warning("Scheduler: could not read the background settings: %s", exc)
+            return BACKGROUND_DEFAULTS
+
+    def _background_enabled(self) -> bool:
+        return self._background_settings().get("enabled", True) is not False
+
+    def _period_start(self, now: datetime) -> datetime:
+        """Start (UTC) of the period containing ``now``: the latest local ``daily_time``, or
+        UTC midnight without background settings (issue #80)."""
+        if self._background is None:
+            return _utc_day_start(now)
+        parsed = parse_daily_time(self._background_settings().get("daily_time"))
+        hour, minute = parsed or parse_daily_time(BACKGROUND_DEFAULTS["daily_time"]) or (8, 0)
+        return period_start(now, time(hour, minute), self._tz)
 
     def _policy(self, defn: ScheduleDefinition) -> str:
         """The startup policy in effect: ``when_opted_in`` (an unofficial source, plan rule
@@ -665,7 +701,7 @@ class SchedulerService:
         if self._policy(defn) != "run_once_per_day":
             return None  # unknown / disabled policy, or a source the user has not chosen
         now = self._now()
-        today_start = _utc_day_start(now)
+        today_start = self._period_start(now)
         if storage.get_last_completed_execution(defn.id, since=today_start) is not None:
             return None
         failed_today, last_failed_at = storage.get_failed_attempts_since(defn.id, today_start)
@@ -865,6 +901,22 @@ class SchedulerService:
 def _utc_day_start(now: datetime) -> datetime:
     """UTC midnight (00:00:00) of the day containing *now*."""
     return now.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def period_start(now: datetime, daily_time: time, tz: tzinfo | None = None) -> datetime:
+    """The latest moment at or before ``now`` whose local wall-clock time is ``daily_time``,
+    in UTC. ``tz`` None uses the system's local time (its own DST rules), so the time of day
+    stays the same across a clock change."""
+
+    def at(day: Any) -> datetime:
+        naive = datetime.combine(day, daily_time)
+        return naive.replace(tzinfo=tz) if tz is not None else naive.astimezone()
+
+    local_now = now.astimezone(tz) if tz is not None else now.astimezone()
+    start = at(local_now.date())
+    if start > now:
+        start = at(local_now.date() - timedelta(days=1))
+    return start.astimezone(UTC)
 
 
 def retry_backoff_seconds(retry_delay_seconds: int, failed_attempts: int) -> float:

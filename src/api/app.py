@@ -198,7 +198,7 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
     )
     # LinkedIn/HelloWork scan daily only once chosen (plan rule I1, F6.4): the stored choice,
     # else an install that already ran a scan of that source (an observed choice).
-    from src.app_settings import unofficial_source_enabled
+    from src.app_settings import background_settings, unofficial_source_enabled
 
     scan_history = {"linkedin": li_staging, "hellowork": hw_staging}
 
@@ -214,6 +214,8 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
         handlers=handlers,
         pipeline_runner=application.state.runner,
         opted_in=_opted_in,
+        # Daily runs at the user's local time, switchable (issue #80).
+        background=lambda: background_settings(Path(application.state.settings_path)),
     )
     scheduler.start()
     application.state.scheduler = scheduler
