@@ -13,6 +13,7 @@ import {
 } from '../components'
 import { formatDateTime, promotionCommand } from '../utils'
 import Lab from './Lab'
+import CalibrationCard from './Calibration'
 import FtCoverageCard from './FtCoverage'
 
 // Plain-language quality page (plan F9.1, §C10). Every sentence is built here from the codes and
@@ -296,6 +297,8 @@ export default function Quality() {
           ? <ErrorState message={t('quality.history.error')} onRetry={() => void jobs.refetch()} />
           : <DataTable columns={historyColumns} rows={jobs.data?.jobs} rowKey={j => j.id} loading={jobs.isLoading} emptyMessage={t('quality.history.empty')} />}
       </Card>
+
+      <CalibrationCard />
 
       <RunsSection />
 

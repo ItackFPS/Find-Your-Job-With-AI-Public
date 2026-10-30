@@ -653,6 +653,32 @@ export interface FtCoverage {
 }
 export const getFtCoverage = () => api.get<FtCoverage>('/quality/ft-coverage').then(r => r.data)
 
+// ---- Quality › Calibration: blind labelling of an exported real dataset (P2.3) ----
+export type CalibrationAnswer = 'relevant' | 'not_relevant' | 'not_sure'
+export interface CalibrationDataset {
+  dataset_id: string; version?: string; total?: number; labelled?: number; pending?: number; target?: number
+  by_answer?: Record<CalibrationAnswer, number>; provenance?: Record<string, number>; error?: string
+}
+export interface CalibrationOverview {
+  datasets: CalibrationDataset[]; exports_found: { source: string; dataset_id: string; total: number }[]
+  reasons: string[]; max_session: number
+}
+export interface CalibrationItem {
+  job_id: string; title: string; company: string; location: string; remote: boolean | null; source: string
+  description: string; description_truncated: boolean
+}
+export const getCalibration = () => api.get<CalibrationOverview>('/quality/calibration').then(r => r.data)
+export const importCalibration = (source: string) =>
+  api.post<CalibrationDataset>('/quality/calibration/import', { source }).then(r => r.data)
+export const nextCalibrationItems = (id: string, n: number) =>
+  api.get<{ items: CalibrationItem[] }>(`/quality/calibration/${encodeURIComponent(id)}/next?n=${n}`).then(r => r.data.items)
+export const answerCalibration = (id: string, job_id: string, answer: CalibrationAnswer, reason: string | null) =>
+  api.post<CalibrationDataset>(`/quality/calibration/${encodeURIComponent(id)}/answers`, { job_id, answer, reason }).then(r => r.data)
+export const saveCalibration = (id: string) =>
+  api.post<CalibrationDataset & { changed: number }>(`/quality/calibration/${encodeURIComponent(id)}/save`).then(r => r.data)
+export const extendCalibration = (id: string) =>
+  api.post<CalibrationDataset>(`/quality/calibration/${encodeURIComponent(id)}/extend`).then(r => r.data)
+
 // ---- Feedback journal (append-only; see docs/adr/0009-feedback-journal.md) ----
 export interface FeedbackEvent {
   event_id: string

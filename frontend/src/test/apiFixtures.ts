@@ -247,6 +247,7 @@ export function resolveFixture(path: string): unknown {
     [/^\/quality\/health$/, qualityHealth],
     [/^\/quality\/jobs$/, qualityJobs],
     [/^\/quality\/ft-coverage$/, { status: 'no_api_offers', window_days: 7, days_with_both: 0, api_offers: 0, web_offers: 12, found_by_web: 0, share: null, ci95: null }],
+    [/^\/quality\/calibration$/, { datasets: [], exports_found: [], reasons: ['location', 'other'], max_session: 30 }],
     [/^\/quality\/jobs\/[^/]+$/, qualityJobs.jobs[1]],
     [/^\/linkedin\/status$/, linkedInStatus],
     [/^\/linkedin\/scans$/, [linkedInScan]],

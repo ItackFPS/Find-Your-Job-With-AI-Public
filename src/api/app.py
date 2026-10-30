@@ -54,6 +54,7 @@ from src.api.peer_guard import (
 )
 from src.api.routes import (
     ai,
+    calibration,
     dashboard,
     decisions,
     departments,
@@ -386,6 +387,7 @@ app.include_router(settings_routes.router)
 app.include_router(skills.router)
 app.include_router(lab.router)
 app.include_router(quality.router)
+app.include_router(calibration.router)
 app.include_router(ai.router)
 app.include_router(sources.router)
 
