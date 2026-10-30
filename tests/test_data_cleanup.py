@@ -148,3 +148,21 @@ def test_the_cleanup_waits_for_a_running_search(client, monkeypatch: pytest.Monk
     assert (r.status_code, r.json()["detail"]) == (409, "search_running")
     assert client.post("/api/settings/data/cleanup", json={"older_than_days": 1}).status_code == 422
 
+
+@pytest.mark.parametrize("method,path", [
+    ("post", "/api/pipeline/run"),
+    ("post", "/api/scheduler/run/pipeline_daily"),
+    ("post", "/api/linkedin/scan"),
+    ("post", "/api/linkedin/resume"),
+    ("post", "/api/hellowork/scan"),
+    ("post", "/api/hellowork/resume"),
+])
+def test_no_search_or_scan_starts_during_a_cleanup(client, method: str, path: str) -> None:
+    from src.api.routes.settings import _cleanup
+
+    assert _cleanup.lock.acquire(blocking=False)
+    try:
+        r = getattr(client, method)(path)
+        assert (r.status_code, r.json()["detail"]) == (409, "cleanup_running")
+    finally:
+        _cleanup.lock.release()

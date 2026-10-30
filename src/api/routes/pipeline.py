@@ -72,6 +72,9 @@ def start_run(
     run with Phase 2 (local AI) enabled, the same flag the CLI's ``--ai``
     switch controls.
     """
+    from src.api.routes.settings import refuse_while_cleaning
+
+    refuse_while_cleaning()
     runner = _get_runner(request)
     use_ai = body.use_ai if body is not None else False
     try:

@@ -96,6 +96,12 @@ class _Cleanup:
 _cleanup = _Cleanup()
 
 
+def refuse_while_cleaning() -> None:
+    """409 for a search or scan asked for while a cleanup rewrites the database."""
+    if _cleanup.lock.locked():
+        raise HTTPException(status_code=409, detail="cleanup_running")
+
+
 def _busy(request: Request) -> str | None:
     """Why a cleanup cannot start now (it needs the database to itself), or None."""
     state = request.app.state
