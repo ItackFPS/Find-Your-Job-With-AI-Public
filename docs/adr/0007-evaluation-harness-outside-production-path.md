@@ -23,6 +23,12 @@ could itself change production). Time-dependent checks are frozen to the dataset
 - Real-job datasets exported from `jobs.db` contain only jobs accepted at the time
   (rejected jobs keep no description). They therefore expose false positives but cannot
   measure false negatives; runs on them carry an explicit survival-bias warning.
+- Hard filters and gates only reject; location and the other preferences rank (ADR 0005; location
+  rejects only beyond `max_distance_km` when the profile sets `strict_distance`). A
+  job labelled `reject` "for location" therefore usually passes and counts as a false positive in the
+  confusion metrics. Runs also report `ranking` (AUC and precision@k of the deterministic score
+  over the accepted jobs, and what the `relevant` tier floor shows). This is the measure for
+  scoring changes. Offline it is a proxy, because production blends in semantic similarity.
 - The runner mirrors the orchestrator's requirements-gate wiring and builds the scoring
   config through the shared `scoring.build_scoring_config`.
   `tests/test_evaluation_orchestrator_equivalence.py` runs the real `run_pipeline()` on

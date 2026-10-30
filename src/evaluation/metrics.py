@@ -240,6 +240,7 @@ def evaluate(
         "uncertainty": _uncertainty(decisions),
         "diagnostic_excluding_freshness": diagnostic_excluding_freshness(decisions, labels),
         "label_provenance": label_provenance(decisions, labels, assisted),
+        "ranking": ranking_metrics(decisions, labels),
     }
 
 
@@ -342,3 +343,109 @@ def review_metrics(decisions: list[Decision], labels: dict[str, LabelRecord]) ->
                  if insufficient else "")
                 + " Offline runs use rules only: a rejected job cannot be flagged for review without LLM/semantic signals.",
     }
+
+
+# --- ranking: how the score orders what the gates let through ------------------------------------------
+#
+# The gates only reject; a job outside the profile's preferred locations, say, passes them and is ranked
+# low instead (ADR 0005). Confusion metrics alone therefore call such a job a false positive, and cannot
+# see a scoring change at all. These metrics judge the order. Offline, ``score`` is the deterministic
+# score (no semantic blend), so they are a proxy for what production ranks.
+
+RANKING_KS = (5, 10, 20)
+VISIBILITY_TIER = "relevant"     # the floor the weekly top-N and notifications apply by default
+MOVED_TOP = 10
+RANKING_DEFINITION = {
+    "population": "labelled jobs accepted by the gates (verdict accept) that have a score",
+    "positive": "accept",
+    "negative": "reject",
+    "excluded": "borderline labels (see auc_borderline_as_accept), unlabelled jobs, jobs the gates rejected "
+                "(counted in accept_rejected_by_gates)",
+    "direction": "higher score ranks first; AUC = P(positive outscores negative), ties count half",
+    "score": "deterministic score of the replay (no semantic blend): a proxy for production's final_score",
+}
+
+
+def _auc(pos: Sequence[float], neg: Sequence[float]) -> float | None:
+    """P(a random accept-labelled job outscores a random reject-labelled one); ties count half."""
+    if not pos or not neg:
+        return None
+    wins = sum((p > n) + 0.5 * (p == n) for p in pos for n in neg)
+    return wins / (len(pos) * len(neg))
+
+
+def _ranked(decisions: Sequence[Decision], labels: dict[str, LabelRecord]) -> list[tuple[float, str, str]]:
+    """``(score, job_id, expected)`` for labelled jobs the gates accepted, best first (job id breaks ties)."""
+    rows = [(d.score, d.job_id, labels[d.job_id].expected) for d in decisions
+            if d.verdict == "accept" and d.score is not None and d.job_id in labels]
+    return sorted(rows, key=lambda r: (-r[0], r[1]))
+
+
+def _auc_of(ranked: Sequence[tuple[float, str, str]], *, borderline_as: str | None = None) -> float | None:
+    def kind(e: str) -> str:
+        return borderline_as if (e == "borderline" and borderline_as) else e
+    return _auc([s for s, _, e in ranked if kind(e) == "accept"], [s for s, _, e in ranked if kind(e) == "reject"])
+
+
+def ranking_metrics(decisions: Sequence[Decision], labels: dict[str, LabelRecord]) -> dict[str, Any]:
+    """AUC, precision@k and the visibility floor over the labelled jobs the gates accepted."""
+    from src.pipeline.scoring import TIER_THRESHOLDS, score_to_tier, tier_meets_minimum
+
+    ranked = _ranked(decisions, labels)
+    precision_at = {str(k): (sum(e == "accept" for _, _, e in ranked[:k]) / k if len(ranked) >= k else None)
+                    for k in RANKING_KS}
+    shown = [e for s, _, e in ranked if tier_meets_minimum(score_to_tier(round(s * 100)), VISIBILITY_TIER)]
+    return {
+        "definition": RANKING_DEFINITION,
+        "auc": _auc_of(ranked),
+        "auc_borderline_as_accept": _auc_of(ranked, borderline_as="accept"),
+        "n_accept": sum(e == "accept" for _, _, e in ranked),
+        "n_reject": sum(e == "reject" for _, _, e in ranked),
+        "n_borderline": sum(e == "borderline" for _, _, e in ranked),
+        "precision_at": precision_at,
+        "visible_at_floor": {
+            "tier": VISIBILITY_TIER,
+            "min_score": next(t for t, name in TIER_THRESHOLDS if name == VISIBILITY_TIER) / 100,
+            "accept": shown.count("accept"), "borderline": shown.count("borderline"), "reject": shown.count("reject"),
+            "accept_hidden": sum(e == "accept" for _, _, e in ranked) - shown.count("accept"),
+        },
+        "accept_rejected_by_gates": sum(1 for d in decisions if d.verdict == "reject" and d.job_id in labels
+                                        and labels[d.job_id].expected == "accept"),
+    }
+
+
+def ranking_delta(
+    baseline: Sequence[Decision], candidate: Sequence[Decision], labels: dict[str, LabelRecord],
+    *, n_boot: int = 2000, seed: int = 20260917,
+) -> dict[str, Any]:
+    """Candidate minus baseline AUC on ONE cohort: the labelled jobs both runs accept.
+
+    Each side's own AUC (``ranking_metrics``) is over the jobs its gates accept; when a candidate changes
+    gate decisions those are two populations, and their difference mixes re-ranking with who was let
+    through. ``cohort`` says how many jobs only one side accepts. The CI is a paired percentile bootstrap
+    over the cohort (same resample for both sides). ``moved`` lists the cohort jobs whose rank changed
+    most. ``auc`` is ``None`` when the cohort has no accept/reject pair."""
+    rb, rc = _ranked(baseline, labels), _ranked(candidate, labels)
+    ib, ic = {r[1] for r in rb}, {r[1] for r in rc}
+    common = ib & ic
+    rb, rc = [r for r in rb if r[1] in common], [r for r in rc if r[1] in common]
+    cohort = {"common": len(common), "only_baseline": len(ib - ic), "only_candidate": len(ic - ib)}
+    pos_b, pos_c = {r[1]: (i + 1, r) for i, r in enumerate(rb)}, {r[1]: (i + 1, r) for i, r in enumerate(rc)}
+    shifted = sorted((j for j in common if pos_b[j][0] != pos_c[j][0]),
+                     key=lambda j: (-abs(pos_b[j][0] - pos_c[j][0]), j))[:MOVED_TOP]
+    moved = [{"job_id": j, "expected": pos_b[j][1][2], "rank": [pos_b[j][0], pos_c[j][0]],
+              "score": [pos_b[j][1][0], pos_c[j][1][0]]} for j in shifted]
+    ab, ac = _auc_of(rb), _auc_of(rc)
+    if ab is None or ac is None:
+        return {"auc": None, "auc_diff_ci95": None, "cohort": cohort, "moved": moved}
+    ids = sorted(j for _, j, e in rb if e != "borderline")
+    rng = random.Random(seed)
+    diffs = []
+    mb, mc = {r[1]: r for r in rb}, {r[1]: r for r in rc}
+    for _ in range(n_boot):
+        sample = [rng.choice(ids) for _ in ids]
+        b, c = _auc_of([mb[j] for j in sample]), _auc_of([mc[j] for j in sample])
+        if b is not None and c is not None:
+            diffs.append(c - b)
+    ci = (percentile(diffs, 0.025), percentile(diffs, 0.975)) if diffs else None
+    return {"auc": ac - ab, "auc_diff_ci95": ci, "cohort": cohort, "moved": moved}
