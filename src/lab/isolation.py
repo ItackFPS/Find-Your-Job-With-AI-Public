@@ -13,13 +13,14 @@ auto-reloader reacts). A probe that is refused for any reason counts as protecte
 File permissions are not the whole boundary, so the full check also probes:
 
 * secrets (``.env*`` except ``.env.example``, ``config/*.local.*``): a readable one is the account's
-  too — ``.env`` holds e.g. the n8n API key, and n8n can call the API as the human;
+  too — ``.env`` can hold API keys and tokens that call services as the human;
 * the application's API port: the API runs as the human and writes production state for any caller, so
   it must refuse this account (``API_SAME_USER_ONLY=1``, ``src/api/peer_guard.py``). Nothing listening
   proves nothing (the server may start later without the guard, or this account could take the port),
   so it counts as unverified;
-* relay ports (the Vite dev server, n8n): services of the human's account that forward requests to the
-  API. Anything answering there is a way round the API guard; nothing listening is fine;
+* relay ports (the Vite dev server; an n8n a pre-2.0 install may have left running): services of the
+  human's account that forward requests to the API. Anything answering there is a way round the API
+  guard; nothing listening is fine;
 * links (junctions, symlinks) inside the repository that lead outside it: whatever is read through
   them is whatever sits at the target, so a target this account can write — or, when it is missing,
   create — lets it plant content (e.g. agent skills) that the human's tools load;
@@ -50,7 +51,7 @@ from src.lab.sandbox import in_app_container
 
 PROBE_SUFFIX = ".isolation-probe"
 API_PORTS = (8000,)
-RELAY_PORTS = (5173, 5678)                 # Vite dev proxy, n8n
+RELAY_PORTS = (5173, 5678)                 # Vite dev proxy; n8n left by a pre-2.0 install (still probed)
 # written by the launcher (src/launcher/core.py Settings.instance_file / port_file); the lab never imports it
 INSTANCE_LOCK = Path("data") / "state" / "instance.json"
 LIVE_PORT_FILE = Path("data") / "state" / "api-port.json"

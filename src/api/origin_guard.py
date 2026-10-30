@@ -1,14 +1,14 @@
 """Keep the local, unauthenticated API reachable only from the local machine.
 
-Security boundary: the backend trusts any process on this machine (curl, n8n,
-scripts — none of them is authenticated), and defends against WEB PAGES the
+Security boundary: the backend trusts any process on this machine (curl,
+scripts, local automation tools — none of them is authenticated), and defends against WEB PAGES the
 user visits, which can make the browser send requests to 127.0.0.1. Two
 ASGI middlewares, the Host guard outermost:
 
 LocalHostGuardMiddleware (issue #59) — every HTTP request, reads included,
 must carry a loopback ``Host`` (``localhost``, ``127.0.0.1``, ``[::1]``, any
 port) or one listed in ``extra_hosts`` (``API_ALLOWED_HOSTS``, e.g.
-``host.docker.internal`` for a containerised n8n). A DNS-rebinding page
+``host.docker.internal`` for a containerised local tool). A DNS-rebinding page
 (``attacker.example`` re-resolved to 127.0.0.1) always sends its own name as
 Host, so it is refused before any route runs — which also stops it from
 reading responses, something CORS cannot do once the page is same-origin.
@@ -24,7 +24,7 @@ Origin with the request's own Host is only sound because the Host guard has
 already restricted Host to the local machine.
 
 Allowed:
-  * no ``Origin`` header — curl, n8n, scripts, server-to-server calls;
+  * no ``Origin`` header — curl, scripts, local tools, server-to-server calls;
   * ``Origin`` equal to the request's own scheme and host — the SPA served by
     the backend itself;
   * ``Origin`` in ``allowed_origins`` — the Vite dev server (its proxy keeps
