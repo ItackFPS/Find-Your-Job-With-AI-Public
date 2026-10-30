@@ -22,8 +22,8 @@ scoring:
     # "status": "preferred"}, ...]) the candidate configures on the Profile
     # page. List position is priority. No hardcoded location default here:
     # an empty profile list means no location gets a priority tier. Resolved
-    # via src/pipeline/location_match.py::resolve_job_location (used only when
-    # the profile has no home; with a home, distance scoring applies). PACA-neighbor departments
+    # via src/pipeline/location_match.py::resolve_job_location, the same
+    # function Discord notification routing uses. PACA-neighbor departments
     # (13/04/05/06/84) remain a separate, fixed constant in
     # src/pipeline/departments.py, independent of this preference.
     #
