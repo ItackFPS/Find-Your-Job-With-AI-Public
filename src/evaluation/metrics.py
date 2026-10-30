@@ -353,6 +353,8 @@ def review_metrics(decisions: list[Decision], labels: dict[str, LabelRecord]) ->
 # score (no semantic blend), so they are a proxy for what production ranks.
 
 RANKING_KS = (5, 10, 20)
+STRONG_TIER = "strong"           # precision@Strong: the offers the app calls a strong match
+RECALL_K = 20                    # recall@20: the suitable offers a top-20 list surfaces
 VISIBILITY_TIER = "relevant"     # the floor the weekly top-N and notifications apply by default
 MOVED_TOP = 10
 RANKING_DEFINITION = {
@@ -387,18 +389,56 @@ def _auc_of(ranked: Sequence[tuple[float, str, str]], *, borderline_as: str | No
     return _auc([s for s, _, e in ranked if kind(e) == "accept"], [s for s, _, e in ranked if kind(e) == "reject"])
 
 
+def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float] | None:
+    """Wilson score interval for ``k`` successes out of ``n`` (``None`` when ``n`` is 0)."""
+    if n == 0:
+        return None
+    p = k / n
+    centre = (p + z * z / (2 * n)) / (1 + z * z / n)
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / (1 + z * z / n)
+    return max(0.0, centre - half), min(1.0, centre + half)
+
+
+def _auc_ci(ranked: Sequence[tuple[float, str, str]], *, n_boot: int = 1000, seed: int = 20260917) -> tuple[float, float] | None:
+    """Percentile bootstrap CI95 of the AUC, resampling the accept/reject-labelled jobs."""
+    rows = [r for r in ranked if r[2] != "borderline"]
+    if _auc_of(rows) is None:
+        return None
+    rng = random.Random(seed)
+    values = [v for v in (_auc_of([rng.choice(rows) for _ in rows]) for _ in range(n_boot)) if v is not None]
+    return (percentile(values, 0.025), percentile(values, 0.975)) if len(values) >= n_boot // 2 else None  # type: ignore[return-value]
+
+
 def ranking_metrics(decisions: Sequence[Decision], labels: dict[str, LabelRecord]) -> dict[str, Any]:
-    """AUC, precision@k and the visibility floor over the labelled jobs the gates accepted."""
+    """AUC, precision@k and the visibility floor over the labelled jobs the gates accepted.
+
+    With CIs: ``auc_ci95`` (bootstrap), ``precision_at_strong`` (accept share of the jobs scored at the
+    ``strong`` tier or above) and ``recall_at_20`` (share of ALL accept-labelled jobs, gate-rejected ones
+    included, that the top 20 holds), both with Wilson intervals."""
     from src.pipeline.scoring import TIER_THRESHOLDS, score_to_tier, tier_meets_minimum
 
     ranked = _ranked(decisions, labels)
     precision_at = {str(k): (sum(e == "accept" for _, _, e in ranked[:k]) / k if len(ranked) >= k else None)
                     for k in RANKING_KS}
     shown = [e for s, _, e in ranked if tier_meets_minimum(score_to_tier(round(s * 100)), VISIBILITY_TIER)]
+    strong = [e for s, _, e in ranked if tier_meets_minimum(score_to_tier(round(s * 100)), STRONG_TIER)]
+    all_accepts = sum(1 for d in decisions if d.job_id in labels and labels[d.job_id].expected == "accept")
+    in_top = sum(e == "accept" for _, _, e in ranked[:RECALL_K])
     return {
         "definition": RANKING_DEFINITION,
         "auc": _auc_of(ranked),
         "auc_borderline_as_accept": _auc_of(ranked, borderline_as="accept"),
+        "auc_ci95": _auc_ci(ranked),
+        "precision_at_strong": {
+            "tier": STRONG_TIER, "min_score": next(t for t, name in TIER_THRESHOLDS if name == STRONG_TIER) / 100,
+            "n": len(strong), "accept": strong.count("accept"),
+            "value": strong.count("accept") / len(strong) if strong else None,
+            "ci95": wilson(strong.count("accept"), len(strong)),
+        },
+        "recall_at_20": {
+            "k": RECALL_K, "n_accept": all_accepts, "in_top": in_top,
+            "value": in_top / all_accepts if all_accepts else None, "ci95": wilson(in_top, all_accepts),
+        },
         "n_accept": sum(e == "accept" for _, _, e in ranked),
         "n_reject": sum(e == "reject" for _, _, e in ranked),
         "n_borderline": sum(e == "borderline" for _, _, e in ranked),

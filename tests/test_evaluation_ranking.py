@@ -109,3 +109,26 @@ def test_the_markdown_report_shows_the_ranking():
                       require_complete_labels=False)
     md = render_markdown(run_evaluation(ds, StrategyRef(config_dir=str(root / "config"))))
     assert "## Ranking of the accepted jobs" in md and "at the `relevant` floor" in md
+
+
+def test_precision_at_strong_recall_at_20_and_the_auc_interval():
+    decisions = [_dec("a1", "accept", 0.80), _dec("r1", "accept", 0.70), _dec("a2", "accept", 0.65),
+                 _dec("b1", "accept", 0.62), _dec("r2", "accept", 0.50), _dec("r3", "accept", 0.64),
+                 _dec("x", "reject", None)]
+    m = ranking_metrics(decisions, LABELS)
+    strong = m["precision_at_strong"]                            # strong tier: score >= 0.65
+    assert (strong["tier"], strong["min_score"], strong["n"], strong["accept"]) == ("strong", 0.65, 3, 2)
+    assert strong["value"] == pytest.approx(2 / 3) and strong["ci95"][0] < 2 / 3 < strong["ci95"][1]
+    recall = m["recall_at_20"]                                   # x is accept but gate-rejected: never in the top
+    assert (recall["k"], recall["n_accept"], recall["in_top"]) == (20, 3, 2)
+    assert recall["value"] == pytest.approx(2 / 3)
+    lo, hi = m["auc_ci95"]
+    assert 0 <= lo <= m["auc"] <= hi <= 1
+    assert ranking_metrics(decisions, LABELS)["auc_ci95"] == (lo, hi)      # seeded: reproducible
+
+
+def test_intervals_are_absent_rather_than_invented_without_evidence():
+    m = ranking_metrics([_dec("a1", "accept", 0.3)], LABELS)
+    assert m["auc_ci95"] is None
+    assert m["precision_at_strong"]["value"] is None and m["precision_at_strong"]["ci95"] is None
+    assert m["recall_at_20"]["in_top"] == 1
