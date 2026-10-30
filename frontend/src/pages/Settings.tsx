@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { BackgroundCard, DailyRunsCard, SourcesCard } from '../components/settings'
+import { BackgroundCard, DailyRunsCard, DataCard, SourcesCard } from '../components/settings'
 
 // Settings › Sources and background (issue #82, owner decisions R-Q3, R-C2, R-C5):
 // everything about collection, without a terminal or a settings file.
@@ -14,6 +14,7 @@ export default function Settings() {
       <BackgroundCard />
       <DailyRunsCard />
       <SourcesCard />
+      <DataCard />
     </div>
   )
 }
