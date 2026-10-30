@@ -288,9 +288,11 @@ def run_agent(
             basis = ("independently supported" if res["independently_validated"] else
                      "EXPLORATORY ONLY, not independently validated: the independent human labels alone do not "
                      "support it")
+            # the replay's profile too: approve recomputes the evidence and needs it when the dataset pins none
+            profile = f' --profile "{baseline.profile_path}"' if baseline.profile_path else ""
             entry["recommendation"] = memory_rec = (
                 f"Eligible for HUMAN review ({basis}): inspect experiment {exp_id}, then if you agree run "
-                f"`python -m src.lab approve {exp_id} --dataset {dataset.path} --by <you> --reason \"...\""
+                f"`python -m src.lab approve {exp_id} --dataset \"{dataset.path}\"{profile} --by <you> --reason \"...\""
                 f"{'' if res['independently_validated'] else ' --accept-exploratory-evidence'}` in your own terminal "
                 "(it re-runs the experiment and asks you to type a confirmation code)")
             memory.add("conclusion", memory_rec, inputs=inputs, key=f.key, ref=exp_id)

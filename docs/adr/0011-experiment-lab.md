@@ -90,9 +90,10 @@ filters must stay a measured, reversible, human-approved act.
   now) and candidate are replayed in the approving process; the fresh baseline and candidate fingerprints
   and verdict must match the record (a mismatch means the record was altered or production changed:
   re-run), and the fresh verdict must be an eligible `improvement`. The approver is shown the recomputed
-  verdict, tier and limitations and types back a one-time code; the pointer then stores
-  `approval_evidence` (recomputed verdict, CI, tier, dataset path and hashes, fingerprints, reason,
-  approver name + OS account + host). `rollback` appends a pointer to an earlier bundle, `deactivate` a
+  verdict, tier and limitations and the change itself — a diff of what production runs now against the
+  verified bundle, never the lab's or a proposer's description of it — and types back a one-time code;
+  the pointer then stores `approval_evidence` (recomputed verdict, CI, tier, dataset path and hashes,
+  fingerprints, that diff as `change`, reason, approver name + OS account + host). `rollback` appends a pointer to an earlier bundle, `deactivate` a
   pointer back to `config/`, both confirmed the same way and recorded with the approver's identity. No
   automatic promotion exists.
 - **Production honours the pointer** through `src/decisions/active_strategy.py` (production still never

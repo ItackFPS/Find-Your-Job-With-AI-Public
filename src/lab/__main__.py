@@ -88,6 +88,9 @@ def _approval_summary(evidence: dict[str, Any]) -> str:
              f" - independent labels: {ind.get('why', 'n/a')}"]
     if evidence["acknowledged_exploratory"]:
         lines.append("  you are acknowledging that this is NOT independently validated")
+    # the change itself, from the verified bundle: what a hypothesis statement claims is not what is promoted
+    lines.append("  change (what production runs now -> the bundle):")
+    lines += [f"    {line}" for line in evidence["change"]] or ["    (none)"]
     a = evidence["approver"]
     lines.append(f"  recorded as approved by {a['name']} (account {a['os_account']} on {a['host']}): {evidence['reason']}")
     return "\n".join(lines)
