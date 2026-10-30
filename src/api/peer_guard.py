@@ -19,7 +19,7 @@ included — before any middleware runs, so a process of another account could n
 one of the human's open connections (any account can list them) and be looked up as that connection.
 
 What it cannot see: a process of the SAME account that relays requests (the Vite dev server's proxy, a
-browser, Docker Desktop forwarding a containerised n8n) is allowed, and so is whatever talks to it. Such
+browser, Docker Desktop forwarding a containerised tool) is allowed, and so is whatever talks to it. Such
 relays must not be reachable by the restricted account (docs/development.md, *Isolated lab agent*).
 """
 

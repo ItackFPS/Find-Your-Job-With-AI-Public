@@ -506,7 +506,7 @@ and that check probes all four from the agent's account:
 
 1. **Files**: NTFS denies the account every write, delete, rename, ACL and owner change in the
    repository except `data\lab\`. It also denies it reading secrets (`.env*` except `.env.example`,
-   `config\*.local.*`): `.env` holds e.g. the n8n API key, and n8n can call the API as you.
+   `config\*.local.*`): `.env` can hold API keys and tokens that call services as you.
 2. **Places you execute from**: the account must not be able to write, or create, anything you run.
    That covers PATH directories, the programs and scripts your scheduled tasks start, Startup items and
    Run keys. Code planted there runs **as you**, which defeats everything else.

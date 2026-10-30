@@ -305,7 +305,7 @@ app.add_middleware(OriginGuardMiddleware, allowed_origins=ALLOWED_WEB_ORIGINS)
 
 # Refuse any request whose Host is not this machine
 # (issue #59, DNS rebinding). API_ALLOWED_HOSTS (comma-separated) adds names
-# such as host.docker.internal for a containerised n8n.
+# such as host.docker.internal for a containerised local tool.
 app.add_middleware(
     LocalHostGuardMiddleware,
     extra_hosts=os.environ.get("API_ALLOWED_HOSTS", "").split(","),
