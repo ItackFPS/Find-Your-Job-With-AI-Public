@@ -10,9 +10,11 @@ import { StatusBadge } from '../StatusBadge'
 import { useToast } from '../toastContext'
 import { SCHEDULER_QUERY_KEY } from './queryKeys'
 
-// What a schedule does on its own, in plain words.
-function cadence(s: ScheduleStatus, t: (key: string, opts?: Record<string, unknown>) => string): string {
+// What a schedule does on its own, in plain words. With background collection off nothing
+// runs daily, whatever the schedule's own condition.
+function cadence(s: ScheduleStatus, t: (key: string, opts?: Record<string, unknown>) => string, backgroundOff: boolean): string {
   if (s.is_running) return t('settings.runs.runningNow')
+  if (!s.daily && backgroundOff) return t('settings.runs.backgroundOff')
   if (!s.daily) {
     if (s.startup_policy === 'when_opted_in') return t('settings.runs.notChosen')
     if (s.startup_policy === 'when_profile_saved') return t('settings.runs.needsProfile')
@@ -82,7 +84,7 @@ export function DailyRunsCard() {
             >
               <div style={{ flex: '1 1 12rem', minWidth: 0 }}>
                 <div style={{ fontWeight: 'var(--font-weight-semibold)' }}>{t(`settings.runs.labels.${s.id}`, { defaultValue: s.label })}</div>
-                <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>{cadence(s, t)}</div>
+                <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>{cadence(s, t, data.background?.enabled === false)}</div>
               </div>
               <div style={{ flex: '1 1 12rem', minWidth: 0 }}><LastRun s={s} /></div>
               <Button variant="secondary" disabled={s.is_running || run.isPending} onClick={() => run.mutate(s.id)}>

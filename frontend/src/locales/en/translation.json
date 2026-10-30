@@ -1090,6 +1090,7 @@
       "notChosen": "Only when you start it: turn the source on below to run it daily.",
       "needsProfile": "Starts once you have saved your profile.",
       "manualOnly": "Only when you start it.",
+      "backgroundOff": "Background collection is off: only when you start it.",
       "dueToday": "Today's run is about to start.",
       "next": "Next run: {when}",
       "never": "Never run",
