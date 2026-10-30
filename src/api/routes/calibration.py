@@ -7,24 +7,33 @@ POST /api/quality/calibration/{id}/answers       — save one answer {job_id, an
 POST /api/quality/calibration/{id}/save          — write the session's answers as a new dataset version
 POST /api/quality/calibration/{id}/extend        — "label 100 more"
 
-Everything happens in ``src.evaluation.calibration``; this module maps its refusals to HTTP codes. It
-never reads or writes ``jobs.db``. Writes go through the same origin and peer guards as every other
-mutating route (app middleware).
+Each request runs ``python -m src.evaluation.calibration`` in a child process, like the Quality jobs:
+production code never imports the evaluation package (ADR 0007). This module only maps its JSON and
+refusal codes to HTTP. It never reads or writes ``jobs.db``. Writes go through the same origin and peer
+guards as every other mutating route (app middleware).
 """
 
 from __future__ import annotations
 
+import json
+import logging
+import os
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, Body, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.evaluation import calibration as cal
-from src.evaluation.dataset import DatasetError, load_dataset
+from src.api.quality_jobs import PROJECT_ROOT
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/quality/calibration", tags=["quality"])
 
+CALIBRATION_DIR = "calibration"       # under the data folder, beside jobs.db
+MAX_SESSION = 30
+_TIMEOUT_SECONDS = 120
 _STATUS = {"not_found": 404, "already_imported": 409, "already_labelled": 409}
 
 
@@ -37,7 +46,7 @@ class AnswerIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     job_id: str = Field(min_length=1, max_length=128)
     answer: Literal["relevant", "not_relevant", "not_sure"]
-    reason: str | None = Field(default=None, max_length=32)   # one of cal.REASONS, checked there
+    reason: str | None = Field(default=None, max_length=32)   # one of the tool's reasons, checked there
 
 
 def _data_dir(request: Request) -> Path:
@@ -45,70 +54,61 @@ def _data_dir(request: Request) -> Path:
 
 
 def _root(request: Request) -> Path:
-    return Path(getattr(request.app.state, "calibration_dir", None) or cal.calibration_root(_data_dir(request)))
+    return Path(getattr(request.app.state, "calibration_dir", None) or _data_dir(request) / CALIBRATION_DIR)
 
 
-def _refused(exc: cal.CalibrationError) -> HTTPException:
-    return HTTPException(status_code=_STATUS.get(exc.code, 400), detail={"code": exc.code})
+def _arg(value: str) -> str:
+    """A user value passed as a command-line argument: one starting with "-" would read as an option."""
+    if value.startswith("-"):
+        raise HTTPException(status_code=400, detail={"code": "invalid_argument"})
+    return value
 
 
-def _exports_found(request: Request, imported: set[str]) -> list[dict[str, Any]]:
-    """Real exports under ``<data>/benchmarks/`` not imported yet, so the page can offer them by name."""
-    bench = _data_dir(request) / "benchmarks"
-    found = []
-    if bench.is_dir():
-        for child in sorted(p for p in bench.iterdir() if (p / "manifest.json").is_file()):
-            try:
-                m = load_dataset(child, require_complete_labels=False).manifest
-            except DatasetError:
-                continue
-            if m.kind == "real" and m.dataset_id not in imported:
-                found.append({"source": str(child), "dataset_id": m.dataset_id, "total": m.job_count})
-    return found
+def _call(request: Request, *args: str) -> dict[str, Any]:
+    cmd = [sys.executable, "-m", "src.evaluation.calibration", str(_root(request)), *args]
+    try:
+        proc = subprocess.run(cmd, cwd=str(PROJECT_ROOT), env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+                              capture_output=True, text=True, encoding="utf-8", errors="replace",
+                              stdin=subprocess.DEVNULL, timeout=_TIMEOUT_SECONDS,
+                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        out = json.loads(proc.stdout or "null")
+    except (subprocess.TimeoutExpired, OSError, ValueError) as exc:
+        logger.warning("calibration %s failed: %s", args[:1], exc)
+        raise HTTPException(status_code=500, detail={"code": "unexpected"}) from exc
+    if proc.returncode == 2 and isinstance(out, dict) and "error" in out:
+        raise HTTPException(status_code=_STATUS.get(out["error"], 400), detail={"code": out["error"]})
+    if proc.returncode != 0 or not isinstance(out, dict):
+        logger.warning("calibration %s exited %s: %s", args[:1], proc.returncode, (proc.stderr or "")[-2000:])
+        raise HTTPException(status_code=500, detail={"code": "unexpected"})
+    return out
 
 
 @router.get("")
 def overview(request: Request) -> dict[str, Any]:
-    datasets = cal.list_datasets(_root(request))
-    return {"datasets": datasets, "exports_found": _exports_found(request, {d["dataset_id"] for d in datasets}),
-            "reasons": list(cal.REASONS), "max_session": cal.MAX_SESSION}
+    return _call(request, "list", "--exports", str(_data_dir(request) / "benchmarks"))
 
 
 @router.post("/import")
 def import_export(request: Request, body: ImportIn = Body(...)) -> dict[str, Any]:
-    try:
-        return cal.import_dataset(body.source, _root(request))
-    except cal.CalibrationError as exc:
-        raise _refused(exc) from exc
+    return _call(request, "import", _arg(body.source))
 
 
 @router.get("/{dataset_id}/next")
-def next_items(dataset_id: str, request: Request, n: int = Query(default=10, ge=1, le=cal.MAX_SESSION)) -> dict[str, Any]:
-    try:
-        return {"items": cal.next_items(_root(request), dataset_id, n)}
-    except cal.CalibrationError as exc:
-        raise _refused(exc) from exc
+def next_items(dataset_id: str, request: Request, n: int = Query(default=10, ge=1, le=MAX_SESSION)) -> dict[str, Any]:
+    return _call(request, "next", _arg(dataset_id), str(n))
 
 
 @router.post("/{dataset_id}/answers")
 def answer(dataset_id: str, request: Request, body: AnswerIn = Body(...)) -> dict[str, Any]:
-    try:
-        return cal.record_answer(_root(request), dataset_id, body.job_id, body.answer, body.reason)
-    except cal.CalibrationError as exc:
-        raise _refused(exc) from exc
+    return _call(request, "answer", _arg(dataset_id), _arg(body.job_id), body.answer,
+                 *(["--reason", _arg(body.reason)] if body.reason is not None else []))
 
 
 @router.post("/{dataset_id}/save")
 def save(dataset_id: str, request: Request) -> dict[str, Any]:
-    try:
-        return cal.save_session(_root(request), dataset_id)
-    except cal.CalibrationError as exc:
-        raise _refused(exc) from exc
+    return _call(request, "save", _arg(dataset_id))
 
 
 @router.post("/{dataset_id}/extend")
 def extend(dataset_id: str, request: Request) -> dict[str, Any]:
-    try:
-        return cal.extend_target(_root(request), dataset_id)
-    except cal.CalibrationError as exc:
-        raise _refused(exc) from exc
+    return _call(request, "extend", _arg(dataset_id))

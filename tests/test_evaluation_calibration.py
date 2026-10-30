@@ -184,3 +184,9 @@ def test_api_offers_exports_found_in_the_data_folder(api, export_dir):
     assert [(f["dataset_id"], f["total"]) for f in found] == [("real-x", 100)]
     c.post("/api/quality/calibration/import", json={"source": found[0]["source"]})
     assert c.get("/api/quality/calibration").json()["exports_found"] == []
+
+
+def test_api_refuses_values_that_would_read_as_options(api):
+    c, _ = api
+    assert c.get("/api/quality/calibration/--help/next").status_code == 400
+    assert c.post("/api/quality/calibration/import", json={"source": "--exports"}).status_code == 400

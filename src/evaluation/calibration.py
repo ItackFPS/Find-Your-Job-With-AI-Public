@@ -163,6 +163,20 @@ def list_datasets(root: str | Path) -> list[dict[str, Any]]:
     return out
 
 
+def exports_found(folder: str | Path, imported: set[str]) -> list[dict[str, Any]]:
+    """Real exports directly under ``folder`` not imported yet, so the page can offer them by name."""
+    found = []
+    folder = Path(folder)
+    for child in sorted(p for p in folder.iterdir() if (p / "manifest.json").is_file()) if folder.is_dir() else []:
+        try:
+            m = load_dataset(child, require_complete_labels=False).manifest
+        except DatasetError:
+            continue
+        if m.kind == "real" and m.dataset_id not in imported:
+            found.append({"source": str(child), "dataset_id": m.dataset_id, "total": m.job_count})
+    return found
+
+
 def next_items(root: str | Path, dataset_id: str, n: int) -> list[dict[str, Any]]:
     """The next ``n`` offers to label: blind (the offer's own text only), in the representative order."""
     path = _dataset_dir(Path(root), dataset_id)
@@ -230,3 +244,55 @@ def extend_target(root: str | Path, dataset_id: str) -> dict[str, Any]:
     s = summary(path)
     (path / STATE).write_text(json.dumps({"target": min(s["total"], s["target"] + TARGET_STEP)}), encoding="utf-8")
     return summary(path)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """``python -m src.evaluation.calibration <root> <action> [...]`` → one JSON object on stdout.
+
+    The app calls this in a child process: production code never imports the evaluation package
+    (ADR 0007). Refusals print ``{"error": <code>}`` and exit 2."""
+    import argparse
+    import sys
+
+    ap = argparse.ArgumentParser(prog="python -m src.evaluation.calibration")
+    ap.add_argument("root")
+    sub = ap.add_subparsers(dest="action", required=True)
+    sub.add_parser("list").add_argument("--exports", default=None, help="folder to look for exports not imported yet")
+    sub.add_parser("import").add_argument("source")
+    nx = sub.add_parser("next")
+    nx.add_argument("dataset_id")
+    nx.add_argument("n", type=int)
+    an = sub.add_parser("answer")
+    for a in ("dataset_id", "job_id", "answer"):
+        an.add_argument(a)
+    an.add_argument("--reason", default=None)
+    for name in ("save", "extend"):
+        sub.add_parser(name).add_argument("dataset_id")
+    ns = ap.parse_args(argv)
+    try:
+        if ns.action == "list":
+            datasets = list_datasets(ns.root)
+            out: Any = {"datasets": datasets, "exports_found": exports_found(ns.exports, {d["dataset_id"] for d in datasets})
+                        if ns.exports else [], "reasons": list(REASONS), "max_session": MAX_SESSION}
+        elif ns.action == "import":
+            out = import_dataset(ns.source, ns.root)
+        elif ns.action == "next":
+            out = {"items": next_items(ns.root, ns.dataset_id, ns.n)}
+        elif ns.action == "answer":
+            out = record_answer(ns.root, ns.dataset_id, ns.job_id, ns.answer, ns.reason)
+        elif ns.action == "save":
+            out = save_session(ns.root, ns.dataset_id)
+        else:
+            out = extend_target(ns.root, ns.dataset_id)
+    except CalibrationError as exc:
+        print(json.dumps({"error": exc.code}))
+        return 2
+    except DatasetError:
+        print(json.dumps({"error": "invalid_dataset"}))
+        return 2
+    sys.stdout.write(json.dumps(out, ensure_ascii=False))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
