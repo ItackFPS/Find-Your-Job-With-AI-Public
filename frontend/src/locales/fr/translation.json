@@ -14,7 +14,8 @@
     "interrupted": "Interrompu",
     "partial": "Partiel",
     "skipped": "Ignoré",
-    "idle": "Inactif"
+    "idle": "Inactif",
+    "rate_limited": "Limité"
   },
   "pipelineStages": {
     "collect": {
@@ -156,7 +157,9 @@
       "percentDone": " · ~{percent} % effectués",
       "foundNew": "{found, number} trouvées · {new, number} nouvelles",
       "lastAttempt": "Dernière tentative le {date}",
-      "noScans": "Aucun scan pour l’instant."
+      "noScans": "Aucun scan pour l’instant.",
+      "rateLimited": "Limité par le site — reprend seul après une pause",
+      "rateLimitedUntil": "Limité par le site — reprend seul après {time}"
     }
   },
   "app": {

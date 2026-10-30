@@ -53,6 +53,8 @@ class HelloWorkStatusOut(BaseModel):
     # slug total is not known in advance) — None without a checkpoint.
     state: str = "idle"
     progress: dict[str, Any] | None = None
+    # A scan stopped on a 429 (state "rate_limited", F6.4): when it resumes on its own.
+    resume_after: str | None = None
 
 
 class ScanStartedOut(BaseModel):
@@ -112,6 +114,7 @@ async def get_status(request: Request) -> HelloWorkStatusOut:
         is_scanning=scanner.is_scanning(),
         state=state,
         progress=progress,
+        resume_after=_resume_after(scanner),
     )
 
 
@@ -186,3 +189,10 @@ async def list_scans(request: Request, limit: int = 20) -> list[ScanRunOut]:
         return []
     rows = staging.list_scan_runs(limit=min(limit, 100))
     return [_scan_row_to_out(r) for r in rows]
+
+
+def _resume_after(scanner: Any) -> str | None:
+    """ISO time a rate-limited scan resumes by itself (F6.4), else None."""
+    fn = getattr(scanner, "rate_limited_until", None)
+    value = fn() if callable(fn) else None
+    return value if isinstance(value, str) else None

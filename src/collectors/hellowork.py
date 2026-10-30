@@ -97,6 +97,7 @@ from src.collectors._jsonld import (
     map_jobposting_ld_to_raw,
 )
 from src.collectors.base import BaseCollector, CollectorResult, RatePolicy, RecordedFixture
+from src.scan_control import RateLimited
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +171,8 @@ class HelloWorkCollector(BaseCollector):
         self.explicit_metier_slugs: list[str] = list(cfg.get("metier_slugs") or [])
         self.max_jobs_per_slug: int = int(cfg.get("max_jobs_per_slug", 3))
         self.max_jobs: int | None = cfg.get("max_jobs")
+        # Set when a background scan (stop_on_rate_limit) meets a 429 (see collect()).
+        self.rate_limited: str | None = None
 
     def collect(
         self,
@@ -211,6 +214,9 @@ class HelloWorkCollector(BaseCollector):
         seen_ids: set[str] = set()
         unreadable_listings = 0
         skip_slugs = skip_slugs or set()
+        # Set when a background scan (stop_on_rate_limit) meets a 429: collection stops at
+        # once and the slug in progress is not checked off, so the resume re-fetches it.
+        self.rate_limited = None
 
         metier_slugs, discovery_errors = self._resolve_metier_slugs()
         errors.extend(discovery_errors)
@@ -242,6 +248,9 @@ class HelloWorkCollector(BaseCollector):
                 self._enforce_rate_limit()
                 response = self._fetch_with_retry(listing_url, headers=_HEADERS)
                 job_urls = extract_itemlist_urls(response.text)
+            except RateLimited as exc:
+                self.rate_limited = str(exc)
+                break
             except (httpx.HTTPError, RuntimeError) as exc:
                 errors.append(f"HelloWork: failed to list jobs for metier '{slug}': {exc}")
                 continue
@@ -282,6 +291,10 @@ class HelloWorkCollector(BaseCollector):
                 try:
                     self._enforce_rate_limit()
                     detail_response = self._fetch_with_retry(job_url, headers=_HEADERS)
+                except RateLimited as exc:
+                    self.rate_limited = str(exc)
+                    slug_interrupted = True
+                    break
                 except (httpx.HTTPError, RuntimeError) as exc:
                     errors.append(f"HelloWork: failed to load {job_url}: {exc}")
                     continue
@@ -338,6 +351,9 @@ class HelloWorkCollector(BaseCollector):
             try:
                 self._enforce_rate_limit()
                 response = self._fetch_with_retry(index_url, headers=_HEADERS, parsed=False)  # taxonomy, no offer
+            except RateLimited as exc:
+                self.rate_limited = str(exc)
+                break
             except (httpx.HTTPError, RuntimeError) as exc:
                 errors.append(f"HelloWork: failed to load domain taxonomy for '{domain}': {exc}")
                 continue

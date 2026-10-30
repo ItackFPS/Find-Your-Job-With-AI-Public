@@ -24,10 +24,14 @@ from typing import Any
 from src.hellowork.staging import HelloWorkStagingStorage, job_to_staging_record
 from src.scan_control import (
     STATE_PAUSED,
+    STATE_RATE_LIMITED,
+    AdaptivePacer,
     StopSignal,
     config_fingerprint,
+    cooling_until,
     interrupted_checkpoint_id,
     persist_pause,
+    record_rate_limit,
     record_shutdown_stop,
     resumable_scan_id,
     scan_state,
@@ -78,6 +82,7 @@ class HelloWorkScanner:
         # new scan claims the lock, so a stale request never pauses a resume.
         self._pause_event = threading.Event()
         self._last_scan_paused = False
+        self._last_scan_rate_limited = False
 
     def is_scanning(self) -> bool:
         with self._scan_lock:
@@ -125,6 +130,17 @@ class HelloWorkScanner:
     def last_scan_paused(self) -> bool:
         """Whether the most recently finished run_scan() stopped for a user pause."""
         return self._last_scan_paused
+
+    def last_scan_rate_limited(self) -> bool:
+        """Whether the most recently finished run_scan() stopped on a 429 (F6.4)."""
+        return self._last_scan_rate_limited
+
+    def rate_limited_until(self) -> str | None:
+        """ISO time a rate-limited scan may resume, while that is still ahead (F6.4)."""
+        if self.is_scanning():
+            return None
+        until = cooling_until(self.staging.get_scan_checkpoint())
+        return until.isoformat() if until is not None else None
 
     def scan_state(self) -> str:
         """idle | running | pausing | paused | interrupted (see src/scan_control.py)."""
@@ -241,6 +257,7 @@ class HelloWorkScanner:
         from src.pipeline.normalize import normalize_job
 
         self._last_scan_paused = False
+        self._last_scan_rate_limited = False
         # create_scan_run() must be inside this try: a transient "database is
         # locked" from a concurrent writer (pipeline, API request, or the
         # sibling scanner) previously propagated straight out of this method,
@@ -291,6 +308,8 @@ class HelloWorkScanner:
                 self.staging.clear_scan_checkpoint()
                 checkpoint = None
             completed_slugs: set[str] = set()
+            # After a rate limit, resume slowly (F6.4: no burst after a resume).
+            after_limit = bool(checkpoint) and (checkpoint or {}).get("state") == STATE_RATE_LIMITED
             if checkpoint:
                 self.staging.set_checkpoint_state(scan_id, "running", create_if_missing=False)
                 completed_slugs = set(json.loads(checkpoint.get("completed_slugs_json") or "[]"))
@@ -345,6 +364,9 @@ class HelloWorkScanner:
                     )
 
             collector = HelloWorkCollector(config=self.config)
+            # Background scan (F6.4): stop on the first 429, pace requests adaptively.
+            collector.stop_on_rate_limit = True
+            collector.pacer = AdaptivePacer(getattr(collector, "rate_limit_delay", 1.0), resumed=after_limit)
             stop = StopSignal(self._shutdown_event, self._pause_event)
             result = collector.collect(
                 on_slug_done=_stage_slug,
@@ -367,6 +389,15 @@ class HelloWorkScanner:
                     "HelloWork scan %s paused — checkpoint: %d metier slug(s) done.",
                     scan_id, len(completed_slugs),
                 )
+                return
+
+            limited = getattr(collector, "rate_limited", None)
+            if limited:
+                # HelloWork answered 429: stop and resume after the cooldown; the slug in
+                # progress was not checked off, so the resume re-fetches it.
+                logger.warning("HelloWork scan %s: %s", scan_id, limited)
+                self._last_scan_completed = False
+                self._last_scan_rate_limited = record_rate_limit(self.staging, scan_id, "HelloWork") is not None
                 return
 
             if self._shutdown_event.is_set():

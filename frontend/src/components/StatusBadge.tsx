@@ -12,6 +12,7 @@ const STATUS_COLORS: Record<string, string> = {
   pausing: 'var(--color-yellow)',
   paused: 'var(--color-info)',
   interrupted: 'var(--color-info)',
+  rate_limited: 'var(--color-yellow)',
   // Per-source collection outcome (SourceStats.status, src/pipeline/orchestrator.py).
   partial: 'var(--color-yellow)',
   skipped: 'var(--color-info)',

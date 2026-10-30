@@ -465,3 +465,13 @@ def test_no_stop_event_without_the_launcher(monkeypatch) -> None:
 
     monkeypatch.delenv(STOP_EVENT_ENV, raising=False)
     assert stop_signal.start_stop_signal_watcher() is None
+
+
+def test_a_scan_stopped_on_a_rate_limit_is_announced_once() -> None:
+    on = _settings(strong_matches=True, search_failed=True, source_paused=True)
+    backend = _Backend(settings=[on], linkedin=[_status("running"), _status("rate_limited"),
+                                                _status("rate_limited")])
+    watcher = RunWatcher("http://127.0.0.1:1", fetch=backend)
+    assert watcher.poll() == []
+    assert watcher.poll() == ["LinkedIn paused: rate-limited. It resumes on its own later."]
+    assert watcher.poll() == []

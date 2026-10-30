@@ -50,7 +50,8 @@ class RunWatcher:
 
     * ``strong_matches``: a search finished with offers in a "strong" tier or better;
     * ``search_failed``: a search, or a LinkedIn/HelloWork scan, failed;
-    * ``source_paused``: a LinkedIn/HelloWork scan paused, or stopped on a rate limit;
+    * ``source_paused``: a LinkedIn/HelloWork scan paused, or stopped on a rate limit (state
+      ``rate_limited``, F6.4, or an older failed run that names one);
     * ``saved_expiring``: TODO(F6.6), no saved-offer expiry data yet.
 
     The first poll only records the current state, so starting the app never announces old events.
@@ -131,6 +132,8 @@ class RunWatcher:
                 continue
             if state == "paused" and before[0] != "paused" and wanted["source_paused"]:
                 messages.append(f"{label} search paused. Resume it from the app.")
+            if state == "rate_limited" and before[0] != "rate_limited" and wanted["source_paused"]:
+                messages.append(f"{label} paused: rate-limited. It resumes on its own later.")
             if scan_id != before[1] and last.get("status") == "failed":
                 error = str(last.get("error") or "").lower()
                 if any(marker in error for marker in RATE_LIMIT_MARKERS):

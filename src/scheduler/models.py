@@ -13,7 +13,7 @@ class ScheduleDefinition:
     source_id: str              # matches handler registry key, e.g. "linkedin"
     label: str                  # human-readable
     enabled: bool
-    startup_policy: str         # "run_once_per_day" | "disabled"
+    startup_policy: str         # "run_once_per_day" | "when_opted_in" | "disabled"
     retry_max: int              # 0 = no retry on failure
     retry_delay_seconds: int    # seconds between retry attempts
     created_at: str             # ISO UTC
