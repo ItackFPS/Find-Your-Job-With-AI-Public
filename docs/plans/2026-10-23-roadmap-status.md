@@ -52,7 +52,7 @@ The phase order that supersedes the waves from 2026-10-30 is in the completion p
 | F0.1 baselines | R | done #45 | `docs/baselines/v1.0.0.md`; full run duration not measured |
 | F0.2 personal labels | T | owner data exists | `real-v1` 250 labels (K2), not yet read by the self-check; blind real-v2 labelling in the app = completion plan P2.3 |
 | F0.3 FT coverage benchmark | T | ready | needs 7 calendar days of background runs (P1) |
-| F1.1–F1.3 removals | R | merged #40, #58; **no UI** for F1.3 | source health API has no screen yet (P1.2); leftovers (comments, relay port 5678) = P0.5 |
+| F1.1–F1.3 removals | R | merged #40, #58, #74; **no UI** for F1.3 | source health API has no screen yet (P1.2); leftover wording cleaned in #74 (the 5678 probe stays) |
 | F1.4 APEC, WTTJ browser, crawl4ai | R | done #51 | old configs listing them are skipped with a reason |
 | F2.1–F2.5 desktop | R | merged #42, #52, #54, #55 | installer acceptance with window, tray, autostart and quit not run yet (P7) |
 | F3.1 ONNX | R | done #43, #46 | Spearman 1.000 on 1,000 jobs; installer 62.1 MB without the model; first-run download UI = P3.3 |
@@ -92,9 +92,10 @@ The phase order that supersedes the waves from 2026-10-30 is in the completion p
 Owner instructions: one item at a time, in order; finish, review and merge before starting the
 next (2026-10-25). Order from the completion plan §P (approved 2026-10-30):
 
-1. P0: this record (P0.1), version `2.0.0.dev0` (P0.3), local worktree inventory
-   (P0.4), n8n/Discord leftover cleanup (P0.5).
-2. P1: daily pipeline schedule → Settings › Sources and background → migration registry →
+1. P0 done (2026-10-30): #71 record, #70 merged, #72 CI fix, #73 version `2.0.0.dev0`, #74
+   leftovers, local worktree inventory and cleanup (57 merged worktrees removed, the rest kept with
+   reasons; inventory kept outside the repo with the owner's data).
+2. P1 (next): daily pipeline schedule → Settings › Sources and background → migration registry →
    expiry + provenance → source follow-ups.
 3. P2: ports (ranking metrics, sampling cohorts, top-scored stratum, rejected-pool scan, approval
    diff) → pre-registration → in-app blind calibration (owner labels 100 representative offers) →
@@ -106,7 +107,7 @@ next (2026-10-25). Order from the completion plan §P (approved 2026-10-30):
 Blocked on the owner: confirm which database the everyday app uses (before P1.4/P2.3); 100 blind
 labels (P2.3); usability testers and machines (P7).
 
-Follow-ups recorded from reviews: CORS allows the Vite dev origin when `API_SAME_USER_ONLY` is off (pre-existing); installer pins have no hashes (`--require-hashes`); retire `scripts/install_startup.py`; drop 5678 from the lab relay ports; EURES robots `Crawl-delay: 10` not honoured; backend `apply_url` scheme validation.
+Follow-ups recorded from reviews: CORS allows the Vite dev origin when `API_SAME_USER_ONLY` is off (pre-existing); installer pins have no hashes (`--require-hashes`); retire `scripts/install_startup.py`; ~~drop 5678 from the lab relay ports~~ (won't do: an n8n left by a pre-2.0 install can still relay to the API, so the probe stays, #74); EURES robots `Crawl-delay: 10` not honoured; backend `apply_url` scheme validation.
 
 ## Log
 
@@ -117,3 +118,4 @@ Follow-ups recorded from reviews: CORS allows the Vite dev origin when `API_SAME
 - 2026-10-30: project audit on 8b30e37 (`pytest -m "not network"` 5268 passed, 9 skipped; synthetic self-check PASS, unchanged). Findings and the owner-approved execution order: `2026-10-30-completion-plan.md`.
 - 2026-10-30: #70 (F6.4) self-reviewed and merged under K1 (owner decision R-Q2). Main 4eb1f03.
 - 2026-10-30: `main` CI turned red after CI picked up pytest 9.2.0 (its `monkeypatch.setattr` deleted Starlette `app.state` attributes on teardown; 78 errors, not caused by #70). Fixed by #72 (tests patch `app.state._state` with `setitem`, regression test).
+- 2026-10-30: #73 (`2.0.0.dev0`) and #74 (n8n/Discord wording; a comment edit in `config/scoring.yaml` was reverted because the strategy fingerprint hashes config bytes) merged. Phase 0 complete. Main 9031f0c.
