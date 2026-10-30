@@ -351,7 +351,8 @@
       "daysAgo": " · {days, number}d ago",
       "remote": "Remote",
       "salary": "Salary: {range} {currency}",
-      "viewOriginal": "View original offer →"
+      "viewOriginal": "View original offer →",
+      "seenOn": "Seen on"
     },
     "description": "Description",
     "notFound": "Job not found.",
