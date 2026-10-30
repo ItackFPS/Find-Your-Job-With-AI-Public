@@ -191,7 +191,9 @@ runs the main pipeline once per UTC day with `startup_policy: when_profile_saved
 `config/profile.local.yaml` exists, so a first start on the example profile sends no query.
 Days missed while the backend was stopped give one catch-up run. Its automatic run waits while
 a scan runs or was dispatched in the same tick; a completed scan starts the pipeline through
-this schedule (trigger `after_scan`), so that run counts for the day. `retry_max: 1` after
+this schedule (trigger `after_scan`), so that run counts for the day. A run started with
+`POST /api/pipeline/run` is recorded on the schedule too (trigger `manual`,
+`SchedulerService.adopt_pipeline_run`): once completed, it is the day's run. `retry_max: 1` after
 30 minutes; a backend shutdown during the run records it as `interrupted`. Background runs do
 not use the local LLM (`use_ai` false).
 

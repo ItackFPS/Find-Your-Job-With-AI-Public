@@ -256,6 +256,10 @@ class PipelineHandler:
         except RuntimeError:
             # A run started elsewhere ("Run" on the dashboard) holds the slot.
             return DispatchResult(run_ref=None, completed=False)
+        return self.wait(run_id)
+
+    def wait(self, run_id: str) -> DispatchResult:
+        """Wait for the run ``run_id`` (already started) to finish and report its outcome."""
         while self._runner.current_run_id() == run_id:
             if self._shutdown.wait(self._poll_seconds):
                 return DispatchResult(run_ref=run_id, completed=False, interrupted=True)
@@ -578,6 +582,37 @@ class SchedulerService:
         self._dispatch(defn, exec_id, handler)
         return True
 
+    def adopt_pipeline_run(self, run_id: str) -> str | None:
+        """Record a pipeline run started outside the scheduler ("Run pipeline" on the
+        dashboard) as a manual execution of the pipeline schedule, so a completed one
+        counts as the day's run (owner decision, 2026-10-30): a full search the user just
+        ran is not repeated minutes later. Returns the execution id, or None when there is
+        no enabled pipeline schedule or one of its executions is already running."""
+        handler = self._handlers.get(PIPELINE_SOURCE_ID)
+        wait = getattr(handler, "wait", None)
+        if handler is None or not callable(wait):
+            return None
+        storage = self._open_storage()
+        try:
+            defn = next(
+                (d for d in storage.get_enabled_definitions() if d.source_id == PIPELINE_SOURCE_ID),
+                None,
+            )
+            if defn is None:
+                return None
+            failed_today, _last = storage.get_failed_attempts_since(
+                defn.id, _utc_day_start(self._now())
+            )
+            exec_id = storage.try_reserve_execution(
+                defn.id, trigger="manual", no_completed_since=None, attempt=failed_today + 1,
+            )
+        finally:
+            storage.close()
+        if exec_id is None:
+            return None
+        self._dispatch(defn, exec_id, handler, work=lambda: wait(run_id))
+        return exec_id
+
     def _start_pipeline_after_scan(self) -> str | None:
         """Start the pipeline after a completed scan: through the pipeline schedule when
         one is enabled (the run is recorded and counts for the day, issue #76), else
@@ -658,8 +693,12 @@ class SchedulerService:
         defn: ScheduleDefinition,
         exec_id: str,
         handler: SourceHandler,
+        work: Callable[[], DispatchResult] | None = None,
     ) -> None:
         """Launch a daemon thread that runs handler.dispatch() and records the result.
+
+        ``work`` replaces handler.dispatch() when the run was already started
+        elsewhere (adopt_pipeline_run waits for it instead of starting one).
 
         When pipeline_runner is configured, a genuinely completed dispatch
         (result.completed and run_ref is not None) automatically triggers a
@@ -685,7 +724,7 @@ class SchedulerService:
             started_at = datetime.now(UTC)
             storage = self._open_storage()
             try:
-                result = handler.dispatch()
+                result = work() if work is not None else handler.dispatch()
                 run_ref = result.run_ref
                 duration = (datetime.now(UTC) - started_at).total_seconds()
                 if result.completed:

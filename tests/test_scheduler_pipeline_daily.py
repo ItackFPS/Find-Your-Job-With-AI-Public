@@ -261,6 +261,54 @@ def test_a_pipeline_run_does_not_start_another(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# A manual run ("Run pipeline") counts as the day's run (owner decision, 2026-10-30)
+# ---------------------------------------------------------------------------
+
+class _WaitingHandler(_Handler):
+    """A pipeline handler whose adopted runs end with ``outcome``."""
+
+    def __init__(self, completed: bool = True) -> None:
+        super().__init__()
+        self.completed = completed
+        self.waited: list[str] = []
+
+    def wait(self, run_id: str) -> DispatchResult:
+        self.waited.append(run_id)
+        return DispatchResult(run_ref=run_id, completed=self.completed)
+
+
+def test_a_completed_manual_run_counts_for_the_day(tmp_path: Path) -> None:
+    pipeline = _WaitingHandler()
+    svc = _service(tmp_path, {PIPELINE_SOURCE_ID: pipeline})
+    assert svc.adopt_pipeline_run("run-1") is not None
+    svc.join_dispatches(timeout=5)
+    assert pipeline.waited == ["run-1"]
+    runs = _executions(tmp_path, "pipeline_daily")
+    assert [(r["trigger"], r["status"], r["run_ref"]) for r in runs] == [("manual", "completed", "run-1")]
+
+    svc._tick(is_startup=True)              # the day's run already happened
+    svc.join_dispatches(timeout=5)
+    assert pipeline.dispatch_calls == 0
+
+
+def test_a_failed_manual_run_does_not_count(tmp_path: Path) -> None:
+    clock = _Clock(datetime(2026, 10, 30, 7, 0, tzinfo=UTC))
+    pipeline = _WaitingHandler(completed=False)
+    svc = _service(tmp_path, {PIPELINE_SOURCE_ID: pipeline}, clock=clock)
+    svc.adopt_pipeline_run("run-1")
+    svc.join_dispatches(timeout=5)
+    clock.now += timedelta(hours=1)         # after the retry delay (30 min)
+    svc._tick(is_startup=False)
+    svc.join_dispatches(timeout=5)
+    assert pipeline.dispatch_calls == 1
+
+
+def test_a_manual_run_is_not_recorded_without_a_pipeline_schedule(tmp_path: Path) -> None:
+    svc = _service(tmp_path, {"scan": _Handler()})
+    assert svc.adopt_pipeline_run("run-1") is None
+
+
+# ---------------------------------------------------------------------------
 # PipelineHandler
 # ---------------------------------------------------------------------------
 
