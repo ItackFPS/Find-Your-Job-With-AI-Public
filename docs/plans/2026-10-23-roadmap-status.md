@@ -66,7 +66,7 @@ The phase order that supersedes the waves from 2026-10-30 is in the completion p
 | F6.1 source contract | R | done #58 | access classes, robots, rate caps, breaker + reset API, parser canary |
 | F6.2 FT web | R | merged #44 | F0.3 coverage report pending |
 | F6.3 Indeed via jobspy | R | merged #68 | opt-in only through `data/settings.json` until F6.5 (P1.2) |
-| F6.4 background pacing | R | PR #70 | merge = P0.2 |
+| F6.4 background pacing | R | merged #70 | a 429 stops the scan, cooldown 1 h → 24 h, resumes slower; opted-in sources daily; consent screen = F6.5 (P1.2) |
 | F6.5 consent | R | ready | P1.2 |
 | F6.6 expiry + provenance | R | ready | P1.4 (contract: own plan; migration registry P1.3 first) |
 | F7.1 i18n skeleton | R | merged #53 | EN+FR 780 keys; backend prose → codes still to do |
@@ -92,7 +92,7 @@ The phase order that supersedes the waves from 2026-10-30 is in the completion p
 Owner instructions: one item at a time, in order; finish, review and merge before starting the
 next (2026-10-25). Order from the completion plan §P (approved 2026-10-30):
 
-1. P0: this record (P0.1), PR #70 (P0.2), version `2.0.0.dev0` (P0.3), local worktree inventory
+1. P0: this record (P0.1), version `2.0.0.dev0` (P0.3), local worktree inventory
    (P0.4), n8n/Discord leftover cleanup (P0.5).
 2. P1: daily pipeline schedule → Settings › Sources and background → migration registry →
    expiry + provenance → source follow-ups.
@@ -115,3 +115,4 @@ Follow-ups recorded from reviews: CORS allows the Vite dev origin when `API_SAME
 - 2026-10-25: merged #45–#59: F0.1, F1.4, F2 rest, F3 fail-open, F4.3, F6.1, F7.1, F8.1, F9.1, F10.1. Every contract or security PR had a review pass; fixes landed before merge.
 - 2026-10-25/26: merged #61 (F8.2), #62 (F8.3), #64 (F5.1), #65 (F5.2), #66 (F5.3), #68 (F6.3). Main 8b30e37. Draft #70 (F6.4) opened with the 2026-10-26 owner decisions.
 - 2026-10-30: project audit on 8b30e37 (`pytest -m "not network"` 5268 passed, 9 skipped; synthetic self-check PASS, unchanged). Findings and the owner-approved execution order: `2026-10-30-completion-plan.md`.
+- 2026-10-30: #70 (F6.4) self-reviewed and merged under K1 (owner decision R-Q2). Main 4eb1f03.
