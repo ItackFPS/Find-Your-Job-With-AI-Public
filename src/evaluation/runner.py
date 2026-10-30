@@ -309,6 +309,12 @@ def run_evaluation(dataset: Dataset, strategy: StrategyRef, *, assess: bool = Fa
     from src.evaluation.heldout import describe
 
     metrics["split"] = describe(dataset)          # which labels: every report states it (P2.4)
+    # P2.6: where the false positives come from (by_category, from the labels, is in `evaluate`)
+    source_of = {j["id"]: j.get("source") or "unknown" for j in dataset.job_dicts}
+    fp_by_source: dict[str, int] = {}
+    for jid in metrics["false_positive_ids"]:
+        fp_by_source[source_of.get(jid, "unknown")] = fp_by_source.get(source_of.get(jid, "unknown"), 0) + 1
+    metrics["false_positives_by_source"] = dict(sorted(fp_by_source.items()))
     pairs = [(labels[d.job_id].expected, d.verdict) for d in decisions if d.job_id in labels]
     metrics["bootstrap_ci_95"] = bootstrap_ci(pairs)
     if assess:

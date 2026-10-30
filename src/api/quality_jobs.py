@@ -230,7 +230,8 @@ class QualityJobManager:
 
     def __init__(self, executors: dict[str, Executor] | None = None) -> None:
         self.executors: dict[str, Executor] = executors or {"self_check": run_self_check_job,
-                                                            "evaluation": run_evaluation_job}
+                                                            "evaluation": run_evaluation_job,
+                                                            "personal": run_personal_job}
         self._lock = threading.Lock()
         self._active: QualityJobContext | None = None
         self._thread: threading.Thread | None = None
@@ -348,6 +349,29 @@ def run_evaluation_job(ctx: QualityJobContext) -> dict[str, Any]:
     return summarise_evaluation_run(_read_json(path), report_file=path.relative_to(ctx.runs_dir.resolve()).as_posix())
 
 
+CALIBRATION_DIR = "calibration"        # the owner's imported sets, beside jobs.db (P2.3)
+
+
+def run_personal_job(ctx: QualityJobContext) -> dict[str, Any]:
+    """The owner's own labels (an imported calibration set), on its held-out part by default (P2.4/P2.5)."""
+    dataset_id = str(ctx.options.get("dataset_id") or "")
+    path = ctx.db_path.parent / CALIBRATION_DIR / dataset_id
+    if not dataset_id or "/" in dataset_id or "\\" in dataset_id or not (path / "manifest.json").is_file():
+        raise QualityJobError("not_found")
+    split = "all" if ctx.options.get("split") == "all" else "heldout"
+    out_root = ctx.runs_dir.parent / "personal-runs"
+    cmd = [sys.executable, "-m", "src.evaluation", "run", str(path), "--split", split, "--sampling",
+           "--out", str(out_root / dataset_id), "--config-dir", str(ctx.config_dir)]
+    ctx.set_phase("running")
+    code, _out, err = ctx.run_process(cmd)
+    if code != 0:
+        logger.warning("personal evaluation exited %s: %s", code, err[-2000:])
+        raise QualityJobError("tool_failed")
+    ctx.set_phase("summarising")
+    report = _written_path(err, out_root)
+    return summarise_personal_run(_read_json(report), report_file=report.relative_to(out_root.resolve()).as_posix())
+
+
 # ---------------------------------------------------------------------------
 # Summaries: codes and numbers only (the UI words them, in the user's language)
 # ---------------------------------------------------------------------------
@@ -428,6 +452,53 @@ def summarise_evaluation_run(run: dict[str, Any], *, report_file: str | None = N
                           "recall": _num(o.get("recall")), "ranking": "not_measured", "review": review,
                           "baseline": None, "flips": None, "flags": flags, "warnings": len(run.get("warnings") or [])}],
             "feedback": {"status": "not_requested"}, "report_file": report_file}
+
+
+def _interval(ci: Any) -> list[float] | None:
+    return [float(ci[0]), float(ci[1])] if isinstance(ci, (list, tuple)) and len(ci) == 2 and None not in ci else None
+
+
+def summarise_personal_run(run: dict[str, Any], *, report_file: str | None = None) -> dict[str, Any]:
+    """The owner's set: ranking with CIs, missed opportunities, false positives by reason and source (P2.5/P2.6)."""
+    ds, m = run.get("dataset") or {}, run.get("metrics") or {}
+    rk, sm, o = m.get("ranking") or {}, m.get("sampling") or {}, m.get("overall") or {}
+    split = m.get("split") or {}
+    ps, rc = rk.get("precision_at_strong") or {}, rk.get("recall_at_20") or {}
+    rej = sm.get("rejected_sample") or None
+    rep = sm.get("representative") or None
+    accepts = int(o.get("tp") or 0) + int(o.get("fn") or 0)
+    flags: list[str] = []
+    if accepts < _FEW_SUITABLE:
+        flags.append("few_suitable_labels")
+    if (m.get("label_provenance") or {}).get("basis") not in (None, "independent"):
+        flags.append("labels_not_independent")
+    if sm.get("enriched_strata"):
+        flags.append("pooled_over_enriched_strata")
+    fresh = m.get("diagnostic_excluding_freshness") or {}
+    by_category = {k: int((v or {}).get("fp") or 0) for k, v in (m.get("by_category") or {}).items()}
+    return {
+        "kind": "personal", "created_at": run.get("created_at"), "report_file": report_file,
+        "dataset": {"id": ds.get("id"), "version": ds.get("version"), "split": split.get("name"),
+                    "labels": _num(split.get("labels")), "accept_labels": accepts},
+        "ranking": {"auc": _num(rk.get("auc")), "auc_ci95": _interval(rk.get("auc_ci95")),
+                    "n_accept": _num(rk.get("n_accept")), "n_reject": _num(rk.get("n_reject")),
+                    "precision_at_strong": {"value": _num(ps.get("value")), "ci95": _interval(ps.get("ci95")),
+                                            "n": _num(ps.get("n"))},
+                    "recall_at_20": {"value": _num(rc.get("value")), "ci95": _interval(rc.get("ci95")),
+                                     "in_top": _num(rc.get("in_top")), "n_accept": _num(rc.get("n_accept"))}},
+        "representative_auc": _num(((rep or {}).get("ranking") or {}).get("auc")),
+        "missed": {"labelled": _num(rej.get("n_labelled")), "accept": _num(rej.get("accept")),
+                   "rate_ci95": _interval(rej.get("accept_rate_ci95")),
+                   "estimate": rej.get("estimated_missed_accepts"), "pool": _num(rej.get("pool"))} if rej else None,
+        "unsafe_rejections": int(o.get("fn") or 0),
+        # accept labels rejected only for their age: shown apart (an old offer may simply be gone)
+        "unsafe_freshness_only": int(o.get("fn") or 0) - int((fresh.get("overall") or {}).get("fn") or 0)
+        if fresh.get("overall") else None,
+        "false_positives": {"total": int(o.get("fp") or 0),
+                            "by_category": {k: v for k, v in sorted(by_category.items()) if v},
+                            "by_source": {k: int(v) for k, v in (m.get("false_positives_by_source") or {}).items()}},
+        "flags": flags, "warnings": len(run.get("warnings") or []),
+    }
 
 
 def latest_self_check(self_check_dir: Path) -> dict[str, Any] | None:
