@@ -205,16 +205,22 @@ def isolated_app(tmp_path, monkeypatch):
     `with TestClient(app)` runs the real lifespan (the scheduler). Overriding
     app.state's paths is not enough — app.state.runner is built at import
     time against the real config/ and data/ (issue #46).
+
+    app.state is patched through ``monkeypatch.setitem(app.state._state, ...)``, never
+    ``monkeypatch.setattr(app.state, ...)``: Starlette's State keeps its values in the
+    ``_state`` dict, and since pytest 9.2 ``setattr`` reads the old value from the instance
+    ``__dict__``, finds nothing, and *deletes* the attribute on teardown, breaking every
+    later test that uses the app.
     """
     from src.api.app import app
     from src.api.runner import PipelineRunner
 
     db_path = str(tmp_path / "app_test.db")
     config_dir = str(tmp_path / "empty_config")
-    monkeypatch.setattr(app.state, "db_path", db_path)
-    monkeypatch.setattr(app.state, "config_dir", config_dir)
-    monkeypatch.setattr(app.state, "esco_db_path", str(tmp_path / "esco_test.db"))
-    monkeypatch.setattr(app.state, "runner", PipelineRunner(
+    monkeypatch.setitem(app.state._state, "db_path", db_path)
+    monkeypatch.setitem(app.state._state, "config_dir", config_dir)
+    monkeypatch.setitem(app.state._state, "esco_db_path", str(tmp_path / "esco_test.db"))
+    monkeypatch.setitem(app.state._state, "runner", PipelineRunner(
         db_path=db_path, config_dir=config_dir,
         progress_bus=app.state.progress_bus,
     ))

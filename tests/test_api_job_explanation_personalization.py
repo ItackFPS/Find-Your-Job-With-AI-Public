@@ -49,8 +49,8 @@ def client(tmp_db: str, tmp_config_dir: Path, monkeypatch: pytest.MonkeyPatch) -
     rs.init_db()
     rs.close()
 
-    monkeypatch.setattr(app.state, "db_path", tmp_db)
-    monkeypatch.setattr(app.state, "config_dir", str(tmp_config_dir))
+    monkeypatch.setitem(app.state._state, "db_path", tmp_db)
+    monkeypatch.setitem(app.state._state, "config_dir", str(tmp_config_dir))
 
     return TestClient(app)
 
