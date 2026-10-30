@@ -11,6 +11,10 @@ What an answer means follows RFC 9309 §2.3.1:
 * HTTP 4xx (404 included): no robots.txt, so no restriction;
 * HTTP 5xx, any other status, or the site unreachable: **disallow everything**.
 
+``Crawl-delay`` (not in RFC 9309, but widely used) is honoured too: the group that applies
+gives the minimum number of seconds between two requests to the site, capped at
+``MAX_CRAWL_DELAY_S`` (``BaseCollector._before_request`` waits).
+
 A collector can ask for the stricter reading (``strict=True``, e.g. France Travail web,
 documented to crawl only with a robots.txt actually served): anything but HTTP 200 with a
 non-empty body then disallows everything.
@@ -25,6 +29,8 @@ from urllib.parse import urlsplit
 import httpx
 
 RobotsRule = tuple[bool, re.Pattern[str], int]  # (allow, pattern, length of the normalised path)
+# A longer Crawl-delay would stall a run for hours; it is honoured up to this.
+MAX_CRAWL_DELAY_S = 60.0
 
 _UNRESERVED = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
 _PERCENT = re.compile(r"%([0-9A-Fa-f]{2})")
@@ -55,7 +61,18 @@ def parse_robots(text: str, agent: str = "*") -> list[RobotsRule]:
     token (case-insensitive, ``Name/2.0`` matched as ``name``) applies, merged; when none
     does, the ``*`` groups apply.
     """
-    groups: list[tuple[set[str], list[RobotsRule]]] = []
+    return [rule for _agents, rules, _delay in _groups_for(text, agent) for rule in rules]
+
+
+def parse_crawl_delay(text: str, agent: str = "*") -> float | None:
+    """The ``Crawl-delay`` (seconds) of the groups that apply to ``agent`` (the longest
+    when several do), or None. Unparsable or negative values are ignored."""
+    delays = [delay for _agents, _rules, delay in _groups_for(text, agent) if delay is not None]
+    return max(delays) if delays else None
+
+
+def _groups_for(text: str, agent: str) -> list[tuple[set[str], list[RobotsRule], float | None]]:
+    groups: list[tuple[set[str], list[RobotsRule], float | None]] = []
     in_agent_lines = False
     for raw in text.splitlines():
         line = raw.split("#", 1)[0].strip()
@@ -65,23 +82,30 @@ def parse_robots(text: str, agent: str = "*") -> list[RobotsRule]:
         key = key.lower()
         if key == "user-agent":
             if not in_agent_lines:
-                groups.append((set(), []))
+                groups.append((set(), [], None))
                 in_agent_lines = True
             token = value.lower() if value.strip() == "*" else _product_token(value)
             if token:
                 groups[-1][0].add(token)
             continue
         in_agent_lines = False
+        if key == "crawl-delay" and groups:
+            try:
+                delay = float(value)
+            except ValueError:
+                continue
+            if delay >= 0:
+                agents, rules, _ = groups[-1]
+                groups[-1] = (agents, rules, delay)
+            continue
         if key in ("allow", "disallow") and groups and value:
             value = normalise(value)
             regex = "".join(".*" if ch == "*" else ("$" if ch == "$" and i == len(value) - 1 else re.escape(ch))
                             for i, ch in enumerate(value))
             groups[-1][1].append((key == "allow", re.compile(regex), len(value)))
     wanted = _product_token(agent) if agent.strip() != "*" else "*"
-    chosen = [rules for agents, rules in groups if wanted in agents]
-    if not chosen:
-        chosen = [rules for agents, rules in groups if "*" in agents]
-    return [rule for rules in chosen for rule in rules]
+    chosen = [g for g in groups if wanted in g[0]]
+    return chosen or [g for g in groups if "*" in g[0]]
 
 
 def robots_allows(rules: list[RobotsRule], path_and_query: str) -> bool:
@@ -145,6 +169,7 @@ class RobotsCache:
         self.strict = strict
         self.unreachable: set[str] = set()  # sites whose robots.txt could not be fetched at all
         self._rules: dict[str, list[RobotsRule] | None] = {}
+        self._delays: dict[str, float] = {}
         self._why: dict[str, str] = {}
         self._lock = threading.Lock()
 
@@ -167,6 +192,9 @@ class RobotsCache:
                 self.unreachable.add(site)
             else:
                 rules = rules_from_response(status, text, self.agent, strict=self.strict)
+                delay = parse_crawl_delay(text, self.agent) if status == 200 else None
+                if delay:
+                    self._delays[site] = min(delay, MAX_CRAWL_DELAY_S)
                 why = "" if rules is not None else (
                     f"robots.txt unavailable (HTTP {status}{', empty' if status == 200 else ''})")
             self._rules[site] = rules
@@ -177,6 +205,12 @@ class RobotsCache:
     def allows(self, url: str) -> bool:
         rules = self._rules_for(origin(url))
         return rules is not None and robots_allows(rules, path_and_query(url))
+
+    def crawl_delay(self, url: str) -> float:
+        """Seconds to leave between two requests to ``url``'s site (0: no Crawl-delay)."""
+        site = origin(url)
+        self._rules_for(site)
+        return self._delays.get(site, 0.0)
 
     def refusal(self, url: str) -> str:
         """Why ``url`` is not allowed, for an error message."""

@@ -13,7 +13,7 @@ import re
 from html.parser import HTMLParser
 from typing import Any
 
-from src.models.job import Job
+from src.models.job import Job, http_url
 from src.requirements.principal_skill import extract_known_technologies
 
 logger = logging.getLogger(__name__)
@@ -121,16 +121,9 @@ def normalize_job(source_name: str, raw_data: dict[str, Any]) -> Job:
     # Preserve the original job URL — collectors may provide it as 'url',
     # 'canonical_url', or 'apply_url'. We try each in priority order so that
     # the best available link is always surfaced in the UI.
-    canonical_url: str | None = (
-        raw_data.get("canonical_url") or raw_data.get("url") or None
-    )
-    # Empty-string sentinel from collectors → treat as absent.
-    if not canonical_url:
-        canonical_url = None
-
-    apply_url: str | None = raw_data.get("apply_url") or raw_data.get("apply") or None
-    if not apply_url:
-        apply_url = None
+    # Empty-string sentinel from collectors, or anything but an http(s) URL → absent.
+    canonical_url = http_url(raw_data.get("canonical_url") or raw_data.get("url"))
+    apply_url = http_url(raw_data.get("apply_url") or raw_data.get("apply"))
 
     # Source-specific job identifier (slug, numeric id, …)
     source_job_id: str | None = (

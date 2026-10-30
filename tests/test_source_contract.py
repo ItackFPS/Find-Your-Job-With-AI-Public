@@ -463,3 +463,44 @@ def test_a_collector_reaching_its_cap_still_returns_what_it_read(monkeypatch) ->
     assert result.jobs
     assert sum("request cap of 2 per run reached" in e for e in result.errors) == 5
     assert collector.health()["request_cap_reached"] is True
+
+
+# -- robots.txt Crawl-delay (audit D12: EURES asks for 10 s) --------------------------------------
+
+EUROPA_ROBOTS = "User-agent: bingbot\nDisallow: /x/\n\nUser-agent: *\t# any\nDisallow: /cgi-bin/\nCrawl-delay: 10\n"
+
+
+@pytest.mark.parametrize("text,agent,expected", [
+    (EUROPA_ROBOTS, "FindYourJobBot", 10.0),
+    (EUROPA_ROBOTS, "bingbot", None),                          # its own group sets none
+    ("User-agent: *\nCrawl-delay: soon\n", "x", None),
+    ("User-agent: *\nCrawl-delay: -3\n", "x", None),
+    ("User-agent: *\nDisallow:\n", "x", None),
+])
+def test_crawl_delay_is_read_from_the_group_that_applies(text: str, agent: str, expected) -> None:  # noqa: ANN001
+    assert robots.parse_crawl_delay(text, agent) == expected
+    assert robots.parse_robots(EUROPA_ROBOTS, "x")             # rules unchanged by the delay line
+
+
+def test_requests_to_a_site_wait_its_crawl_delay(monkeypatch) -> None:  # noqa: ANN001
+    clock = {"now": 1000.0}
+    waits: list[float] = []
+
+    def sleep(seconds: float) -> None:
+        waits.append(round(seconds, 3))
+        clock["now"] += seconds
+
+    monkeypatch.setattr(robots, "fetch_robots_txt", lambda _url, **_kw: (200, EUROPA_ROBOTS))
+    monkeypatch.setattr("src.collectors.base.time.monotonic", lambda: clock["now"])
+    monkeypatch.setattr(BaseCollector, "_sleep", sleep)
+    collector = _Scraper()
+    collector._before_request("https://europa.eu/eures/api/search")
+    clock["now"] += 3
+    collector._before_request("https://europa.eu/eures/api/search")
+    collector._before_request("https://other.example/page")        # another site: no wait
+    assert waits == [7.0]
+
+
+def test_a_huge_crawl_delay_is_capped(monkeypatch) -> None:  # noqa: ANN001
+    monkeypatch.setattr(robots, "fetch_robots_txt", lambda _url, **_kw: (200, "User-agent: *\nCrawl-delay: 86400\n"))
+    assert _Scraper()._robots_cache().crawl_delay("https://slow.example/x") == robots.MAX_CRAWL_DELAY_S

@@ -715,3 +715,21 @@ def test_port_that_never_answers_is_refused(tmp_path, monkeypatch):
     monkeypatch.setattr(run, "STARTING_GRACE_S", 1.0)
     monkeypatch.setattr(core, "probe_backend", lambda port, timeout_s=2.0, token=None: Backend.STARTING)
     assert launcher.run() == 1
+
+
+@pytest.mark.parametrize("mode,dev_server", [("dev", "1"), ("start", None)])
+def test_only_dev_mode_lets_the_backend_allow_the_dev_server(tmp_path, monkeypatch, mode, dev_server):
+    """FYJ_DEV_SERVER reaches the backend in dev mode only, even if the launcher inherited it."""
+    monkeypatch.setenv(core.DEV_SERVER_ENV, "1")
+    envs: list[dict[str, str]] = []
+
+    class _Proc:
+        def poll(self):
+            return None
+
+    settings = Settings(root=tmp_path, backend_port=free_port(), startup_timeout_s=1)
+    launcher = run.Launcher(settings, run.Output(None), mode=mode, window="none")
+    monkeypatch.setattr(launcher, "_spawn", lambda name, cmd, cwd, port, env: envs.append(env) or _Proc())
+    monkeypatch.setattr(launcher, "_wait_until", lambda *a, **k: False)
+    assert launcher._ensure_backend() is False
+    assert envs and envs[0].get(core.DEV_SERVER_ENV) == dev_server

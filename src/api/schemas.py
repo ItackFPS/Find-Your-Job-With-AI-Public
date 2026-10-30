@@ -10,7 +10,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from src.models.job import http_url
 
 
 # ---------------------------------------------------------------------------
@@ -337,6 +339,12 @@ class JobOut(BaseModel):
     application_status: str | None = None
     score: ScoreBreakdownOut | None = None
 
+    @field_validator("canonical_url", "apply_url", mode="before")
+    @classmethod
+    def _http_links_only(cls, value: Any) -> str | None:
+        """Links come from job boards: only http(s) ones are served (stored rows included)."""
+        return http_url(value)
+
 
 class ProvenanceOut(BaseModel):
     """One source an offer was seen on (issue #86)."""
@@ -345,6 +353,11 @@ class ProvenanceOut(BaseModel):
     url: str | None = None
     first_seen_at: datetime
     last_seen_at: datetime
+
+    @field_validator("url", mode="before")
+    @classmethod
+    def _http_link_only(cls, value: Any) -> str | None:
+        return http_url(value)
 
 
 class JobDetailOut(JobOut):

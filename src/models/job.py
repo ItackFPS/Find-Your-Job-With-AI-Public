@@ -5,8 +5,25 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field
+
+
+def http_url(value: Any) -> str | None:
+    """``value`` stripped if it is an absolute http(s) URL with a host, else None.
+
+    Links come from job boards: a ``javascript:``, ``data:``, ``file:`` or custom-protocol
+    URL is never stored or served as an offer's link (the dashboard filters links again,
+    frontend/src/utils/httpUrl.ts)."""
+    if not isinstance(value, str):
+        return None
+    url = value.strip()
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return None
+    return url if parts.scheme.lower() in ("http", "https") and parts.netloc else None
 
 
 class Job(BaseModel):

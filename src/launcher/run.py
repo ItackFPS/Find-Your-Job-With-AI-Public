@@ -450,6 +450,9 @@ class Launcher:
             cmd = core.backend_command(sys.executable, port, reload=self.reload)
             env = _environ()
             env[core.INSTANCE_TOKEN_ENV] = self.token
+            env.pop(core.DEV_SERVER_ENV, None)
+            if self.mode == "dev":
+                env[core.DEV_SERVER_ENV] = "1"
             proc = self._spawn("backend", cmd, cwd=self.s.root, port=port, env=env)
             # Only our child knows the token, so the answer proves it is ours.
             port_taken = lambda: not self.s.fixed_port and core.port_in_use(port)  # noqa: E731

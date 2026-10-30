@@ -191,7 +191,9 @@ up `data/` first — see [Data and backups](#data-and-backups).
 # Backend + built dashboard, any OS (http://127.0.0.1:8000)
 uvicorn src.api.app:app --host 127.0.0.1 --port 8000
 
-# Development: Vite dev server with hot reload (http://127.0.0.1:5173), backend as above
+# Development: Vite dev server with hot reload (http://127.0.0.1:5173). The backend accepts
+# the dev server's origin only when started with FYJ_DEV_SERVER=1 (FindYourJob.cmd dev sets it)
+FYJ_DEV_SERVER=1 uvicorn src.api.app:app --host 127.0.0.1 --port 8000
 cd frontend && npm run dev          # or, on Windows: FindYourJob.cmd dev
 
 # CLI: one pipeline run, summary in the terminal
@@ -241,7 +243,7 @@ enrich, never decide eligibility on their own
 
 | Component | Required | Managed by |
 |---|---|---|
-| Backend + dashboard | yes | the launcher, a logon task (`scripts/install_startup.py`), or you |
+| Backend + dashboard | yes | the launcher (`FindYourJob.cmd autostart on` at sign-in), or you |
 | SQLite databases | yes | the backend (created and upgraded in place) |
 | Embedding model | yes | its ONNX export, downloaded from Hugging Face on first use |
 | LM Studio / Ollama | only for AI-enabled runs | you; the launcher only reports its state |
