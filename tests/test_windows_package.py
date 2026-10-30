@@ -171,16 +171,35 @@ def test_runtime_requirements_pin_every_declared_dependency():
 
     pins: dict[str, str] = {}
     for line in (PKG / "requirements.txt").read_text(encoding="utf-8").splitlines():
-        if not line.strip() or line.startswith("#"):
+        if not line.strip() or line.startswith("#") or line.strip().startswith("--hash="):
             continue
-        name, sep, version = line.partition("==")
+        name, sep, version = line.removesuffix("\\").strip().partition("==")
         assert sep and version.strip(), f"not pinned: {line}"
-        pins[norm(name)] = version
+        pins[norm(name)] = version.strip()
     for requirement in declared:
         name = re.match(r"[A-Za-z0-9_.-]+", requirement).group(0)
         assert norm(name) in pins, f"{name} is declared in pyproject.toml but not pinned"
     for tool in ("pip", "wheel", "pytest", "mypy", "ruff"):
         assert tool not in pins, f"{tool} must not be bundled"
+
+
+def test_every_bundled_pin_is_hashed_and_installed_with_require_hashes():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("hash_requirements", PKG / "hash_requirements.py")
+    hashing = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(hashing)
+    text = (PKG / "requirements.txt").read_text(encoding="utf-8")
+    assert hashing.pins(text) and hashing.unhashed(text) == []
+    assert '"--require-hashes"' in (PKG / "build.ps1").read_text(encoding="utf-8")
+    # only files a CPython 3.12 x64 Windows build can install are listed
+    assert hashing.installable("numpy-2.5.4-cp312-cp312-win_amd64.whl", "numpy")
+    assert hashing.installable("idna-3.20-py3-none-any.whl", "idna")
+    assert hashing.installable("cffi-2.1.1-cp312-abi3-win_amd64.whl", "cffi")
+    assert not hashing.installable("numpy-2.5.4-cp312-cp312-manylinux_2_28_x86_64.whl", "numpy")
+    assert not hashing.installable("numpy-2.5.4-cp313-cp313-win_amd64.whl", "numpy")
+    assert not hashing.installable("numpy-2.5.4.tar.gz", "numpy")
+    assert hashing.installable("proxy_tools-0.1.0.tar.gz", "proxy_tools")
 
 
 def test_api_reports_the_packaged_version():

@@ -177,10 +177,12 @@ without the setup program.
 `packaging\windows\requirements.txt` pins the runtime set (the project's dependencies
 plus the `linkedin` extra). After changing `pyproject.toml`, regenerate it in a fresh
 virtual environment of CPython 3.12 x64 (install the dependencies with
-`--only-binary=:all:`, then `pip freeze`, dropping pip and wheel), keep the header, and
+`--only-binary=:all:`, then `pip freeze`, dropping pip and wheel), keep the header, run
+`python packaging\windows\hash_requirements.py` to add each pinned file's SHA-256 from PyPI
+(the build installs with `--require-hashes`: a file that does not match fails the build), and
 run `pip-audit -r packaging\windows\requirements.txt --no-deps --disable-pip`. CI runs
 that audit on every pull request (`Dependency audit`), and
-`tests/test_windows_package.py` checks that every declared dependency is pinned.
+`tests/test_windows_package.py` checks that every declared dependency is pinned and hashed.
 
 ## Limitations
 
