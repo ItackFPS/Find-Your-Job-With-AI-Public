@@ -316,9 +316,11 @@ class _Runner:
     """A PipelineRunner stand-in: start_run records a run that finishes with ``outcome``
     once ``release`` is set."""
 
-    def __init__(self, db_path: str, outcome: str = "completed", busy: bool = False) -> None:
+    def __init__(self, db_path: str, outcome: str = "completed", busy: bool = False,
+                 stats: dict | None = None) -> None:
         self._db_path = db_path
         self._outcome = outcome
+        self._stats = stats or {}
         self._busy = busy
         self._current: str | None = None
         self.release = threading.Event()
@@ -344,7 +346,7 @@ class _Runner:
             self.release.wait(5)
             rs2 = RunStorage(db_path=self._db_path)
             if self._outcome == "completed":
-                rs2.complete_run(run_id, {})
+                rs2.complete_run(run_id, self._stats)
             else:
                 rs2.fail_run(run_id, "boom")
             rs2.close()
@@ -361,6 +363,19 @@ def test_handler_reports_the_run_outcome(tmp_path: Path, outcome: str, completed
     result = handler.dispatch()
     assert result.run_ref is not None
     assert (result.completed, result.interrupted) == (completed, False)
+
+
+def test_a_run_that_reached_no_source_is_not_the_days_run(tmp_path: Path) -> None:
+    """Waking up offline at the daily time: the run completes with every source unreachable
+    (the pipeline marks a network outage). It counts as a failed attempt, retried after its
+    backoff, not as the day's run."""
+    db = str(tmp_path / "jobs.db")
+    offline = {"by_source": {"france-travail-web": {"status": "failed", "network_outage": True},
+                             "eures": {"status": "failed", "network_outage": True}}}
+    result = PipelineHandler(runner=_Runner(db, stats=offline), db_path=db, poll_seconds=0.01).dispatch()
+    assert (result.completed, result.interrupted) == (False, False)
+    one_down = {"by_source": {"france-travail-web": {"status": "completed"}, "eures": {"status": "failed"}}}
+    assert PipelineHandler(runner=_Runner(db, stats=one_down), db_path=db, poll_seconds=0.01).dispatch().completed
 
 
 def test_handler_reports_interrupted_on_shutdown(tmp_path: Path) -> None:
