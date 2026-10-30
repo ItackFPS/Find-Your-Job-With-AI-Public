@@ -246,6 +246,7 @@ export function resolveFixture(path: string): unknown {
     [/^\/lab\/self-check$/, selfCheck],
     [/^\/quality\/health$/, qualityHealth],
     [/^\/quality\/jobs$/, qualityJobs],
+    [/^\/quality\/calibration$/, { datasets: [], exports_found: [], reasons: ['location', 'other'], max_session: 30 }],
     [/^\/quality\/jobs\/[^/]+$/, qualityJobs.jobs[1]],
     [/^\/linkedin\/status$/, linkedInStatus],
     [/^\/linkedin\/scans$/, [linkedInScan]],
