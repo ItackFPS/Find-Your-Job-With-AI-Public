@@ -116,3 +116,4 @@ Follow-ups recorded from reviews: CORS allows the Vite dev origin when `API_SAME
 - 2026-10-25/26: merged #61 (F8.2), #62 (F8.3), #64 (F5.1), #65 (F5.2), #66 (F5.3), #68 (F6.3). Main 8b30e37. Draft #70 (F6.4) opened with the 2026-10-26 owner decisions.
 - 2026-10-30: project audit on 8b30e37 (`pytest -m "not network"` 5268 passed, 9 skipped; synthetic self-check PASS, unchanged). Findings and the owner-approved execution order: `2026-10-30-completion-plan.md`.
 - 2026-10-30: #70 (F6.4) self-reviewed and merged under K1 (owner decision R-Q2). Main 4eb1f03.
+- 2026-10-30: `main` CI turned red after CI picked up pytest 9.2.0 (its `monkeypatch.setattr` deleted Starlette `app.state` attributes on teardown; 78 errors, not caused by #70). Fixed by #72 (tests patch `app.state._state` with `setitem`, regression test).
