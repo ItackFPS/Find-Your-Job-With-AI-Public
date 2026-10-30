@@ -16,6 +16,8 @@
 #                       Also re-triggers automatically when a UTC day rolls over
 #                       while the backend is running.
 #   when_opted_in     — run_once_per_day for a source the user chose; disabled otherwise.
+#   when_profile_saved — run_once_per_day once the user saved their own profile
+#                       (config/profile.local.yaml); disabled before.
 #   disabled          — never run automatically (manual trigger only).
 #
 # Rate limits (F6.4): a scan stopped on the source's first 429 waits out a cooldown
@@ -34,6 +36,18 @@
 # Timezones: all scheduling uses UTC.  The "day" boundary is UTC midnight.
 
 schedules:
+  - id: pipeline_daily
+    source_id: pipeline
+    label: "Daily search"
+    enabled: true
+    # The main pipeline: collects the official/public sources (and any unofficial
+    # source the user chose), then filters and scores. Once per UTC day; after days
+    # with the app closed, one run catches up. It waits while a scan runs, and a
+    # completed scan starts it through this schedule (issue #76).
+    startup_policy: when_profile_saved
+    retry_max: 1                       # one automatic retry after a failure
+    retry_delay_seconds: 1800
+
   - id: linkedin_daily
     source_id: linkedin
     label: "LinkedIn daily scan"

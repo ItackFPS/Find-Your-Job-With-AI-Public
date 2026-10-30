@@ -5,6 +5,8 @@ queries the user never chose (and LinkedIn/HelloWork scans are long). The
 shipped schedules are therefore ``when_opted_in`` (plan rule I1, F6.4): without
 a choice, the backend starting, or a UTC day rolling over, dispatches nothing;
 once the user chose a source, it scans daily. The dashboard's "Scan now" always works.
+The main pipeline (``pipeline_daily``, issue #76) is ``when_profile_saved``: it runs
+daily only once the user saved their own profile, never on the example profile.
 
 Uses a temporary database and a copy of the real file; no data/ is touched.
 """
@@ -44,7 +46,9 @@ def test_no_shipped_schedule_runs_automatically() -> None:
     assert {e["id"] for e in entries} >= {"linkedin_daily", "hellowork_daily"}
     for entry in entries:
         if entry.get("enabled", True):
-            assert entry.get("startup_policy") in ("disabled", "when_opted_in"), entry["id"]
+            assert entry.get("startup_policy") in (
+                "disabled", "when_opted_in", "when_profile_saved",
+            ), entry["id"]
 
 
 def test_startup_and_rollover_ticks_dispatch_nothing(tmp_path: Path) -> None:

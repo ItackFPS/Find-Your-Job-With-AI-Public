@@ -186,6 +186,15 @@ with the API) that can trigger recurring pipeline runs, independent of the web U
 CLI. Status and manual triggers are exposed at `/api/scheduler/status`,
 `/api/scheduler/executions`, and `/api/scheduler/run/{definition_id}`.
 
+`pipeline_daily` (source `pipeline`, `src/scheduler/service.py` `PipelineHandler`, issue #76)
+runs the main pipeline once per UTC day with `startup_policy: when_profile_saved`: only once
+`config/profile.local.yaml` exists, so a first start on the example profile sends no query.
+Days missed while the backend was stopped give one catch-up run. Its automatic run waits while
+a scan runs or was dispatched in the same tick; a completed scan starts the pipeline through
+this schedule (trigger `after_scan`), so that run counts for the day. `retry_max: 1` after
+30 minutes; a backend shutdown during the run records it as `interrupted`. Background runs do
+not use the local LLM (`use_ai` false).
+
 ## Frontend
 
 React 19 + TypeScript, built with Vite, using React Query for data fetching and

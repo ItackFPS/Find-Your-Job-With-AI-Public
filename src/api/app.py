@@ -82,6 +82,8 @@ from src.linkedin.staging import LinkedInStagingStorage
 from src.scheduler.service import (
     HelloWorkHandler,
     LinkedInHandler,
+    PIPELINE_SOURCE_ID,
+    PipelineHandler,
     SchedulerService,
     SourceHandler,
 )
@@ -189,6 +191,11 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
         handlers["linkedin"] = LinkedInHandler(scanner=li_scanner)
     if hw_scanner is not None:
         handlers["hellowork"] = HelloWorkHandler(scanner=hw_scanner)
+    # The main pipeline runs daily too (pipeline_daily, issue #76): it collects the
+    # official/public sources in the background.
+    handlers[PIPELINE_SOURCE_ID] = PipelineHandler(
+        runner=application.state.runner, db_path=db_path, shutdown_event=scanner_shutdown_event,
+    )
     # LinkedIn/HelloWork scan daily only once chosen (plan rule I1, F6.4): the stored choice,
     # else an install that already ran a scan of that source (an observed choice).
     from src.app_settings import unofficial_source_enabled

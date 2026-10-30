@@ -101,6 +101,16 @@ cd frontend && npm ci && npm run build && cd ..
 copy .env.example .env
 ```
 
+#### Daily search in the background
+
+Once you have saved your profile (the **Profile** page), the backend runs the search once a
+day on its own (`pipeline_daily` in `config/schedules.yaml`): it collects the official and
+public sources, then filters and scores the offers. If the app was closed for several days,
+it runs once when it starts again, not once per missed day. It waits while a LinkedIn or
+HelloWork scan is running, and a finished scan starts it. Before you save a profile, nothing
+is collected on its own. To turn it off, set `startup_policy: disabled` on `pipeline_daily`
+and restart the backend; **Run pipeline** on the dashboard still works.
+
 #### Job scans (LinkedIn, HelloWork)
 
 The shipped config has two background scanners, **off until you choose them**: on a fresh

@@ -83,7 +83,7 @@ The phase order that supersedes the waves from 2026-10-30 is in the completion p
 | F10.2, F10.4 pages | R | ready | P6 (each phase ships its own screens, R-C2) |
 | F10.3 settings | T → **R** | ready | promoted by R-Q3/R-C2/R-C3: Settings › Sources (P1.2), AI (P3.2), Data/Language (P3.5) |
 | F11.1 slim installer | R | blocked | P7 |
-| New: daily pipeline schedule | R | ready | audit D1, R-Q3 → P1.1 |
+| New: daily pipeline schedule | R | merged #77; **no UI** yet | `pipeline_daily` once per UTC day after the profile is saved, one catch-up run, waits for scans; Settings page = P1.2 |
 | New: embedding first-run download UI | R | ready | audit D8, R-Q4 → P3.3 |
 | New: port evaluation work from the private repo | R | ready | R-Q7 → P2.1 |
 
@@ -95,8 +95,8 @@ next (2026-10-25). Order from the completion plan §P (approved 2026-10-30):
 1. P0 done (2026-10-30): #71 record, #70 merged, #72 CI fix, #73 version `2.0.0.dev0`, #74
    leftovers, local worktree inventory and cleanup (57 merged worktrees removed, the rest kept with
    reasons; inventory kept outside the repo with the owner's data).
-2. P1 (next): daily pipeline schedule → Settings › Sources and background → migration registry →
-   expiry + provenance → source follow-ups.
+2. P1 (in progress): daily pipeline schedule (#77) → Settings › Sources and background (next) →
+   migration registry → expiry + provenance → source follow-ups.
 3. P2: ports (ranking metrics, sampling cohorts, top-scored stratum, rejected-pool scan, approval
    diff) → pre-registration → in-app blind calibration (owner labels 100 representative offers) →
    held-out split → personal sets in the self-check and Quality page → FP analysis → FT coverage.
