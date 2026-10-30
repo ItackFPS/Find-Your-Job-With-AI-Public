@@ -606,6 +606,28 @@
     }
   },
   "quality": {
+    "personal": {
+      "title": "Mesuré sur vos propres étiquettes",
+      "measure": "Mesurer sur les étiquettes réservées",
+      "running": "Mesure en cours…",
+      "basis": "{labels} étiquettes réservées de « {dataset} » (version {version}), dont {accepts} pertinentes.",
+      "auc": "Classement : une offre pertinente est classée devant une offre non pertinente dans {value} des cas (probablement entre {lo} et {hi}).",
+      "precisionStrong": "Sur les {n} offres notées Forte ou mieux, {value} étaient pertinentes (probablement entre {lo} et {hi}).",
+      "recall20": "Une liste des 20 premières contient {inTop} de vos {total} offres pertinentes ({value}, probablement entre {lo} et {hi}).",
+      "missed": "Parmi {labelled} offres écartées par l'application, {accept} étaient pertinentes : environ {estimate} offres adaptées manquées sur {pool} écartées (probablement entre {lo} et {hi}).",
+      "unsafe": "{count, plural, =0 {Aucune offre pertinente n'a été écartée.} one {# offre pertinente a été écartée} other {# offres pertinentes ont été écartées}}",
+      "freshness": "{count, plural, =0 {} one {, dont # seulement parce qu'elle était ancienne.} other {, dont # seulement parce qu'elles étaient anciennes.}}",
+      "fp": "{count, plural, =0 {Aucune offre non pertinente n'est passée.} one {# offre non pertinente est passée.} other {# offres non pertinentes sont passées.}}",
+      "fpByReason": "Selon votre raison : {list}.",
+      "fpBySource": "Par source : {list}.",
+      "flags": {
+        "few_suitable_labels": "Moins de 30 offres pertinentes dans ces étiquettes : preuves insuffisantes pour conclure. Étiqueter davantage aide.",
+        "labels_not_independent": "Certaines étiquettes ont été faites avec une suggestion affichée : ce ne sont pas des preuves indépendantes.",
+        "pooled_over_enriched_strata": "Ces chiffres mélangent plusieurs groupes d'échantillonnage, certains choisis exprès : à lire comme indicatifs, pas comme des taux sur toutes les offres."
+      },
+      "proxy": "Mesuré hors ligne avec le seul score à règles (sans correspondance sémantique), sur la partie réservée qu'aucun réglage n'utilise.",
+      "short": "{labels} étiquettes réservées"
+    },
     "calibration": {
       "title": "Calibrer sur vos propres offres",
       "subtitle": "Indiquez à l'application quelles offres vous conviennent vraiment, quelques-unes à la fois",
@@ -627,7 +649,8 @@
         "skills": "Compétences",
         "contract": "Contrat",
         "language": "Langue",
-        "other": "Autre"
+        "other": "Autre",
+        "uncategorised": "Sans raison"
       },
       "answers": {
         "relevant": "Pertinente",
@@ -720,7 +743,8 @@
       "runEvaluation": "Lancer l’évaluation",
       "running": {
         "self_check": "Vérification en cours…",
-        "evaluation": "Évaluation en cours…"
+        "evaluation": "Évaluation en cours…",
+        "personal": "Mesure sur vos étiquettes…"
       },
       "progressLabel": "Progression",
       "cancel": "Annuler",
@@ -734,7 +758,8 @@
     },
     "kinds": {
       "self_check": "Vérification",
-      "evaluation": "Évaluation"
+      "evaluation": "Évaluation",
+      "personal": "Vos étiquettes"
     },
     "jobStatus": {
       "running": "En cours",
@@ -781,7 +806,8 @@
     "toast": {
       "done": {
         "self_check": "Vérification terminée.",
-        "evaluation": "Évaluation terminée."
+        "evaluation": "Évaluation terminée.",
+        "personal": "Mesure sur vos étiquettes terminée."
       },
       "cancelled": "Vérification annulée."
     },

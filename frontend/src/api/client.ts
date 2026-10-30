@@ -613,7 +613,7 @@ export const getSelfCheck = () => api.get<SelfCheckResponse>('/lab/self-check').
 
 // ---- Quality page: background self-check / evaluation jobs (src/api/routes/quality.py) ----
 // Summaries are codes and numbers only; the page words them in the user's language.
-export type QualityJobKind = 'self_check' | 'evaluation'
+export type QualityJobKind = 'self_check' | 'evaluation' | 'personal'
 export type QualityJobStatus = 'running' | 'completed' | 'failed' | 'cancelled'
 export type QualityPhase = 'starting' | 'running' | 'summarising'
 export type QualityFlag =
@@ -636,15 +636,29 @@ export interface QualitySummary {
 export interface QualityJob {
   id: string; kind: QualityJobKind; status: QualityJobStatus; phase: QualityPhase | null
   options: Record<string, unknown>; created_at: string; finished_at: string | null
-  summary: QualitySummary | null; error_code: string | null
+  summary: QualitySummary | PersonalSummary | null; error_code: string | null
+}
+type Interval = [number, number] | null
+export interface PersonalSummary {
+  kind: 'personal'; created_at: string | null; report_file: string | null; flags: string[]; warnings: number
+  dataset: { id: string | null; version: string | null; split: string | null; labels: number | null; accept_labels: number }
+  ranking: {
+    auc: number | null; auc_ci95: Interval; n_accept: number | null; n_reject: number | null
+    precision_at_strong: { value: number | null; ci95: Interval; n: number | null }
+    recall_at_20: { value: number | null; ci95: Interval; in_top: number | null; n_accept: number | null }
+  }
+  representative_auc: number | null
+  missed: { labelled: number | null; accept: number | null; rate_ci95: Interval; estimate: [number, number, number] | null; pool: number | null } | null
+  unsafe_rejections: number; unsafe_freshness_only: number | null
+  false_positives: { total: number; by_category: Record<string, number>; by_source: Record<string, number> }
 }
 export interface QualityHealth { self_check: QualitySummary | null; evaluation: QualitySummary | null }
 export const getQualityHealth = () => api.get<QualityHealth>('/quality/health').then(r => r.data)
 export const listQualityJobs = (limit = 20) =>
   api.get<{ active_id: string | null; jobs: QualityJob[] }>(`/quality/jobs?limit=${limit}`).then(r => r.data)
 export const getQualityJob = (id: string) => api.get<QualityJob>(`/quality/jobs/${id}`).then(r => r.data)
-export const startQualityJob = (kind: QualityJobKind) =>
-  api.post<QualityJob>('/quality/jobs', { kind }).then(r => r.data)
+export const startQualityJob = (kind: QualityJobKind, options?: Record<string, unknown>) =>
+  api.post<QualityJob>('/quality/jobs', options ? { kind, options } : { kind }).then(r => r.data)
 export const cancelQualityJob = (id: string) =>
   api.post<{ id: string; cancelling: boolean }>(`/quality/jobs/${id}/cancel`).then(r => r.data)
 

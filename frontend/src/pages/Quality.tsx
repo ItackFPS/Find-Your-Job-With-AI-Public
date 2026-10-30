@@ -99,6 +99,7 @@ export function SummaryView({ s }: { s: QualitySummary }) {
 function shortResult(job: QualityJob, t: (k: string, o?: Record<string, unknown>) => string): string {
   if (job.status === 'failed') return t(`quality.errors.${job.error_code && KNOWN_ERRORS.has(job.error_code) ? job.error_code : 'unexpected'}`)
   if (job.status !== 'completed' || !job.summary) return ''
+  if (!('datasets' in job.summary)) return t('quality.personal.short', { labels: job.summary.dataset.labels ?? 0 })
   const d = job.summary.datasets[0]
   if (!d) return ''
   return t('quality.history.result', { unsafe: d.unsafe_rejections, precision: d.precision ?? 0, recall: d.recall ?? 0 })
