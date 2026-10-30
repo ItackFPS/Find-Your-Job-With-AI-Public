@@ -298,8 +298,14 @@ python -m src.evaluation export --db data/jobs.db --out data/benchmarks/real-v2 
 #  then `record <batch> --blind`; any non-blind `show` makes that batch's labels human_assisted)
 python -m src.evaluation annotate-import data/benchmarks/real-v2 data/benchmarks/real-v2/annotations.csv --labeler <you>
 python -m src.evaluation audit data/benchmarks/real-v2 --db data/jobs.db
-python -m src.evaluation run data/benchmarks/real-v2 --config-dir config --profile config/profile.yaml
+python -m src.evaluation run data/benchmarks/real-v2 --config-dir config --profile config/profile.yaml --sampling --markdown
 ```
+
+`--sampling` reads the export's strata (private sidecar, aggregates only). An export mixes strata drawn with
+unequal probabilities, so its pooled precision and recall are not rates of the job stream. Read the
+`random_control` cohort for what the gates let through. Read the `pipeline_rejected` draw (accept rate times
+the rejected pool) for the suitable jobs the gates turn away. Use the enriched strata for paired comparisons
+and ranking.
 
 Unsafe rejections are only measurable on the `--rejected` subsample; the report's sampling line says so.
 Below 150 decisive labels every metric stays `insufficient_evidence`, and fewer than 30 accept labels

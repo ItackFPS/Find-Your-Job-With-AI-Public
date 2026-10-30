@@ -57,6 +57,9 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--markdown", action="store_true")
     r.add_argument("--assess", action="store_true",
                    help="also run the disagreement engine on deterministic evidence (shadow review metrics)")
+    r.add_argument("--sampling", action="store_true",
+                   help="read the export's strata (private sidecar; aggregates only) and report the uniform "
+                        "cohorts beside the pooled, enriched metrics")
 
     c = sub.add_parser("compare", help="compare two run result files")
     c.add_argument("baseline")
@@ -194,7 +197,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if ns.cmd == "run":
             ds = load_dataset(ns.dataset)
-            result = run_evaluation(ds, _strategy(ns), assess=ns.assess)
+            result = run_evaluation(ds, _strategy(ns), assess=ns.assess, sampling=ns.sampling)
             print(render_markdown(result) if ns.markdown else json.dumps(result.metrics["overall"], indent=2))
             if not ns.no_write:
                 out = ns.out or f"{DEFAULT_RUNS_DIR}/{ds.manifest.dataset_id}"

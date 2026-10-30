@@ -247,7 +247,8 @@ def run_decisions(
 
 
 def _dataset_warnings(dataset: Dataset) -> list[str]:
-    """Sampling limits of a real dataset, from its manifest (the private export sidecar is never read)."""
+    """Sampling limits of a real dataset, from its manifest (the private export sidecar is read only with
+    ``sampling=True``, and then only its strata and pool sizes)."""
     from src.evaluation.export import PIPELINE_REJECTED_NOTE
 
     if dataset.manifest.kind != "real":
@@ -260,8 +261,12 @@ def _dataset_warnings(dataset: Dataset) -> list[str]:
             "(`export --rejected N` adds a sample from the decision journal)"]
 
 
-def run_evaluation(dataset: Dataset, strategy: StrategyRef, *, assess: bool = False) -> RunResult:
+def run_evaluation(dataset: Dataset, strategy: StrategyRef, *, assess: bool = False,
+                   sampling: bool = False) -> RunResult:
     """Run the dataset under ``strategy`` and return an immutable ``RunResult``.
+
+    ``sampling=True`` reads the export's strata from its private sidecar (``src/evaluation/sampling.py``)
+    and adds ``metrics["sampling"]``: per-stratum counts and the uniform cohorts' metrics.
 
     ``assess=True`` also runs the disagreement engine on the deterministic evidence (rules-only
     signals: no semantic similarity, Phase 2 or LLM verdict in an offline run) and adds the review
@@ -336,6 +341,16 @@ def run_evaluation(dataset: Dataset, strategy: StrategyRef, *, assess: bool = Fa
     if n_assisted:
         warnings.append(f"{n_assisted}/{len(dataset.labels)} label(s) are assistant-assisted (not independent evidence)")
     warnings += _dataset_warnings(dataset)
+    if sampling:
+        from src.evaluation.sampling import load_sampling, sampling_metrics
+
+        loaded = load_sampling(dataset.path)
+        if loaded is None:
+            warnings.append("--sampling: this dataset has no export sidecar, so no sampling cohorts")
+        else:
+            metrics["sampling"] = sampling_metrics(decisions, labels, *loaded)
+            if metrics["sampling"]["warning"]:
+                warnings.append(metrics["sampling"]["warning"])
 
     return RunResult(
         run_id=str(uuid.uuid4()),
