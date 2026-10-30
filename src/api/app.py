@@ -196,17 +196,23 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
     handlers[PIPELINE_SOURCE_ID] = PipelineHandler(
         runner=application.state.runner, db_path=db_path, shutdown_event=scanner_shutdown_event,
     )
-    # LinkedIn/HelloWork scan daily only once chosen (plan rule I1, F6.4): the stored choice,
-    # else an install that already ran a scan of that source (an observed choice).
-    from src.app_settings import background_settings, unofficial_source_enabled
+    # LinkedIn/HelloWork scan daily only once chosen (plan rule I1, F6.4): the stored choice.
+    # An install that scanned them before 2.0 has that observed choice stored once, now; a
+    # scan started by hand later never turns daily scans on.
+    from src.app_settings import background_settings, record_observed_choices, unofficial_source_enabled
 
-    scan_history = {"linkedin": li_staging, "hellowork": hw_staging}
+    try:
+        observed = record_observed_choices(Path(application.state.settings_path), {
+            name: staging is not None and bool(staging.list_scan_runs(limit=1))
+            for name, staging in (("linkedin", li_staging), ("hellowork", hw_staging))})
+        if observed:
+            logger.info("Unofficial sources already scanned by this install, kept as chosen: %s",
+                        ", ".join(observed))
+    except Exception as exc:  # noqa: BLE001 — a settings write must never stop the backend
+        logger.warning("Could not record the sources this install already scanned: %s", exc)
 
     def _opted_in(source_id: str) -> bool:
-        staging = scan_history.get(source_id)
-        used_before = staging is not None and bool(staging.list_scan_runs(limit=1))
-        return unofficial_source_enabled(Path(application.state.settings_path), source_id,
-                                         used_before=used_before)
+        return unofficial_source_enabled(Path(application.state.settings_path), source_id)
 
     # Settings › Sources shows the same choice the scheduler acts on (issue #82).
     application.state.source_opted_in = _opted_in
