@@ -84,6 +84,11 @@ class CollectorResult(BaseModel):
     # Optional structured metadata (e.g. per-query stats). Not used by the
     # pipeline core; callers may read it for diagnostics.
     metadata: dict[str, Any] = {}
+    # True only when the collector read every result of every query or board it
+    # searched (no page cap, no result cap, no error). Expiry counts an offer missing
+    # from a run only for such a source (issue #86): a first page or the newest N
+    # results say nothing about the offers they leave out.
+    listing_complete: bool = False
 
 
 class BaseCollector(ABC):

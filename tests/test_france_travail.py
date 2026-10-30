@@ -939,6 +939,7 @@ class TestFranceTravailPagination:
         # Page 1 jobs are preserved; error from page 2 is captured
         assert len(result.errors) >= 1
         assert "failed" in result.errors[0].lower() or "400" in result.errors[0]
+        assert result.listing_complete is False
 
     def test_missing_credentials_makes_no_http_call_pagination(self) -> None:
         """Credentials check happens before any pagination attempt."""
@@ -1018,6 +1019,7 @@ class TestFranceTravailMultiQuery:
         # Both queries run: two API calls, all unique jobs collected
         assert mock_get.call_count == 2
         assert len(result.jobs) == 10
+        assert result.listing_complete is True
 
     def test_duplicate_jobs_across_queries_are_removed(self) -> None:
         """A job returned by two different queries must appear only once."""

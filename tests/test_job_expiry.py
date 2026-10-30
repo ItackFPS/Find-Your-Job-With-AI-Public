@@ -195,3 +195,113 @@ def test_the_user_reports_availability(isolated_app) -> None:
     assert (r.json()["status"], r.json()["expiry_reason"]) == ("active", None)
     assert client.post("/api/jobs/nope/availability", json={"available": False}).status_code == 404
     assert client.post("/api/jobs/seen/availability", json={"available": "no"}).status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Only a complete collection is evidence of absence
+# ---------------------------------------------------------------------------
+
+_COMPLETE = {"status": "completed", "collected": 12, "listing_complete": True}
+
+
+@pytest.mark.parametrize("row,counts", [
+    (_COMPLETE, True),
+    ({**_COMPLETE, "listing_complete": False}, False),        # first page / newest N only
+    ({k: v for k, v in _COMPLETE.items() if k != "listing_complete"}, False),
+    ({**_COMPLETE, "status": "partial"}, False),
+    ({**_COMPLETE, "status": "failed"}, False),
+    ({**_COMPLETE, "status": "paused"}, False),
+    ({**_COMPLETE, "request_cap_reached": True}, False),
+    ({**_COMPLETE, "collected": 0}, False),                   # an empty answer is not a census
+    ({**_COMPLETE, "yield_anomaly": {"kind": "drop"}}, False),
+])
+def test_a_source_counts_misses_only_after_a_complete_collection(row: dict, counts: bool) -> None:
+    from src.pipeline.orchestrator import sources_counting_misses
+
+    assert sources_counting_misses({"france-travail": row}) == ({"france-travail"} if counts else set())
+
+
+def test_staged_sources_never_count_misses() -> None:
+    from src.pipeline.orchestrator import sources_counting_misses
+
+    assert sources_counting_misses({"linkedin": dict(_COMPLETE), "hellowork": dict(_COMPLETE)}) == set()
+
+
+def _pipeline_config(tmp: Path) -> Path:
+    import shutil
+
+    from tests.fixtures.profiles import TEST_PROFILE_PATH
+
+    root = Path(__file__).resolve().parents[1]
+    cfg = tmp / "config"
+    cfg.mkdir()
+    shutil.copy(TEST_PROFILE_PATH, cfg / "profile.yaml")
+    for name in ("filters.yaml", "scoring.yaml", "semantic_config.yaml", "personalization.yaml"):
+        shutil.copy(root / "config" / name, cfg / name)
+    (cfg / "sources.yaml").write_text(
+        "sources:\n  - name: board\n    type: fake_board\n    domain: board.example\n"
+        "    careers_url: https://board.example/jobs\n    active: true\n", encoding="utf-8")
+    return cfg
+
+
+def test_an_offer_that_fails_validation_is_still_seen(tmp_path: Path, monkeypatch) -> None:
+    """A source that read its whole board lists offer 'thin' with too little text to pass
+    validation: it was seen, so it gets no miss — only the offer the board dropped does."""
+    from unittest.mock import patch
+
+    from src.collectors.base import BaseCollector, CollectorResult
+    from src.collectors.registry import registry
+    from src.embeddings.embedding import EmbeddingService
+    from src.pipeline.orchestrator import run_pipeline
+
+    def raw(job_id: str, **kw) -> dict:
+        return {"source_job_id": job_id, "canonical_url": f"https://board.example/{job_id}",
+                "title": "Développeur Python", "company": "Acme", **kw}
+
+    class FakeBoard(BaseCollector):
+        def __init__(self, config=None) -> None:
+            super().__init__()
+
+        def collect(self) -> CollectorResult:
+            return CollectorResult(source_name="board", listing_complete=True, jobs=[
+                raw("full", description="Python, FastAPI, SQL. CDI à Lyon.", location="Lyon"),
+                raw("thin"),
+            ])
+
+    class FakeEmbeddings(EmbeddingService):
+        def __init__(self, *a, **k) -> None:
+            super().__init__(model_name="fake")
+
+        def embed(self, text):                       # type: ignore[override]
+            return [0.5] * 8
+
+        def embed_batch(self, texts, ids=None):      # type: ignore[override]
+            from src.embeddings.embedding import BatchEmbeddingResult
+            return BatchEmbeddingResult(ids=list(ids or range(len(texts))), vectors=[[0.5] * 8 for _ in texts])
+
+    real_get = registry.get_collector_class
+    monkeypatch.setattr(registry, "get_collector_class",
+                        lambda t: FakeBoard if t == "fake_board" else real_get(t))
+    cfg = _pipeline_config(tmp_path)
+    db = tmp_path / "jobs.db"
+    # Both offers stored by an earlier run, with the ids the pipeline gives them.
+    earlier = [normalize_job("board", raw(job_id, description="Python", location="Lyon"))
+               for job_id in ("thin", "gone")]
+    assert all(earlier)
+    s = _storage(db)
+    for job in earlier:
+        s.upsert_job(job)
+    s.record_provenance(earlier, NOW)
+    s.close()
+    ids = {earlier[0].id: "thin", earlier[1].id: "gone"}
+
+    with patch("src.embeddings.embedding.EmbeddingService", FakeEmbeddings):
+        result = run_pipeline(db_path=str(db), config_dir=str(cfg))
+    assert result.status == "completed", result.error
+    assert result.stats.by_source["board"].get("listing_complete") is True
+
+    s = _storage(db)
+    missed = {ids[r[0]]: r[1] for r in s._get_conn().execute("SELECT id, missed_runs FROM jobs").fetchall()
+              if r[0] in ids}
+    s.close()
+    assert missed == {"thin": 0, "gone": 1}

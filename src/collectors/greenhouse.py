@@ -90,7 +90,8 @@ class GreenhouseCollector(BaseCollector):
         duration = time.time() - start_time
         self._log_collection("greenhouse", len(jobs), errors, duration)
         return CollectorResult(source_name="greenhouse", jobs=jobs, errors=errors,
-                               duration_seconds=duration)
+                               duration_seconds=duration,
+                               listing_complete=not errors and self.max_jobs is None)
 
     def _collect_board(
         self, token: str, jobs: list[dict[str, Any]], errors: list[str]

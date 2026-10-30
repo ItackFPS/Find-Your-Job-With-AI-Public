@@ -143,6 +143,8 @@ def test_collect_reads_only_pages_published_in_the_sitemap(monkeypatch) -> None:
                                            "departments": ["83", "2a", "99"], "rate_limit_delay": 0})
     result = collector.collect()
     urls = _Client.last.urls
+    # a listing page shows the newest offers only (20 of 961 on a live page, 2026-10-30)
+    assert result.listing_complete is False
     assert urls[0].endswith("/robots.txt") and urls[1].endswith(".xml")
     listing_urls = urls[2:]
     # web_development pages the sitemap publishes for 83 and 2A (99 has none; the city

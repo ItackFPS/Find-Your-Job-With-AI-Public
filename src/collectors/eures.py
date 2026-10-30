@@ -206,6 +206,8 @@ class EURESCollector(BaseCollector):
             # completion order — this is what makes the merge below
             # deterministic and identical to the old single-threaded run.
             per_query_results = [f.result() for f in futures]
+        # complete only if every query ended on a short page, before the page cap
+        listing_complete = all(done for _, _, done in per_query_results)
 
         # Merge in original query-list order, first-occurrence-wins — the
         # exact same semantics as the previous single shared `seen_ids` set
@@ -218,7 +220,7 @@ class EURESCollector(BaseCollector):
         errors: list[str] = []
         seen_ids: set[str] = set()
         total_raw = 0
-        for raw_jobs_for_query, errors_for_query in per_query_results:
+        for raw_jobs_for_query, errors_for_query, _ in per_query_results:
             errors.extend(errors_for_query)
             total_raw += len(raw_jobs_for_query)
             for raw in raw_jobs_for_query:
@@ -243,11 +245,12 @@ class EURESCollector(BaseCollector):
             jobs=jobs,
             errors=errors,
             duration_seconds=duration,
+            listing_complete=listing_complete and not errors,
         )
 
     def _run_query(
         self, query: dict[str, Any]
-    ) -> tuple[list[dict[str, Any]], list[str]]:
+    ) -> tuple[list[dict[str, Any]], list[str], bool]:
         """Fetch all pages for one query — unchanged sequential logic.
 
         Identical to the per-query body of the previous single-threaded
@@ -257,7 +260,7 @@ class EURESCollector(BaseCollector):
         already made thread-safe via ``self._rate_lock``.
 
         Returns (raw jv dicts collected across this query's pages, error
-        strings for this query).
+        strings for this query, whether its last page was reached).
         """
         keyword: str = str(query.get("keyword") or "").strip()
         location_codes: list[str] = query.get("location_codes") or []
@@ -273,7 +276,7 @@ class EURESCollector(BaseCollector):
                 errors.append(
                     f"EURES: query='{keyword}' loc={location_codes} page={page}: {exc}"
                 )
-                break
+                return raw_jobs_collected, errors, False
 
             raw_jobs_collected.extend(raw_jobs)
             logger.info(
@@ -283,9 +286,9 @@ class EURESCollector(BaseCollector):
             )
 
             if len(raw_jobs) < self.results_per_page:
-                break  # reached last page for this query
+                return raw_jobs_collected, errors, True  # reached last page for this query
 
-        return raw_jobs_collected, errors
+        return raw_jobs_collected, errors, False  # max_pages_per_query reached
 
     # ------------------------------------------------------------------
     # Internal helpers

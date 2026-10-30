@@ -197,6 +197,7 @@ class FranceTravailCollector(BaseCollector):
         errors: list[str] = []
         jobs: list[dict[str, Any]] = []
         metadata: dict[str, Any] = {}
+        listing_complete = False
 
         if not self.client_id or not self.client_secret:
             errors.append(
@@ -234,6 +235,9 @@ class FranceTravailCollector(BaseCollector):
             metadata["per_query_status"] = per_query_status
             metadata["raw_count"] = raw_count
             metadata["unique_count"] = unique_count
+            # every query paginated to its end: none saturated, capped or failed
+            listing_complete = self.max_jobs is None and all(
+                s.get("stop_reason") == "exhausted" for s in per_query_status.values())
 
             for raw in raw_jobs:
                 if not isinstance(raw, dict):
@@ -251,6 +255,7 @@ class FranceTravailCollector(BaseCollector):
             errors=errors,
             duration_seconds=duration,
             metadata=metadata,
+            listing_complete=listing_complete and not errors,
         )
 
     # -- OAuth2 ---------------------------------------------------------------

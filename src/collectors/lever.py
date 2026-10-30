@@ -94,7 +94,8 @@ class LeverCollector(BaseCollector):
         duration = time.time() - start_time
         self._log_collection("lever", len(jobs), errors, duration)
         return CollectorResult(source_name="lever", jobs=jobs, errors=errors,
-                               duration_seconds=duration)
+                               duration_seconds=duration,
+                               listing_complete=not errors and self.max_jobs is None)
 
     def _collect_site(
         self, site: str, jobs: list[dict[str, Any]], errors: list[str]
