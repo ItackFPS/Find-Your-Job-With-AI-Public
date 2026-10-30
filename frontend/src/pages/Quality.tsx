@@ -13,6 +13,7 @@ import {
 } from '../components'
 import { formatDateTime, promotionCommand } from '../utils'
 import Lab from './Lab'
+import CalibrationCard from './Calibration'
 
 // Plain-language quality page (plan F9.1, §C10). Every sentence is built here from the codes and
 // numbers the API returns; nothing from the lab is rendered as HTML or as an acting link (ADR 0011:
@@ -295,6 +296,8 @@ export default function Quality() {
           ? <ErrorState message={t('quality.history.error')} onRetry={() => void jobs.refetch()} />
           : <DataTable columns={historyColumns} rows={jobs.data?.jobs} rowKey={j => j.id} loading={jobs.isLoading} emptyMessage={t('quality.history.empty')} />}
       </Card>
+
+      <CalibrationCard />
 
       <RunsSection />
 

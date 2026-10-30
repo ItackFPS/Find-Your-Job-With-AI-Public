@@ -15,3 +15,6 @@ config/scoring.yaml text eol=lf
 config/semantic_config.yaml text eol=lf
 config/personalization.yaml text eol=lf
 tests/fixtures/ai_filter_benchmark/** text eol=lf
+
+# Pre-registered lab candidates are identified by the sha256 of their bytes (docs/lab/preregistered/README.md).
+docs/lab/preregistered/**/*.json -text

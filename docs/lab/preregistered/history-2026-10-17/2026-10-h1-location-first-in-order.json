@@ -1,0 +1,17 @@
+{
+ "format": "fyj-lab-proposal/1",
+ "author": "claude-code:preregistered-2026-10-17",
+ "statement": "Raise location_fit to 0.38 and rescale the others to domain 0.24, skills 0.16, seniority 0.12, experience 0.10, keeping ADR 0003's strict order.",
+ "rationale": "On real-v1 (assistant-assisted labels) location_fit was the most discriminating factor (factor AUC 0.73) and 96 of 116 reject-labelled jobs passing the gates cited location. These weights were chosen without measuring them on real-v1 and are frozen before any real-v2 label exists.",
+ "overrides": {
+  "scoring.yaml": {
+   "scoring": {
+    "location_fit": {"weight": 0.38},
+    "domain_relevance": {"weight": 0.24},
+    "skills_match": {"weight": 0.16},
+    "seniority_match": {"weight": 0.12},
+    "experience_fit": {"weight": 0.10}
+   }
+  }
+ }
+}

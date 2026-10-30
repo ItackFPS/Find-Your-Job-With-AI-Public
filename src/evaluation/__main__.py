@@ -57,6 +57,9 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--markdown", action="store_true")
     r.add_argument("--assess", action="store_true",
                    help="also run the disagreement engine on deterministic evidence (shadow review metrics)")
+    r.add_argument("--split", choices=("all", "heldout", "tuning"), default="all",
+                   help="labels to measure on: the held-out part (tests of pre-registered changes), the tuning "
+                        "part, or all (src/evaluation/heldout.py)")
     r.add_argument("--sampling", action="store_true",
                    help="read the export's strata (private sidecar; aggregates only) and report the uniform "
                         "cohorts beside the pooled, enriched metrics")
@@ -196,7 +199,9 @@ def main(argv: list[str] | None = None) -> int:
                                                     new_version=ns.version, assisted=assisted), indent=2))
             return 0
         if ns.cmd == "run":
-            ds = load_dataset(ns.dataset)
+            from src.evaluation.heldout import load_split
+
+            ds = load_split(ns.dataset, ns.split)
             result = run_evaluation(ds, _strategy(ns), assess=ns.assess, sampling=ns.sampling)
             print(render_markdown(result) if ns.markdown else json.dumps(result.metrics["overall"], indent=2))
             if not ns.no_write:
