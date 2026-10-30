@@ -78,6 +78,13 @@ def start_run(
         run_id = runner.start_run(use_ai=use_ai)
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    # A completed manual run counts as the day's background run (pipeline_daily).
+    scheduler = getattr(request.app.state, "scheduler", None)
+    if scheduler is not None:
+        try:
+            scheduler.adopt_pipeline_run(run_id)
+        except Exception as exc:  # noqa: BLE001 — bookkeeping must never fail the run
+            logger.warning("Could not record run %s on the daily schedule: %s", run_id, exc)
     return StartRunOut(run_id=run_id)
 
 

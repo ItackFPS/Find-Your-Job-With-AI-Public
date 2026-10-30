@@ -107,7 +107,8 @@ Once you have saved your profile (the **Profile** page), the backend runs the se
 day on its own (`pipeline_daily` in `config/schedules.yaml`): it collects the official and
 public sources, then filters and scores the offers. If the app was closed for several days,
 it runs once when it starts again, not once per missed day. It waits while a LinkedIn or
-HelloWork scan is running, and a finished scan starts it. Before you save a profile, nothing
+HelloWork scan is running, and a finished scan starts it. A search you start yourself with
+**Run pipeline** counts as the day's search once it completes. Before you save a profile, nothing
 is collected on its own. To turn it off, set `startup_policy: disabled` on `pipeline_daily`
 and restart the backend; **Run pipeline** on the dashboard still works.
 

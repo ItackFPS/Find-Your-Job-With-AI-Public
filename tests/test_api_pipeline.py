@@ -398,3 +398,45 @@ class TestOrchestratorSharedWithCLI:
         from src import main
         source = inspect.getsource(main)
         assert "from src.pipeline.orchestrator import run_pipeline" in source
+
+
+class _FakeScheduler:
+    def __init__(self, fail: bool = False) -> None:
+        self.adopted: list[str] = []
+        self.fail = fail
+
+    def adopt_pipeline_run(self, run_id: str) -> str | None:
+        if self.fail:
+            raise RuntimeError("scheduler storage unavailable")
+        self.adopted.append(run_id)
+        return "exec-1"
+
+
+def _finished_result():
+    from datetime import datetime, timezone
+
+    from src.pipeline.orchestrator import PipelineResult, PipelineStats
+
+    now = datetime.now(timezone.utc)
+    return PipelineResult(
+        run_id=str(uuid.uuid4()), started_at=now, completed_at=now, status="completed",
+        stats=PipelineStats(), scored_jobs=[], rejection_records=[],
+    )
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_a_manual_run_is_handed_to_the_daily_schedule(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, fail: bool,
+) -> None:
+    """A manual run counts as the day's run (owner decision, 2026-10-30); a scheduler
+    error never fails the request."""
+    scheduler = _FakeScheduler(fail=fail)
+    monkeypatch.setitem(client.app.state._state, "scheduler", scheduler)
+    with patch("src.api.runner.run_pipeline", return_value=_finished_result()):
+        r = client.post("/api/pipeline/run")
+        runner = client.app.state.runner
+        deadline = time.time() + 5.0
+        while runner.is_running() and time.time() < deadline:
+            time.sleep(0.01)
+    assert r.status_code == 202
+    assert scheduler.adopted == ([] if fail else [r.json()["run_id"]])
