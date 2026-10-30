@@ -647,6 +647,11 @@ export const startQualityJob = (kind: QualityJobKind) =>
   api.post<QualityJob>('/quality/jobs', { kind }).then(r => r.data)
 export const cancelQualityJob = (id: string) =>
   api.post<{ id: string; cancelling: boolean }>(`/quality/jobs/${id}/cancel`).then(r => r.data)
+export interface FtCoverage {
+  status: 'measured' | 'too_early' | 'no_api_offers' | 'no_web_offers'; window_days: number; days_with_both: number
+  api_offers: number; web_offers: number; found_by_web: number; share: number | null; ci95: [number, number] | null
+}
+export const getFtCoverage = () => api.get<FtCoverage>('/quality/ft-coverage').then(r => r.data)
 
 // ---- Quality › Calibration: blind labelling of an exported real dataset (P2.3) ----
 export type CalibrationAnswer = 'relevant' | 'not_relevant' | 'not_sure'
