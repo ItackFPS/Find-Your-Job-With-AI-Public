@@ -38,6 +38,7 @@ from src.evaluation.models import StrategyRef
 from src.lab.bundle import verify_bundle
 from src.lab.experiment import run_experiment
 from src.lab.store import LabStore
+from src.storage.migrations import ensure_columns
 
 EVIDENCE_COLUMN = "approval_evidence"
 
@@ -77,12 +78,11 @@ def _append(jobs_db: str | Path, row: tuple[Any, ...], evidence: dict[str, Any] 
     conn = sqlite3.connect(str(jobs_db))
     try:
         conn.executescript(_DDL)
-        cols = {r[1] for r in conn.execute("PRAGMA table_info(active_strategy)").fetchall()}
         with conn:
-            if EFFECTIVE_COLUMN not in cols:     # table from before the pipeline honoured pointers: old rows stay 0
-                conn.execute(f"ALTER TABLE active_strategy ADD COLUMN {EFFECTIVE_COLUMN} INTEGER NOT NULL DEFAULT 0")
-            if EVIDENCE_COLUMN not in cols:      # older rows have none: they were approved on the stored verdict
-                conn.execute(f"ALTER TABLE active_strategy ADD COLUMN {EVIDENCE_COLUMN} TEXT")
+            ensure_columns(conn, "active_strategy", {
+                EFFECTIVE_COLUMN: "INTEGER NOT NULL DEFAULT 0",  # table from before the pipeline honoured pointers: old rows stay 0
+                EVIDENCE_COLUMN: "TEXT",                         # older rows have none: they were approved on the stored verdict
+            })
             conn.execute(f"INSERT INTO active_strategy ({', '.join(_COLUMNS)}, {EFFECTIVE_COLUMN}, {EVIDENCE_COLUMN}) "
                          f"VALUES ({', '.join('?' * len(_COLUMNS))}, 1, ?)",
                          (*row, json.dumps(evidence, sort_keys=True, default=str) if evidence else None))

@@ -12,6 +12,7 @@ from typing import Any
 
 from src.models.job import Job
 from src.models.source import Source
+from src.storage.migrations import JOBS_COLUMNS, JOBS_DATA_MIGRATIONS, apply_data_migrations, ensure_columns
 
 
 # ---------------------------------------------------------------------------
@@ -164,62 +165,10 @@ class Storage:
         # from direct SQL inserts or imports that bypassed the normalizer.
         conn.execute("UPDATE jobs SET content_hash = '' WHERE content_hash IS NULL")
 
-        # Migration: add department/work_mode columns to jobs tables created
-        # before these fields existed. ALTER TABLE ADD COLUMN is safe here
-        # because SQLite allows it without a table rebuild for nullable columns.
-        existing_columns = {row[1] for row in conn.execute("PRAGMA table_info(jobs)")}
-        if "department" not in existing_columns:
-            conn.execute("ALTER TABLE jobs ADD COLUMN department TEXT")
-        if "work_mode" not in existing_columns:
-            conn.execute("ALTER TABLE jobs ADD COLUMN work_mode TEXT")
-        if "canonical_url" not in existing_columns:
-            conn.execute("ALTER TABLE jobs ADD COLUMN canonical_url TEXT")
-        if "apply_url" not in existing_columns:
-            conn.execute("ALTER TABLE jobs ADD COLUMN apply_url TEXT")
-        if "application_status" not in existing_columns:
-            conn.execute("ALTER TABLE jobs ADD COLUMN application_status TEXT")
-
-        # Migration tracking table — records one-shot data migrations by name so they
-        # run exactly once per database even when init_db() is called repeatedly.
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS db_migrations (
-                name    TEXT PRIMARY KEY,
-                applied_at TEXT NOT NULL DEFAULT (datetime('now'))
-            )
-        """)
-
-        # One-time migration: purge stale rows that have no canonical_url from sources
-        # that always provide one. These rows were stored before the canonical_url column
-        # existed. EURES is excluded — its API summary endpoint never returns job URLs.
-        # The next pipeline run re-inserts the purged rows with canonical_url set via
-        # INSERT OR REPLACE on their stable IDs.
-        _PURGE_MIGRATION = "purge_jobs_without_canonical_url"
-        already_applied = conn.execute(
-            "SELECT 1 FROM db_migrations WHERE name = ?", (_PURGE_MIGRATION,)
-        ).fetchone()
-        if not already_applied:
-            conn.execute("DELETE FROM jobs WHERE canonical_url IS NULL AND source != 'eures'")
-            conn.execute(
-                "INSERT INTO db_migrations (name) VALUES (?)", (_PURGE_MIGRATION,)
-            )
-
-        # One-time migration: normalize LinkedIn country codes stored as ISO "FR"
-        # to the canonical full name "France".  Rows were written by an older
-        # pipeline run that did not call normalize_country_code before storage.
-        # The jobs table stores countries as a JSON array; we target the exact
-        # string '["FR"]' to avoid touching other sources or valid country lists.
-        _LI_FR_MIGRATION = "normalize_linkedin_fr_to_france"
-        _li_fr_applied = conn.execute(
-            "SELECT 1 FROM db_migrations WHERE name = ?", (_LI_FR_MIGRATION,)
-        ).fetchone()
-        if not _li_fr_applied:
-            conn.execute(
-                "UPDATE jobs SET countries = '[\"France\"]' "
-                "WHERE source = 'linkedin' AND countries = '[\"FR\"]'"
-            )
-            conn.execute(
-                "INSERT INTO db_migrations (name) VALUES (?)", (_LI_FR_MIGRATION,)
-            )
+        # Columns added to jobs after its first release, then the one-shot data
+        # migrations recorded in db_migrations (src/storage/migrations.py).
+        ensure_columns(conn, "jobs", JOBS_COLUMNS)
+        apply_data_migrations(conn, JOBS_DATA_MIGRATIONS)
 
         # FTS5 table with accent-stripping tokenizer.
         # Check whether the existing job_fts was created with the current tokenizer;

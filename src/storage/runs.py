@@ -36,6 +36,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from src.storage.migrations import ensure_columns
+
 logger = logging.getLogger(__name__)
 
 # A running row is only recovered when its heartbeat is older than this AND
@@ -191,11 +193,7 @@ class RunStorage:
         # migration rows get NULL, which recover_stale_runs treats as
         # unconditionally stale (same as the old blanket behavior) since
         # there is no PID/heartbeat evidence to say otherwise.
-        existing_columns = {row[1] for row in conn.execute("PRAGMA table_info(pipeline_runs)")}
-        if "pid" not in existing_columns:
-            conn.execute("ALTER TABLE pipeline_runs ADD COLUMN pid INTEGER")
-        if "heartbeat_at" not in existing_columns:
-            conn.execute("ALTER TABLE pipeline_runs ADD COLUMN heartbeat_at TEXT")
+        ensure_columns(conn, "pipeline_runs", {"pid": "INTEGER", "heartbeat_at": "TEXT"})
 
         conn.commit()
         RunStorage._initialized_paths.add(resolved)
