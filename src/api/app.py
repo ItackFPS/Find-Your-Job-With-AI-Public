@@ -208,6 +208,8 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
         return unofficial_source_enabled(Path(application.state.settings_path), source_id,
                                          used_before=used_before)
 
+    # Settings › Sources shows the same choice the scheduler acts on (issue #82).
+    application.state.source_opted_in = _opted_in
     scheduler = SchedulerService(
         db_path=db_path,
         config_dir=config_dir,

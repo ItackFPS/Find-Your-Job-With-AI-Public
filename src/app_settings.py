@@ -34,6 +34,7 @@ import json
 import os
 import threading
 from collections.abc import Mapping
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -95,6 +96,41 @@ def update_notification_settings(path: Path, changes: Mapping[str, Any]) -> dict
 # Unofficial sources (plan rule I1): off unless chosen. When no choice is stored, an install
 # that already set the source up the old way (this environment variable) counts as opted in.
 UNOFFICIAL_LEGACY_ENV: dict[str, str] = {"indeed": "INDEED_API_KEY"}
+
+
+# The unofficial sources the user turns on or off in Settings › Sources (F6.5, issue #82).
+UNOFFICIAL_CHOICE_SOURCES: tuple[str, ...] = ("linkedin", "hellowork", "indeed")
+
+
+def set_unofficial_source(path: Path, source: str, enabled: bool, now: datetime | None = None) -> dict[str, Any]:
+    """Store the user's choice for the unofficial ``source`` and when it was made
+    (``unofficial_sources.<source>``, ``unofficial_sources_chosen_at.<source>``, ISO UTC).
+    Returns ``{"enabled", "chosen_at"}``. Raises ValueError for another source or a
+    non-boolean. Other settings in the file are kept."""
+    if source not in UNOFFICIAL_CHOICE_SOURCES:
+        raise ValueError(f"not an unofficial source: {source}")
+    if not isinstance(enabled, bool):
+        raise ValueError("enabled takes true or false")
+    chosen_at = (now or datetime.now(UTC)).astimezone(UTC).isoformat(timespec="seconds")
+    with _lock:
+        data = _read(path)
+        for key, value in (("unofficial_sources", enabled), ("unofficial_sources_chosen_at", chosen_at)):
+            section = data.get(key)
+            section = section if isinstance(section, dict) else {}
+            section[source] = value
+            data[key] = section
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
+        os.replace(tmp, path)
+    return {"enabled": enabled, "chosen_at": chosen_at}
+
+
+def unofficial_source_chosen_at(path: Path | None, source: str) -> str | None:
+    """When the user last chose to turn ``source`` on or off (ISO UTC), or None."""
+    stored = _read(path).get("unofficial_sources_chosen_at") if path is not None else None
+    value = stored.get(source) if isinstance(stored, dict) else None
+    return value if isinstance(value, str) else None
 
 
 def unofficial_source_choice(path: Path | None, source: str) -> bool | None:
