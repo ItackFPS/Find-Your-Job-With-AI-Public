@@ -10,7 +10,8 @@ SchedulerService
   - Records every execution in schedule_executions (persistent across restarts)
 
 Startup policy: run_once_per_day (or when_opted_in: the same, once the user chose the
-source, plan rule I1; disabled before)
+source, plan rule I1; or when_profile_saved: the same, once the user saved their own
+profile, config/profile.local.yaml; disabled before)
   A run is dispatched when no completed execution exists for today (UTC midnight).
   If the backend starts at 07:00 → scan runs.
   If the backend restarts at 14:00 (after a scan already ran) → no second scan.
@@ -30,6 +31,14 @@ Retries (issue #68) — outcome of each execution, per UTC day:
   retry_delay_seconds * 2**(F-1) (capped at MAX_RETRY_BACKOFF_SECONDS) has
   elapsed since the last failure. retry_max: 0 = no automatic retry after a
   failure. A manual trigger always runs (explicit user action).
+
+The pipeline schedule (issue #76)
+  The main pipeline is itself a source handler (source_id "pipeline", PipelineHandler):
+  pipeline_daily runs it once per UTC day, so the official/public sources are collected
+  in the background. A day missed while the app was closed gives one run, not one per
+  missed day. Its automatic run waits while a scan runs or was dispatched in the same
+  tick (both write jobs.db), and a completed scan triggers the pipeline through this
+  schedule, so that run counts for the day.
 
 Concurrency
   - try_reserve_execution uses BEGIN IMMEDIATE (atomic across multiple processes).
@@ -57,6 +66,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
+from src.config_files import local_config_path
 from src.scheduler.storage import SchedulerStorage
 from src.scheduler.models import ScheduleDefinition
 
@@ -65,6 +75,10 @@ logger = logging.getLogger(__name__)
 POLL_INTERVAL = 60  # seconds between scheduler loop ticks
 # Upper bound on the wait between two automatic attempts of the same day.
 MAX_RETRY_BACKOFF_SECONDS = 6 * 3600
+# The handler key of the main pipeline (PipelineHandler); every other handler is a scan.
+PIPELINE_SOURCE_ID = "pipeline"
+# How often PipelineHandler checks whether its run has finished.
+PIPELINE_POLL_SECONDS = 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -206,6 +220,54 @@ class HelloWorkHandler:
 
     def dispatch(self) -> DispatchResult:
         return _scanner_dispatch(self._scanner)
+
+
+# ---------------------------------------------------------------------------
+# Pipeline handler (wraps PipelineRunner, issue #76)
+# ---------------------------------------------------------------------------
+
+class PipelineHandler:
+    """Adapts PipelineRunner to the SourceHandler interface.
+
+    The runner starts each run in its own thread; dispatch() waits for it to
+    finish, then reads its outcome from the pipeline_runs table. A backend
+    shutdown while it waits reports the run as interrupted (the run thread is a
+    daemon and dies with the process).
+    """
+
+    def __init__(
+        self,
+        runner: Any,
+        db_path: str,
+        shutdown_event: threading.Event | None = None,
+        poll_seconds: float = PIPELINE_POLL_SECONDS,
+    ) -> None:
+        self._runner = runner
+        self._db_path = db_path
+        self._shutdown = shutdown_event or threading.Event()
+        self._poll_seconds = poll_seconds
+
+    def is_running(self) -> bool:
+        return bool(self._runner.is_running())
+
+    def dispatch(self) -> DispatchResult:
+        try:
+            run_id = self._runner.start_run()
+        except RuntimeError:
+            # A run started elsewhere ("Run" on the dashboard) holds the slot.
+            return DispatchResult(run_ref=None, completed=False)
+        while self._runner.current_run_id() == run_id:
+            if self._shutdown.wait(self._poll_seconds):
+                return DispatchResult(run_ref=run_id, completed=False, interrupted=True)
+        from src.storage.runs import RunStorage
+
+        rs = RunStorage(db_path=self._db_path)
+        try:
+            run = rs.get_run(run_id)
+        finally:
+            rs.close()
+        completed = run is not None and run.get("status") == "completed"
+        return DispatchResult(run_ref=run_id, completed=completed)
 
 
 # ---------------------------------------------------------------------------
@@ -418,31 +480,49 @@ class SchedulerService:
         storage = self._open_storage()
         try:
             definitions = storage.get_enabled_definitions()
-            for defn in definitions:
+            # Scans first: the pipeline waits for a scan dispatched in this tick
+            # (its handler may not report running yet) or still running (issue #76).
+            scans = [d for d in definitions if d.source_id != PIPELINE_SOURCE_ID]
+            pipelines = [d for d in definitions if d.source_id == PIPELINE_SOURCE_ID]
+            scan_dispatched = False
+            for defn in scans:
+                scan_dispatched |= self._check_and_dispatch(storage, defn, is_startup=is_startup)
+            for defn in pipelines:
+                if scan_dispatched or self._scan_running():
+                    logger.debug("Scheduler: %s waits for the running scan(s).", defn.id)
+                    continue
                 self._check_and_dispatch(storage, defn, is_startup=is_startup)
         finally:
             storage.close()
+
+    def _scan_running(self) -> bool:
+        return any(
+            handler.is_running()
+            for source_id, handler in self._handlers.items()
+            if source_id != PIPELINE_SOURCE_ID
+        )
 
     def _check_and_dispatch(
         self,
         storage: SchedulerStorage,
         defn: ScheduleDefinition,
         is_startup: bool,
-    ) -> None:
+    ) -> bool:
+        """Dispatch ``defn`` if it is due. Returns True when a run was dispatched."""
         handler = self._handlers.get(defn.source_id)
         if handler is None:
             logger.debug("Scheduler: no handler for source_id=%r — skipping.", defn.source_id)
-            return
+            return False
 
         # A user-paused source stays paused, across restarts too, until it is
         # explicitly resumed (issue #81). Checked first: no execution row, no
         # retry bookkeeping, no log line every tick.
         if _flag(handler, "is_paused") or self._paused.is_set():
-            return
+            return False
         # A source stopped on a 429 waits out its cooldown (F6.4): no daily run, retry or
         # resume before then. Once it has passed, the run below resumes its checkpoint.
         if _marker(handler, "rate_limited_until") is not None:
-            return
+            return False
 
         trigger = "startup" if is_startup else "scheduled"
         today_start = _utc_day_start(self._now())
@@ -463,13 +543,13 @@ class SchedulerService:
             # each one is resumed once, so neither failures nor a resume that
             # leaves the checkpoint untouched can turn into a per-tick loop.
             if self._policy(defn) != "run_once_per_day":
-                return
+                return False
             resumed_checkpoint = _marker(handler, "interrupted_checkpoint_id")
             if (
                 resumed_checkpoint is None
                 or self._resumed_checkpoints.get(defn.id) == resumed_checkpoint
             ):
-                return
+                return False
             failed_today, _last = storage.get_failed_attempts_since(defn.id, today_start)
             attempt = failed_today + 1
             trigger = "resume"
@@ -478,7 +558,7 @@ class SchedulerService:
         # In-process early-exit: don't even try to reserve if already running.
         if handler.is_running():
             logger.debug("Scheduler: %s already running, skipping tick.", defn.id)
-            return
+            return False
 
         exec_id = storage.try_reserve_execution(
             defn.id,
@@ -489,17 +569,43 @@ class SchedulerService:
         if exec_id is None:
             # Another process beat us to the reservation, or already completed today.
             logger.debug("Scheduler: %s reservation skipped (already reserved/completed).", defn.id)
-            return
+            return False
 
         logger.info(
             "Scheduler: dispatching %s (trigger=%s, attempt=%d, exec_id=%s).",
             defn.id, trigger, attempt, exec_id,
         )
         self._dispatch(defn, exec_id, handler)
+        return True
+
+    def _start_pipeline_after_scan(self) -> str | None:
+        """Start the pipeline after a completed scan: through the pipeline schedule when
+        one is enabled (the run is recorded and counts for the day, issue #76), else
+        directly on the runner. Raises RuntimeError when a run is already in progress."""
+        if PIPELINE_SOURCE_ID in self._handlers:
+            storage = self._open_storage()
+            try:
+                defn = next(
+                    (d for d in storage.get_enabled_definitions()
+                     if d.source_id == PIPELINE_SOURCE_ID),
+                    None,
+                )
+            finally:
+                storage.close()
+            if defn is not None:
+                return self.trigger_manual(defn.id, trigger="after_scan")
+        run_id: str = self._pipeline_runner.start_run()
+        return run_id
 
     def _policy(self, defn: ScheduleDefinition) -> str:
         """The startup policy in effect: ``when_opted_in`` (an unofficial source, plan rule
-        I1) is ``run_once_per_day`` once the user chose the source, ``disabled`` before."""
+        I1) is ``run_once_per_day`` once the user chose the source, ``disabled`` before;
+        ``when_profile_saved`` (the pipeline, issue #76) is ``run_once_per_day`` once the
+        user saved their own profile, so a first start on the example profile sends no
+        query the user never chose."""
+        if defn.startup_policy == "when_profile_saved":
+            saved = local_config_path(self._config_dir, "profile.yaml").is_file()
+            return "run_once_per_day" if saved else "disabled"
         if defn.startup_policy != "when_opted_in":
             return defn.startup_policy
         try:
@@ -663,10 +769,12 @@ class SchedulerService:
                 other_handlers_busy = any(
                     other.is_running() for other in self._handlers.values() if other is not handler
                 )
-                if result.completed and run_ref is not None and self._pipeline_runner is not None and not other_handlers_busy:
+                if defn.source_id == PIPELINE_SOURCE_ID:
+                    pass  # the pipeline itself never triggers another pipeline run
+                elif result.completed and run_ref is not None and self._pipeline_runner is not None and not other_handlers_busy:
                     if not self._pipeline_runner.is_running():
                         try:
-                            pipeline_run_id = self._pipeline_runner.start_run()
+                            pipeline_run_id = self._start_pipeline_after_scan()
                             logger.info(
                                 "Scheduler: auto-triggered pipeline run %s after %s scan %s.",
                                 pipeline_run_id, defn.source_id, run_ref,
