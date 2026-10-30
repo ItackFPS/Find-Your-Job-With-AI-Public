@@ -19,8 +19,10 @@ eligible at all). ``independently_validated`` is true only in the first case. No
 exploratory evidence.
 
 Every result also carries ``comparison``: precision, recall, F1, unsafe-rejection rate, reject recall,
-review (abstention) rate and confusion counts for both sides and their deltas, the label provenance and
-the limitations of the comparison. These are reported, never used to grant approval on their own.
+review (abstention) rate and confusion counts for both sides and their deltas, ``ranking`` (how the score
+orders the accepted jobs: AUC, precision@k, the visibility floor, and a bootstrap CI on the AUC change —
+the only place a scoring-only change shows), the label provenance and the limitations of the comparison.
+These are reported, never used to grant approval on their own.
 """
 
 from __future__ import annotations
@@ -32,7 +34,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from src.evaluation.dataset import Dataset
-from src.evaluation.metrics import evaluate, review_metrics
+from src.evaluation.metrics import evaluate, ranking_delta, ranking_metrics, review_metrics
 from src.evaluation.models import RunResult, StrategyRef
 from src.evaluation.runner import run_evaluation
 from src.lab.bundle import verify_bundle
@@ -89,8 +91,14 @@ def compare_metrics(dataset: Dataset, baseline: RunResult, candidate: RunResult)
         limitations.append(f"only {accepts} accept label(s): recall and unsafe-rejection deltas rest on very few jobs")
     if any(("survival bias" in w) or ("pipeline-rejected" in w) for w in candidate.warnings):
         limitations.append("sampling of the dataset limits which false negatives can be seen (see dataset warnings)")
-    return {"baseline": b, "candidate": c, "delta": delta, "label_provenance": dict(sorted(provenance.items())),
-            "accept_labels": accepts, "limitations": limitations}
+    # reported beside the verdict, never part of it: a scoring-only change flips no gate decision, so the
+    # verdict cannot see it; how the score orders the accepted jobs can
+    ranking = {"baseline": ranking_metrics(baseline.decisions, dataset.labels),
+               "candidate": ranking_metrics(candidate.decisions, dataset.labels),
+               "delta": ranking_delta(baseline.decisions, candidate.decisions, dataset.labels)}
+    return {"baseline": b, "candidate": c, "delta": delta, "ranking": ranking,
+            "label_provenance": dict(sorted(provenance.items())), "accept_labels": accepts,
+            "limitations": limitations}
 
 
 def _sources(dataset: Dataset) -> dict[str, str]:

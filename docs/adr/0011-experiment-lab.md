@@ -82,7 +82,11 @@ filters must stay a measured, reversible, human-approved act.
   review (abstention) rate and confusion counts for baseline and candidate with their deltas,
   recomputed from the judged decisions, plus the label provenance and the comparison's limitations
   (non-independent labels, few accept labels, survival-biased sampling). Reported, never sufficient
-  for approval on its own.
+  for approval on its own. It also carries `ranking` (AUC, precision@k and the `relevant` visibility
+  floor over the accepted jobs; the AUC change and its paired bootstrap CI are computed on the jobs
+  both sides accept, with the jobs only one side accepts counted and the most-moved jobs listed): a `scoring.yaml`-only
+  candidate flips no gate decision, so the verdict is `insufficient_evidence` and only the ranking
+  shows its effect. The ranking does not enter the verdict or eligibility.
 - Promotion: `python -m src.lab approve <experiment> --dataset <its dataset> --by <name> --reason …`
   re-verifies the bundle hash and that it still reproduces from the current `config/`, then **recomputes
   the evidence** instead of reading it from `lab.db`: the dataset must load with its content hashes, be

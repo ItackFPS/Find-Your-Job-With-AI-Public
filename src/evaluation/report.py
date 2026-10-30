@@ -75,6 +75,23 @@ def render_markdown(r: RunResult) -> str:
         f"False positives: {m['false_positive_ids'] or 'none'}",
         f"False negatives (unsafe rejections): {m['false_negative_ids'] or 'none'}",
         f"Rejections by stage: {m['rejections_by_stage']}",
+    ]
+    rk = m.get("ranking")
+    if rk:
+        f = rk["visible_at_floor"]
+        pk = ", ".join(f"P@{k} {_f(v)}" for k, v in rk["precision_at"].items())
+        lines += [
+            "",
+            "## Ranking of the accepted jobs (deterministic score; location etc. rank, they do not reject)",
+            "",
+            f"- AUC {_f(rk['auc'])} over {rk['n_accept']} accept / {rk['n_reject']} reject labels "
+            f"({rk['n_borderline']} borderline excluded; counted as accept: AUC "
+            f"{_f(rk.get('auc_borderline_as_accept'))}); {pk}",
+            f"- at the `{f['tier']}` floor (score >= {f['min_score']}): shown {f['accept']} accept, "
+            f"{f['borderline']} borderline, {f['reject']} reject; accept hidden by the floor {f['accept_hidden']}, "
+            f"rejected by the gates {rk['accept_rejected_by_gates']}",
+        ]
+    lines += [
         "",
         "## By category",
         "",

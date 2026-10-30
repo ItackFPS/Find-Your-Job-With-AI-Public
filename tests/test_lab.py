@@ -132,6 +132,19 @@ def test_baseline_replayed_through_the_lab_reproduces_the_plain_evaluation(datas
     assert res["verdict"] == "insufficient_evidence" and res["eligible_for_approval"] is False
 
 
+def test_a_scoring_only_change_is_invisible_to_the_verdict_but_not_to_the_ranking(dataset, tmp_path):
+    """Scores never flip a gate decision: the comparison's ranking is where such a change shows."""
+    _, path = create_bundle(ROOT / "config", {"scoring.yaml": {"scoring": {"skills_match": {"weight": 0.0}}}},
+                            tmp_path)
+    res = run_experiment(dataset, StrategyRef(config_dir=str(ROOT / "config")), path)
+    assert res["fixed"] == res["broken"] == 0 and res["verdict"] == "insufficient_evidence"
+    ranking = res["comparison"]["ranking"]
+    assert ranking["delta"]["auc"] == pytest.approx(ranking["candidate"]["auc"] - ranking["baseline"]["auc"])
+    assert ranking["delta"]["auc"] < 0                       # skills carried signal on this dataset
+    assert ranking["delta"]["moved"]
+    lo, hi = ranking["delta"]["auc_diff_ci95"]
+    assert lo <= ranking["delta"]["auc"] <= hi
+
 # -- promotion -------------------------------------------------------------------------------
 
 @pytest.fixture()
