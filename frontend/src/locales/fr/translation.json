@@ -606,6 +606,56 @@
     }
   },
   "quality": {
+    "calibration": {
+      "title": "Calibrer sur vos propres offres",
+      "subtitle": "Indiquez à l'application quelles offres vous conviennent vraiment, quelques-unes à la fois",
+      "why": "Vous voyez de vraies offres une par une, sans aucun score ni verdict de l'application, et dites si chacune vous convient. Ces réponses sont le seul moyen indépendant de mesurer si l'application classe bien les offres pour vous.",
+      "progress": "{labelled} offres sur {target} étiquetées ({dataset})",
+      "ofTotal": "{total} dans cet ensemble",
+      "counts": "Pertinentes {relevant} · non pertinentes {notRelevant} · incertaines {notSure}",
+      "more": "Étiqueter 100 de plus",
+      "itemOf": "Offre {index} sur {count}",
+      "remote": "télétravail",
+      "noDescription": "Pas de description.",
+      "truncated": "(description raccourcie)",
+      "reasonPrompt": "Raison principale (facultatif)",
+      "reasons": {
+        "location": "Lieu",
+        "domain": "Domaine",
+        "seniority": "Niveau",
+        "experience": "Expérience",
+        "skills": "Compétences",
+        "contract": "Contrat",
+        "language": "Langue",
+        "other": "Autre"
+      },
+      "answers": {
+        "relevant": "Pertinente",
+        "not_relevant": "Non pertinente",
+        "not_sure": "Je ne sais pas"
+      },
+      "skip": "Passer",
+      "finish": "Terminer et enregistrer",
+      "nothingLeft": "Toutes les offres de cet ensemble sont étiquetées.",
+      "empty": "Aucun ensemble d'offres à étiqueter. Importez un dossier exporté ci-dessous.",
+      "found": "Ensemble « {dataset} » trouvé ({total} offres)",
+      "import": "Importer",
+      "folderLabel": "Dossier d'un ensemble exporté",
+      "folderPlaceholder": "ex. D:\\…\\data\\benchmarks\\real-v2",
+      "note": "Le dossier est copié dans les données de l'application : l'original n'est jamais modifié. Chaque session est enregistrée comme nouvelle version de l'ensemble.",
+      "errors": {
+        "load": "Impossible de charger les ensembles de calibration.",
+        "invalid_dataset": "Ce dossier n'est pas un ensemble exporté valide.",
+        "not_real": "Cet ensemble est un jeu de test, pas de vraies offres.",
+        "already_imported": "Cet ensemble est déjà importé.",
+        "not_found": "Cet ensemble n'existe plus.",
+        "already_labelled": "Cette offre est déjà étiquetée.",
+        "unexpected": "Une erreur est survenue. Réessayez."
+      },
+      "start": "{count, plural, one {Étiqueter # offre} other {Étiqueter # offres}}",
+      "savePending": "{count, plural, one {Enregistrer # réponse} other {Enregistrer # réponses}}",
+      "saved": "{count, plural, one {# réponse enregistrée (version {version})} other {# réponses enregistrées (version {version})}}"
+    },
     "title": "Qualité",
     "intro": "Le tri est-il sûr, et s’améliore-t-il ou se dégrade-t-il ? Lancez une vérification ici, sans terminal.",
     "checkedAt": "Vérifié le {date}",

@@ -606,6 +606,56 @@
     }
   },
   "quality": {
+    "calibration": {
+      "title": "Calibrate on your own offers",
+      "subtitle": "Tell the app which offers really fit you, a few at a time",
+      "why": "You see real offers one by one, without any score or verdict from the app, and say whether each fits you. These answers are the only independent way to measure how well the app ranks offers for you.",
+      "progress": "{labelled} of {target} offers labelled ({dataset})",
+      "ofTotal": "{total} in this set",
+      "counts": "Relevant {relevant} · not relevant {notRelevant} · not sure {notSure}",
+      "more": "Label 100 more",
+      "itemOf": "Offer {index} of {count}",
+      "remote": "remote",
+      "noDescription": "No description.",
+      "truncated": "(description shortened)",
+      "reasonPrompt": "Main reason (optional)",
+      "reasons": {
+        "location": "Location",
+        "domain": "Field",
+        "seniority": "Seniority",
+        "experience": "Experience",
+        "skills": "Skills",
+        "contract": "Contract",
+        "language": "Language",
+        "other": "Other"
+      },
+      "answers": {
+        "relevant": "Relevant",
+        "not_relevant": "Not relevant",
+        "not_sure": "Not sure"
+      },
+      "skip": "Skip",
+      "finish": "Finish and save",
+      "nothingLeft": "Every offer of this set is labelled.",
+      "empty": "No offer set to label yet. Import an export folder below.",
+      "found": "Set “{dataset}” found ({total} offers)",
+      "import": "Import",
+      "folderLabel": "Folder of an exported set",
+      "folderPlaceholder": "e.g. D:\\…\\data\\benchmarks\\real-v2",
+      "note": "The folder is copied into the app's data: the original is never changed. Each session is saved as a new version of the set.",
+      "errors": {
+        "load": "Could not load the calibration sets.",
+        "invalid_dataset": "This folder is not a valid exported set.",
+        "not_real": "This set is a test set, not real offers.",
+        "already_imported": "This set is already imported.",
+        "not_found": "This set no longer exists.",
+        "already_labelled": "This offer is already labelled.",
+        "unexpected": "Something went wrong. Try again."
+      },
+      "start": "{count, plural, one {Label # offer} other {Label # offers}}",
+      "savePending": "{count, plural, one {Save # answer} other {Save # answers}}",
+      "saved": "{count, plural, one {# answer saved (version {version})} other {# answers saved (version {version})}}"
+    },
     "title": "Quality",
     "intro": "Is matching safe, and is it getting better or worse? Run a check from here: no terminal needed.",
     "checkedAt": "Checked {date}",
