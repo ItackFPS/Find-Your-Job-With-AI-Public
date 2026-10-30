@@ -81,7 +81,8 @@ def start_job(request: Request, body: StartQualityJobIn = Body(...)) -> dict[str
     manager = _manager(request)
     try:
         job_id = manager.start(
-            body.kind, body.options.model_dump(), db_path=request.app.state.db_path,
+            body.kind, body.options.model_dump(exclude=None if body.kind == "personal" else {"dataset_id", "split"}),
+            db_path=request.app.state.db_path,
             config_dir=getattr(request.app.state, "config_dir", None) or "config",
             self_check_dir=_self_check_dir(request), runs_dir=_runs_dir(request))
     except QualityJobBusy as exc:
