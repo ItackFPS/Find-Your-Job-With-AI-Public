@@ -130,6 +130,7 @@ class TestGreenhouseCollector:
         assert result.source_name == "greenhouse"
         assert len(result.jobs) == 1
         assert result.errors == []
+        assert result.listing_complete is True  # the whole board
         job = result.jobs[0]
         assert job["title"] == "Staff Software Engineer"
         assert job["company"] == "Doctolib"
@@ -202,6 +203,7 @@ class TestGreenhouseCollector:
         assert result.jobs == []
         assert len(result.errors) == 1
         assert "connection refused" in result.errors[0]
+        assert result.listing_complete is False
 
     @patch("src.collectors.greenhouse.GreenhouseCollector._enforce_rate_limit")
     def test_max_jobs_cap(self, _rl: MagicMock) -> None:
@@ -323,6 +325,7 @@ class TestLeverCollector:
         assert result.source_name == "lever"
         assert len(result.jobs) == 1
         assert result.errors == []
+        assert result.listing_complete is True
         job = result.jobs[0]
         assert job["title"] == "AI Architect"
         assert job["company"] == "Theodo"
@@ -388,6 +391,7 @@ class TestLeverCollector:
         assert result.jobs == []
         assert len(result.errors) == 1
         assert "timeout" in result.errors[0]
+        assert result.listing_complete is False
 
     @patch("src.collectors.lever.LeverCollector._enforce_rate_limit")
     def test_max_jobs_cap(self, _rl: MagicMock) -> None:

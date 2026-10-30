@@ -189,12 +189,21 @@ duplicate keeps the same offer from one run to the next. `GET /api/jobs/{id}` re
 
 Offers expire (issue #86, `Storage.apply_expiry`, run after storage): an offer whose end
 date (`valid_through`, read from schema.org `validThrough` when a source gives one) has passed
-is `expired` (reason `valid_through`); an active offer no longer listed by a source that was
-fully collected this run (completed, not request-capped; LinkedIn and HelloWork never count)
-gets a missed run, and `expire_after_missed_runs` in a row (`config/retention.yaml`, 3)
+is `expired` (reason `valid_through`); an active offer no longer listed by a source that read
+its whole listing this run gets a missed run, and `expire_after_missed_runs` in a row (`config/retention.yaml`, 3)
 expire it (`not_seen`). Seen again, it is active again. `POST /api/jobs/{id}/availability`
 `{"available": false}` records the user's report (`user_report`), which a new sighting does
 not undo. Expired offers are kept, hidden from `GET /api/jobs` unless `include_expired=true`.
+
+Absence counts only after a complete collection (`sources_counting_misses`): the collector
+says it read every result of every query or board (`CollectorResult.listing_complete`: France
+Travail API with every query exhausted, EURES with every query ending before its page cap,
+Greenhouse, Lever, SmartRecruiters), with no error, no request cap, at least one offer and no
+yield anomaly. Sources that read a first page or the newest results (France Travail web shows
+20 offers per page, the one-page APIs, the feeds) and LinkedIn/HelloWork never count a miss;
+their offers expire by end date or user report only. Every offer collected counts as seen,
+including one that failed validation or was merged as a duplicate. Known gap: an offer found
+by a query or board the user later removed is still counted missing by a complete source.
 
 Schema changes live in `src/storage/migrations.py`: additive columns (`ensure_columns`) and
 named one-shot data migrations recorded in `db_migrations`. Before data migrations run on a

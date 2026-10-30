@@ -88,14 +88,14 @@ the Hugging Face Hub).
 
 `logs/` is git-ignored. The launcher never prints or logs the content of `.env`.
 
-## Running at logon instead
+## Running at logon
 
-`scripts\install_startup.py` registers a per-user Task Scheduler task
-(`FindYourJobWithAI_Backend`) that starts the backend in the background at logon, without
-the launcher. It still works, and the launcher detects and reuses what it started. Remove
-it with `scripts\uninstall_startup.py`. Nothing is registered unless you run that script
-yourself. n8n support was removed in 2.0: if you once registered its logon task, remove it
-with `scripts\uninstall_n8n_startup.py`.
+`FindYourJob.cmd autostart on` starts the installed app (tray) when you sign in. The
+per-user Task Scheduler task of 1.x (`FindYourJobWithAI_Backend`, which started the backend
+alone, from `scripts\install_startup.py`) is no longer created: the script was removed in
+2.0. If you once registered it, the launcher still detects and reuses that backend; remove the
+task with `scripts\uninstall_startup.py`. n8n support was removed in 2.0 too: remove its logon
+task, if you registered one, with `scripts\uninstall_n8n_startup.py`.
 
 ## Installing, updating, uninstalling
 

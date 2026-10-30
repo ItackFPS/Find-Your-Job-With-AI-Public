@@ -76,6 +76,9 @@ def trigger_manual_run(definition_id: str, request: Request) -> dict[str, Any]:
     Returns 409 if the source is already running.
     Returns 404 if the definition_id is not found.
     """
+    from src.api.routes.settings import refuse_while_cleaning
+
+    refuse_while_cleaning()
     scheduler = getattr(request.app.state, "scheduler", None)
     if scheduler is None:
         raise HTTPException(status_code=503, detail="Scheduler not available")

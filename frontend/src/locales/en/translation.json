@@ -1154,6 +1154,32 @@
         "linkedin": "LinkedIn",
         "hellowork": "HelloWork"
       }
+    },
+    "data": {
+      "title": "Data",
+      "subtitle": "How much space the app's database takes, and removing offers that closed long ago.",
+      "summary": "Database: {size} · {active, number} open offers · {expired, number} expired offers",
+      "backups": "{count, plural, one {# safety copy} other {# safety copies}} made before database updates and cleanups ({size}), in the backups folder.",
+      "olderThan": "Remove expired offers older than",
+      "days": "{count, plural, one {# day} other {# days}}",
+      "keeps": "Offers you gave feedback on, applied to or tracked are always kept.",
+      "remove": "{count, plural, =0 {Nothing to remove} one {Remove # offer} other {Remove # offers}}",
+      "confirmTitle": "Confirm removal",
+      "confirm": "{count, plural, one {Remove # expired offer for good?} other {Remove # expired offers for good?}} This cannot be undone.",
+      "confirmYes": "Remove",
+      "cancel": "Cancel",
+      "running": "Removing and compacting… this can take a minute on a large database.",
+      "done": "{count, plural, one {# offer removed} other {# offers removed}}. Database: {before} → {after}.",
+      "doneBackup": "A safety copy was made first: {name}.",
+      "failedRun": "The cleanup did not finish. Nothing was lost; try again later.",
+      "failedBackup": "Nothing was removed: a safety copy of the database could not be made first. Free some disk space and try again.",
+      "notCompacted": "The database could not be compacted (not enough free disk space?), so its file did not shrink yet.",
+      "failed": "Could not start the cleanup. Try again.",
+      "busy": {
+        "search_running": "A search is running. Try again when it has finished.",
+        "scan_running": "A scan is running. Try again when it has finished.",
+        "cleanup_running": "A cleanup is already running."
+      }
     }
   }
 }

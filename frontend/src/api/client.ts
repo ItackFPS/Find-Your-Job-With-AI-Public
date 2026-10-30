@@ -915,3 +915,24 @@ export const setSourceChoice = (name: string, enabled: boolean) =>
   api.put<{ enabled: boolean; chosen_at: string }>(`/sources/${name}/choice`, { enabled }).then(r => r.data)
 export const resetSourceBreaker = (name: string) =>
   api.post<SourceBreaker>(`/sources/${name}/breaker/reset`).then(r => r.data)
+
+// Settings › Data (issue #86): database size and removing old expired offers.
+export interface DataSettings {
+  database_bytes: number
+  offers: { active: number; expired: number }
+  removable_expired: Record<'30' | '90' | '180', number>
+  backups: { name: string; bytes: number }[]
+  cleanup: {
+    state: 'idle' | 'running' | 'done' | 'failed'
+    removed?: number
+    bytes_before?: number
+    bytes_after?: number
+    backup?: string | null
+    compacted?: boolean
+    error?: string
+  }
+}
+
+export const getDataSettings = () => api.get<DataSettings>('/settings/data').then(r => r.data)
+export const startDataCleanup = (olderThanDays: number) =>
+  api.post<DataSettings['cleanup']>('/settings/data/cleanup', { older_than_days: olderThanDays }).then(r => r.data)

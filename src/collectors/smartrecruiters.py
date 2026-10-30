@@ -95,6 +95,7 @@ class SmartRecruitersCollector(BaseCollector):
         self._log_collection("smartrecruiters", len(jobs), errors, duration)
         return CollectorResult(
             source_name="smartrecruiters", jobs=jobs, errors=errors, duration_seconds=duration,
+            listing_complete=not errors and self.max_jobs is None,
         )
 
     def _collect_pages(

@@ -145,6 +145,9 @@ async def resume_scan_route(request: Request) -> ScanResumedOut:
 
     Returns 409 if a scan is already running or the backend is shutting down.
     """
+    from src.api.routes.settings import refuse_while_cleaning
+
+    refuse_while_cleaning()
     scanner = _require_scanner(request)
     try:
         scan_id, exec_id = resume_scan(
@@ -168,6 +171,9 @@ async def trigger_scan(request: Request) -> ScanStartedOut:
     this endpoint returns immediately with a scan_id to poll via /status or
     /scans, it does not wait for the scan to finish.
     """
+    from src.api.routes.settings import refuse_while_cleaning
+
+    refuse_while_cleaning()
     scanner = getattr(request.app.state, "hellowork_scanner", None)
     if scanner is None:
         raise HTTPException(status_code=503, detail="HelloWork scanner is not initialised.")

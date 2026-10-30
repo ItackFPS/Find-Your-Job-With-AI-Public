@@ -42,6 +42,9 @@ DEFAULT_VITE_PORT = 5173
 # The launcher passes its instance token to the backend in this variable; /api/health returns it
 # to processes of the same OS account only (src/api/app.py), and it is never printed or logged.
 INSTANCE_TOKEN_ENV = "FYJ_INSTANCE_TOKEN"
+# Set on the backend only by dev mode, which runs the Vite dev server: its origins are
+# allowed then and only then (src/api/app.py ``allowed_web_origins``).
+DEV_SERVER_ENV = "FYJ_DEV_SERVER"
 DEFAULT_LLM_ENDPOINT = "http://localhost:1234"
 
 # Imports the backend cannot start without (module name -> pip distribution).

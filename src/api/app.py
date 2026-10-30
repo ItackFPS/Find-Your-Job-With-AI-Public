@@ -25,7 +25,7 @@ import asyncio
 import logging
 import os
 import threading
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -75,7 +75,7 @@ from src.api.routes import (
 from src.api.progress_stream import ProgressBus
 from src.api.runner import PipelineRunner
 from src.hellowork.scanner import HelloWorkScanner
-from src.launcher.core import INSTANCE_TOKEN_ENV
+from src.launcher.core import DEV_SERVER_ENV, INSTANCE_TOKEN_ENV
 from src.hellowork.staging import HelloWorkStagingStorage
 from src.linkedin.scanner import LinkedInConfig, LinkedInScanner
 from src.linkedin.staging import LinkedInStagingStorage
@@ -290,7 +290,7 @@ app = FastAPI(
 )
 
 # Web origins other than the backend itself that may call the API: the Vite
-# dev server. Shared by CORS and the cross-origin write guard.
+# dev server, in dev mode only. Shared by CORS and the cross-origin write guard.
 DEV_WEB_ORIGINS: tuple[str, ...] = (
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -298,16 +298,22 @@ DEV_WEB_ORIGINS: tuple[str, ...] = (
 )
 
 
-def allowed_web_origins(same_user_only_enabled: bool) -> tuple[str, ...]:
-    """None under API_SAME_USER_ONLY: the dev server must not run then (it would
-    relay other accounts' requests as yours), and while its port is free another
-    account could serve a page there that your browser would treat as allowed."""
-    return () if same_user_only_enabled else DEV_WEB_ORIGINS
+def allowed_web_origins(same_user_only_enabled: bool, dev_server: bool = False) -> tuple[str, ...]:
+    """The dev server's origins only while dev mode runs it (``FYJ_DEV_SERVER=1``, set
+    by ``FindYourJob.cmd dev``): otherwise its port is free, and any local program could
+    serve a page there that your browser would let read and write the API. None under
+    API_SAME_USER_ONLY either: the dev server would relay other accounts' requests as
+    yours."""
+    return DEV_WEB_ORIGINS if dev_server and not same_user_only_enabled else ()
 
 
-ALLOWED_WEB_ORIGINS: tuple[str, ...] = allowed_web_origins(same_user_only())
+def dev_server_from_env(environ: Mapping[str, str] = os.environ) -> bool:
+    return str(environ.get(DEV_SERVER_ENV, "")).strip().lower() in ("1", "true", "yes", "on")
 
-# CORS: allow the Vite dev server to reach the API during development.
+
+ALLOWED_WEB_ORIGINS: tuple[str, ...] = allowed_web_origins(same_user_only(), dev_server_from_env())
+
+# CORS: allow the Vite dev server to reach the API in dev mode.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=list(ALLOWED_WEB_ORIGINS),

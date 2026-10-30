@@ -2,59 +2,120 @@
 # The project's dependencies plus the [linkedin] extra, resolved once on CPython 3.12 x64
 # and pinned so a rebuild installs the same versions. Regenerate after changing
 # pyproject.toml: see docs/windows-installer.md, "Updating the pinned dependencies".
-annotated-doc==0.0.5
-annotated-types==0.8.0
-anyio==4.15.1
-beautifulsoup4==4.15.0
-bottle==0.13.4
-certifi==2026.10.19
-cffi==2.1.1
-charset-normalizer==3.5.2
-click==8.5.0
-clr_loader==0.3.1
-colorama==0.4.6
-curl_cffi==0.16.3
-fastapi==0.146.0
-feedparser-sgmllib==2.1.0
-feedparser==6.0.14
-filelock==4.2.3
-flatbuffers==25.12.19
-fsspec==2026.9.0
-h11==0.16.0
-hf-xet==1.7.0
-httpcore==1.0.9
-httpx==0.28.1
-huggingface_hub==1.33.0
-idna==3.20
-markdownify==1.2.3
-numpy==2.5.4
-onnxruntime==1.31.0
-opentelemetry-api==1.45.1
-packaging==26.3
-pandas==3.0.6
-pillow==13.0.0
-protobuf==7.36.2
-proxy_tools==0.1.0
-pycparser==3.11
-pydantic-settings==2.16.0
-pydantic==2.14.1
-pydantic_core==2.50.1
-pystray==0.19.5
-python-dateutil==2.9.0.post0
-python-dotenv==1.2.4
-python-jobspy==1.3.0
-python-multipart==0.0.32
-pythonnet==3.2.1
-pywebview==6.2.1
-PyYAML==6.0.3
-requests==2.34.2
-six==1.17.0
-soupsieve==3.0.3
-starlette==1.9.0
-tokenizers==0.23.3
-tqdm==4.70.1
-typing-inspection==0.4.4
-typing_extensions==4.16.0
-tzdata==2026.5
-urllib3==2.8.0
-uvicorn==0.54.0
+# build.ps1 installs with --require-hashes; the hashes come from
+# packaging/windows/hash_requirements.py.
+annotated-doc==0.0.5 \
+    --hash=sha256:117bac03a25ede5df5440e855b32d556049ca169ead221505badf432fed4b101
+annotated-types==0.8.0 \
+    --hash=sha256:f072f4d804ea359e4eaf198b1af7a8b0943881a87f31bb764f8bf219bb9419e0
+anyio==4.15.1 \
+    --hash=sha256:6152fdbbf9a77fdec97731721bebf7c4c44f7c29b424b0065826173efc7ed101
+beautifulsoup4==4.15.0 \
+    --hash=sha256:d6f88de62e1d4e38ecb1077eb9724cd0eff29d2a08ca16a401e9b9e93f117cf9
+bottle==0.13.4 \
+    --hash=sha256:045684fbd2764eac9cdeb824861d1551d113e8b683d8d26e296898d3dd99a12e
+certifi==2026.10.19 \
+    --hash=sha256:42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b
+cffi==2.1.1 \
+    --hash=sha256:f53e442b08449d42821fa4a4fba000095af9f62742a500f978a9f557ec44339a
+charset-normalizer==3.5.2 \
+    --hash=sha256:780fbe7cab297b81dad9fb8dc5eb003c0468ffb0d9e5f65068c53a34661a96bc \
+    --hash=sha256:9f56f72050826f63dcee7a7f55b0a77168cb3bfc553fd405e7f8f9ece75a4036 \
+    --hash=sha256:b6b751274acb69d77b3323d6b7dbaa3c7fdfc1eb829b7eb61d262f32e1af9685
+click==8.5.0 \
+    --hash=sha256:255bc9599cf7748b4b1a446ccc735421bd08a2ae529a8b88597d3de5664ee360
+clr_loader==0.3.1 \
+    --hash=sha256:cbad189de20d202a7d621956b0fc38049e13c9bf7ca2923441eff725cd121aa1
+colorama==0.4.6 \
+    --hash=sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6
+curl_cffi==0.16.3 \
+    --hash=sha256:fe87b66e324ed7318166698e02169f3208dbda32b872a27d2bc61a9c19b335eb
+fastapi==0.146.0 \
+    --hash=sha256:0eb9985a7d5bb11ce9a962d4b65e0cf1a2e13d6aca2e14da57bc526370e26748
+feedparser-sgmllib==2.1.0 \
+    --hash=sha256:2cab2d43b95a954f920f18aebce7a4dbbb3f539780b127e2aa114f579821e01d
+feedparser==6.0.14 \
+    --hash=sha256:e35e3f760151b0c3b22cac9684155cae186a233e16c49bcbc6c49e91e3131137
+filelock==4.2.3 \
+    --hash=sha256:8a09a56992ac9c4eb58d17c6c723c1fe5209fbcd4d569b49d58c1a9103295061
+flatbuffers==25.12.19 \
+    --hash=sha256:7634f50c427838bb021c2d66a3d1168e9d199b0607e6329399f04846d42e20b4
+fsspec==2026.9.0 \
+    --hash=sha256:8dd6e646e99ea382bd85f97a45e6b526a442d79423a7dc673f1e2756d05fcb5f
+h11==0.16.0 \
+    --hash=sha256:63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86
+hf-xet==1.7.0 \
+    --hash=sha256:2b7bb5727889b0f2436dbaaad8fc4c3e66b8240d992716989e0c086b4278b1bc
+httpcore==1.0.9 \
+    --hash=sha256:2d400746a40668fc9dec9810239072b40b4484b640a8c38fd654a024c7a1bf55
+httpx==0.28.1 \
+    --hash=sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad
+huggingface_hub==1.33.0 \
+    --hash=sha256:04e434b06e100eddbce9a6e817d72693a7884b10a79bd67ab48080d5c07eb899
+idna==3.20 \
+    --hash=sha256:ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c
+markdownify==1.2.3 \
+    --hash=sha256:a189a0bedfd14009030fde5f85bb6f77c56897cb839b5c25315dd7d4e3e290ba
+numpy==2.5.4 \
+    --hash=sha256:a7b1b6353e36a7e50de2973a38d705c88ee93adcf120673cee7f45a4a3fa223a
+onnxruntime==1.31.0 \
+    --hash=sha256:09d56445c1753e66e0912de69d3f0184016ad9a191dcd6925bf5dd570d2bfbe5
+opentelemetry-api==1.45.1 \
+    --hash=sha256:b31553efa588ae44bc306f863c785c5333a9ecc091248c6ee68b4b6c87fdedfb
+packaging==26.3 \
+    --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
+pandas==3.0.6 \
+    --hash=sha256:3ef908d28590b3f42d7070e7ad8f9b34b442b260b7f3c1afb57e0040c58cdb1b
+pillow==13.0.0 \
+    --hash=sha256:ff3fe9eb621fbb9db4c4be33ab946f6bac5f98ab50ca8d3260503653656c961b
+protobuf==7.36.2 \
+    --hash=sha256:a300819d441e078a5608c0d3c709796bb548136058fda017ae51d425b44fd353 \
+    --hash=sha256:bdb3a345d48db958e6ce1f18e508beb0cc981d64f24088427549c866cd039f1e
+proxy_tools==0.1.0 \
+    --hash=sha256:ccb3751f529c047e2d8a58440d86b205303cf0fe8146f784d1cbcd94f0a28010
+pycparser==3.11 \
+    --hash=sha256:51d5a8ba2be0bbe440b99d2112604c95bbbc3c2748a64260186c541e1729cd80
+pydantic-settings==2.16.0 \
+    --hash=sha256:7e73acf7f61936a15e5a3b6eedaea29f133357faf7272f2607ba479b049dd7f2
+pydantic==2.14.1 \
+    --hash=sha256:9195d967ec791692a04438115466764fb8b9a27b31f14a760437694f40d6b454
+pydantic_core==2.50.1 \
+    --hash=sha256:132529c83901437ff642f585216831bf5fd7a91df66829907e155192ead62498
+pystray==0.19.5 \
+    --hash=sha256:a0c2229d02cf87207297c22d86ffc57c86c227517b038c0d3c59df79295ac617
+python-dateutil==2.9.0.post0 \
+    --hash=sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427
+python-dotenv==1.2.4 \
+    --hash=sha256:42269a8a5b3fd54ffa6f3d84b18abed50064717576b4ecf03dc4a55d8aa04fdc
+python-jobspy==1.3.0 \
+    --hash=sha256:74e19fa6b1313668541a7a4bc0d51d714534740a70d6f11533ef921715d15017
+python-multipart==0.0.32 \
+    --hash=sha256:ff6d3f776f16878c894e52e107296ffc890e913c611b1a4ec6c44e2821fe2e23
+pythonnet==3.2.1 \
+    --hash=sha256:dd5668b74b0c903d9a24e1ba86f728fc490f8e919d56b3c24bf06739b9ee2b7f
+pywebview==6.2.1 \
+    --hash=sha256:9d07275f53894ab4d5e2e0e996227193e7187dec276d9b624dccbce029216b46
+PyYAML==6.0.3 \
+    --hash=sha256:5fcd34e47f6e0b794d17de1b4ff496c00986e1c83f7ab2fb8fcfe9616ff7477b
+requests==2.34.2 \
+    --hash=sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0
+six==1.17.0 \
+    --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274
+soupsieve==3.0.3 \
+    --hash=sha256:fa30e3ba4809cb81ce1f3209f2fbe3e779fc445f0439bc147a0d7c4601743f21
+starlette==1.9.0 \
+    --hash=sha256:fd3f159936e882d06c1108f84688f7cda2cf85fc6a592a50edbd175e882c2ddc
+tokenizers==0.23.3 \
+    --hash=sha256:1f0823bb00c5fdc98e487354d54dd55a03848d61a1a0bf29a68c77f24f3b26c3
+tqdm==4.70.1 \
+    --hash=sha256:c293e525e6fef9c20e8728fd4612df02a0aa31bb5fe91ecd93e123b1b7bffa73
+typing-inspection==0.4.4 \
+    --hash=sha256:65b8397ba37ccbce054456aaccddfc91e6e3083c92824df348d96ca832f3f147
+typing_extensions==4.16.0 \
+    --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
+tzdata==2026.5 \
+    --hash=sha256:b683bd1b6659ddcd810ff02ad09ba821d4bf1065072805063eb35c49617905ac
+urllib3==2.8.0 \
+    --hash=sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3
+uvicorn==0.54.0 \
+    --hash=sha256:505bdb0f318731d45f1f712071fc781a8981f6847a31c902c9f5e652d4f67faf

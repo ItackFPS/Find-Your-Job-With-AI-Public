@@ -517,6 +517,8 @@ def run_pipeline(
                     source_stats["per_query_stats"] = result.metadata["per_query_stats"]
                 if result.metadata.get("per_query_status"):
                     source_stats["per_query_status"] = result.metadata["per_query_status"]
+                if result.listing_complete:
+                    source_stats["listing_complete"] = True
                 errors = [f"{name}: {e}" for e in result.errors]
                 _apply_source_contract(collector, source_stats, errors, name)
                 logger.info("  Collected %d jobs from %s", len(normalized), name)
@@ -983,17 +985,14 @@ def run_pipeline(
             storage.record_provenance([job for job, _, _ in scored_with_breakdown], datetime.now(UTC))
         except Exception as exc:  # noqa: BLE001
             logger.warning("Provenance not recorded: %s", exc)
-        # Expiry (issue #86): offers seen this run stay active; a source fully collected
-        # this run counts a miss for the offers it no longer lists. Never fails the run.
+        # Expiry (issue #86): every offer collected this run stays active (an offer that
+        # failed validation or was merged as a duplicate was still seen); only a source
+        # that read its whole listing counts a miss for the offers it no longer lists.
+        # Never fails the run.
         try:
-            complete_sources = {
-                name for name, row in stats.by_source.items()
-                if row.get("status") == "completed" and not row.get("request_cap_reached")
-                and name not in EXPIRY_EXCLUDED_SOURCES
-            }
             expiry = storage.apply_expiry(
-                {job.id for job in deduped_jobs}, complete_sources, datetime.now(UTC),
-                expire_after_missed_runs(config_dir),
+                {job.id for job in all_jobs}, sources_counting_misses(stats.by_source),
+                datetime.now(UTC), expire_after_missed_runs(config_dir),
             )
             logger.info("Expiry: %s", expiry)
         except Exception as exc:  # noqa: BLE001
@@ -1522,6 +1521,23 @@ def _stage_reporter(
 # listing: a missing offer proves nothing, so they never count a miss (issue #86).
 EXPIRY_EXCLUDED_SOURCES = frozenset({"linkedin", "hellowork"})
 DEFAULT_EXPIRE_AFTER_MISSED_RUNS = 3
+
+
+def sources_counting_misses(by_source: dict[str, dict[str, Any]]) -> set[str]:
+    """The sources whose absence of an offer this run is evidence that it closed: those
+    whose collector read its whole listing (``listing_complete``), with no error, no
+    request cap, at least one offer and no sudden yield drop. A first page, a capped
+    search, a failure or a suspiciously small yield never counts a miss (issue #86)."""
+    return {
+        name for name, row in by_source.items()
+        if isinstance(row, dict)
+        and row.get("listing_complete") is True
+        and row.get("status") == "completed"
+        and not row.get("request_cap_reached")
+        and not row.get("yield_anomaly")
+        and (row.get("collected") or 0) > 0
+        and name not in EXPIRY_EXCLUDED_SOURCES
+    }
 
 
 def expire_after_missed_runs(config_dir: str | Path) -> int:
