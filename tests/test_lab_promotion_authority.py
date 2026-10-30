@@ -29,7 +29,7 @@ from src.lab.bundle import create_bundle
 from src.lab.experiment import run_experiment
 from src.lab import isolation
 from src.lab.isolation import PROBE_SUFFIX, check_isolation
-from src.lab.promotion import PromotionError, approve, current_pointer
+from src.lab.promotion import PromotionError, approve, current_pointer, strategy_change
 from src.lab.store import LabStore
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -92,6 +92,33 @@ def test_approval_recomputes_the_evidence_and_records_who_and_why(env):
     assert ev["baseline_fingerprint"] == env["fix_result"]["baseline_fingerprint"]
     assert set(ev["approver"]) == {"name", "os_account", "host"} and ev["approver"]["name"] == "reviewer"
     assert ev["reason"] == "fixes junior rejections" and ev["bundle_hash"] == env["fix"][0]
+
+
+def test_the_approver_sees_and_records_the_change_itself_not_the_lab_s_description_of_it(env, monkeypatch):
+    lab = env["lab"]
+    digest, path = env["fix"]
+    # the lab (or a proposer) may describe the change however it likes; the approver is shown the bundle diff
+    cid = lab.add_candidate(lab.add_hypothesis("only fixes a typo"), digest, str(path), {"filters.yaml": {}})
+    eid = lab.add_experiment(cid, env["ds"].manifest.model_dump(), env["fix_result"])
+    shown = {}
+    approve(env["lab"], env["jobs"], eid, dataset=env["ds"], approved_by="angel", reason="r", config_dir=env["cfg"],
+            confirm=lambda ev: shown.update(ev) or True)
+    removed = [line for line in shown["change"] if line.startswith("-") and not line.startswith("---")]
+    assert removed == ["-  - junior"] and not [ln for ln in shown["change"] if ln.startswith("+ ")]
+    assert "--- production/filters.yaml" in shown["change"] and "+++ bundle/filters.yaml" in shown["change"]
+    assert json.loads(current_pointer(env["jobs"])["approval_evidence"])["change"] == shown["change"]
+
+    from src.lab.__main__ import _approval_summary
+    assert "    -  - junior" in _approval_summary(shown).splitlines()
+
+
+def test_the_change_shown_to_the_approver_cannot_hide_lines_from_a_terminal(env, tmp_path):
+    words = ["a\u202eb", "c\u200bd"]     # bidi override, zero-width space: printable to YAML, not to a reader
+    digest, path = create_bundle(env["cfg"], {"filters.yaml": {"seniority_exclusions": {"senior": words}}},
+                                 tmp_path / "s")
+    change = "\n".join(strategy_change(env["cfg"], path))
+    assert "\u202e" not in change and "\u200b" not in change
+    assert "a\\u202eb" in change and "c\\u200bd" in change
 
 
 def test_a_forged_eligible_verdict_is_not_evidence(env):

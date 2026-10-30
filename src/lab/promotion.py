@@ -22,10 +22,12 @@ inert, so an approval made when it had no effect never starts having one silentl
 
 from __future__ import annotations
 
+import difflib
 import getpass
 import json
 import platform
 import sqlite3
+import unicodedata
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -33,6 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from src.decisions.active_strategy import EFFECTIVE_COLUMN, approval_basis, check_bundle, resolve_active_strategy
+from src.decisions.bundle_format import BUNDLE_FILES, render_bundle
 from src.evaluation.dataset import Dataset
 from src.evaluation.models import StrategyRef
 from src.lab.bundle import verify_bundle
@@ -120,6 +123,28 @@ def _inside(path: Path, root: Path) -> bool:
         return False
 
 
+def _production_dir(jobs_db: str | Path, config_dir: str | Path) -> Path:
+    """The configuration production runs now: the active bundle, else ``config_dir``."""
+    active = resolve_active_strategy(jobs_db, config_dir)
+    return active.bundle_dir if active.uses_bundle and active.bundle_dir is not None else Path(config_dir)
+
+
+def strategy_change(production_dir: str | Path, bundle_dir: str | Path) -> list[str]:
+    """Unified diff of what production runs now -> the bundle, both rendered the way bundles are written.
+
+    Built from the hash-verified bundle files, not from anything the lab (or a proposer) wrote about the
+    change: a hypothesis statement or a candidate's recorded overrides can say one thing and change another.
+    Characters that a terminal could interpret (controls, bidi overrides) are shown escaped."""
+    before = render_bundle(production_dir, {})
+    lines: list[str] = []
+    for name in BUNDLE_FILES:
+        after = (Path(bundle_dir) / name).read_text(encoding="utf-8")
+        lines += [line.rstrip("\n") for line in difflib.unified_diff(
+            before[name].splitlines(True), after.splitlines(True), f"production/{name}", f"bundle/{name}", n=1)]
+    return ["".join(f"\\u{ord(c):04x}" if unicodedata.category(c).startswith("C") else c for c in line)
+            for line in lines]
+
+
 def recompute_evidence(lab: LabStore, jobs_db: str | Path, experiment_id: str, dataset: Dataset, *,
                        config_dir: str | Path = "config", profile_path: str | None = None) -> dict[str, Any]:
     """Re-run ``experiment_id`` from its inputs, in this process, against what production runs now.
@@ -140,10 +165,9 @@ def recompute_evidence(lab: LabStore, jobs_db: str | Path, experiment_id: str, d
         raise PromotionError(f"dataset {dataset.path} ({m.dataset_id}, labels {m.labels_sha256[:12]}) is not the one "
                              f"experiment {experiment_id} recorded ({exp['dataset_id']}, labels "
                              f"{exp['dataset_labels_sha256'][:12]})")
-    active = resolve_active_strategy(jobs_db, config_dir)
-    base_dir = active.bundle_dir if active.uses_bundle and active.bundle_dir is not None else Path(config_dir)
     try:
-        fresh = run_experiment(dataset, StrategyRef(config_dir=str(base_dir), profile_path=profile_path),
+        fresh = run_experiment(dataset, StrategyRef(config_dir=str(_production_dir(jobs_db, config_dir)),
+                                                    profile_path=profile_path),
                                cand["bundle_path"], name=cand["candidate_id"])
     except ValueError as exc:
         raise PromotionError(f"the experiment cannot be replayed: {exc}") from exc
@@ -190,6 +214,7 @@ def approve(lab: LabStore, jobs_db: str | Path, experiment_id: str, *, dataset: 
         "independent_evidence": fresh.get("independent_evidence"),
         "limitations": (fresh.get("comparison") or {}).get("limitations", []),
         "acknowledged_exploratory": tier != "independently_supported",
+        "change": strategy_change(_production_dir(jobs_db, config_dir), cand["bundle_path"]),
         "approver": approver_identity(approved_by), "reason": reason,
     }
     if confirm is not None and not confirm(evidence):
