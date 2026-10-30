@@ -983,6 +983,21 @@ def run_pipeline(
             storage.record_provenance([job for job, _, _ in scored_with_breakdown], datetime.now(UTC))
         except Exception as exc:  # noqa: BLE001
             logger.warning("Provenance not recorded: %s", exc)
+        # Expiry (issue #86): offers seen this run stay active; a source fully collected
+        # this run counts a miss for the offers it no longer lists. Never fails the run.
+        try:
+            complete_sources = {
+                name for name, row in stats.by_source.items()
+                if row.get("status") == "completed" and not row.get("request_cap_reached")
+                and name not in EXPIRY_EXCLUDED_SOURCES
+            }
+            expiry = storage.apply_expiry(
+                {job.id for job in deduped_jobs}, complete_sources, datetime.now(UTC),
+                expire_after_missed_runs(config_dir),
+            )
+            logger.info("Expiry: %s", expiry)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Expiry not applied: %s", exc)
 
         # Phase NEXT / I11: incremental-collection INFRASTRUCTURE only — record
         # that a source's collection completed cleanly, and how many of its
@@ -1503,3 +1518,19 @@ def _stage_reporter(
     return _report
 
 
+# LinkedIn and HelloWork reach a run only as their newly staged offers, not as a full
+# listing: a missing offer proves nothing, so they never count a miss (issue #86).
+EXPIRY_EXCLUDED_SOURCES = frozenset({"linkedin", "hellowork"})
+DEFAULT_EXPIRE_AFTER_MISSED_RUNS = 3
+
+
+def expire_after_missed_runs(config_dir: str | Path) -> int:
+    """``expire_after_missed_runs`` from config/retention.yaml (at least 1), else 3."""
+    import yaml
+
+    try:
+        data = yaml.safe_load((Path(config_dir) / "retention.yaml").read_text(encoding="utf-8")) or {}
+        value = int(data.get("expire_after_missed_runs", DEFAULT_EXPIRE_AFTER_MISSED_RUNS))
+    except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError):
+        return DEFAULT_EXPIRE_AFTER_MISSED_RUNS
+    return max(1, value)

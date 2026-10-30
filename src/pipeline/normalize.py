@@ -168,6 +168,25 @@ def normalize_job(source_name: str, raw_data: dict[str, Any]) -> Job:
         except (ValueError, TypeError):
             pass
 
+    # End date (schema.org validThrough, issue #86). A bare date means the end of that day.
+    # An unreadable value is ignored: the offer simply has no end date.
+    valid_through = None
+    valid_raw = raw_data.get("valid_through")
+    if valid_raw:
+        from datetime import datetime, time, timezone
+        try:
+            text = str(valid_raw).strip().replace("Z", "+00:00")
+            if len(text) == 10:
+                valid_through = datetime.combine(datetime.fromisoformat(text).date(), time(23, 59, 59), timezone.utc)
+            else:
+                valid_through = datetime.fromisoformat(text)
+                if valid_through.tzinfo is None:
+                    valid_through = valid_through.replace(tzinfo=timezone.utc)
+                # Stored in UTC, so dates compare as text in SQL.
+                valid_through = valid_through.astimezone(timezone.utc)
+        except (ValueError, TypeError):
+            valid_through = None
+
     # Derive a stable, deterministic job ID when the source provides a
     # reliable external identifier.  The same source+source_job_id always
     # produces the same ID, so repeated pipeline runs update the existing DB
@@ -201,6 +220,7 @@ def normalize_job(source_name: str, raw_data: dict[str, Any]) -> Job:
         apply_url=apply_url,
         skills=skills,
         published_at=published_at,
+        valid_through=valid_through,
     )
 
     # Store raw payload for debugging and future parsing

@@ -329,6 +329,11 @@ class JobOut(BaseModel):
     canonical_url: str | None = None
     apply_url: str | None = None
     status: str = "active"
+    # Expiry (issue #86): the source's end date; when and why the offer was marked expired
+    # (valid_through | not_seen | user_report).
+    valid_through: datetime | None = None
+    expired_at: datetime | None = None
+    expiry_reason: str | None = None
     application_status: str | None = None
     score: ScoreBreakdownOut | None = None
 

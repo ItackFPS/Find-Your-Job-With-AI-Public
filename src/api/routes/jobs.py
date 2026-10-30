@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
-from pydantic import BaseModel
+from pydantic import BaseModel, StrictBool
 
 from src.api.schemas import ExplanationReason, ExplanationSignal, JobDetailOut, JobExplanationOut, ProvenanceOut
 from src.models.job import Job
@@ -273,6 +273,9 @@ def list_jobs(
             "since there is no run-scoped score to filter by)."
         ),
     ),
+    include_expired: bool = Query(
+        default=False, description="Also list offers marked expired (issue #86); hidden by default.",
+    ),
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> list[JobDetailOut]:
@@ -316,6 +319,8 @@ def list_jobs(
                 run_id_set = set(run_job_ids)
                 fts_matches = [j for j in fts_matches if j.id in run_id_set]
             # Apply structural filters in Python (mirrors _get_jobs_filtered).
+            if not include_expired:
+                fts_matches = [j for j in fts_matches if j.status != "expired"]
             if source is not None:
                 fts_matches = [j for j in fts_matches if j.source == source]
             if country is not None:
@@ -355,6 +360,7 @@ def list_jobs(
                     limit=None,   # no SQL pagination — score order preserved
                     offset=0,
                     job_ids=run_job_ids,
+                    include_expired=include_expired,
                 )
                 if department is not None:
                     from src.pipeline.departments import extract_department_code
@@ -368,7 +374,7 @@ def list_jobs(
                 if department is not None:
                     raw = _get_jobs_filtered(
                         s, source=source, country=country, remote=remote,
-                        limit=5000, offset=0,
+                        limit=5000, offset=0, include_expired=include_expired,
                     )
                     from src.pipeline.departments import extract_department_code
                     filtered = [
@@ -379,7 +385,7 @@ def list_jobs(
                 else:
                     jobs = _get_jobs_filtered(
                         s, source=source, country=country, remote=remote,
-                        limit=limit, offset=offset,
+                        limit=limit, offset=offset, include_expired=include_expired,
                     )
 
         # Batch-fetch scores in one query instead of N individual lookups.
@@ -685,6 +691,25 @@ def get_job_explanation(job_id: str, request: Request) -> JobExplanationOut:
         rs.close()
 
 
+class AvailabilityIn(BaseModel):
+    available: StrictBool
+
+
+@router.post("/{job_id}/availability", response_model=JobDetailOut)
+def report_availability(job_id: str, body: AvailabilityIn, request: Request) -> JobDetailOut:
+    """The user reports an offer as no longer available (``available: false``; it is marked
+    expired and stays so even if a source lists it again), or available after all (issue #86)."""
+    s, rs = _get_storages(request)
+    try:
+        if not s.set_reported_expired(job_id, expired=not body.available, now=datetime.now(UTC)):
+            raise HTTPException(status_code=404, detail="Job not found")
+        job = s.get_job_by_id(job_id)
+        return _job_to_job_detail_out(job, rs.get_job_latest_score(job_id))
+    finally:
+        s.close()
+        rs.close()
+
+
 @router.patch("/{job_id}/application-status", response_model=JobDetailOut)
 def update_application_status(
     job_id: str,
@@ -880,6 +905,7 @@ def _get_jobs_filtered(
     limit: int | None = 50,
     offset: int = 0,
     job_ids: list[str] | None = None,
+    include_expired: bool = True,
 ) -> list:
     """Filtered job query via SQLite. Builds a WHERE clause from the params.
 
@@ -915,6 +941,8 @@ def _get_jobs_filtered(
     if remote is not None:
         conditions.append("remote = ?")
         params.append(1 if remote else 0)
+    if not include_expired:
+        conditions.append("status != 'expired'")
 
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
@@ -967,6 +995,9 @@ def _job_to_job_detail_out(job: object, score_row: dict | None) -> JobDetailOut:
         canonical_url=j.canonical_url,
         apply_url=j.apply_url,
         status=j.status,
+        valid_through=j.valid_through,
+        expired_at=j.expired_at,
+        expiry_reason=j.expiry_reason,
         application_status=j.application_status,
         score=score_out,
         description=j.description,

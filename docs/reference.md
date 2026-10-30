@@ -187,6 +187,15 @@ latest sighting. Sources are ordered as configured before deduplication, so a cr
 duplicate keeps the same offer from one run to the next. `GET /api/jobs/{id}` returns them as
 `provenance`; the job page shows "Seen on …".
 
+Offers expire (issue #86, `Storage.apply_expiry`, run after storage): an offer whose end
+date (`valid_through`, read from schema.org `validThrough` when a source gives one) has passed
+is `expired` (reason `valid_through`); an active offer no longer listed by a source that was
+fully collected this run (completed, not request-capped; LinkedIn and HelloWork never count)
+gets a missed run, and `expire_after_missed_runs` in a row (`config/retention.yaml`, 3)
+expire it (`not_seen`). Seen again, it is active again. `POST /api/jobs/{id}/availability`
+`{"available": false}` records the user's report (`user_report`), which a new sighting does
+not undo. Expired offers are kept, hidden from `GET /api/jobs` unless `include_expired=true`.
+
 Schema changes live in `src/storage/migrations.py`: additive columns (`ensure_columns`) and
 named one-shot data migrations recorded in `db_migrations`. Before data migrations run on a
 database of 200 MB or more, it is copied to `data/backups/` (the last 2 are kept); without
