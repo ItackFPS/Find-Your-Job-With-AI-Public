@@ -18,27 +18,16 @@ by stratum, never ids, the id map or the salt.
 from __future__ import annotations
 
 import json
-import math
 from pathlib import Path
 from typing import Any, Sequence
 
-from src.evaluation.metrics import confusion, ranking_metrics
+from src.evaluation.metrics import confusion, ranking_metrics, wilson
 from src.evaluation.models import Decision, LabelRecord
 
 SIDECAR = "PRIVATE_export_meta.json"
 REPRESENTATIVE = "random_control"
 REJECTED = "pipeline_rejected"
 _UNIFORM = (REPRESENTATIVE, REJECTED)
-
-
-def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float] | None:
-    """Wilson score interval for ``k`` successes out of ``n`` (``None`` when ``n`` is 0)."""
-    if n == 0:
-        return None
-    p = k / n
-    centre = (p + z * z / (2 * n)) / (1 + z * z / n)
-    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / (1 + z * z / n)
-    return max(0.0, centre - half), min(1.0, centre + half)
 
 
 def load_sampling(dataset_path: str | Path) -> tuple[dict[str, str], dict[str, Any]] | None:

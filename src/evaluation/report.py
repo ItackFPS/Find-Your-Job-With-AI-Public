@@ -46,6 +46,10 @@ def _evidence(r: RunResult) -> list[str]:
     return lines
 
 
+def _ci(ci: object) -> str:
+    return f"{_f(ci[0])}-{_f(ci[1])}" if isinstance(ci, (tuple, list)) else "n/a"
+
+
 def render_markdown(r: RunResult) -> str:
     m = r.metrics
     o = m["overall"]
@@ -91,6 +95,12 @@ def render_markdown(r: RunResult) -> str:
             f"{f['borderline']} borderline, {f['reject']} reject; accept hidden by the floor {f['accept_hidden']}, "
             f"rejected by the gates {rk['accept_rejected_by_gates']}",
         ]
+        if "auc_ci95" in rk:
+            ci, ps, rc = rk["auc_ci95"], rk["precision_at_strong"], rk["recall_at_20"]
+            lines.append(
+                f"- AUC CI95 {_ci(ci)}; precision@Strong {_f(ps['value'])} CI95 {_ci(ps['ci95'])} over {ps['n']} jobs "
+                f"scored >= {ps['min_score']}; recall@{rc['k']} {_f(rc['value'])} CI95 {_ci(rc['ci95'])} "
+                f"({rc['in_top']} of {rc['n_accept']} accept labels)")
     sm = m.get("sampling")
     if sm:
         lines += ["", "## Sampling cohorts (export strata)", ""]
