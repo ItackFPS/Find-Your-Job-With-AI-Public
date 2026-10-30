@@ -50,8 +50,8 @@ The phase order that supersedes the waves from 2026-10-30 is in the completion p
 | Item | Tier | Status | Where / evidence |
 |---|---|---|---|
 | F0.1 baselines | R | done #45 | `docs/baselines/v1.0.0.md`; full run duration not measured |
-| F0.2 personal labels | T | owner data exists | `real-v1` 250 labels (K2), not yet read by the self-check; blind real-v2 labelling in the app = completion plan P2.3 |
-| F0.3 FT coverage benchmark | T | ready | background collection exists since P1 (#77, #81); 7 calendar days of runs not collected yet (P2.7) |
+| F0.2 personal labels | T | flow merged #99, #104; labels pending | blind in-app labelling of real-v2 (Quality › Calibration) and held-out measurement with CIs are merged; real-v2 has 0 labels until the owner labels it |
+| F0.3 FT coverage benchmark | T | report merged #103; measurement pending | Quality shows the share of API offers the website reader also found; needs FT API credentials and 7 days of both sources |
 | F1.1–F1.3 removals | R | done #40, #58, #74, #83 | source health, last error and breaker reset in Settings › Sources (#83); leftover wording cleaned in #74 (the 5678 probe stays) |
 | F1.4 APEC, WTTJ browser, crawl4ai | R | done #51 | old configs listing them are skipped with a reason |
 | F2.1–F2.5 desktop | R | merged #42, #52, #54, #55 | installer acceptance with window, tray, autostart and quit not run yet (P7) |
@@ -85,7 +85,7 @@ The phase order that supersedes the waves from 2026-10-30 is in the completion p
 | F11.1 slim installer | R | blocked | P7 |
 | New: daily pipeline schedule | R | merged #77, #79, #81, #83, #92 | `pipeline_daily` once per local day at the chosen time after the profile is saved, one catch-up run, waits for scans, a manual run counts; a run that reached no source is retried (#92); background switch and Daily runs card in Settings |
 | New: embedding first-run download UI | R | ready | audit D8, R-Q4 → P3.3 |
-| New: port evaluation work from the private repo | R | ready | R-Q7 → P2.1 |
+| New: port evaluation work from the private repo | R | merged #94–#98, #101 | private #130, #133, #131, #132, #129 ported and #134 kept as history; the private PRs can now be closed with links and the private repo archived (owner action) |
 
 ## Next actions
 
@@ -101,18 +101,18 @@ next (2026-10-25). Order from the completion plan §P (approved 2026-10-30):
    still **not verified as stated**: the 24 h window-closed run from a fresh install and the
    FT web + EURES duplicate with two provenances in a real run (tests cover both mechanisms; see the
    completion plan, P1 status).
-3. **Next — P2** (no labelling and no change to a candidate production database until the owner
-   confirms which database the everyday app opens, R-A2): ports (ranking metrics, sampling cohorts, top-scored stratum, rejected-pool scan, approval
-   diff) → pre-registration → in-app blind calibration (owner labels 100 representative offers) →
-   held-out split → personal sets in the self-check and Quality page → FP analysis → FT coverage.
+3. P2 merged (2026-10-30): ports #94–#98, pre-registration #101, calibration #99, held-out split #100,
+   ranking CIs #102, personal measurement and FP analysis #104, FT coverage #103. Not met: the owner's
+   100 blind labels, the v2-profile baseline (P3.1), the 7-day FT coverage figure.
 4. P3 (while labels are collected): profile v2 UI, AI setup UI, embedding download, wizard,
    Settings › Data/Language, CV import.
 5. P4 ranking quality, P5 AI analysis, P6 polish, P7 release qualification (owner approval to release).
 
-Blocked on the owner: confirm which database the everyday app uses (before P2.3 and before any
-migration runs on it; candidates: the private `data/jobs.db` 3.5 GB, the v1.0.0 install's
-`%LOCALAPPDATA%\Programs\Find Your Job With AI V1\data\jobs.db`, a leftover preview install);
-100 blind labels (P2.3); usability testers and machines (P7).
+Blocked on the owner: 100 blind labels in Quality › Calibration (from a 2.0 build: v1.0.0 has no such
+page); France Travail API credentials for the 7-day coverage figure; confirm the everyday database before
+any migration runs on it. The Desktop and Start-menu shortcuts open the v1.0.0 install, so it is most
+likely `%LOCALAPPDATA%\Programs\Find Your Job With AI V1\data\jobs.db` (27 MB, last written
+2026-10-23); real-v1/real-v2 come from the private `data/jobs.db` (3.5 GB). Usability testers and machines (P7).
 
 Follow-ups recorded from reviews: the D12 items (dev origins, installer hashes, `install_startup.py`, EURES `Crawl-delay`, link schemes) are closed by #91; the 5678 lab relay probe stays (#74). Open, proposed as issues: per-scope expiry completeness (an offer from a query or board the user removed is still counted missing by a complete source); 463 legacy `status = 'inactive'` rows in the owner's large DB; pre-existing orphan rows in derived tables (3,624 embeddings, 3,722 personalization cache rows, 158 FTS, 60 AI analyses on the owner's DB copy); a startup catch-up run can be followed within the hour by the new period's run.
 
@@ -129,3 +129,4 @@ Follow-ups recorded from reviews: the D12 items (dev origins, installer hashes, 
 - 2026-10-30: P1 merged: #77, #79, #81 (daily pipeline at a local time, manual run counts, background switch), #83 (Settings › Sources and background, consent), #85 (migration registry), #87 (provenance), #88 (expiry), #90 (expiry counts a miss only after a **complete** collection: a France Travail web page lists 20 of 961 offers, so #88 alone would have expired most open FT web offers in 3 days), #89 (Settings › Data cleanup: safety copy first, no search or scan during it; rehearsed on a copy of the 3.5 GB DB: 14,704 offers removed in 71 s, 3.68 → 3.25 GB, integrity ok, protected offers kept), #91 (D12: dev origins in dev mode only, http(s) links only, `Crawl-delay`, `install_startup.py` retired, installer `--require-hashes` verified on CPython 3.12), #92 (a manual scan is never a source choice; a daily run that reached no source is retried; background-off wording).
 - 2026-10-30: live check of a fresh copy of `main` 371cd6d (own empty `data/`, example profile): before the profile was saved nothing ran and LinkedIn/HelloWork showed "not chosen"; once it was saved the scheduler started `pipeline_daily` by itself (trigger `scheduled`), which completed in 8.4 min (FT web 640 collected, EURES 1,824 with its 10 s Crawl-delay, RemoteOK 401, WWR 195, Jobicy 75; 691 offers stored; FT API and Indeed skipped with reasons; no source claimed a complete listing, so no miss was counted). Settings showed the run, its time, the next run (next day 08:00) and each source's result. No cross-source duplicate occurred in that run. Not done: the 24 h window-closed run. UX gap noted: the FT API row shows a raw environment-variable message and "Collected" while skipped.
 - 2026-10-30: final P1 checks on `main` 371cd6d: `pytest -m "not network"` 5396 passed, 9 skipped, 0 failed; frontend lint clean, 294 tests passed, build OK. Phase 1 merged; next: Phase 2.
+- 2026-10-30: P2 merged: #94–#104 (see the completion plan, P2 status). Final check on the P2 head (all of #94–#104): `pytest -m "not network"` 5456 passed, 9 skipped, 0 failed; frontend 301 tests passed, build OK. One timing-flaky test seen once (`test_scheduler_service.py::TestAutoPipelineTrigger::test_successful_scan_triggers_pipeline`, passes 3/3 alone), proposed as an issue.

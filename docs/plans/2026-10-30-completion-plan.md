@@ -183,6 +183,25 @@ Each phase lists: objective · already exists · to do (tagged) · acceptance ·
   baseline recorded (the owner's profile migrated on a copy).
 - **Risks:** labelling fatigue (short sessions); leakage of personal data (anonymised exports,
   `test_no_personal_profile_in_tests.py`).
+- **Status (2026-10-30): everything the agent can build is merged; the acceptance needs the owner's
+  labels.** P2.1 #94 (from private #130), #98 (#133), #95 (#131), #96 (#132), #97 (#129); P2.2 #101;
+  P2.3 #99; P2.4 #100; P2.5 #102, #104; P2.6 #104; P2.7 #103. Against the acceptance criteria:
+
+  | Criterion | Status |
+  |---|---|
+  | 100 blind real-v2 labels exist | **not met: the owner's action.** The flow exists (Quality › Calibration, #99), tested live on a copy; real-v2 still has 0 labels |
+  | Quality shows ranking metrics with CIs on held-out labels | **built** (#102, #104): AUC, precision@Strong, recall@20 with CIs on the held-out part; checked live on throwaway labels, which were deleted afterwards. Real figures need the labels |
+  | label provenance and "insufficient evidence" where true | built: provenance per label (`human`, labeler `in-app calibration`); fewer than 30 relevant labels flagged as insufficient evidence (#104) |
+  | v2-profile baseline recorded (owner's profile migrated on a copy) | **not done**: profile v2 is P3.1, and the owner's everyday database/profile is not yet confirmed (R-A2) |
+
+  Verified along the way (R-A4):
+  - real-v2's sidecar reads as 310 strata with a rejected pool of 20,085;
+  - the first 100 offers to label cover every stratum in proportion (pipeline_rejected 32, random_control 27, top_scored 20, near_tier 12, per_source 9);
+  - 99 of the 310 jobs are held out, and 31 of the first 100.
+
+  Found and fixed: under the distance model, the private lab test's location example no longer moves the AUC (#94); production may not import evaluation code, so calibration runs it in a child process (#99, caught by CI).
+
+  P2.7 measures **nothing yet**: it needs the France Travail API (credentials) and the website reader running together for 7 days.
 
 #### Phase 3 — Profile v2, AI setup and onboarding, each with its UI
 
