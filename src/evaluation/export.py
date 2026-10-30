@@ -418,9 +418,13 @@ def _rejected_candidates(
     Duplicates are not missed opportunities: a rejected copy whose ``content_hash`` (the deduplication
     key: title + description) equals a stored job's was surfaced under that other id, and several rejected
     copies of one listing count once (the smallest job id is kept)."""
-    sql = f"""SELECT job_id, deciding_stage, snapshot_hash, {{h}} AS content_hash FROM (
-                  SELECT *, ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY decided_at DESC, rowid DESC) AS rn
-                  FROM job_decisions)
+    # NOT INDEXED + only the needed columns: walking idx_decisions_job fetches every journal row at a random
+    # position of a multi-GB file (measured: 517 s cold, 1.6 s warm, on a 3.3 GB jobs.db); a scan in file order
+    # reads it sequentially and the window sorts narrow rows in memory
+    sql = f"""SELECT job_id, deciding_stage, snapshot_hash, content_hash FROM (
+                  SELECT job_id, deciding_stage, snapshot_hash, {{h}} AS content_hash, outcome,
+                         ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY decided_at DESC, rowid DESC) AS rn
+                  FROM job_decisions NOT INDEXED)
                 WHERE rn = 1 AND outcome = 'rejected'
                   AND deciding_stage IN ({",".join("?" * len(_OPPORTUNITY_STAGES))})
                 ORDER BY job_id"""
