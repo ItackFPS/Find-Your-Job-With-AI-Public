@@ -55,3 +55,18 @@ def test_the_database_is_opened_read_only(tmp_path):
     before = path.read_bytes()
     ft_web_coverage(path, now=NOW)
     assert path.read_bytes() == before
+
+
+def test_api_reports_the_coverage_of_the_app_database(tmp_path):
+    from fastapi.testclient import TestClient
+
+    from src.api.app import app
+
+    path = _db(tmp_path, [(API_SOURCE, "1", 0), (WEB_SOURCE, "1", 0), (API_SOURCE, "2", 0)])
+    saved = app.state.db_path
+    app.state.db_path = str(path)
+    try:
+        r = TestClient(app).get("/api/quality/ft-coverage").json()
+    finally:
+        app.state.db_path = saved
+    assert (r["status"], r["api_offers"], r["found_by_web"]) == ("too_early", 2, 1)

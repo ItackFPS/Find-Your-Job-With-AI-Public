@@ -606,6 +606,19 @@
     }
   },
   "quality": {
+    "coverage": {
+      "title": "France Travail website coverage",
+      "subtitle": "Offers the France Travail API found in the last 7 days that the website reader found too",
+      "share": "The website reader found {found} of the {total} API offers ({share}, likely between {lo} and {hi}).",
+      "status": {
+        "measured": "Measured over {window} days on which both sources ran.",
+        "too_early": "Both sources ran on {days} of the {window} days needed: this figure is not final yet.",
+        "no_api_offers": "The France Travail API found no offer in the last 7 days (it needs credentials). Without it there is nothing to compare.",
+        "no_web_offers": "The France Travail website reader found no offer in the last 7 days.",
+        "unexpected": "Unknown result."
+      },
+      "error": "Could not measure the coverage."
+    },
     "title": "Quality",
     "intro": "Is matching safe, and is it getting better or worse? Run a check from here: no terminal needed.",
     "checkedAt": "Checked {date}",

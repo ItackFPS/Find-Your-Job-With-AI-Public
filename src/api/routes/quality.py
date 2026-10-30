@@ -5,6 +5,7 @@ POST /api/quality/jobs              — start a job {kind: "self_check" | "evalu
 GET  /api/quality/jobs              — job history, newest first, and the running job's id
 GET  /api/quality/jobs/{id}         — one job: status, phase, result summary or error code
 POST /api/quality/jobs/{id}/cancel  — stop the running job
+GET  /api/quality/ft-coverage       — France Travail web coverage of the API offers over 7 days (P2.7)
 
 The jobs run the existing evaluation CLI in a child process (``src.api.quality_jobs``); nothing here
 evaluates anything itself, and nothing here can approve or promote a strategy (ADR 0011: promotion
@@ -14,6 +15,11 @@ mutating route (app middleware).
 
 from __future__ import annotations
 
+import json
+import logging
+import os
+import subprocess
+import sys
 import threading
 from typing import Any, Literal
 
@@ -21,10 +27,11 @@ from fastapi import APIRouter, Body, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.api.quality_jobs import (
-    QualityJobBusy, QualityJobManager, QualityJobStore, latest_evaluation, latest_self_check,
+    PROJECT_ROOT, QualityJobBusy, QualityJobManager, QualityJobStore, latest_evaluation, latest_self_check,
 )
 from src.api.routes.lab import _runs_dir, _self_check_dir
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/quality", tags=["quality"])
 
 
@@ -100,3 +107,21 @@ def cancel_job(job_id: str, request: Request) -> dict[str, Any]:
             raise HTTPException(status_code=404, detail={"code": "not_found"})
         raise HTTPException(status_code=409, detail={"code": "not_running", "status": job["status"]})
     return {"id": job_id, "cancelling": True}
+
+
+@router.get("/ft-coverage")
+def ft_coverage(request: Request) -> dict[str, Any]:
+    """Counts and a status only; the read-only tool runs in a child process (ADR 0007)."""
+    cmd = [sys.executable, "-m", "src.evaluation.coverage", "--db", str(request.app.state.db_path)]
+    try:
+        proc = subprocess.run(cmd, cwd=str(PROJECT_ROOT), env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+                              capture_output=True, text=True, encoding="utf-8", errors="replace",
+                              stdin=subprocess.DEVNULL, timeout=120,
+                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        out = json.loads(proc.stdout) if proc.returncode == 0 else None
+    except (subprocess.TimeoutExpired, OSError, ValueError) as exc:
+        logger.warning("ft coverage failed: %s", exc)
+        out = None
+    if not isinstance(out, dict):
+        raise HTTPException(status_code=500, detail={"code": "unexpected"})
+    return out

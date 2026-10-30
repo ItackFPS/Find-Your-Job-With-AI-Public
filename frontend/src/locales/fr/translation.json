@@ -606,6 +606,19 @@
     }
   },
   "quality": {
+    "coverage": {
+      "title": "Couverture du site France Travail",
+      "subtitle": "Offres trouvées par l'API France Travail ces 7 derniers jours que la lecture du site a aussi trouvées",
+      "share": "La lecture du site a trouvé {found} des {total} offres de l'API ({share}, probablement entre {lo} et {hi}).",
+      "status": {
+        "measured": "Mesuré sur {window} jours où les deux sources ont fonctionné.",
+        "too_early": "Les deux sources ont fonctionné {days} jours sur les {window} nécessaires : ce chiffre n'est pas encore définitif.",
+        "no_api_offers": "L'API France Travail n'a trouvé aucune offre ces 7 derniers jours (elle demande des identifiants). Sans elle, rien à comparer.",
+        "no_web_offers": "La lecture du site France Travail n'a trouvé aucune offre ces 7 derniers jours.",
+        "unexpected": "Résultat inconnu."
+      },
+      "error": "Impossible de mesurer la couverture."
+    },
     "title": "Qualité",
     "intro": "Le tri est-il sûr, et s’améliore-t-il ou se dégrade-t-il ? Lancez une vérification ici, sans terminal.",
     "checkedAt": "Vérifié le {date}",
