@@ -138,6 +138,21 @@ Each phase lists: objective · already exists · to do (tagged) · acceptance ·
   the owner's large database (several GB) with a backup.
 - **Risks:** site blocking (opt-in, breakers); DB migration time on large DBs (measured on the copy).
 - **Postponed:** F6.7 ATS auto-follow, F6.9 URL paste.
+- **Status (2026-10-30): merged.** P1.1 #77, #79, #81; P1.2 #83; P1.3 #85; P1.4 #87, #88, #90, #89;
+  P1.5 #91; review fixes #92. Against the acceptance criteria:
+
+  | Criterion | Status |
+  |---|---|
+  | one background run with the window closed, FT web offers, visible in Settings | mechanism tested; live: a fresh copy of `main` ran the daily search by itself once the profile was saved (8.4 min, 691 offers, FT web present) and Settings showed time, status and next run; the **24 h window-closed run is not done** |
+  | a 429 pauses and resumes without burst | tested (#70); after a startup catch-up the new period's run can follow within the hour (follow-up) |
+  | a disabled background stops scheduled runs | tested (#81); Settings says so (#92) |
+  | consent off by default, stored with its date | tested (#83); a manual scan no longer counts as a choice (#92) |
+  | FT web + EURES duplicate shown once with 2 provenances | tested on fixtures (#87); not observed in a live run |
+  | migration rehearsed on a copy of the large DB with a backup | **done**: copy of the 3.5 GB DB, migrations + backup 19 s; cleanup 71 s (copy, delete 14,704, VACUUM), integrity ok |
+
+  Found during P1 and fixed: expiry counted truncated listings as absence (#90); cleanup had no
+  backup and could run beside a manual scan (#89); dev origins allowed in installed apps (#91);
+  manual scans turned daily unofficial scans on (#92); an offline daily run counted as done (#92).
 
 #### Phase 2 — Measurement foundation
 
