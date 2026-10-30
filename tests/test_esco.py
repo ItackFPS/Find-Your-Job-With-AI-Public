@@ -354,7 +354,7 @@ class TestEscoApiEndpoints:
         # from a full test-suite run before this fix).
         # isolated_app (tests/conftest.py) also swaps the notification engine
         # and runner, which are otherwise bound to the real config/ (#46).
-        monkeypatch.setattr(isolated_app.state, "esco_db_path", db_path)
+        monkeypatch.setitem(isolated_app.state._state, "esco_db_path", db_path)
 
         with TestClient(isolated_app) as client:
             yield client
@@ -379,7 +379,7 @@ class TestEscoApiEndpoints:
         # not-ready db, but the real lifespan's ESCO auto-seed step (see
         # app.py's `if not esco_db.is_ready(): ... load_seed_data(...)`)
         # would otherwise seed the SAME file before the request runs.
-        monkeypatch.setattr(isolated_app.state, "esco_db_path", str(tmp_path / "lifespan_seed.db"))
+        monkeypatch.setitem(isolated_app.state._state, "esco_db_path", str(tmp_path / "lifespan_seed.db"))
 
         db = EscoDb(db_path=db_path)
         db.init_db()  # schema created but no data

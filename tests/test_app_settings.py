@@ -44,7 +44,7 @@ def test_a_corrupt_file_reads_as_the_defaults(tmp_path):
 def test_settings_api_reads_and_updates_the_categories(tmp_path, monkeypatch):
     from src.api.app import app
 
-    monkeypatch.setattr(app.state, "settings_path", str(tmp_path / "settings.json"))
+    monkeypatch.setitem(app.state._state, "settings_path", str(tmp_path / "settings.json"))
     client = TestClient(app)
     body = client.get("/api/settings/notifications").json()
     assert body["categories"] == NOTIFICATION_DEFAULTS
