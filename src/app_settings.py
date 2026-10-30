@@ -6,9 +6,11 @@ notification categories the user opted into; the tray app reads them through
 ``GET /api/settings/notifications`` before each Windows notification.
 
 It also holds the user's choice for each *unofficial* source (``unofficial_sources``, plan rule
-I1, F6.3/F6.4: Indeed, LinkedIn, HelloWork): off on a fresh install. Until the consent screen
-exists (F6.5), an install that already set the source up the old way (``INDEED_API_KEY``) or
-already ran a LinkedIn/HelloWork scan counts as having chosen it.
+I1, F6.3/F6.4: Indeed, LinkedIn, HelloWork): off on a fresh install, chosen in Settings ›
+Sources. An install that set Indeed up the old way (``INDEED_API_KEY``) counts as having chosen
+it; one that ran LinkedIn/HelloWork scans before 2.0 has that observed choice stored once, at
+its first 2.0 start (``record_observed_choices``), so a scan started by hand later is never
+taken for a choice.
 
 And the background collection (``background``, issue #80, owner decision R-Q3): ``enabled``
 (default on) stops every automatic scan and search when false; ``daily_time`` ("HH:MM", local
@@ -140,6 +142,28 @@ def unofficial_source_choice(path: Path | None, source: str) -> bool | None:
     if isinstance(stored, dict) and isinstance(stored.get(source), bool):
         return bool(stored[source])
     return None
+
+
+def record_observed_choices(path: Path, used_before: Mapping[str, bool], now: datetime | None = None) -> list[str]:
+    """Once per install: store as chosen each unofficial source that ``used_before`` says
+    this install already scanned and that has no stored choice (a 1.x install, plan rule I1),
+    then mark it done (``unofficial_sources_observed_at``) so later scans count for nothing.
+    Returns the sources recorded."""
+    with _lock:
+        if _read(path).get("unofficial_sources_observed_at"):
+            return []
+    recorded = [source for source, used in sorted(used_before.items())
+                if used and source in UNOFFICIAL_CHOICE_SOURCES and unofficial_source_choice(path, source) is None]
+    for source in recorded:
+        set_unofficial_source(path, source, True, now)
+    with _lock:
+        data = _read(path)
+        data["unofficial_sources_observed_at"] = (now or datetime.now(UTC)).astimezone(UTC).isoformat(timespec="seconds")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
+        os.replace(tmp, path)
+    return recorded
 
 
 def unofficial_source_enabled(path: Path | None, source: str, *, used_before: bool = False) -> bool:

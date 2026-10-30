@@ -1090,6 +1090,7 @@
       "notChosen": "Seulement quand vous la lancez : activez la source ci-dessous pour une exécution quotidienne.",
       "needsProfile": "Démarre une fois votre profil enregistré.",
       "manualOnly": "Seulement quand vous la lancez.",
+      "backgroundOff": "La collecte en arrière-plan est désactivée : seulement quand vous la lancez.",
       "dueToday": "L'exécution du jour va démarrer.",
       "next": "Prochaine exécution : {when}",
       "never": "Jamais exécutée",

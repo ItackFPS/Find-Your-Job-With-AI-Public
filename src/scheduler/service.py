@@ -276,6 +276,14 @@ class PipelineHandler:
         finally:
             rs.close()
         completed = run is not None and run.get("status") == "completed"
+        # A run that reached no source (the pipeline marks a network outage, e.g. the
+        # machine woke up offline) is not the day's run: a failed attempt, retried after
+        # its backoff.
+        by_source = ((run or {}).get("stats") or {}).get("by_source") or {}
+        if completed and any(isinstance(r, dict) and r.get("network_outage") for r in by_source.values()):
+            logger.warning("Scheduler: pipeline run %s reached no source (network down?); "
+                           "not counted as the day's run.", run_id)
+            completed = False
         return DispatchResult(run_ref=run_id, completed=completed)
 
 

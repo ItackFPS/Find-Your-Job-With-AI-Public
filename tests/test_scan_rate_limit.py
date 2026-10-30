@@ -344,3 +344,37 @@ def test_opt_in_reads_the_stored_choice_then_the_scan_history(tmp_path, monkeypa
     assert unofficial_source_enabled(settings, "linkedin", used_before=True) is True     # observed choice
     settings.write_text('{"unofficial_sources": {"linkedin": false}}', encoding="utf-8")
     assert unofficial_source_enabled(settings, "linkedin", used_before=True) is False    # stored choice wins
+
+
+def test_a_1x_scan_history_counts_as_chosen_once_then_never_again(tmp_path):
+    """Plan rule I1: an install that scanned LinkedIn before 2.0 keeps its daily scans (the
+    observed choice is stored, with its date). After that, a scan started by hand ("Run now",
+    the Dashboard) is not a choice: daily scans start only once the source is turned on."""
+    from src.app_settings import (record_observed_choices, unofficial_source_chosen_at,
+                                  unofficial_source_enabled)
+
+    upgraded = tmp_path / "upgraded.json"
+    assert record_observed_choices(upgraded, {"linkedin": True, "hellowork": False}) == ["linkedin"]
+    assert unofficial_source_enabled(upgraded, "linkedin") is True
+    assert unofficial_source_chosen_at(upgraded, "linkedin") is not None
+    assert unofficial_source_enabled(upgraded, "hellowork") is False
+
+    fresh = tmp_path / "fresh.json"
+    assert record_observed_choices(fresh, {"linkedin": False}) == []           # first start of 2.0
+    # later, the user ran one LinkedIn scan by hand: the next start records nothing
+    assert record_observed_choices(fresh, {"linkedin": True}) == []
+    assert unofficial_source_enabled(fresh, "linkedin") is False
+
+
+def test_startup_records_the_observed_choices_in_the_apps_own_settings(isolated_app, tmp_path):
+    """The lifespan runs record_observed_choices once, on app.state.settings_path (a temp file
+    here, never the checkout's data/settings.json)."""
+    import json
+
+    from fastapi.testclient import TestClient
+
+    with TestClient(isolated_app):
+        pass
+    stored = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
+    assert stored.get("unofficial_sources_observed_at")
+    assert "linkedin" not in stored.get("unofficial_sources", {})      # no scan history in this DB

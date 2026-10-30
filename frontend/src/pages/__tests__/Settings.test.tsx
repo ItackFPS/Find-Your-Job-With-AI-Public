@@ -122,6 +122,19 @@ describe('Settings › Sources and background', () => {
     expect(calls).toContainEqual({ method: 'POST', url: '/scheduler/run/pipeline_daily', body: undefined })
   })
 
+  it('says nothing runs daily while background collection is off', async () => {
+    routes['GET /scheduler/status'] = {
+      ...scheduler, background: { enabled: false, daily_time: '08:00' },
+      schedules: scheduler.schedules.map(s => ({ ...s, daily: false, next_run_at: null })),
+    }
+    renderPage()
+    const search = await screen.findByRole('listitem', { name: 'Daily search' })
+    expect(within(search).getByText(/background collection is off/i)).toBeInTheDocument()
+    expect(within(search).queryByText(/saved your profile/i)).not.toBeInTheDocument()
+    const linkedin = screen.getByRole('listitem', { name: 'LinkedIn scan' })
+    expect(within(linkedin).queryByText(/turn the source on below/i)).not.toBeInTheDocument()
+  })
+
   it('groups sources by kind with their latest result', async () => {
     renderPage()
     const official = await screen.findByRole('region', { name: /official and public sources/i })
