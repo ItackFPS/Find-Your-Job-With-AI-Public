@@ -220,6 +220,8 @@ def isolated_app(tmp_path, monkeypatch):
     monkeypatch.setitem(app.state._state, "db_path", db_path)
     monkeypatch.setitem(app.state._state, "config_dir", config_dir)
     monkeypatch.setitem(app.state._state, "esco_db_path", str(tmp_path / "esco_test.db"))
+    # the lifespan writes data/settings.json once (record_observed_choices): never the real one
+    monkeypatch.setitem(app.state._state, "settings_path", str(tmp_path / "settings.json"))
     monkeypatch.setitem(app.state._state, "runner", PipelineRunner(
         db_path=db_path, config_dir=config_dir,
         progress_bus=app.state.progress_bus,

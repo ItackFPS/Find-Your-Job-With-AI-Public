@@ -364,3 +364,17 @@ def test_a_1x_scan_history_counts_as_chosen_once_then_never_again(tmp_path):
     # later, the user ran one LinkedIn scan by hand: the next start records nothing
     assert record_observed_choices(fresh, {"linkedin": True}) == []
     assert unofficial_source_enabled(fresh, "linkedin") is False
+
+
+def test_startup_records_the_observed_choices_in_the_apps_own_settings(isolated_app, tmp_path):
+    """The lifespan runs record_observed_choices once, on app.state.settings_path (a temp file
+    here, never the checkout's data/settings.json)."""
+    import json
+
+    from fastapi.testclient import TestClient
+
+    with TestClient(isolated_app):
+        pass
+    stored = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
+    assert stored.get("unofficial_sources_observed_at")
+    assert "linkedin" not in stored.get("unofficial_sources", {})      # no scan history in this DB
