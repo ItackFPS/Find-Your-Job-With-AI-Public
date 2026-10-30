@@ -12,7 +12,15 @@ from typing import Any
 
 from src.models.job import Job
 from src.models.source import Source
-from src.storage.migrations import JOBS_COLUMNS, JOBS_DATA_MIGRATIONS, apply_data_migrations, ensure_columns
+from src.storage.migrations import (
+    JOB_PROVENANCE_DDL,
+    JOBS_COLUMNS,
+    JOBS_DATA_MIGRATIONS,
+    apply_data_migrations,
+    backup_before_migrating,
+    ensure_columns,
+    pending_data_migrations,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -168,7 +176,11 @@ class Storage:
         # Columns added to jobs after its first release, then the one-shot data
         # migrations recorded in db_migrations (src/storage/migrations.py).
         ensure_columns(conn, "jobs", JOBS_COLUMNS)
-        apply_data_migrations(conn, JOBS_DATA_MIGRATIONS)
+        conn.executescript(JOB_PROVENANCE_DDL)
+        # A large database is copied before its data migrations run (issue #86); without
+        # room for the copy they wait for a later start.
+        if not pending_data_migrations(conn, JOBS_DATA_MIGRATIONS) or backup_before_migrating(conn, self._db_path):
+            apply_data_migrations(conn, JOBS_DATA_MIGRATIONS)
 
         # FTS5 table with accent-stripping tokenizer.
         # Check whether the existing job_fts was created with the current tokenizer;
@@ -283,6 +295,56 @@ class Storage:
     # _UPSERT_CHUNK_SIZE rows bounds how long the lock is held at a stretch
     # while still committing far less often than one-commit-per-job.
     _UPSERT_CHUNK_SIZE = 200
+
+    def record_provenance(self, jobs: list[Job], seen_at: datetime) -> int:
+        """Record where each stored offer was seen (issue #86): one ``job_provenance`` row
+        per (offer, source in ``Job.sources``, its own source included), its first and
+        latest sighting. The offer's own source keeps its id and URL; a source merged into
+        it by deduplication has neither. Returns the rows written."""
+        conn = self._get_conn()
+        when = seen_at.isoformat()
+        rows = []
+        for job in jobs:
+            for source in dict.fromkeys([job.source, *job.sources]):
+                if not source:
+                    continue
+                own = source == job.source
+                rows.append((job.id, source, job.source_job_id if own else None,
+                             job.canonical_url if own else None, when, when))
+        conn.executemany(
+            """INSERT INTO job_provenance (job_id, source, source_job_id, url, first_seen_at, last_seen_at)
+               VALUES (?, ?, ?, ?, ?, ?)
+               ON CONFLICT(job_id, source) DO UPDATE SET
+                   last_seen_at = excluded.last_seen_at,
+                   source_job_id = COALESCE(excluded.source_job_id, job_provenance.source_job_id),
+                   url = COALESCE(excluded.url, job_provenance.url)""",
+            rows,
+        )
+        conn.commit()
+        return len(rows)
+
+    def get_provenance(self, job_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+        """Each offer's sightings, its own source first then by first sighting."""
+        if not job_ids:
+            return {}
+        conn = self._get_conn()
+        out: dict[str, list[dict[str, Any]]] = {}
+        for i in range(0, len(job_ids), 500):
+            chunk = job_ids[i:i + 500]
+            marks = ",".join("?" * len(chunk))
+            rows = conn.execute(
+                f"""SELECT p.job_id, p.source, p.url, p.first_seen_at, p.last_seen_at, j.source AS own
+                    FROM job_provenance p LEFT JOIN jobs j ON j.id = p.job_id
+                    WHERE p.job_id IN ({marks})
+                    ORDER BY p.job_id, (p.source = j.source) DESC, p.first_seen_at, p.source""",
+                chunk,
+            ).fetchall()
+            for r in rows:
+                out.setdefault(r["job_id"], []).append({
+                    "source": r["source"], "url": r["url"],
+                    "first_seen_at": r["first_seen_at"], "last_seen_at": r["last_seen_at"],
+                })
+        return out
 
     def upsert_jobs_batch(
         self, jobs: list[Job], detect_field_changes: bool = False

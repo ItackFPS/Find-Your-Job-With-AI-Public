@@ -333,8 +333,19 @@ class JobOut(BaseModel):
     score: ScoreBreakdownOut | None = None
 
 
+class ProvenanceOut(BaseModel):
+    """One source an offer was seen on (issue #86)."""
+
+    source: str
+    url: str | None = None
+    first_seen_at: datetime
+    last_seen_at: datetime
+
+
 class JobDetailOut(JobOut):
     description: str | None = None
+    # Every source the offer was seen on, its own source first (issue #86).
+    provenance: list[ProvenanceOut] = []
 
 
 class ExplanationSignal(BaseModel):

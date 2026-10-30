@@ -179,6 +179,20 @@ in `jobs.db`:
 On a warm cache (unchanged jobs and profile), semantic matching and personalization
 approach zero compute time.
 
+## Provenance and migrations
+
+Each stored offer has one `job_provenance` row per source it was seen on (issue #86): its own
+source with its id and URL, and every source deduplication merged into it, with first and
+latest sighting. Sources are ordered as configured before deduplication, so a cross-source
+duplicate keeps the same offer from one run to the next. `GET /api/jobs/{id}` returns them as
+`provenance`; the job page shows "Seen on …".
+
+Schema changes live in `src/storage/migrations.py`: additive columns (`ensure_columns`) and
+named one-shot data migrations recorded in `db_migrations`. Before data migrations run on a
+database of 200 MB or more, it is copied to `data/backups/` (the last 2 are kept); without
+enough free space the migrations wait for a later start. Rehearsed on a copy of a 3.5 GB
+database (39 035 offers): 15 s, backup included, +10 MB.
+
 ## Background Scheduler
 
 `config/schedules.yaml` configures a generic scheduler service (started automatically

@@ -18,9 +18,21 @@ evolution (src/storage/sqlite.py). Append new entries at the end.
 
 from __future__ import annotations
 
+import logging
+import shutil
 import sqlite3
+import time
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+# A database at least this large is copied before a data migration runs on it (issue #86).
+BACKUP_MIN_BYTES = 200 * 1024 * 1024
+# Backups kept in <database folder>/backups.
+BACKUPS_KEPT = 2
 
 
 def ensure_columns(conn: sqlite3.Connection, table: str, columns: Mapping[str, str]) -> list[str]:
@@ -49,6 +61,61 @@ _DDL_MIGRATIONS_TABLE = """
                 applied_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
         """
+
+
+def pending_data_migrations(conn: sqlite3.Connection, migrations: Iterable[DataMigration]) -> list[str]:
+    """Names of the migrations not yet recorded in ``db_migrations``."""
+    conn.execute(_DDL_MIGRATIONS_TABLE)
+    done = {row[0] for row in conn.execute("SELECT name FROM db_migrations")}
+    return [m.name for m in migrations if m.name not in done]
+
+
+def backup_before_migrating(conn: sqlite3.Connection, db_path: Path, now: datetime | None = None) -> bool:
+    """Copy a large database before its data migrations run (issue #86).
+
+    Below ``BACKUP_MIN_BYTES`` nothing is copied. Otherwise the database is copied to
+    ``<folder>/backups/<name>-<UTC time>.db`` with SQLite's backup API, keeping the last
+    ``BACKUPS_KEPT``. Returns False, after logging why, only when the copy cannot be made
+    (not enough free disk space, or an error): the caller then leaves the migrations for
+    the next start rather than running them without a backup."""
+    try:
+        size = db_path.stat().st_size
+    except OSError:
+        return True  # a new or in-memory database: nothing to keep
+    if size < BACKUP_MIN_BYTES:
+        return True
+    backups = db_path.parent / "backups"
+    try:
+        backups.mkdir(parents=True, exist_ok=True)
+        free = shutil.disk_usage(backups).free
+    except OSError as exc:
+        logger.warning("Database backup before migrating: cannot prepare %s (%s); migrations postponed.", backups, exc)
+        return False
+    if free < size * 1.1:
+        logger.warning(
+            "Database backup before migrating: %d MB needed, %d MB free on %s; migrations postponed.",
+            size // 2**20, free // 2**20, backups,
+        )
+        return False
+    stamp = (now or datetime.now(UTC)).strftime("%Y%m%dT%H%M%SZ")
+    target = backups / f"{db_path.stem}-{stamp}.db"
+    started = time.perf_counter()
+    try:
+        conn.commit()
+        dest = sqlite3.connect(str(target))
+        try:
+            conn.backup(dest)
+        finally:
+            dest.close()
+    except sqlite3.Error as exc:
+        logger.warning("Database backup before migrating failed (%s); migrations postponed.", exc)
+        target.unlink(missing_ok=True)
+        return False
+    logger.info("Database backed up to %s before migrating (%d MB in %.1f s).",
+                target, size // 2**20, time.perf_counter() - started)
+    for old in sorted(backups.glob(f"{db_path.stem}-*.db"))[:-BACKUPS_KEPT]:
+        old.unlink(missing_ok=True)
+    return True
 
 
 def apply_data_migrations(conn: sqlite3.Connection, migrations: Iterable[DataMigration]) -> list[str]:
@@ -80,6 +147,21 @@ JOBS_COLUMNS: dict[str, str] = {
     "application_status": "TEXT",
 }
 
+# Where each stored offer was seen (issue #86): one row per (offer, source), so an offer
+# several sources list is shown once with all of them.
+JOB_PROVENANCE_DDL = """
+            CREATE TABLE IF NOT EXISTS job_provenance (
+                job_id        TEXT NOT NULL,
+                source        TEXT NOT NULL,
+                source_job_id TEXT,
+                url           TEXT,
+                first_seen_at TEXT NOT NULL,
+                last_seen_at  TEXT NOT NULL,
+                PRIMARY KEY (job_id, source)
+            );
+            CREATE INDEX IF NOT EXISTS idx_job_provenance_source ON job_provenance(source);
+        """
+
 JOBS_DATA_MIGRATIONS: tuple[DataMigration, ...] = (
     # Purge stale rows that have no canonical_url from sources that always provide one.
     # These rows were stored before the canonical_url column existed. EURES is excluded —
@@ -97,5 +179,12 @@ JOBS_DATA_MIGRATIONS: tuple[DataMigration, ...] = (
     DataMigration(
         "normalize_linkedin_fr_to_france",
         ("UPDATE jobs SET countries = '[\"France\"]' WHERE source = 'linkedin' AND countries = '[\"FR\"]'",),
+    ),
+    # Each stored offer's own source becomes its first provenance (issue #86).
+    DataMigration(
+        "backfill_job_provenance",
+        ("INSERT OR IGNORE INTO job_provenance (job_id, source, source_job_id, url, first_seen_at, last_seen_at) "
+         "SELECT id, source, source_job_id, canonical_url, COALESCE(first_seen_at, discovered_at), "
+         "COALESCE(last_seen_at, discovered_at) FROM jobs",),
     ),
 )

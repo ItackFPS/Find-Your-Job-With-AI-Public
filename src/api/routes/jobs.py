@@ -17,7 +17,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 
 from pydantic import BaseModel
 
-from src.api.schemas import ExplanationReason, ExplanationSignal, JobDetailOut, JobExplanationOut
+from src.api.schemas import ExplanationReason, ExplanationSignal, JobDetailOut, JobExplanationOut, ProvenanceOut
 from src.models.job import Job
 from src.outcomes.models import OutcomeEventType
 from src.outcomes.storage import OutcomeEventStorage
@@ -586,7 +586,12 @@ def get_job(job_id: str, request: Request) -> JobDetailOut:
         if job is None:
             raise HTTPException(status_code=404, detail="Job not found")
         score_row = rs.get_job_latest_score(job_id)
-        return _job_to_job_detail_out(job, score_row)
+        out = _job_to_job_detail_out(job, score_row)
+        try:
+            out.provenance = [ProvenanceOut(**p) for p in s.get_provenance([job_id]).get(job_id, [])]
+        except Exception as exc:  # noqa: BLE001 — the offer is shown even without its sightings
+            logger.warning("Provenance unavailable for %s: %s", job_id, exc)
+        return out
     finally:
         s.close()
         rs.close()
