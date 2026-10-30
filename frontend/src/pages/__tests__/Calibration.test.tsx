@@ -3,8 +3,8 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ToastProvider } from '../../components'
-import type { CalibrationItem, CalibrationOverview } from '../../api/client'
-import CalibrationCard from '../Calibration'
+import type { CalibrationItem, CalibrationOverview, PersonalSummary } from '../../api/client'
+import CalibrationCard, { PersonalResult } from '../Calibration'
 
 type Handler = (url: string, body?: unknown) => Promise<{ data: unknown }>
 const net: { get: Handler; post: Handler } = { get: async () => ({ data: null }), post: async () => ({ data: {} }) }
@@ -72,5 +72,41 @@ describe('CalibrationCard', () => {
     expect(await screen.findByText('Set “real-v2” found (310 offers)')).toBeInTheDocument()
     await user.click(screen.getAllByRole('button', { name: 'Import' })[0])
     await waitFor(() => expect(posts).toEqual([{ url: '/quality/calibration/import', body: { source: 'D:/x/real-v2' } }]))
+  })
+})
+
+const summary: PersonalSummary = {
+  kind: 'personal', created_at: null, report_file: null, warnings: 0, flags: ['few_suitable_labels'],
+  dataset: { id: 'real-v2@heldout', version: '4', split: 'heldout', labels: 31, accept_labels: 6 },
+  ranking: { auc: 0.71, auc_ci95: [0.52, 0.86], n_accept: 5, n_reject: 20,
+    precision_at_strong: { value: 0.5, ci95: [0.19, 0.81], n: 8 }, recall_at_20: { value: 0.5, ci95: [0.19, 0.81], in_top: 3, n_accept: 6 } },
+  representative_auc: null,
+  missed: { labelled: 9, accept: 1, rate_ci95: [0.02, 0.43], estimate: [400, 2232, 8636], pool: 20085 },
+  unsafe_rejections: 2, unsafe_freshness_only: 1,
+  false_positives: { total: 4, by_category: { location: 3, domain: 1 }, by_source: { 'france-travail-web': 4 } },
+}
+
+describe('PersonalResult', () => {
+  it('states ranking, misses and false positives with their intervals and the evidence caveat', () => {
+    render(<PersonalResult s={summary} />)
+    expect(screen.getByText(/31 held-out labels of “real-v2@heldout” \(version 4\), 6 of them relevant/)).toBeInTheDocument()
+    expect(screen.getByText(/ranked above a not-relevant one 71 % of the time \(likely between 52 % and 86 %\)/)).toBeInTheDocument()
+    expect(screen.getByText(/Of the 8 offers rated Strong or better, 50 %/)).toBeInTheDocument()
+    expect(screen.getByText(/about 2232 suitable offers missed out of 20085/)).toBeInTheDocument()
+    expect(screen.getByText(/2 relevant offers were rejected, 1 of them only because it was old/)).toBeInTheDocument()
+    expect(screen.getByText(/By your reason: Location 3, Field 1\./)).toBeInTheDocument()
+    expect(screen.getByText(/insufficient evidence/)).toBeInTheDocument()
+  })
+})
+
+describe('measuring a set', () => {
+  it('starts a personal measure on the held-out labels', async () => {
+    const posts: { url: string; body: unknown }[] = []
+    net.get = async () => ({ data: { ...overview, datasets: [{ ...dataset, labelled: 40 }] } })
+    net.post = async (url, body) => { posts.push({ url, body }); return { data: { id: 'qj', kind: 'personal', status: 'running' } } }
+    const user = userEvent.setup()
+    renderCard()
+    await user.click(await screen.findByRole('button', { name: 'Measure on held-out labels' }))
+    await waitFor(() => expect(posts).toEqual([{ url: '/quality/jobs', body: { kind: 'personal', options: { dataset_id: 'real-v2', split: 'heldout' } } }]))
   })
 })

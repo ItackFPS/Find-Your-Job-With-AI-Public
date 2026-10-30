@@ -606,6 +606,28 @@
     }
   },
   "quality": {
+    "personal": {
+      "title": "Measured on your own labels",
+      "measure": "Measure on held-out labels",
+      "running": "Measuring…",
+      "basis": "{labels} held-out labels of “{dataset}” (version {version}), {accepts} of them relevant.",
+      "auc": "Ranking: a relevant offer is ranked above a not-relevant one {value} of the time (likely between {lo} and {hi}).",
+      "precisionStrong": "Of the {n} offers rated Strong or better, {value} were relevant (likely between {lo} and {hi}).",
+      "recall20": "A top-20 list holds {inTop} of your {total} relevant offers ({value}, likely between {lo} and {hi}).",
+      "missed": "Among {labelled} offers the app turned away, {accept} were relevant: about {estimate} suitable offers missed out of {pool} turned away (likely between {lo} and {hi}).",
+      "unsafe": "{count, plural, =0 {No relevant offer was rejected.} one {# relevant offer was rejected} other {# relevant offers were rejected}}",
+      "freshness": "{count, plural, =0 {} one {, # of them only because it was old.} other {, # of them only because they were old.}}",
+      "fp": "{count, plural, =0 {No not-relevant offer got through.} one {# not-relevant offer got through.} other {# not-relevant offers got through.}}",
+      "fpByReason": "By your reason: {list}.",
+      "fpBySource": "By source: {list}.",
+      "flags": {
+        "few_suitable_labels": "Fewer than 30 relevant offers in these labels: insufficient evidence for firm conclusions. Labelling more helps.",
+        "labels_not_independent": "Some labels were made with a suggestion shown: they are not independent evidence.",
+        "pooled_over_enriched_strata": "These figures pool several sampling groups, some picked on purpose: read them as indicative, not as rates of all offers."
+      },
+      "proxy": "Measured offline with the rule-based score only (no semantic matching), on the held-out part that no tuning uses.",
+      "short": "{labels} held-out labels"
+    },
     "coverage": {
       "title": "France Travail website coverage",
       "subtitle": "Offers the France Travail API found in the last 7 days that the website reader found too",
@@ -640,7 +662,8 @@
         "skills": "Skills",
         "contract": "Contract",
         "language": "Language",
-        "other": "Other"
+        "other": "Other",
+        "uncategorised": "No reason given"
       },
       "answers": {
         "relevant": "Relevant",
@@ -733,7 +756,8 @@
       "runEvaluation": "Run evaluation",
       "running": {
         "self_check": "Health check running…",
-        "evaluation": "Evaluation running…"
+        "evaluation": "Evaluation running…",
+        "personal": "Measuring on your labels…"
       },
       "progressLabel": "Progress",
       "cancel": "Cancel",
@@ -747,7 +771,8 @@
     },
     "kinds": {
       "self_check": "Health check",
-      "evaluation": "Evaluation"
+      "evaluation": "Evaluation",
+      "personal": "Your labels"
     },
     "jobStatus": {
       "running": "Running",
@@ -794,7 +819,8 @@
     "toast": {
       "done": {
         "self_check": "Health check finished.",
-        "evaluation": "Evaluation finished."
+        "evaluation": "Evaluation finished.",
+        "personal": "Measure on your labels finished."
       },
       "cancelled": "Check cancelled."
     },
