@@ -245,6 +245,13 @@ export interface ScoreBreakdown {
   tier: string | null
 }
 
+export interface Provenance {
+  source: string
+  url: string | null
+  first_seen_at: string
+  last_seen_at: string
+}
+
 export interface Job {
   id: string
   source: string
@@ -271,6 +278,8 @@ export interface Job {
   application_status: string | null
   score: ScoreBreakdown | null
   description?: string | null
+  // Every source the offer was seen on, its own source first (issue #86; detail only).
+  provenance?: Provenance[]
 }
 
 export interface Dashboard {

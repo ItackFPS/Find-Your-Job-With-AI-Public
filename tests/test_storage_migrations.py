@@ -89,9 +89,7 @@ def test_an_old_jobs_db_is_upgraded_as_before(tmp_path: Path) -> None:
     _old_jobs_db(db)
     conn = _init(db)
     assert set(JOBS_COLUMNS) <= set(_columns(conn, "jobs"))
-    assert {r[0] for r in conn.execute("SELECT name FROM db_migrations")} == {
-        "purge_jobs_without_canonical_url", "normalize_linkedin_fr_to_france",
-    }
+    assert {r[0] for r in conn.execute("SELECT name FROM db_migrations")} == {m.name for m in JOBS_DATA_MIGRATIONS}
     # The purge kept only EURES (it never has a URL); the LinkedIn row had none.
     assert [r[0] for r in conn.execute("SELECT id FROM jobs ORDER BY id")] == ["j2"]
     conn.close()

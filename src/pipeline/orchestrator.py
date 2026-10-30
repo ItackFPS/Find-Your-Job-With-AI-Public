@@ -664,6 +664,12 @@ def run_pipeline(
         # =================================================================
         _t_dedup = time.perf_counter()
         _dedup_reporter = _stage_reporter(progress_callback, stats, "deduplicate", len(valid_jobs))
+        # Sources finish in any order (parallel collection); ordering them as configured
+        # makes deduplication keep the same offer of a cross-source duplicate from one run
+        # to the next, so its id and provenance stay stable (issue #86). Stable sort: each
+        # source's own order is kept.
+        source_rank = {cfg["name"]: i for i, cfg in enumerate(source_registry.all_sources)}
+        valid_jobs = sorted(valid_jobs, key=lambda j: source_rank.get(j.source, len(source_rank)))
         deduped_jobs, duplicates_removed = deduplicate_jobs(
             valid_jobs, progress_callback=lambda p, _t: _dedup_reporter(p)
         )
@@ -971,6 +977,12 @@ def run_pipeline(
             storage_stats["updated"],
             storage_stats["unchanged"],
         )
+        # Where each stored offer was seen, merged duplicates included (issue #86).
+        # Bookkeeping: a failure is logged, never fails the run.
+        try:
+            storage.record_provenance([job for job, _, _ in scored_with_breakdown], datetime.now(UTC))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Provenance not recorded: %s", exc)
 
         # Phase NEXT / I11: incremental-collection INFRASTRUCTURE only — record
         # that a source's collection completed cleanly, and how many of its

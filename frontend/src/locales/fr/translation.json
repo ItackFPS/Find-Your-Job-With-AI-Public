@@ -351,7 +351,8 @@
       "daysAgo": " · il y a {days, number} j",
       "remote": "Télétravail",
       "salary": "Salaire : {range} {currency}",
-      "viewOriginal": "Voir l’offre d’origine →"
+      "viewOriginal": "Voir l’offre d’origine →",
+      "seenOn": "Vue sur"
     },
     "description": "Description",
     "notFound": "Offre introuvable.",

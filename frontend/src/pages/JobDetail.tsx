@@ -406,6 +406,28 @@ export function DecisionPanel({ decision }: { decision: DecisionRecord }) {
   )
 }
 
+// Where the offer was seen (issue #86): every source that listed it, linked when its
+// address is known, so a duplicate across France Travail and EURES shows once.
+export function SeenOn({ job }: { job: Job }) {
+  const { t } = useTranslation()
+  const sightings = job.provenance?.length ? job.provenance : [{ source: job.source, url: null }]
+  const name = (source: string) => t(`settings.sources.names.${source}`, { defaultValue: source })
+  return (
+    <span>
+      {t('jobDetail.header.seenOn')}{' '}
+      {sightings.map((p, i) => {
+        const url = httpUrl(p.url)
+        return (
+          <span key={p.source}>
+            {i > 0 && ', '}
+            {url ? <a href={url} target="_blank" rel="noopener noreferrer">{name(p.source)}</a> : name(p.source)}
+          </span>
+        )
+      })}
+    </span>
+  )
+}
+
 function JobHeader({ job, overallScore }: { job: Job; overallScore: number | null }) {
   const { t } = useTranslation()
   const age = daysAgo(job.published_at)
@@ -420,7 +442,7 @@ function JobHeader({ job, overallScore }: { job: Job; overallScore: number | nul
         <div style={{ fontSize: '0.88rem', color: 'var(--color-muted)' }}>
           {[job.company, job.location].filter(Boolean).join(' · ')}
           {age !== null ? t('jobDetail.header.daysAgo', { days: age }) : ''}
-          {' · '}{job.source}
+          {' · '}<SeenOn job={job} />
         </div>
       </div>
 
