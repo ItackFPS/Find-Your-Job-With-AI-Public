@@ -191,7 +191,9 @@ up `data/` first — see [Data and backups](#data-and-backups).
 # Backend + built dashboard, any OS (http://127.0.0.1:8000)
 uvicorn src.api.app:app --host 127.0.0.1 --port 8000
 
-# Development: Vite dev server with hot reload (http://127.0.0.1:5173), backend as above
+# Development: Vite dev server with hot reload (http://127.0.0.1:5173). The backend accepts
+# the dev server's origin only when started with FYJ_DEV_SERVER=1 (FindYourJob.cmd dev sets it)
+FYJ_DEV_SERVER=1 uvicorn src.api.app:app --host 127.0.0.1 --port 8000
 cd frontend && npm run dev          # or, on Windows: FindYourJob.cmd dev
 
 # CLI: one pipeline run, summary in the terminal

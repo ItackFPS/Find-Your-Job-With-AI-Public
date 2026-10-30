@@ -79,11 +79,15 @@ def test_a_request_naming_another_peer_is_refused(header):
     assert resp.status_code == 403 and calls == []
 
 
-def test_the_dev_server_origins_are_dropped_when_only_this_account_is_served():
-    from src.api.app import ALLOWED_WEB_ORIGINS, DEV_WEB_ORIGINS, allowed_web_origins
+def test_the_dev_server_origins_are_allowed_only_in_dev_mode():
+    from src.api.app import (ALLOWED_WEB_ORIGINS, DEV_WEB_ORIGINS, allowed_web_origins,
+                             dev_server_from_env)
 
-    assert allowed_web_origins(False) == DEV_WEB_ORIGINS and allowed_web_origins(True) == ()
-    assert ALLOWED_WEB_ORIGINS == allowed_web_origins(enabled_from_env())
+    assert allowed_web_origins(False, dev_server=True) == DEV_WEB_ORIGINS
+    assert allowed_web_origins(False) == ()                       # installed app: no dev server
+    assert allowed_web_origins(True, dev_server=True) == ()       # API_SAME_USER_ONLY
+    assert dev_server_from_env({"FYJ_DEV_SERVER": "1"}) and not dev_server_from_env({})
+    assert ALLOWED_WEB_ORIGINS == allowed_web_origins(enabled_from_env(), dev_server_from_env())
 
 
 def test_an_unsupported_platform_refuses_to_start(monkeypatch):
