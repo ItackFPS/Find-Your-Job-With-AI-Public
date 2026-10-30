@@ -173,7 +173,8 @@
       "skills": "Skills",
       "quality": "Quality",
       "pipeline": "Pipeline",
-      "label": "Main"
+      "label": "Main",
+      "settings": "Settings"
     },
     "backend": {
       "connected": "Backend connected",
@@ -1047,5 +1048,98 @@
     "errorDetails": "The local server did not answer.",
     "retrying": "Retrying…",
     "toast": "A {tone} message."
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Sources and background collection: what the app collects, when, and how it went.",
+    "loadFailed": "Could not load this section. Is the app still running?",
+    "background": {
+      "title": "Background collection",
+      "subtitle": "The app searches for new offers once a day, even with its window closed.",
+      "enabled": "Collect in the background",
+      "enabledOn": "On: the daily runs below start on their own.",
+      "enabledOff": "Off: nothing runs on its own. You can still start a run yourself.",
+      "time": "Daily time (your local time)",
+      "saveTime": "Save time",
+      "timeHelp": "If the computer is off at that time, the run starts as soon as the app does. After several days off, it runs once.",
+      "saved": "Background collection updated.",
+      "saveFailed": "Could not save. Try again."
+    },
+    "runs": {
+      "title": "Daily runs",
+      "subtitle": "What runs on its own each day, when it last ran and when it runs next.",
+      "labels": {
+        "pipeline_daily": "Daily search",
+        "linkedin_daily": "LinkedIn scan",
+        "hellowork_daily": "HelloWork scan"
+      },
+      "runningNow": "Running now",
+      "notChosen": "Only when you start it: turn the source on below to run it daily.",
+      "needsProfile": "Starts once you have saved your profile.",
+      "manualOnly": "Only when you start it.",
+      "dueToday": "Today's run is about to start.",
+      "next": "Next run: {when}",
+      "never": "Never run",
+      "failedHelp": "It did not finish. It is retried automatically, or start it again now.",
+      "interruptedHelp": "It was stopped when the app closed and resumes on its own.",
+      "runNow": "Run now",
+      "started": "Started.",
+      "busy": "It is already running.",
+      "startFailed": "Could not start it. Try again.",
+      "paused": "Scans are paused from the notification-area icon: nothing runs on its own until you resume them there."
+    },
+    "sources": {
+      "title": "Sources",
+      "subtitle": "Where offers come from, and how each source did in the latest search.",
+      "groups": {
+        "official": "Official and public sources",
+        "unofficial": "Unofficial sources"
+      },
+      "groupHelp": {
+        "official": "Public job boards and official APIs, collected in every search.",
+        "unofficial": "Sites that do not offer access for apps like this one. They stay off unless you turn them on."
+      },
+      "access": {
+        "official": "Official API",
+        "public_page": "Public pages",
+        "unofficial": "Unofficial"
+      },
+      "collected": "Collected",
+      "notCollected": "Not collected",
+      "choose": "Collect from {name}",
+      "risk": {
+        "linkedin": "LinkedIn does not allow automated searches: it may block the app for a while, and the searches use your profile's keywords.",
+        "indeed": "Indeed does not allow automated searches: it may block the app for a while, and the searches use your profile's keywords.",
+        "hellowork": "HelloWork has no access for apps: the app reads its job pages slowly (about 30 minutes) and the site may block it.",
+        "default": "This site does not offer access for apps: it may block the app for a while."
+      },
+      "chosenOn": "Turned on on {when}",
+      "declinedOn": "Turned off on {when}",
+      "neverChosen": "Off: never turned on",
+      "unavailable": "not set up on this computer",
+      "lastSearch": "Latest search:",
+      "noResult": "no result yet",
+      "counts": "{collected} found, {accepted} kept",
+      "paused": "Paused after repeated failures.",
+      "pausedUntil": "{count, plural, one {Paused after # failure, until {when}.} other {Paused after # failures in a row, until {when}.}}",
+      "retryNow": "Try again now",
+      "resetDone": "It will be tried in the next search.",
+      "resetFailed": "Could not reset it. Try again.",
+      "choiceFailed": "Could not save your choice. Try again.",
+      "names": {
+        "france-travail": "France Travail (official API)",
+        "france-travail-web": "France Travail (website)",
+        "eures": "EURES",
+        "remoteok": "Remote OK",
+        "jobicy": "Jobicy",
+        "weworkremotely": "We Work Remotely",
+        "workingnomads": "Working Nomads",
+        "bundesagentur": "Bundesagentur für Arbeit",
+        "arbetsformedlingen": "Arbetsförmedlingen",
+        "indeed": "Indeed",
+        "linkedin": "LinkedIn",
+        "hellowork": "HelloWork"
+      }
+    }
   }
 }

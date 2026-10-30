@@ -409,20 +409,35 @@ class SchedulerService:
         storage = self._open_storage()
         try:
             defs = storage.list_all_definitions()
+            now = self._now()
+            period = self._period_start(now)
+            background_on = self._background_enabled()
             result = []
             for defn in defs:
                 handler = self._handlers.get(defn.source_id)
                 last = storage.get_last_execution(defn.id)
+                # Daily in effect: what the user sees as "runs every day" (issue #82).
+                daily = (
+                    defn.enabled and handler is not None and background_on
+                    and self._policy(defn) == "run_once_per_day"
+                )
+                done = daily and storage.get_last_completed_execution(defn.id, since=period) is not None
                 result.append({
                     "id": defn.id,
                     "source_id": defn.source_id,
                     "label": defn.label,
                     "enabled": defn.enabled,
                     "startup_policy": defn.startup_policy,
+                    "daily": daily,
+                    # Today's run is still to come ("due") or done; the next one starts the
+                    # next period. None when nothing runs on its own.
+                    "due": daily and not done,
+                    "next_run_at": self._next_period_start(period).isoformat() if done else None,
                     "is_running": handler.is_running() if handler else False,
                     "last_execution": last,
                 })
-            return {"schedules": result, "paused": self.paused}
+            background = dict(self._background_settings()) if self._background is not None else None
+            return {"schedules": result, "paused": self.paused, "background": background}
         finally:
             storage.close()
 
@@ -658,6 +673,11 @@ class SchedulerService:
 
     def _background_enabled(self) -> bool:
         return self._background_settings().get("enabled", True) is not False
+
+    def _next_period_start(self, period: datetime) -> datetime:
+        """Start of the period after the one starting at ``period``: a day lasts 23 to 25 h,
+        so 26 h later always falls in the next one."""
+        return self._period_start(period + timedelta(hours=26))
 
     def _period_start(self, now: datetime) -> datetime:
         """Start (UTC) of the period containing ``now``: the latest local ``daily_time``, or

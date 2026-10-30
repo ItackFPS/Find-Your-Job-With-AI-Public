@@ -819,3 +819,80 @@ export const resumeHelloWorkScan = () =>
 
 export const listHelloWorkScans = (limit = 10) =>
   api.get<HelloWorkScanRun[]>(`/hellowork/scans?limit=${limit}`).then(r => r.data)
+
+// ---- Settings › Sources and background (issue #82) -------------------------
+
+// data/settings.json "background": every automatic run on/off, and the local time each
+// day's runs become due (src/scheduler/service.py, issue #80).
+export interface BackgroundSettings {
+  enabled: boolean
+  daily_time: string // "HH:MM", local time
+}
+
+export interface ScheduleExecution {
+  id: string
+  trigger: string
+  status: 'running' | 'completed' | 'failed' | 'interrupted' | 'skipped' | string
+  started_at: string
+  finished_at: string | null
+  error: string | null
+}
+
+export interface ScheduleStatus {
+  id: string
+  source_id: string
+  label: string
+  enabled: boolean
+  startup_policy: string
+  daily: boolean // runs on its own every day
+  due: boolean // today's run is still to come
+  next_run_at: string | null
+  is_running: boolean
+  last_execution: ScheduleExecution | null
+}
+
+export interface SchedulerStatus {
+  schedules: ScheduleStatus[]
+  paused: boolean
+  background: BackgroundSettings | null
+}
+
+export interface SourceBreaker {
+  source: string
+  consecutive_failures: number
+  paused: boolean
+  paused_until: string | null
+  last_failure_reason: string | null
+}
+
+export interface SourceOverview {
+  name: string
+  access_class: 'official' | 'public_page' | 'unofficial' | null
+  available: boolean
+  collected: boolean
+  choice: { enabled: boolean; chosen_at: string | null } | null
+  last_run: {
+    started_at: string | null
+    status: string | null
+    reason: string | null
+    collected: number | null
+    accepted: number | null
+    errors: number | null
+  } | null
+  breaker: SourceBreaker | null
+}
+
+export const getBackgroundSettings = () =>
+  api.get<BackgroundSettings>('/settings/background').then(r => r.data)
+export const updateBackgroundSettings = (changes: Partial<BackgroundSettings>) =>
+  api.put<BackgroundSettings>('/settings/background', changes).then(r => r.data)
+export const getSchedulerStatus = () =>
+  api.get<SchedulerStatus>('/scheduler/status').then(r => r.data)
+export const runScheduleNow = (id: string) =>
+  api.post<{ exec_id: string }>(`/scheduler/run/${id}`).then(r => r.data)
+export const getSourcesOverview = () =>
+  api.get<{ sources: SourceOverview[] }>('/sources/overview').then(r => r.data)
+export const setSourceChoice = (name: string, enabled: boolean) =>
+  api.put<{ enabled: boolean; chosen_at: string }>(`/sources/${name}/choice`, { enabled }).then(r => r.data)
+export const resetSourceBreaker = (name: string) =>
+  api.post<SourceBreaker>(`/sources/${name}/breaker/reset`).then(r => r.data)
