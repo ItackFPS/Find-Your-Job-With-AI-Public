@@ -91,6 +91,31 @@ def render_markdown(r: RunResult) -> str:
             f"{f['borderline']} borderline, {f['reject']} reject; accept hidden by the floor {f['accept_hidden']}, "
             f"rejected by the gates {rk['accept_rejected_by_gates']}",
         ]
+    sm = m.get("sampling")
+    if sm:
+        lines += ["", "## Sampling cohorts (export strata)", ""]
+        if sm["warning"]:
+            lines += [f"> **{sm['warning']}**", ""]
+        lines.append("| stratum | jobs | accept | reject | borderline | unlabelled |")
+        lines.append("|---|---|---|---|---|---|")
+        for name, c in sm["by_stratum"].items():
+            lines.append(f"| {name} | {c['n']} | {c['accept']} | {c['reject']} | {c['borderline']} | {c['unlabelled']} |")
+        rep = sm["representative"]
+        if rep:
+            o = rep["overall"]
+            lines += ["", f"- representative (`{rep['stratum']}`, uniform over stored jobs): {rep['n_labelled']} "
+                      f"labelled; precision {_f(o['precision'])}, recall {_f(o['recall'])}, "
+                      f"ranking AUC {_f(rep['ranking']['auc'])}"]
+        rj = sm["rejected_sample"]
+        if rj:
+            ci = rj["accept_rate_ci95"]
+            est = rj["estimated_missed_accepts"]
+            lines.append(f"- pipeline-rejected draw: {rj['accept']}/{rj['n_labelled']} labelled accept "
+                         f"({rj['borderline']} borderline, in the denominator) "
+                         f"(rate {_f(rj['accept_rate'])}, CI95 {_f(ci[0])}-{_f(ci[1])}); over the pool of "
+                         f"{rj['pool']} rejected jobs that is about {est[1] if est else 'n/a'} suitable job(s) "
+                         f"turned away (CI {est[0] if est else 'n/a'}-{est[2] if est else 'n/a'}); "
+                         f"{rj['still_rejected_now']} of the labelled ones still rejected by this strategy")
     lines += [
         "",
         "## By category",

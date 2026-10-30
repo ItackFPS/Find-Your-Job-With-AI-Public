@@ -23,6 +23,9 @@ could itself change production). Time-dependent checks are frozen to the dataset
 - Real-job datasets exported from `jobs.db` contain only jobs accepted at the time
   (rejected jobs keep no description). They therefore expose false positives but cannot
   measure false negatives; runs on them carry an explicit survival-bias warning.
+- Exports are stratified with unequal selection probabilities. `run --sampling` reports the
+  uniform cohorts (`random_control` over stored jobs, `pipeline_rejected` over rejected ones) beside the
+  pooled metrics. It reads only the strata and pool sizes from the private sidecar, and outputs aggregates.
 - Hard filters and gates only reject; location and the other preferences rank (ADR 0005; location
   rejects only beyond `max_distance_km` when the profile sets `strict_distance`). A
   job labelled `reject` "for location" therefore usually passes and counts as a false positive in the
