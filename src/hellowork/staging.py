@@ -48,6 +48,7 @@ from src.scan_control import (
     mark_run,
     recover_stale_runs,
     reopen_run,
+    write_rate_limit,
 )
 
 if TYPE_CHECKING:
@@ -161,7 +162,8 @@ class HelloWorkStagingStorage:
         existing = {
             r["name"] for r in conn.execute("PRAGMA table_info(hellowork_scan_checkpoint)")
         }
-        for column in ("state", "config_fingerprint"):
+        # resume_after / rate_limit_strikes (F6.4): the cooldown after a 429.
+        for column in ("state", "config_fingerprint", "resume_after", "rate_limit_strikes"):
             if column not in existing:
                 add_checkpoint_column(conn, "hellowork_scan_checkpoint", column)
         conn.commit()
@@ -379,10 +381,15 @@ class HelloWorkStagingStorage:
         )
         conn.commit()
 
-    def interrupt_scan_run(self, scan_id: str) -> None:
-        """Record a running scan stopped for backend shutdown: resumable, not failed."""
+    def interrupt_scan_run(self, scan_id: str, note: str | None = None) -> None:
+        """Record a running scan stopped for backend shutdown (or, with ``note``, a rate
+        limit): resumable, not failed."""
         mark_run(self._get_conn(), "hellowork_scan_runs", scan_id, "interrupted",
-                 SHUTDOWN_RUN_NOTE, ("running",))
+                 note or SHUTDOWN_RUN_NOTE, ("running",))
+
+    def set_rate_limited(self, scan_id: str) -> tuple[datetime, int]:
+        """Label the checkpoint 'rate_limited' with its cooldown (src/scan_control.py)."""
+        return write_rate_limit(self._get_conn(), "hellowork_scan_checkpoint", scan_id)
 
     def reopen_scan_run(self, scan_id: str) -> bool:
         """Reopen an interrupted/paused run as the same logical scan (issue #86).

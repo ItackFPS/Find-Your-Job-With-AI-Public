@@ -9,7 +9,8 @@ SchedulerService
   - Dispatches to registered SourceHandlers by source_id
   - Records every execution in schedule_executions (persistent across restarts)
 
-Startup policy: run_once_per_day
+Startup policy: run_once_per_day (or when_opted_in: the same, once the user chose the
+source, plan rule I1; disabled before)
   A run is dispatched when no completed execution exists for today (UTC midnight).
   If the backend starts at 07:00 → scan runs.
   If the backend restarts at 14:00 (after a scan already ran) → no second scan.
@@ -22,6 +23,8 @@ Retries (issue #68) — outcome of each execution, per UTC day:
   interrupted  → stopped for backend shutdown, or found still 'running' at
                  startup. Resumable (checkpoint), NOT counted; resumed next tick.
   skipped      → the source was already running; nothing was dispatched.
+  A source stopped on a 429 (F6.4) records 'interrupted' and is not dispatched at all
+  until its cooldown has passed; then the normal policy resumes its checkpoint.
   After F failed attempts today: if F > retry_max → no more automatic
   attempts until UTC midnight (logged once). Otherwise attempt F + 1 runs once
   retry_delay_seconds * 2**(F-1) (capped at MAX_RETRY_BACKOFF_SECONDS) has
@@ -90,12 +93,16 @@ class DispatchResult:
     paused: True when the run stopped at a checkpoint because the user paused
         it. Recorded as 'interrupted' (not a failure); the source is then
         skipped by the scheduler until it is resumed (issue #81).
+    rate_limited: True when the run stopped on the source's first 429 (F6.4).
+        Recorded as 'interrupted' (not a failure); the source is skipped until
+        its cooldown has passed, then resumed from its checkpoint.
     """
 
     run_ref: str | None
     completed: bool
     interrupted: bool = False
     paused: bool = False
+    rate_limited: bool = False
 
 
 def _flag(obj: Any, name: str) -> bool:
@@ -120,8 +127,10 @@ def _scanner_dispatch(scanner: Any) -> DispatchResult:
     run_ref = scanner.run_scan()
     completed = run_ref is not None and bool(scanner.last_scan_completed())
     paused = run_ref is not None and not completed and _flag(scanner, "last_scan_paused")
+    rate_limited = run_ref is not None and not completed and _flag(scanner, "last_scan_rate_limited")
     interrupted = run_ref is not None and not completed and bool(scanner.shutdown_requested())
-    return DispatchResult(run_ref=run_ref, completed=completed, interrupted=interrupted, paused=paused)
+    return DispatchResult(run_ref=run_ref, completed=completed, interrupted=interrupted, paused=paused,
+                          rate_limited=rate_limited)
 
 
 @runtime_checkable
@@ -157,6 +166,9 @@ class LinkedInHandler:
     def interrupted_checkpoint_id(self) -> str | None:
         return _marker(self._scanner, "interrupted_checkpoint_id")
 
+    def rate_limited_until(self) -> str | None:
+        return _marker(self._scanner, "rate_limited_until")
+
     def request_pause(self) -> bool:
         """Ask a running scan to stop at its next checkpoint (False when none runs)."""
         return bool(self._scanner.request_pause())
@@ -185,6 +197,9 @@ class HelloWorkHandler:
     def interrupted_checkpoint_id(self) -> str | None:
         return _marker(self._scanner, "interrupted_checkpoint_id")
 
+    def rate_limited_until(self) -> str | None:
+        return _marker(self._scanner, "rate_limited_until")
+
     def request_pause(self) -> bool:
         """Ask a running scan to stop at its next checkpoint (False when none runs)."""
         return bool(self._scanner.request_pause())
@@ -207,8 +222,12 @@ class SchedulerService:
         handlers: dict[str, SourceHandler],
         pipeline_runner: Any = None,
         clock: Callable[[], datetime] | None = None,
+        opted_in: Callable[[str], bool] | None = None,
     ) -> None:
         self._db_path = db_path
+        # Whether the user chose a source (plan rule I1, F6.4): a ``when_opted_in`` schedule
+        # runs daily only then. None: nothing is chosen.
+        self._opted_in: Callable[[str], bool] = opted_in or (lambda _source: False)
         self._config_dir = config_dir
         self._handlers = handlers
         self._pipeline_runner = pipeline_runner
@@ -420,11 +439,15 @@ class SchedulerService:
         # retry bookkeeping, no log line every tick.
         if _flag(handler, "is_paused") or self._paused.is_set():
             return
+        # A source stopped on a 429 waits out its cooldown (F6.4): no daily run, retry or
+        # resume before then. Once it has passed, the run below resumes its checkpoint.
+        if _marker(handler, "rate_limited_until") is not None:
+            return
 
         trigger = "startup" if is_startup else "scheduled"
         today_start = _utc_day_start(self._now())
         no_completed_since: datetime | None = (
-            today_start if defn.startup_policy == "run_once_per_day" else None
+            today_start if self._policy(defn) == "run_once_per_day" else None
         )
 
         # Evaluate the startup policy and the retry state machine.
@@ -439,7 +462,7 @@ class SchedulerService:
             # 'interrupted' qualifies (never one an error left 'running'), and
             # each one is resumed once, so neither failures nor a resume that
             # leaves the checkpoint untouched can turn into a per-tick loop.
-            if defn.startup_policy != "run_once_per_day":
+            if self._policy(defn) != "run_once_per_day":
                 return
             resumed_checkpoint = _marker(handler, "interrupted_checkpoint_id")
             if (
@@ -474,6 +497,18 @@ class SchedulerService:
         )
         self._dispatch(defn, exec_id, handler)
 
+    def _policy(self, defn: ScheduleDefinition) -> str:
+        """The startup policy in effect: ``when_opted_in`` (an unofficial source, plan rule
+        I1) is ``run_once_per_day`` once the user chose the source, ``disabled`` before."""
+        if defn.startup_policy != "when_opted_in":
+            return defn.startup_policy
+        try:
+            chosen = bool(self._opted_in(defn.source_id))
+        except Exception as exc:  # noqa: BLE001 — a settings read must never stop the scheduler
+            logger.warning("Scheduler: could not read the choice for %s: %s", defn.source_id, exc)
+            chosen = False
+        return "run_once_per_day" if chosen else "disabled"
+
     def _next_attempt(self, storage: SchedulerStorage, defn: ScheduleDefinition) -> int | None:
         """The attempt number to dispatch now, or None if nothing is due.
 
@@ -486,8 +521,8 @@ class SchedulerService:
           * last failure + backoff not yet reached → None
           * otherwise                            → failed_today + 1
         """
-        if defn.startup_policy != "run_once_per_day":
-            return None  # unknown / disabled policy
+        if self._policy(defn) != "run_once_per_day":
+            return None  # unknown / disabled policy, or a source the user has not chosen
         now = self._now()
         today_start = _utc_day_start(now)
         if storage.get_last_completed_execution(defn.id, since=today_start) is not None:
@@ -561,6 +596,18 @@ class SchedulerService:
                         duration=duration,
                     )
                     logger.info("Scheduler: %s skipped — source already running.", defn.id)
+                elif result.rate_limited:
+                    # Stopped on the source's 429, checkpoint kept: resumed once its
+                    # cooldown has passed, not counted against retry_max (F6.4).
+                    storage.interrupt_execution(
+                        exec_id,
+                        error=f"{defn.source_id} rate limited (HTTP 429); resumes after its cooldown "
+                              f"(run_ref={run_ref!r}).",
+                        duration=duration,
+                        run_ref=run_ref,
+                    )
+                    logger.warning("Scheduler: %s rate limited after %.1fs (run_ref=%s); will resume "
+                                   "after its cooldown.", defn.id, duration, run_ref)
                 elif result.paused:
                     # Stopped at a checkpoint by the user: not a failure, and
                     # not retried — the source is skipped until resumed.

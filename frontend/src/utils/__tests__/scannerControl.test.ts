@@ -38,7 +38,7 @@ describe('scannerControl', () => {
     expect(c.disabled).toBe(true)
   })
 
-  it.each(['paused', 'interrupted'] as const)('offers Resume when %s', (state) => {
+  it.each(['paused', 'interrupted', 'rate_limited'] as const)('offers Resume when %s', (state) => {
     const c = scannerControl({ is_scanning: false, state })
     expect(c.action).toBe('resume')
     expect(c.label).toBe('Resume')

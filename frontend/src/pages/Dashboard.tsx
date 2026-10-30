@@ -39,6 +39,7 @@ interface ScannerStatus {
   last_scan: { id: string; status: string; started_at: string; completed_at: string | null; jobs_found: number; jobs_new: number } | null
   state?: ScanState
   progress?: LinkedInScanProgress | HelloWorkScanProgress | null
+  resume_after?: string | null
 }
 
 // Based on this scanner's own past completed scans — labeled "(estimated)"
@@ -191,9 +192,14 @@ export function ScannerStatusCard({ name, queryKey, triggerFn, pauseFn, resumeFn
             <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-muted)', marginTop: '0.3rem' }}>{progressLabel}</div>
           )}
         </div>
-      ) : control.state === 'paused' || control.state === 'interrupted' ? (
+      ) : control.state === 'paused' || control.state === 'interrupted' || control.state === 'rate_limited' ? (
         <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>
-          {control.state === 'paused' ? t('dashboard.scanner.paused') : t('dashboard.scanner.interrupted')}
+          {control.state === 'paused' ? t('dashboard.scanner.paused')
+            : control.state === 'rate_limited'
+              ? status.resume_after
+                ? t('dashboard.scanner.rateLimitedUntil', { time: formatDateTime(status.resume_after) })
+                : t('dashboard.scanner.rateLimited')
+              : t('dashboard.scanner.interrupted')}
           {work ? t('dashboard.scanner.percentDone', { percent: work.percent }) : ''}
           {progressLabel ? ` · ${progressLabel}` : ''}
         </div>

@@ -153,8 +153,8 @@ database, and checkpoint/resume logic:
 
 | Scanner | Config | Notes |
 |---|---|---|
-| **LinkedIn** (`src/linkedin/scanner.py`) | `config/linkedin.yaml` | Uses `python-jobspy` (the `linkedin` optional dependency); lazily imported with a clear install error if missing; enabled in the shipped `config/linkedin.yaml`; manual by default (`linkedin_daily` in `config/schedules.yaml` ships with `startup_policy: disabled`). Wired into the API via `src/api/routes/linkedin.py` (`/api/linkedin/status`, `/scan`, `/pause`, `/resume`, `/scans`), not through `CollectorRegistry`. A scan can be paused and resumed from its last checkpoint (issue #81) |
-| **HelloWork** (`src/hellowork/scanner.py`) | — | Runs on its own daily schedule, decoupled from the main pipeline. Wired into the API via `src/api/routes/hellowork.py` (`/api/hellowork/status`, `/scan`, `/pause`, `/resume`, `/scans`); pausable/resumable like LinkedIn |
+| **LinkedIn** (`src/linkedin/scanner.py`) | `config/linkedin.yaml` | Uses `python-jobspy` (the `linkedin` optional dependency); lazily imported with a clear install error if missing; enabled in the shipped `config/linkedin.yaml`; unofficial, opt-in: daily once chosen (`linkedin_daily` ships with `startup_policy: when_opted_in`); the first 429 stops the scan, which resumes from its checkpoint after a cooldown of 1 h doubling to 24 h, paced slower at first (F6.4). Wired into the API via `src/api/routes/linkedin.py` (`/api/linkedin/status`, `/scan`, `/pause`, `/resume`, `/scans`), not through `CollectorRegistry`. A scan can be paused and resumed from its last checkpoint (issue #81) |
+| **HelloWork** (`src/hellowork/scanner.py`) | — | Runs on its own daily schedule once chosen (`when_opted_in`), decoupled from the main pipeline; stops on the first 429 and resumes after a cooldown, like LinkedIn. Wired into the API via `src/api/routes/hellowork.py` (`/api/hellowork/status`, `/scan`, `/pause`, `/resume`, `/scans`); pausable/resumable like LinkedIn |
 
 Both scanners write to their own staging tables; a `StagedSourceAdapter` bridges their
 output back into the main pipeline as a regular source.

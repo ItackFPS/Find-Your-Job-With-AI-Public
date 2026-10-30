@@ -671,7 +671,8 @@ export const recordJobEvent = (id: string, eventType: 'viewed' | 'apply_link_ope
 // backend's persisted checkpoint: 'paused' survives restarts until resumed,
 // 'interrupted' (shutdown/crash) is resumed automatically by the scheduler.
 
-export type ScanState = 'idle' | 'running' | 'pausing' | 'paused' | 'interrupted'
+// 'rate_limited': stopped on the source's 429 (F6.4); resumed by the scheduler after its cooldown.
+export type ScanState = 'idle' | 'running' | 'pausing' | 'paused' | 'interrupted' | 'rate_limited'
 
 export interface ScanResumed {
   scan_id: string | null
@@ -744,6 +745,8 @@ export interface LinkedInStatus {
   is_scanning: boolean
   state?: ScanState
   progress?: LinkedInScanProgress | null
+  // When a rate-limited scan resumes by itself (state 'rate_limited', F6.4).
+  resume_after?: string | null
 }
 
 export const getLinkedInStatus = () =>
@@ -798,6 +801,8 @@ export interface HelloWorkStatus {
   is_scanning: boolean
   state?: ScanState
   progress?: HelloWorkScanProgress | null
+  // When a rate-limited scan resumes by itself (state 'rate_limited', F6.4).
+  resume_after?: string | null
 }
 
 export const getHelloWorkStatus = () =>

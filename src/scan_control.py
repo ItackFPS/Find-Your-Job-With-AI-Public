@@ -10,6 +10,9 @@ Checkpoint lifecycle states (``*_scan_checkpoint.state``):
   running      -- a scan is (or was, until the process died) making progress
   paused       -- stopped by the user; survives restarts until resumed
   interrupted  -- stopped by shutdown/crash; resumed automatically
+  rate_limited -- stopped on the source's first 429 (F6.4); resumed automatically once its
+                  cooldown (``resume_after``) has passed: 1 h, doubled per consecutive
+                  rate-limited attempt (``rate_limit_strikes``), at most 24 h
   failed       -- stopped by an error; retried under the normal retry policy
   NULL         -- legacy row written before this column existed (interrupted)
 
@@ -23,10 +26,11 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import random
 import sqlite3
 import threading
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -37,6 +41,14 @@ STATE_RUNNING = "running"
 STATE_PAUSING = "pausing"
 STATE_PAUSED = "paused"
 STATE_INTERRUPTED = "interrupted"
+STATE_RATE_LIMITED = "rate_limited"
+
+# Cooldown after a 429 (owner decision 2026-10-26): 1 h, doubled per consecutive
+# rate-limited attempt of the same logical scan, at most 24 h. A scan that completes
+# clears its checkpoint, and with it the strike count.
+RATE_LIMIT_BASE_COOLDOWN = timedelta(hours=1)
+RATE_LIMIT_MAX_COOLDOWN = timedelta(hours=24)
+RATE_LIMITED_RUN_NOTE = "Rate limited by {source} (HTTP 429); resumes from its checkpoint after {when}."
 
 # Scan-run history statuses a later attempt may reopen as the same logical
 # scan (issue #86). 'failed' and 'completed' are final.
@@ -67,6 +79,52 @@ class StopSignal(threading.Event):
             self.observed = True
             return True
         return False
+
+
+class RateLimited(RuntimeError):
+    """The source answered 429: the scan must stop now and resume after a cooldown."""
+
+
+def is_rate_limit_message(message: str) -> bool:
+    """Whether a scraper's error text reports an HTTP 429 from the source."""
+    text = message.lower()
+    return "429" in text or "too many requests" in text
+
+
+def rate_limit_cooldown(strikes: int) -> timedelta:
+    """Cooldown after the ``strikes``-th consecutive rate-limited attempt (1-based)."""
+    cooldown: timedelta = min(RATE_LIMIT_BASE_COOLDOWN * (2 ** max(0, strikes - 1)), RATE_LIMIT_MAX_COOLDOWN)
+    return cooldown
+
+
+class AdaptivePacer:
+    """Delay between two requests of a scan (F6.4): never a burst.
+
+    Starts at ``base`` for a fresh scan and at ``resume_factor`` x ``base`` for a scan
+    resumed after a rate limit; each clean page brings it ``decay`` closer to ``base``;
+    ``penalize()`` (an error or a warning from the source) doubles it, up to ``max_factor``
+    x ``base``. ``delay()`` adds up to ``jitter`` x the delay at random, so requests do not
+    fall on a fixed beat.
+    """
+
+    def __init__(self, base: float, *, resumed: bool = False, resume_factor: float = 2.0,
+                 decay: float = 0.8, max_factor: float = 8.0, jitter: float = 0.1,
+                 rng: random.Random | None = None) -> None:
+        self.base = max(0.0, float(base))
+        self.max = self.base * max_factor
+        self.current = self.base * (resume_factor if resumed else 1.0)
+        self.decay = decay
+        self.jitter = jitter
+        self._rng = rng or random.Random()
+
+    def delay(self) -> float:
+        return self.current * (1.0 + self._rng.uniform(0.0, self.jitter))
+
+    def on_success(self) -> None:
+        self.current = max(self.base, self.base + (self.current - self.base) * self.decay)
+
+    def penalize(self) -> None:
+        self.current = min(self.max, max(self.current, self.base) * 2.0)
 
 
 def wait_for_stop(stop: StopSignal, seconds: float, slice_seconds: float = 0.25) -> bool:
@@ -119,6 +177,8 @@ def scan_state(
     cp_state = checkpoint_state(checkpoint)
     if cp_state == STATE_PAUSED:
         return STATE_PAUSED
+    if cp_state == STATE_RATE_LIMITED:
+        return STATE_RATE_LIMITED
     # 'running' while not scanning here means the process that owned it died
     # and startup recovery has not relabelled it yet — same as interrupted.
     if cp_state in (STATE_INTERRUPTED, STATE_RUNNING):
@@ -144,7 +204,7 @@ def resumable_scan_id(
     """
     if checkpoint is None or scan_run is None:
         return None
-    if checkpoint.get("state") not in (None, STATE_INTERRUPTED, STATE_PAUSED):
+    if checkpoint.get("state") not in (None, STATE_INTERRUPTED, STATE_PAUSED, STATE_RATE_LIMITED):
         return None
     if checkpoint.get("config_fingerprint") not in (None, fingerprint):
         return None
@@ -166,7 +226,7 @@ def recovered_run_status(checkpoint: dict[str, Any] | None, scan_id: str) -> str
     state = checkpoint.get("state")
     if state == STATE_PAUSED:
         return STATE_PAUSED
-    if state in (None, STATE_RUNNING, STATE_INTERRUPTED):
+    if state in (None, STATE_RUNNING, STATE_INTERRUPTED, STATE_RATE_LIMITED):
         return STATE_INTERRUPTED
     return "failed"
 
@@ -225,21 +285,96 @@ def mark_run(
     conn.commit()
 
 
-def interrupted_checkpoint_id(checkpoint: dict[str, Any] | None) -> str | None:
+def interrupted_checkpoint_id(checkpoint: dict[str, Any] | None, now: datetime | None = None) -> str | None:
     """Identity of a checkpoint the scheduler may auto-resume, else None.
 
     Only a checkpoint explicitly labelled 'interrupted' (a cooperative
     shutdown stop, or a 'running' row relabelled by startup recovery after a
-    crash) or a legacy row without a state qualifies. A 'running' row left
+    crash), a legacy row without a state, or a 'rate_limited' one whose
+    cooldown has passed qualifies. A 'running' row left
     behind by a live process means the scan ended without being able to
     label itself — typically its 'failed' label write failed — so it stays
     under the normal retry policy instead (issue #81 review, F2). The value
     changes whenever the checkpoint is written again, which lets the
     scheduler resume each interruption once (F1).
     """
-    if checkpoint is None or checkpoint.get("state") not in (None, STATE_INTERRUPTED):
+    if checkpoint is None:
+        return None
+    state = checkpoint.get("state")
+    if state == STATE_RATE_LIMITED:
+        if cooling_until(checkpoint, now) is not None:
+            return None
+    elif state not in (None, STATE_INTERRUPTED):
         return None
     return f"{checkpoint.get('scan_id')}|{checkpoint.get('updated_at')}"
+
+
+def cooling_until(checkpoint: dict[str, Any] | None, now: datetime | None = None) -> datetime | None:
+    """When a rate-limited checkpoint may be resumed, if that is still ahead; else None.
+    A 'rate_limited' row without a readable time is treated as cooled down."""
+    if checkpoint is None or checkpoint.get("state") != STATE_RATE_LIMITED:
+        return None
+    try:
+        until = datetime.fromisoformat(str(checkpoint.get("resume_after")))
+    except ValueError:
+        return None
+    if until.tzinfo is None:
+        until = until.replace(tzinfo=UTC)
+    return until if until > (now or datetime.now(UTC)) else None
+
+
+def write_rate_limit(conn: sqlite3.Connection, table: str, scan_id: str,
+                     now: datetime | None = None) -> tuple[datetime, int]:
+    """Label the checkpoint 'rate_limited' with its next resume time; returns
+    ``(resume_after, strikes)``. The strike count grows with each consecutive
+    rate-limited attempt of the same logical scan (same checkpoint row). Creates an
+    empty-progress row when there is none (a 429 on the very first page). The caller
+    does not commit: this does."""
+    now = now or datetime.now(UTC)
+    row = conn.execute(f"SELECT scan_id, rate_limit_strikes FROM {table} WHERE id = 1").fetchone()
+    previous = 0
+    if row is not None and row[0] == scan_id:
+        try:
+            previous = int(row[1] or 0)
+        except (TypeError, ValueError):
+            previous = 0
+    strikes = previous + 1
+    resume_after = now + rate_limit_cooldown(strikes)
+    conn.execute(
+        f"""INSERT INTO {table} (id, scan_id, updated_at, state, resume_after, rate_limit_strikes)
+            VALUES (1, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                state = excluded.state, updated_at = excluded.updated_at,
+                resume_after = excluded.resume_after,
+                rate_limit_strikes = excluded.rate_limit_strikes""",
+        (scan_id, now.isoformat(), STATE_RATE_LIMITED, resume_after.isoformat(), str(strikes)),
+    )
+    conn.commit()
+    return resume_after, strikes
+
+
+def record_rate_limit(staging: Any, scan_id: str, source: str) -> datetime | None:
+    """Durably record a scan stopped on a 429: checkpoint 'rate_limited' with its cooldown,
+    run 'interrupted' with a note. Returns the resume time, or None when the checkpoint
+    could not be written (the stop is then recorded as a failed run). Never raises."""
+    try:
+        resume_after: datetime
+        resume_after, strikes = staging.set_rate_limited(scan_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("%s scan %s: rate limited, but the cooldown could not be saved (%s).",
+                     source, scan_id, exc)
+        try:
+            staging.fail_scan_run(scan_id, f"Rate limited (HTTP 429); cooldown not saved: {exc}")
+        except Exception:  # noqa: BLE001
+            pass
+        return None
+    when = resume_after.strftime("%Y-%m-%d %H:%M UTC")
+    logger.warning("%s scan %s: rate limited (strike %d) — resumes after %s.", source, scan_id, strikes, when)
+    try:
+        staging.interrupt_scan_run(scan_id, note=RATE_LIMITED_RUN_NOTE.format(source=source, when=when))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("%s: could not mark scan %s interrupted after the rate limit: %s", source, scan_id, exc)
+    return resume_after
 
 
 def persist_pause(staging: Any, scan_id: str, source: str) -> bool:

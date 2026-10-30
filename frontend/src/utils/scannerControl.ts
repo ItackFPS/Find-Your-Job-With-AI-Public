@@ -7,6 +7,7 @@ import i18n from '../i18n'
 //   pausing     → "Pausing…" (disabled until the checkpoint boundary)
 //   paused      → Resume (survives restarts until clicked)
 //   interrupted → Resume
+//   rate_limited → Resume (the scheduler also resumes it after its cooldown, F6.4)
 //   idle        → Scan now
 // Older backends without `state` fall back to is_scanning.
 // Interrupted scans are also resumed by the scheduler on its own when the
@@ -42,6 +43,7 @@ export function scannerControl(
       return { state, action: 'none', label: t('scanner.pausing'), disabled: true }
     case 'paused':
     case 'interrupted':
+    case 'rate_limited': // resumes by itself after the cooldown; "Resume" is the user's override
       return { state, action: 'resume', label: pending ? t('scanner.resuming') : t('scanner.resume'), disabled: pending }
     default:
       return { state, action: 'scan', label: pending ? t('scanner.starting') : t('scanner.scanNow'), disabled: pending }

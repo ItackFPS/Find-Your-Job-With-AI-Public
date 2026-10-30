@@ -165,6 +165,11 @@ class BaseCollector(ABC):
     _sleep: ClassVar[Callable[[float], None] | None] = None
 
     def __init__(self, timeout: int = 30, retries: int = 3, rate_limit_delay: float = 1.0):
+        # Background scans (F6.4) set these on their collector: a 429 then raises
+        # scan_control.RateLimited at once instead of being retried, and the pacer, when
+        # set, decides the delay between requests (floor: rate_limit_delay).
+        self.stop_on_rate_limit = False
+        self.pacer: Any = None
         self.timeout = timeout
         self.retries = retries
         self.rate_limit_delay = max(float(rate_limit_delay), self.rate_policy.min_delay_seconds)
@@ -304,9 +309,11 @@ class BaseCollector(ABC):
         # Read from the class: a function stored on a class would bind to the instance.
         clock = type(self)._clock or time.time
         sleep = type(self)._sleep or time.sleep
+        pacer = getattr(self, "pacer", None)
+        delay = max(self.rate_limit_delay, pacer.delay()) if pacer is not None else self.rate_limit_delay
         elapsed = clock() - self._last_request_time
-        if elapsed < self.rate_limit_delay:
-            sleep_time = self.rate_limit_delay - elapsed
+        if elapsed < delay:
+            sleep_time = delay - elapsed
             logger.debug("Rate limiting: sleeping %.2fs", sleep_time)
             sleep(sleep_time)
         self._last_request_time = clock()
@@ -334,7 +341,14 @@ class BaseCollector(ABC):
                 self._observe_response(response, parsed=parsed)
                 network_failure = False
 
+                if response.status_code == 429 and getattr(self, "stop_on_rate_limit", False):
+                    from src.scan_control import RateLimited
+
+                    raise RateLimited(f"HTTP 429 from {origin(url)}")
                 if response.status_code in _RETRYABLE_STATUS_CODES:
+                    pacer = getattr(self, "pacer", None)
+                    if pacer is not None:
+                        pacer.penalize()
                     last_error = f"HTTP {response.status_code}: {response.text[:300]}"
                     if attempt < self.retries:
                         backoff = self._retry_delay(response, attempt)
@@ -347,6 +361,9 @@ class BaseCollector(ABC):
                     break
 
                 response.raise_for_status()
+                pacer = getattr(self, "pacer", None)
+                if pacer is not None:
+                    pacer.on_success()
                 return response
             except (httpx.TimeoutException, httpx.ConnectError) as exc:
                 last_error = str(exc)

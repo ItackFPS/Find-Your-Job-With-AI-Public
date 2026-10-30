@@ -1163,10 +1163,11 @@ class TestScanStatistics:
         assert len(failed) == 1
         assert failed[0]["search_term"] == "engineer"
 
-    def test_rate_limited_empty_page_is_a_failure_not_exhaustion(self, staging, tmp_path) -> None:
-        """python-jobspy does not raise on HTTP 429 or a blocked page: it logs an ERROR on its
+    def test_blocked_empty_page_is_a_failure_not_exhaustion(self, staging, tmp_path) -> None:
+        """python-jobspy does not raise on a blocked page: it logs an ERROR on its
         "JobSpy:LinkedIn" logger and returns no rows (seen live, 2026-10-19). That empty result is
-        a failed query, not the end of the results, so it must not be reported or checkpointed as done."""
+        a failed query, not the end of the results, so it must not be reported or checkpointed as done.
+        (A 429 stops the whole scan instead: see TestRateLimitStop.)"""
         import json as _json
         import logging
 
@@ -1179,7 +1180,7 @@ class TestScanStatistics:
 
         def scrape(**kwargs):
             if kwargs["search_term"] == "engineer":
-                logging.getLogger("JobSpy:LinkedIn").error("LinkedIn response status code 429")
+                logging.getLogger("JobSpy:LinkedIn").error("LinkedIn response status code 999")
                 return _make_mock_df([])
             return _make_mock_df([])                      # genuinely no results, nothing logged
 
