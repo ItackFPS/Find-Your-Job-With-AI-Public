@@ -201,7 +201,8 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--base-config", default=ACTIVE)
     g.add_argument("--profile", default=None, help="profile to replay with when the dataset pins none")
     g.add_argument("--split", choices=("all", "tuning"), default=None,
-                   help="never the held-out part: the agent explores and tunes (default: tuning for a real dataset)")
+                   help="never the held-out part: the agent explores and tunes (default: tuning for a real dataset; "
+                        "all is refused on a real dataset)")
     g.add_argument("--store", default=DEFAULT_STORE)
     g.add_argument("--max-hypotheses", type=int, default=5)
     g.add_argument("--no-experiments", action="store_true")
@@ -322,7 +323,13 @@ def main(argv: list[str] | None = None) -> int:
             elif ns.cmd == "agent":
                 from src.lab.agent import render_report, run_agent
 
-                ds = _split(load_dataset(ns.dataset), ns.split)
+                whole = load_dataset(ns.dataset)
+                if whole.manifest.kind == "real" and ns.split == "all":
+                    # the held-out labels judge pre-registered changes (P2.4): the agent never sees them
+                    print("error: the agent never reads a real dataset's held-out labels: use --split tuning",
+                          file=sys.stderr)
+                    return 2
+                ds = _split(whole, ns.split)
                 report = run_agent(lab, ds, StrategyRef(config_dir=_base_config(ns), profile_path=ns.profile),
                                    bundle_store=ns.store, max_hypotheses=ns.max_hypotheses,
                                    experiment=not ns.no_experiments)

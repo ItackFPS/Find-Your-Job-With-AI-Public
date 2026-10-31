@@ -84,3 +84,18 @@ def test_the_lab_defaults_to_the_tuning_part_of_a_real_dataset(tmp_path):
     synth = load_dataset(DS)
     assert _split(synth, None) is synth
     assert split_of(_split(dataclasses.replace(synth), "tuning")) == "tuning"
+
+
+def test_the_lab_agent_refuses_the_whole_of_a_real_dataset(tmp_path):
+    """`--split all` would hand the agent the held-out labels too; on a real dataset it is refused."""
+    import subprocess
+    import sys
+
+    real = _real(tmp_path, 50, 50)
+    script = ("import sys\nfrom src.lab.__main__ import main\n"
+              "sys.exit(main(['--lab-db', sys.argv[1], 'agent', sys.argv[2], '--split', 'all', "
+              "'--store', sys.argv[3], '--no-experiments']))\n")
+    out = subprocess.run([sys.executable, "-c", script, str(tmp_path / "lab.db"), str(real), str(tmp_path / "store")],
+                         cwd=ROOT, capture_output=True, text=True, timeout=300)
+    assert out.returncode == 2, out.stderr[-2000:]
+    assert "held-out" in out.stderr
