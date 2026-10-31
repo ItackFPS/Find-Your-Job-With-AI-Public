@@ -107,6 +107,32 @@ def test_answers_survive_until_saved_then_become_human_labels(root):
     assert exc.value.code == "already_labelled"
 
 
+def test_a_restart_keeps_answers_and_a_line_cut_by_a_crash_does_not_block_labelling(root):
+    items = cal.next_items(root, "real-x", 3)
+    cal.record_answer(root, "real-x", items[0]["job_id"], "relevant")
+    with open(root / "real-x" / cal.ANSWERS, "a", encoding="utf-8", newline="\n") as f:
+        f.write('{"job_id": "' + items[1]["job_id"] + '", "expec')       # the process died mid-write
+    assert cal.summary(root / "real-x")["pending"] == 1                  # the complete answer is kept
+    assert [i["job_id"] for i in cal.next_items(root, "real-x", 2)] == [items[1]["job_id"], items[2]["job_id"]]
+    cal.record_answer(root, "real-x", items[1]["job_id"], "not_relevant", "domain")
+    assert cal.summary(root / "real-x")["pending"] == 2
+    assert cal.save_session(root, "real-x")["changed"] == 2
+    labels = load_dataset(root / "real-x", require_complete_labels=False).labels
+    assert (labels[items[0]["job_id"]].expected, labels[items[1]["job_id"]].expected) == ("accept", "reject")
+
+
+def test_saving_again_after_a_crash_before_the_answers_were_cleared_writes_nothing_new(root):
+    items = cal.next_items(root, "real-x", 2)
+    for it in items:
+        cal.record_answer(root, "real-x", it["job_id"], "relevant")
+    answers = (root / "real-x" / cal.ANSWERS).read_bytes()
+    assert cal.save_session(root, "real-x")["version"] == "2"
+    (root / "real-x" / cal.ANSWERS).write_bytes(answers)                # as if the crash came before the clear
+    again = cal.save_session(root, "real-x")
+    assert (again["changed"], again["version"], again["labelled"], again["pending"]) == (0, "2", 2, 0)
+    assert not (root / "real-x" / "versions" / "2").exists()
+
+
 def test_saving_nothing_writes_no_version(root):
     assert cal.save_session(root, "real-x")["changed"] == 0
     assert not (root / "real-x" / "versions").exists()
