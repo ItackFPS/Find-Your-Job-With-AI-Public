@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import tempfile
 import threading
@@ -121,7 +122,9 @@ def _pending(path: Path) -> dict[str, dict[str, Any]]:
     f = path / ANSWERS
     out: dict[str, dict[str, Any]] = {}
     if f.is_file():
-        for line in f.read_text(encoding="utf-8").splitlines():
+        # every answer ends with a newline: a last line without one was cut by a crash mid-write and
+        # holds no complete answer (that offer simply comes back in the next session)
+        for line in f.read_text(encoding="utf-8").split("\n")[:-1]:
             if line.strip():
                 row = json.loads(line)
                 out[row["job_id"]] = row
@@ -214,8 +217,16 @@ def record_answer(root: str | Path, dataset_id: str, job_id: str, answer: str, r
             raise CalibrationError("already_labelled")
         row = {"job_id": job_id, "expected": ANSWER_TO_EXPECTED[answer], "category": reason or "",
                "reason": "", "answered_at": _now()}
-        with open(path / ANSWERS, "a", encoding="utf-8", newline="\n") as f:
+        answers = path / ANSWERS
+        if answers.is_file():
+            data = answers.read_bytes()
+            if data and not data.endswith(b"\n"):          # drop what a crash cut mid-write (see _pending)
+                with open(answers, "r+b") as f:
+                    f.truncate(data.rfind(b"\n") + 1)
+        with open(answers, "a", encoding="utf-8", newline="\n") as f:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            f.flush()
+            os.fsync(f.fileno())          # on disk before the page moves on: survives a crash or power cut
     return summary(path)
 
 
