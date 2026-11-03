@@ -3,13 +3,14 @@
   "frozen_on": "2026-11-03",
   "why": "real-v2 holds 4 held-out accept labels and its 310 jobs can reach about 10, below the 30 of rule 6; most of its jobs were collected under the owner's previous profile",
   "collection": {
-    "where": "the isolated labelling install, its own data/jobs.db, never the V1 install or its database",
+    "where": "the isolated labelling install, in a new database data/real-v3/jobs.db that holds only real-v3 scans; never the V1 install or its database",
     "code": "public main fda7c68",
     "profile_sha256": "8d0be3d139b77eb7fd4551e35b1ef6bb49adfd18afb678204a7e1475f4934e2f",
-    "scans": "one or more full scans with that profile, all made before the export"
+    "scans": "one or more full scans with that profile, all made before the export, all into data/real-v3/jobs.db",
+    "excluded": "the 2026-11-03 21:15 UTC scan stored in that install's data/jobs.db ran with an earlier profile (profile_hash 59ce613edecc1b2a) and is not part of real-v3"
   },
   "export": {
-    "command": "python -m src.evaluation export --db data/jobs.db --out data/benchmarks/real-v3 --dataset-id real-v3 --n 400 --rejected 100 --top-scored 0 --seed 20261103",
+    "command": "python -m src.evaluation export --db data/real-v3/jobs.db --out data/benchmarks/real-v3 --dataset-id real-v3 --n 400 --rejected 100 --top-scored 0 --seed 20261103",
     "copied_to": "data/calibration/real-v3, labelled there; data/benchmarks/real-v3 is never written after the export"
   },
   "candidates": [

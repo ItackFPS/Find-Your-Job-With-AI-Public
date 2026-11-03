@@ -71,7 +71,7 @@ neither the candidates nor rules 1–8.
 
 | file | sha256 | what it fixes |
 |---|---|---|
-| `2026-11-03-real-v3-dataset.json` | `877730df1af9e68194df01c402f586692fe72b3c4ec870280c4a5a4567ee0230` | how real-v3 is collected and exported, the profile hash, and when it is measured |
+| `2026-11-03-real-v3-dataset.json` | `ec6ea865a358476fe7acf2ba280a8874e093d8530204ae6ea749fa75dd65480c` | how real-v3 is collected and exported, the profile hash, and when it is measured |
 
 - Rules 1–8 apply with `real-v3` in place of `real-v2`, and with the profile whose sha256 the file
   records (the profile itself is personal and never committed).

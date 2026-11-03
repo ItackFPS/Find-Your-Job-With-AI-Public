@@ -25,7 +25,7 @@ FROZEN = {
 CURRENT = [name for name in FROZEN if not name.startswith("history")]
 # Dataset pre-registrations: frozen like the candidates, but they are not weight overrides.
 DATASETS = {
-    "2026-11-03-real-v3-dataset.json": "877730df1af9e68194df01c402f586692fe72b3c4ec870280c4a5a4567ee0230",
+    "2026-11-03-real-v3-dataset.json": "ec6ea865a358476fe7acf2ba280a8874e093d8530204ae6ea749fa75dd65480c",
 }
 WEIGHTS = ("location_fit", "domain_relevance", "skills_match", "seniority_match", "experience_fit")
 
