@@ -60,3 +60,21 @@ README and hashes `ee9f6171…` and `70f055ef…`) for the 2.0 pipeline:
 A ranking result does not make a candidate eligible under the lab's verdict, which counts gate
 decisions only (ADR 0011). A scoring-only change flips no gate decision, so its verdict is
 `insufficient_evidence`. Promoting one needs an explicit human decision either way.
+
+## Second dataset: real-v3 (frozen 2026-11-03, before it exists)
+
+The `real-v2` run of 2026-11-03 was exploratory: its held-out part has 4 accept labels, and its 310
+jobs can reach about 10, below the 30 of rule 6. Most of its jobs were collected under the owner's
+previous profile. A fresh dataset, `real-v3`, is collected with the owner's current profile and
+measured with the **same candidates and the same rule**. This section adds a dataset; it changes
+neither the candidates nor rules 1–8.
+
+| file | sha256 | what it fixes |
+|---|---|---|
+| `2026-11-03-real-v3-dataset.json` | `877730df1af9e68194df01c402f586692fe72b3c4ec870280c4a5a4567ee0230` | how real-v3 is collected and exported, the profile hash, and when it is measured |
+
+- Rules 1–8 apply with `real-v3` in place of `real-v2`, and with the profile whose sha256 the file
+  records (the profile itself is personal and never committed).
+- `real-v2` and `real-v3` are decided and reported separately, never pooled.
+- The held-out measurement runs once, after the owner reports labelling finished. No held-out
+  result is computed before that.

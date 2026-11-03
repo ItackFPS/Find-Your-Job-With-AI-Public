@@ -1,0 +1,23 @@
+{
+  "dataset_id": "real-v3",
+  "frozen_on": "2026-11-03",
+  "why": "real-v2 holds 4 held-out accept labels and its 310 jobs can reach about 10, below the 30 of rule 6; most of its jobs were collected under the owner's previous profile",
+  "collection": {
+    "where": "the isolated labelling install, its own data/jobs.db, never the V1 install or its database",
+    "code": "public main fda7c68",
+    "profile_sha256": "8d0be3d139b77eb7fd4551e35b1ef6bb49adfd18afb678204a7e1475f4934e2f",
+    "scans": "one or more full scans with that profile, all made before the export"
+  },
+  "export": {
+    "command": "python -m src.evaluation export --db data/jobs.db --out data/benchmarks/real-v3 --dataset-id real-v3 --n 400 --rejected 100 --top-scored 0 --seed 20261103",
+    "copied_to": "data/calibration/real-v3, labelled there; data/benchmarks/real-v3 is never written after the export"
+  },
+  "candidates": [
+    "2026-10-30-h1-distance-first-in-order.json",
+    "2026-10-30-h2-distance-up-seniority-down.json"
+  ],
+  "rule": "README.md 'Decision rule' 1-8 unchanged, with real-v3 in place of real-v2 and this profile",
+  "pooling": "none: real-v2 and real-v3 are decided and reported separately, never merged",
+  "when_to_run": "once, after the owner reports labelling finished; no held-out result is computed before that",
+  "evidence_threshold": "rule 6: below 30 accept labels in the real-v3 held-out cohort the result is exploratory"
+}
