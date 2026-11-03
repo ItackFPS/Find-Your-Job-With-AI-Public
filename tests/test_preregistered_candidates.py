@@ -23,6 +23,10 @@ FROZEN = {
         "70f055efd640398d5e1d559467dcc78e959d2b0446b727170f4fa3398f8c2a12",
 }
 CURRENT = [name for name in FROZEN if not name.startswith("history")]
+# Dataset pre-registrations: frozen like the candidates, but they are not weight overrides.
+DATASETS = {
+    "2026-11-03-real-v3-dataset.json": "ec6ea865a358476fe7acf2ba280a8874e093d8530204ae6ea749fa75dd65480c",
+}
 WEIGHTS = ("location_fit", "domain_relevance", "skills_match", "seniority_match", "experience_fit")
 
 
@@ -35,6 +39,15 @@ def test_the_readme_states_the_hashes_of_the_current_candidates():
     readme = (PRE / "README.md").read_text(encoding="utf-8")
     for name in CURRENT:
         assert re.search(rf"`{re.escape(name)}` \| `{FROZEN[name]}`", readme), name
+
+
+@pytest.mark.parametrize("name", sorted(DATASETS))
+def test_a_dataset_preregistration_is_frozen_and_names_only_frozen_candidates(name):
+    path = PRE / name
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == DATASETS[name]
+    readme = (PRE / "README.md").read_text(encoding="utf-8")
+    assert re.search(rf"`{re.escape(name)}` \| `{DATASETS[name]}`", readme), name
+    assert set(json.loads(path.read_text(encoding="utf-8"))["candidates"]) <= set(CURRENT)
 
 
 @pytest.mark.parametrize("name", CURRENT)
