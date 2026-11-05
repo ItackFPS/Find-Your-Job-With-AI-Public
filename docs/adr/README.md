@@ -28,3 +28,4 @@ is the source of truth and the ADR must be updated or superseded.
 | [0019](0019-shadow-evaluation-and-health-monitor.md) | Personal ranking activates only on positive shadow evidence and pauses itself more easily than it activates |
 | [0020](0020-two-promotion-regimes.md) | Personal learning updates itself within bounds; global strategy changes still need the lab (amends 0011) |
 | [0021](0021-labels-are-developer-instruments.md) | Labels are developer and release instruments, never a user prerequisite |
+| [0022](0022-knowledge-packs.md) | Shared intelligence travels only in versioned, read-only knowledge packs shipped with releases |
