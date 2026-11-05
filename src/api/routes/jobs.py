@@ -294,6 +294,12 @@ def list_jobs(
         run_job_ids: list[str] | None = None
         if latest_run_id:
             run_job_ids = rs.get_job_ids_for_run(latest_run_id)
+            if not q and not saved_only:
+                # Découverte (S4) offers have their own section; the main list never duplicates them.
+                from src.learning.exploration import drawn_for_run
+
+                s4_ids = {d["job_id"] for d in drawn_for_run(request.app.state.db_path, latest_run_id)}
+                run_job_ids = [j for j in run_job_ids if j not in s4_ids]
 
         # Reduce the run's job-id scope by tier BEFORE any pagination happens
         # below, so every downstream branch (FTS intersect, Python-paginated
@@ -431,6 +437,40 @@ def list_jobs(
                 key=lambda j: (j.score.final_score if j.score and j.score.final_score is not None else -1),
                 reverse=True,
             )
+        return result
+    finally:
+        s.close()
+        rs.close()
+
+
+@router.get("/decouverte", response_model=list[JobDetailOut])
+def list_decouverte(request: Request) -> list[JobDetailOut]:
+    """The Découverte (S4) slots of the latest completed run, in slot order (ADR 0019).
+
+    A uniform random draw independent of every ranking: no score floor, so some offers are poor
+    matches by design. Hidden offers are left out."""
+    from src.learning.exploration import drawn_for_run
+
+    s, rs = _get_storages(request)
+    try:
+        latest_run = rs.get_latest_completed_run()
+        if not latest_run:
+            return []
+        ids = [d["job_id"] for d in drawn_for_run(request.app.state.db_path, latest_run["id"])]
+        list_state = _list_state(request)
+        ids = [j for j in ids if not list_state.get(j, {}).get("hidden")]
+        scores_by_id = rs.get_latest_scores_for_jobs(ids) if ids else {}
+        jobs_by_id = s.get_jobs_by_ids(ids) if ids else {}
+        result: list[JobDetailOut] = []
+        for job_id in ids:
+            job = jobs_by_id.get(job_id)
+            if job is None:
+                continue
+            job_out = _job_to_job_detail_out(job, scores_by_id.get(job_id))
+            st = list_state.get(job_id)
+            if st:
+                job_out.saved, job_out.hidden = st["saved"], st["hidden"]
+            result.append(job_out)
         return result
     finally:
         s.close()

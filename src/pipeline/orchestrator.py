@@ -959,6 +959,22 @@ def run_pipeline(
         # branch below) so the PERSONALIZATION stage further down can safely
         # read scoring.domain_relevance.confirmed_wrong_score from it via
         # cap_personalization_at_gates.
+        # Découverte (S4; ADR 0019, stage L4.3): drawn BEFORE ranking, from the ids of the offers that
+        # reached scoring only, so it never depends on either ranking. Skipped while learning is
+        # paused. Fail-open.
+        s4_draw = None
+        from src.privacy.learning import is_paused as _learning_paused
+
+        if not _learning_paused(db_path):
+            try:
+                from src.learning.exploration import draw as draw_s4
+                from src.learning.exploration import load_slots
+
+                s4_draw = draw_s4(db_path, run_id, [job.id for job in filtered_jobs],
+                                  slots=load_slots(Path(config_dir) / "personalization.yaml"))
+            except Exception:  # noqa: BLE001 - Découverte never affects the run
+                logger.exception("Découverte draw failed; the run has no Découverte slots")
+                s4_draw = None
         scoring_config: dict[str, Any] = {}
         if scoring_path.exists():
             scoring_config = load_scoring_config(str(scoring_path))
@@ -1317,6 +1333,13 @@ def run_pipeline(
             except Exception:  # noqa: BLE001 - the shadow path never affects the run
                 logger.exception("Personal model shadow failed; the run keeps its ranking")
                 shadow_adjustments, shadow_version = {}, None
+            if shadow_version and s4_draw is not None:
+                try:
+                    from src.learning.exploration import record_in_shadow
+
+                    record_in_shadow(db_path, s4_draw)
+                except Exception:  # noqa: BLE001 - the S4 journal never affects the run
+                    logger.exception("Recording the Découverte draw in ranking_shadow failed")
             if shadow_version:
                 # Live AD-5 counting (stage L4.1): records positives and the health state. Activation is
                 # behind a release flag that is off, so this changes nothing the user sees. Fail-open.

@@ -82,3 +82,7 @@ personal_model:
   activation:
     activation_enabled: false
     experimental_enabled: false
+  # Découverte (S4): uniform random draw independent of every ranking, at most 2 slots per run
+  # (0 turns it off). No score floor: some offers are poor matches by design (owner item 16).
+  exploration:
+    slots: 2
