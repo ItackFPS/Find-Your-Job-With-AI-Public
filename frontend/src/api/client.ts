@@ -1,6 +1,23 @@
 import axios from 'axios'
+import { GENERATION_HEADER, setGenerationToken } from './generation'
+import type { OutboxEntry, SendResult } from './outbox'
 
 const api = axios.create({ baseURL: '/api' })
+
+// Every API response carries the erasure generation token (ADR 0015); keep the latest one.
+// (Optional chaining: unit tests replace axios.create with a bare mock.)
+api.interceptors?.response?.use(
+  response => {
+    const token = response.headers?.[GENERATION_HEADER]
+    if (typeof token === 'string' && token) setGenerationToken(token)
+    return response
+  },
+  error => {
+    const token = error?.response?.headers?.[GENERATION_HEADER]
+    if (typeof token === 'string' && token) setGenerationToken(token)
+    return Promise.reject(error)
+  },
+)
 
 // ---- Types ----------------------------------------------------------------
 
@@ -284,6 +301,9 @@ export interface Job {
   description?: string | null
   // Every source the offer was seen on, its own source first (issue #86; detail only).
   provenance?: Provenance[]
+  // List management (ADR 0016, ADR 0017): the user saved / hides this offer.
+  saved?: boolean
+  hidden?: boolean
 }
 
 export interface Dashboard {
@@ -437,6 +457,9 @@ export const listJobs = (params?: {
   min_tier?: string
   // Also list offers marked expired (issue #86); hidden by default.
   include_expired?: boolean
+  // Hide (ADR 0017): hidden offers are left out unless asked for; saved_only lists saved offers.
+  include_hidden?: boolean
+  saved_only?: boolean
   limit?: number
   offset?: number
 }) => api.get<Job[]>('/jobs', { params }).then(r => r.data)
@@ -723,6 +746,48 @@ export const postJobFeedback = (
   id: string,
   body: { type: string; reasons: string[]; note?: string; decision_id?: string },
 ) => api.post<FeedbackEvent>(`/jobs/${id}/feedback`, { ...body, source: 'ui' }).then(r => r.data)
+
+// ---- Ordered delivery and visible exposure (ADR 0015, ADR 0016) ----
+export interface SessionState {
+  data_epoch: string
+  erasure_generation: number
+  token: string
+  learning_paused: boolean
+  learning_reset_at: string | null
+}
+
+export const getSession = () => api.get<SessionState>('/session').then(r => {
+  setGenerationToken(r.data.token)
+  return r.data
+})
+
+/** Outbox transport: one durable action, its HTTP status returned rather than thrown. */
+export const sendOutboxEntry = (e: OutboxEntry): Promise<SendResult> =>
+  api.post(`/jobs/${encodeURIComponent(e.job_id)}/feedback`, {
+    ...e.body,
+    reasons: e.body.reasons ?? [],
+    source: 'ui',
+    client_event_id: e.client_event_id,
+    generation: e.generation,
+    client_instance_id: e.client_instance_id,
+    client_seq: e.client_seq,
+    client_created_at: e.client_created_at,
+  }, { validateStatus: () => true }).then(r => ({ status: r.status, data: r.data }))
+
+export interface ExposureItem {
+  job_id: string
+  surface: string
+  position?: number | null
+  visible_ms?: number | null
+  sort_key?: string | null
+  randomized?: boolean
+  client_created_at?: string | null
+}
+
+/** Best-effort: a failure or a stale generation simply loses the batch. */
+export const postExposureBatch = (generation: string | null, session_id: string, items: ExposureItem[]) =>
+  api.post<{ stored: number }>('/jobs/feedback/exposure', { generation, session_id, items })
+    .then(r => r.data.stored).catch(() => 0)
 
 // I18 outcome tracking: fire-and-forget, best-effort. Only "viewed" and
 // "apply_link_opened" may be reported this way — never let a failure here

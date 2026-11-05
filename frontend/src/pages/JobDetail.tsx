@@ -8,6 +8,7 @@ import {
   type Job, type JobExplanation, type ExplanationReason, type FeedbackEvent, type FeedbackVocabulary, type DecisionRecord, type DecisionEvidence,
 } from '../api/client'
 import { Button, Card, Chip, LoadingState, useToast } from '../components'
+import { SaveHideButtons } from '../components/SaveHideButtons'
 import { daysAgo, formatDateTime, httpUrl } from '../utils'
 
 function OverallScore({ score }: { score: number }) {
@@ -483,6 +484,9 @@ function JobHeader({ job, overallScore }: { job: Job; overallScore: number | nul
           {[job.company, job.location].filter(Boolean).join(' · ')}
           {age !== null ? t('jobDetail.header.daysAgo', { days: age }) : ''}
           {' · '}<SeenOn job={job} />
+        </div>
+        <div style={{ marginTop: '0.5rem' }}>
+          <SaveHideButtons jobId={job.id} saved={job.saved} hidden={job.hidden} surface="job_detail" />
         </div>
       </div>
 

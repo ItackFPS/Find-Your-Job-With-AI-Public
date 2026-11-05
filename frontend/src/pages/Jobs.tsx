@@ -4,6 +4,8 @@ import { listJobs, getAllDepartments, getJobCountries, getProfile, type Job, typ
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Chip, EmptyState, LoadingState, Ring } from '../components'
+import { SaveHideButtons } from '../components/SaveHideButtons'
+import { useVisibleExposure } from '../hooks/useVisibleExposure'
 import { daysAgo, getSourceBadge, locationBadge } from '../utils'
 
 // ---------------------------------------------------------------------------
@@ -162,19 +164,36 @@ const cardLinkStyle: React.CSSProperties = {
   transition: 'border-color 0.15s',
 }
 
-function JobCard({ job, targetSkills, locationPreferences, departmentNames }: {
+function JobCard({ job, targetSkills, locationPreferences, departmentNames, position, trackRef }: {
   job: Job
   targetSkills: string[]
   locationPreferences: LocationPreference[]
   departmentNames: Record<string, string>
+  position: number
+  trackRef: (el: Element | null) => void
 }) {
   const finalScore = job.score?.final_score ?? null
   const tier = job.score?.tier ?? null
   const { t } = useTranslation()
   const age = daysAgo(job.published_at)
+  // Hidden from this card (ADR 0017): it collapses until the next list load leaves it out.
+  const [hiddenNow, setHiddenNow] = useState(!!job.hidden)
+
+  if (hiddenNow) {
+    return (
+      <div style={{ ...cardLinkStyle, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: '0.85rem', color: 'var(--color-muted)' }}>
+          {t('saveHide.hiddenCard', { title: job.title || t('jobs.noTitle') })}
+        </span>
+        <SaveHideButtons jobId={job.id} saved={job.saved} hidden surface="jobs" position={position}
+          onHiddenChange={h => setHiddenNow(h)} />
+      </div>
+    )
+  }
 
   return (
     <Link
+      ref={trackRef}
       to={`/jobs/${job.id}`}
       style={cardLinkStyle}
       onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--color-accent)')}
@@ -198,7 +217,9 @@ function JobCard({ job, targetSkills, locationPreferences, departmentNames }: {
 
       <RelevantSkills job={job} targetSkills={targetSkills} />
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.85rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.85rem', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <SaveHideButtons jobId={job.id} saved={job.saved} hidden={false} surface="jobs" position={position}
+          onHiddenChange={h => setHiddenNow(h)} />
         <TierBadge tier={tier} />
       </div>
 
@@ -229,6 +250,9 @@ export default function Jobs() {
   const [remote, setRemote] = useState<boolean | undefined>(undefined)
   // Expired offers (issue #86) are hidden unless asked for.
   const [includeExpired, setIncludeExpired] = useState(false)
+  // Saved offers (ADR 0016), whatever the run.
+  const [savedOnly, setSavedOnly] = useState(false)
+  const track = useVisibleExposure('jobs')
   const [minTier, setMinTier] = useState(DEFAULT_MIN_TIER)
   const [q, setQ] = useState('')         // debounced value sent to API
   const [inputQ, setInputQ] = useState('') // immediate input value
@@ -273,7 +297,7 @@ export default function Jobs() {
   )
 
   const { data: jobs, isLoading, error } = useQuery({
-    queryKey: ['jobs', country, isFrance ? department : '', remote, minTier, q, includeExpired, offset],
+    queryKey: ['jobs', country, isFrance ? department : '', remote, minTier, q, includeExpired, savedOnly, offset],
     queryFn: () => listJobs({
       country: country || undefined,
       department: (isFrance && department) ? department : undefined,
@@ -281,6 +305,7 @@ export default function Jobs() {
       min_tier: minTier !== 'low_priority' ? minTier : undefined,
       q: q || undefined,
       include_expired: includeExpired || undefined,
+      saved_only: savedOnly || undefined,
       limit: PAGE,
       offset,
     }),
@@ -297,7 +322,7 @@ export default function Jobs() {
   }
 
   const hasActiveFilter = !!(
-    country || remote !== undefined || q || (isFrance && department) || minTier !== DEFAULT_MIN_TIER || includeExpired
+    country || remote !== undefined || q || (isFrance && department) || minTier !== DEFAULT_MIN_TIER || includeExpired || savedOnly
   )
 
   return (
@@ -389,6 +414,15 @@ export default function Jobs() {
           {t('jobs.includeExpired')}
         </label>
 
+        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', fontSize: '0.85rem', color: 'var(--color-muted)' }}>
+          <input
+            type="checkbox"
+            checked={savedOnly}
+            onChange={e => { setSavedOnly(e.target.checked); setOffset(0) }}
+          />
+          {t('saveHide.savedOnly')}
+        </label>
+
         {hasActiveFilter && (
           <button
             onClick={() => {
@@ -399,6 +433,7 @@ export default function Jobs() {
               setRemote(undefined)
               setMinTier(DEFAULT_MIN_TIER)
               setIncludeExpired(false)
+              setSavedOnly(false)
               setOffset(0)
             }}
             style={{ ...filterStyle, cursor: 'pointer', color: 'var(--color-muted)' }}
@@ -415,10 +450,12 @@ export default function Jobs() {
         <EmptyState message={t('jobs.empty')} />
       )}
 
-      {jobs && jobs.map(job => (
+      {jobs && jobs.map((job, i) => (
         <JobCard
           key={job.id}
           job={job}
+          position={offset + i}
+          trackRef={track(job.id, offset + i)}
           targetSkills={targetSkills}
           locationPreferences={locationPreferences}
           departmentNames={departmentNames}
