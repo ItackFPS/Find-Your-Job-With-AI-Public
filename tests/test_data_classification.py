@@ -36,6 +36,7 @@ def test_every_table_created_in_src_is_classified():
 def test_every_table_of_an_initialised_jobs_db_is_classified(tmp_path):
     from src.ai.storage import AIAnalysisStorage
     from src.decisions.storage import DecisionStorage
+    from src.feedback.exposure import ExposureStorage
     from src.feedback.storage import FeedbackStorage
     from src.hellowork.staging import HelloWorkStagingStorage
     from src.linkedin.staging import LinkedInStagingStorage
@@ -46,7 +47,7 @@ def test_every_table_of_an_initialised_jobs_db_is_classified(tmp_path):
     from src.storage.sqlite import Storage
 
     db = str(tmp_path / "jobs.db")
-    for cls in (Storage, RunStorage, FeedbackStorage, DecisionStorage, OutcomeEventStorage,
+    for cls in (Storage, RunStorage, FeedbackStorage, ExposureStorage, DecisionStorage, OutcomeEventStorage,
                 PersonalizationStorage, AIAnalysisStorage, SchedulerStorage,
                 LinkedInStagingStorage, HelloWorkStagingStorage):
         try:

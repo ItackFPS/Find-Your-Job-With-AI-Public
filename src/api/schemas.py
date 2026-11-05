@@ -364,6 +364,9 @@ class JobDetailOut(JobOut):
     description: str | None = None
     # Every source the offer was seen on, its own source first (issue #86).
     provenance: list[ProvenanceOut] = []
+    # List management (ADR 0016, ADR 0017): the user saved / hides this offer.
+    saved: bool = False
+    hidden: bool = False
 
 
 class ExplanationSignal(BaseModel):
