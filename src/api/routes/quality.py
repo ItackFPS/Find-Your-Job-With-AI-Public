@@ -6,6 +6,7 @@ GET  /api/quality/jobs              — job history, newest first, and the runni
 GET  /api/quality/jobs/{id}         — one job: status, phase, result summary or error code
 POST /api/quality/jobs/{id}/cancel  — stop the running job
 GET  /api/quality/ft-coverage       — France Travail web coverage of the API offers over 7 days (P2.7)
+GET  /api/quality/extractor-agreement — requirement extractor vs France Travail structured fields (v5 L2)
 
 The jobs run the existing evaluation CLI in a child process (``src.api.quality_jobs``); nothing here
 evaluates anything itself, and nothing here can approve or promote a strategy (ADR 0011: promotion
@@ -115,19 +116,30 @@ def cancel_job(job_id: str, request: Request) -> dict[str, Any]:
     return {"id": job_id, "cancelling": True}
 
 
-@router.get("/ft-coverage")
-def ft_coverage(request: Request) -> dict[str, Any]:
-    """Counts and a status only; the read-only tool runs in a child process (ADR 0007)."""
-    cmd = [sys.executable, "-m", "src.evaluation.coverage", "--db", str(request.app.state.db_path)]
+def _run_readonly_tool(module: str, db_path: object, timeout: int = 120) -> dict[str, Any]:
+    """Run a read-only evaluation tool in a child process (ADR 0007); its JSON, or 500."""
+    cmd = [sys.executable, "-m", module, "--db", str(db_path)]
     try:
         proc = subprocess.run(cmd, cwd=str(PROJECT_ROOT), env={**os.environ, "PYTHONIOENCODING": "utf-8"},
                               capture_output=True, text=True, encoding="utf-8", errors="replace",
-                              stdin=subprocess.DEVNULL, timeout=120,
+                              stdin=subprocess.DEVNULL, timeout=timeout,
                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         out = json.loads(proc.stdout) if proc.returncode == 0 else None
     except (subprocess.TimeoutExpired, OSError, ValueError) as exc:
-        logger.warning("ft coverage failed: %s", exc)
+        logger.warning("%s failed: %s", module, exc)
         out = None
     if not isinstance(out, dict):
         raise HTTPException(status_code=500, detail={"code": "unexpected"})
     return out
+
+
+@router.get("/ft-coverage")
+def ft_coverage(request: Request) -> dict[str, Any]:
+    """Counts and a status only; the read-only tool runs in a child process (ADR 0007)."""
+    return _run_readonly_tool("src.evaluation.coverage", request.app.state.db_path)
+
+
+@router.get("/extractor-agreement")
+def extractor_agreement(request: Request) -> dict[str, Any]:
+    """Requirement extractor vs France Travail structured fields (v5 L2): counts and rates only."""
+    return _run_readonly_tool("src.evaluation.extractor_agreement", request.app.state.db_path, timeout=300)
