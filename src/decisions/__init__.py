@@ -4,4 +4,4 @@ Observability only — recording never changes a decision, a score or a ranking,
 never raises into the pipeline (fail-open). See ``docs/adr/0008-decision-journal.md``.
 """
 
-DECISION_SCHEMA_VERSION = 1
+DECISION_SCHEMA_VERSION = 2  # 2: EvidenceItem.strength (additive)

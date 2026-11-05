@@ -17,8 +17,9 @@ import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
+from src.geo.places import COMMUNE
 from src.models.job import Job
 from src.pipeline.location_distance import (
     assess,
@@ -814,14 +815,42 @@ _FILTER_CHECKS: list[tuple[str, Callable[[Job, dict[str, Any]], bool]]] = [
 ]
 
 
+Strength = Literal["strong", "weak"]
+
+
 @dataclass(frozen=True)
 class FilterCheckOutcome:
-    """One hard-filter check evaluated on one job (observability: what was looked at)."""
+    """One hard-filter check evaluated on one job (observability: what was looked at).
+    ``strength`` is set on a failed check only (``violation_strength``)."""
 
     code: str
     passed: bool
     observed: str | None
     expected: str | None
+    strength: Strength | None = None
+
+
+def violation_strength(code: str, job: Job, config: dict[str, Any]) -> Strength:
+    """How strong the evidence is behind a FAILED check (ADR 0019 v5 AD-2b).
+
+    STRONG: an explicit user choice compared with a value known with high confidence (a structured
+    field or an explicit statement). WEAK: a curated default, or a value inferred from title words or
+    from weak wording. Descriptive only: today every failed check rejects, whatever its strength.
+    """
+    if code == "location":
+        return "strong"            # a known foreign country against the user's countries
+    if code == "distance":
+        cfg = config.get("location_distance")
+        place = assess(job, cfg).place if cfg else None
+        return "strong" if place is not None and place.precision == COMMUNE else "weak"
+    if code in ("remote_policy", "remote"):
+        return "strong"            # an explicit residency restriction / the structured remote flag
+    if code == "work_mode":
+        return "strong" if job.work_mode in ("remote", "hybrid", "on_site") else "weak"
+    if code == "salary":
+        return "strong" if (config.get("salary_requirements") or {}).get("strict") else "weak"
+    # seniority, published_age, title_keywords (curated vocabulary), contract_type (title words)
+    return "weak"
 
 
 def _summarize(value: Any, max_items: int = 12) -> Any:
@@ -927,7 +956,8 @@ def explain_filter_checks(
     for code, check in _FILTER_CHECKS:
         passed = bool(check(job, config))
         observed, expected = filter_facts(code, job, config)
-        out.append(FilterCheckOutcome(code, passed, observed, expected))
+        out.append(FilterCheckOutcome(code, passed, observed, expected,
+                                      None if passed else violation_strength(code, job, config)))
         if stop_at_first_failure and not passed:
             break
     return out
