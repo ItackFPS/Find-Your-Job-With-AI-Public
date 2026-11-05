@@ -315,11 +315,14 @@ def _build_score_breakdown_out(score_row: dict | None) -> ScoreBreakdownOut | No
 
     final_score = score_row.get("final_score")
     score_100 = round(float(final_score) * 100) if final_score is not None else None
+    breakdown = score_row.get("score_breakdown") or {}
     return ScoreBreakdownOut(
         deterministic_score=score_row.get("deterministic_score"),
         semantic_score=score_row.get("semantic_score"),
         final_score=final_score,
-        factors=score_row.get("score_breakdown", {}),
+        factors={k: v for k, v in breakdown.items() if k not in ("weak_flags", "weak_penalty")},
+        weak_flags=breakdown.get("weak_flags") or [],
+        weak_penalty=breakdown.get("weak_penalty") or 0.0,
         run_id=score_row.get("run_id"),
         score_100=score_100,
         tier=score_to_tier(score_100) if score_100 is not None else None,

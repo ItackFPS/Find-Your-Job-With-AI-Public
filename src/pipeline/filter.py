@@ -279,6 +279,8 @@ def build_filter_config(profile: "JobSearchProfile", engine_cfg: dict[str, Any])
         # Distance + remote-policy model (F4.3): None for a v1 profile without a home,
         # which keeps the "distance" and "remote_policy" checks inert.
         "location_distance": distance_config(profile),
+        # ADR 0019 v5 AD-2b (L5.2): the checks whose WEAK violations rank instead of rejecting.
+        "weak_evidence_mode": weak_evidence_modes(engine_cfg),
     }
 
 
@@ -853,6 +855,60 @@ def violation_strength(code: str, job: Job, config: dict[str, Any]) -> Strength:
     return "weak"
 
 
+# Checks a WEAK violation of which may rank instead of reject. ``salary`` is not one of them until
+# the matches_salary correction lands (decisions v5, AD-2b prerequisite); location, remote and
+# remote_policy are never weak.
+RANKABLE_CHECKS = ("distance", "work_mode", "seniority", "published_age", "title_keywords", "contract_type")
+
+
+def weak_evidence_modes(engine_cfg: dict[str, Any]) -> dict[str, str]:
+    """``filters.yaml`` ``weak_evidence_mode`` → {check: "rank"} for the checks switched to rank.
+
+    Anything else (missing section, ``reject``, an unknown value, a check outside
+    ``RANKABLE_CHECKS``) keeps today's rejection. A non-rankable check set to ``rank`` is logged.
+    """
+    raw = engine_cfg.get("weak_evidence_mode") or {}
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, str] = {}
+    for code, mode in raw.items():
+        if mode != "rank":
+            continue
+        if code in RANKABLE_CHECKS:
+            out[code] = "rank"
+        else:
+            logger.warning("weak_evidence_mode: %s cannot rank (kept as reject)", code)
+    return out
+
+
+@dataclass(frozen=True)
+class WeakFlag:
+    """A WEAK violation that did not reject (``weak_evidence_mode: rank``). ``severity`` in [0, 1]
+    scales the per-flag penalty: 1.0 except ``published_age``, which ramps with the age."""
+
+    code: str
+    observed: str | None
+    expected: str | None
+    severity: float
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"code": self.code, "observed": self.observed, "expected": self.expected,
+                "severity": round(self.severity, 4)}
+
+
+def weak_severity(code: str, job: Job, config: dict[str, Any]) -> float:
+    """``published_age``: 0 at ``posted_within_days``, growing linearly to 1 at 3 x that, 1 beyond.
+    Every other check: 1.0."""
+    if code != "published_age":
+        return 1.0
+    days = float(config.get("posted_within_days") or 30)
+    ref, _basis = freshness_reference(job)
+    if ref is None:
+        return 1.0
+    age = (datetime.now(UTC) - ref).total_seconds() / 86400
+    return min(1.0, max(0.0, (age - days) / (2 * days)))
+
+
 def _summarize(value: Any, max_items: int = 12) -> Any:
     """Shorten long lists structurally (``[..12 items.., '+53 more']``) so the text stays valid and readable."""
     if isinstance(value, list):
@@ -967,26 +1023,42 @@ def filter_jobs(
     jobs: list[Job],
     config: dict[str, Any],
     progress_callback: Callable[[int, int], None] | None = None,
+    *,
+    weak_flags: dict[str, list[WeakFlag]] | None = None,
 ) -> tuple[list[Job], dict[str, str]]:
     """Returns (valid_jobs, rejection_reasons) — rejection_reasons maps
     each rejected job's id to the first check it failed.
 
     ``progress_callback``, if given, is called ``(processed, total)`` after
-    each job — purely observational, never affects which jobs pass."""
+    each job — purely observational, never affects which jobs pass.
+
+    A check listed in ``config["weak_evidence_mode"]`` as ``rank`` lets a WEAK violation pass:
+    the job stays valid and, when ``weak_flags`` is given, ``weak_flags[job.id]`` lists the
+    violations. A STRONG violation rejects in every mode. Without that config key (the default)
+    the behaviour is exactly the historical one."""
     rejection_reasons: dict[str, str] = {}
     valid: list[Job] = []
     total = len(jobs)
+    rank = config.get("weak_evidence_mode") or {}
 
     for i, job in enumerate(jobs, start=1):
         reason = None
+        flags: list[WeakFlag] = []
         for reason_code, check in _FILTER_CHECKS:
             if not check(job, config):
+                if rank.get(reason_code) == "rank" and violation_strength(reason_code, job, config) == "weak":
+                    observed, expected = filter_facts(reason_code, job, config)
+                    flags.append(WeakFlag(reason_code, observed, expected,
+                                          weak_severity(reason_code, job, config)))
+                    continue
                 reason = reason_code
                 break
         if reason is not None:
             rejection_reasons[job.id] = reason
         else:
             valid.append(job)
+            if flags and weak_flags is not None:
+                weak_flags[job.id] = flags
         if progress_callback is not None:
             progress_callback(i, total)
 
