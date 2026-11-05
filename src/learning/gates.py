@@ -53,7 +53,8 @@ class GateParams:
     per_session_cap: int = 3
     # G3 pooled posterior
     g3_threshold: float = 0.95
-    # G3b contradiction guard (set by the simulator; see docs/reports/…-l3-simulator.md)
+    # G3b contradiction guard: placeholders. The L3 simulator found no values meeting ADR 0019's
+    # criteria (docs/reports/2026-11-05-l3-simulator.md), so none were adopted; activation stays off.
     n_lb_min: int = 6
     c_contra: float = 0.80
     c_het: float = 0.80
