@@ -22,3 +22,4 @@ is the source of truth and the ADR must be updated or superseded.
 | [0013](0013-distance-and-remote-policy-location.md) | Location is matched on distance from home and a typed remote policy (supersedes 0005 once a home is set) |
 | [0014](0014-learning-planes-and-invariants.md) | Learning is split into four planes (personal, engine, market, operational) bound by shared invariants |
 | [0015](0015-privacy-retention-and-erasure.md) | Personal data has four in-app actions; erasure is a resumable job verified before success (supersedes 0009's owner-side erasure) |
+| [0016](0016-signal-capture-and-delivery.md) | Only visible exposure is logged; durable actions go through an acknowledged, ordered outbox |
