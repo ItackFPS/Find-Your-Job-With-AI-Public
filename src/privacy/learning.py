@@ -12,8 +12,9 @@
 from __future__ import annotations
 
 import sqlite3
+import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
 from src.storage import app_state
 from src.storage.data_classes import RESET_CLEARED_TABLES
@@ -49,7 +50,13 @@ def is_paused(db_path: str) -> bool:
 
 
 def reset(db_path: str) -> tuple[str, dict[str, int]]:
-    """Set the reset marker and clear the derived tables, in one transaction → (marker, rows cleared)."""
+    """Set the reset marker and clear the derived tables, in one transaction → (marker, rows cleared).
+
+    Signal times have whole-second precision, so the marker is the **next** whole second and the call
+    returns once that second has begun: every signal recorded before the reset is strictly earlier
+    than the marker, every signal recorded after it is at or after the marker."""
+    now = datetime.now(UTC)
+    marker = now.replace(microsecond=0) + timedelta(seconds=1)
     conn = sqlite3.connect(db_path)
     cleared: dict[str, int] = {}
     try:
@@ -59,13 +66,16 @@ def reset(db_path: str) -> tuple[str, dict[str, int]]:
             for table in RESET_CLEARED_TABLES:
                 if table in existing:
                     cleared[table] = conn.execute(f"DELETE FROM {table}").rowcount  # noqa: S608 — fixed names
-            at = app_state.mark_learning_reset(conn)
+            at = app_state.mark_learning_reset(conn, marker.isoformat(timespec="seconds"))
             conn.commit()
         except BaseException:
             conn.rollback()
             raise
     finally:
         conn.close()
+    wait = (marker - datetime.now(UTC)).total_seconds()
+    if wait > 0:
+        time.sleep(wait)
     return at, cleared
 
 
@@ -82,6 +92,5 @@ def after_reset(occurred_at: str, reset_at: str | None) -> bool:
 def _parse(value: str) -> datetime:
     dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
     if dt.tzinfo is None:
-        from datetime import UTC
         dt = dt.replace(tzinfo=UTC)
     return dt

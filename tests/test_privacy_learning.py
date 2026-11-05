@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -74,6 +75,16 @@ def test_reset_clears_derived_state_keeps_signals_and_hidden(tmp_path):
     FeedbackService(str(db), config_dir=str(cfg)).record_explicit(before.scored_jobs[0].job_id, "interested",
                                                                    source="ui")
     assert _count(db, "job_feedback") == 1
+
+
+def test_reset_marker_separates_same_second_signals(tmp_path):
+    db = tmp_path / "jobs.db"
+    learning.state(str(db))
+    before = datetime.now(UTC).isoformat(timespec="seconds")      # a signal in the same second
+    at, _ = learning.reset(str(db))
+    after = datetime.now(UTC).isoformat(timespec="seconds")       # a signal right after the call
+    assert not learning.after_reset(before, at)
+    assert learning.after_reset(after, at)
 
 
 def test_after_reset_compares_instants():
