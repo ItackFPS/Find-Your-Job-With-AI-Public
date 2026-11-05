@@ -10,7 +10,20 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from src.feedback.models import FeedbackEvent
+from src.feedback.models import STATE_FAMILIES, FeedbackEvent
+from src.storage import app_state
+from src.storage.migrations import ensure_columns
+
+# Delivery columns (ADR 0016), added to existing databases; legacy rows keep NULL.
+DELIVERY_COLUMNS = {
+    "client_event_id": "TEXT",
+    "generation": "INTEGER",
+    "client_instance_id": "TEXT",
+    "client_seq": "INTEGER",
+    "client_created_at": "TEXT",
+    "client_time_trusted": "INTEGER",
+    "superseded": "INTEGER NOT NULL DEFAULT 0",
+}
 
 # Canonical application statuses that mean the user went after the job. ``employer_rejected`` counts:
 # the user applied. ``withdrawn`` clears an earlier stance (the user stopped pursuing it, for reasons
@@ -75,21 +88,67 @@ class FeedbackStorage:
                 BEFORE DELETE ON feedback_events
                 BEGIN SELECT RAISE(ABORT, 'feedback_events is append-only'); END;
         """)
+        ensure_columns(conn, "feedback_events", DELIVERY_COLUMNS)
+        conn.executescript("""
+            -- idempotent delivery: a replayed client event inserts nothing (ADR 0016)
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_feedback_client_event
+                ON feedback_events(client_event_id) WHERE client_event_id IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS idx_feedback_order
+                ON feedback_events(job_id, client_instance_id, client_seq) WHERE client_seq IS NOT NULL;
+        """)
+        app_state.ensure(conn)
         conn.commit()
         self._initialized_paths.add(key)
 
-    def append(self, e: FeedbackEvent) -> None:
+    def append(self, e: FeedbackEvent, generation_token: str | None = None) -> FeedbackEvent:
+        """Insert ``e`` and return the stored event.
+
+        In one immediate transaction (ADR 0015, ADR 0016):
+        * ``generation_token`` (``<data_epoch>:<generation>``), when given, must match ``app_state``,
+          else ``app_state.GenerationMismatch``; the stored ``generation`` is the current one;
+        * a known ``client_event_id`` inserts nothing and returns the stored event (replay);
+        * an event of a state family that arrives after a higher ``client_seq`` of the same family,
+          offer and client instance is stored with ``superseded = 1``.
+        """
         conn = self._get_conn()
-        with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            state = app_state.check_token(conn, generation_token) if generation_token else app_state.read(conn)
+            if e.client_event_id:
+                row = conn.execute("SELECT * FROM feedback_events WHERE client_event_id = ?",
+                                   (e.client_event_id,)).fetchone()
+                if row is not None:
+                    conn.rollback()
+                    return self._row(row)
+            superseded = False
+            family = STATE_FAMILIES.get(e.type)
+            if family and e.client_instance_id and e.client_seq is not None:
+                types = [t for t, f in STATE_FAMILIES.items() if f == family]
+                newer = conn.execute(
+                    f"""SELECT 1 FROM feedback_events
+                        WHERE job_id = ? AND client_instance_id = ? AND client_seq > ?
+                          AND type IN ({','.join('?' * len(types))}) LIMIT 1""",
+                    (e.job_id, e.client_instance_id, e.client_seq, *types)).fetchone()
+                superseded = newer is not None
+            e = e.model_copy(update={"generation": state.erasure_generation, "superseded": superseded})
             conn.execute(
                 """INSERT INTO feedback_events
                    (event_id, schema_version, reason_vocab_version, job_id, decision_id, strategy_version,
-                    signal_class, type, reasons_json, note, source, occurred_at, metadata_json)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    signal_class, type, reasons_json, note, source, occurred_at, metadata_json,
+                    client_event_id, generation, client_instance_id, client_seq, client_created_at,
+                    client_time_trusted, superseded)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (e.event_id, e.schema_version, e.reason_vocab_version, e.job_id, e.decision_id,
                  e.strategy_version, e.signal_class, e.type, json.dumps(e.reasons), e.note, e.source,
-                 e.occurred_at, json.dumps(e.metadata, ensure_ascii=False, default=str)),
+                 e.occurred_at, json.dumps(e.metadata, ensure_ascii=False, default=str),
+                 e.client_event_id, e.generation, e.client_instance_id, e.client_seq, e.client_created_at,
+                 None if e.client_time_trusted is None else int(e.client_time_trusted), int(e.superseded)),
             )
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        return e
 
     @staticmethod
     def _row(r: sqlite3.Row) -> FeedbackEvent:
@@ -99,6 +158,11 @@ class FeedbackStorage:
             strategy_version=r["strategy_version"], signal_class=r["signal_class"], type=r["type"],
             reasons=json.loads(r["reasons_json"]), note=r["note"], source=r["source"],
             occurred_at=r["occurred_at"], metadata=json.loads(r["metadata_json"]),
+            client_event_id=_col(r, "client_event_id"), generation=_col(r, "generation"),
+            client_instance_id=_col(r, "client_instance_id"), client_seq=_col(r, "client_seq"),
+            client_created_at=_col(r, "client_created_at"),
+            client_time_trusted=None if _col(r, "client_time_trusted") is None else bool(r["client_time_trusted"]),
+            superseded=bool(_col(r, "superseded") or 0),
         )
 
     def list_for_job(self, job_id: str, limit: int = 200) -> list[FeedbackEvent]:
@@ -174,6 +238,31 @@ class FeedbackStorage:
             out[r["job_id"]] = self._row(r)
         return out
 
+    def list_state(self, job_ids: list[str] | None = None) -> dict[str, dict[str, bool]]:
+        """Per job, its Save and Hide state: ``{job_id: {"saved": bool, "hidden": bool}}``, from the
+        latest non-superseded event of each family in insert order (ADR 0016). Jobs with no list
+        event are omitted."""
+        where = "signal_class = 'list' AND superseded = 0"
+        params: list[Any] = []
+        if job_ids is not None:
+            if not job_ids:
+                return {}
+            where += f" AND job_id IN ({','.join('?' * len(job_ids))})"
+            params += job_ids
+        out: dict[str, dict[str, bool]] = {}
+        for r in self._get_conn().execute(
+                f"SELECT job_id, type FROM feedback_events WHERE {where} ORDER BY rowid", params):
+            st = out.setdefault(r["job_id"], {"saved": False, "hidden": False})
+            if r["type"] in ("saved", "unsaved"):
+                st["saved"] = r["type"] == "saved"
+            else:
+                st["hidden"] = r["type"] == "hidden"
+        return out
+
+    def hidden_job_ids(self) -> set[str]:
+        """Offers the user currently hides."""
+        return {j for j, s in self.list_state().items() if s["hidden"]}
+
     def has_outcome_ref(self, outcome_event_id: str) -> bool:
         """True when this ``outcome_events`` row already has a journal event (live mirror or backfill)."""
         row = self._get_conn().execute(
@@ -181,3 +270,8 @@ class FeedbackStorage:
             (outcome_event_id,),
         ).fetchone()
         return row is not None
+
+
+def _col(r: sqlite3.Row, name: str) -> Any:
+    """A column that a row read before ``ensure_columns`` ran may lack."""
+    return r[name] if name in r.keys() else None
