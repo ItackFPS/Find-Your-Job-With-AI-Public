@@ -656,6 +656,33 @@
       "noOffers": "Aucune offre France Travail n’est encore enregistrée : rien à comparer.",
       "error": "Impossible de mesurer la lecture des exigences."
     },
+    "alerts": {
+      "title": "Santé des sources",
+      "subtitle": "Les changements que l’application a remarqués dans ses propres sources. Elle vous prévient ; elle ne change rien d’elle-même.",
+      "none": "Rien d’inhabituel lors des dernières collectes.",
+      "since": "Remarqué le {date}.",
+      "resolve": "Marquer comme traité",
+      "error": "Impossible de charger les alertes des sources.",
+      "unknown": "Alerte {code} sur {scope}.",
+      "volume": {
+        "title": "{source} apporte beaucoup moins d’offres que d’habitude",
+        "evidence": "Dernières collectes : {recent} offres ; habituellement environ {median} (sur {runs} collectes).",
+        "action": "Vérifiez la source dans Réglages › Sources : identifiants, mots-clés, ou un changement du site."
+      },
+      "completeness": {
+        "title": "{source} : le champ {field} manque sur beaucoup plus d’offres",
+        "evidence": "Renseigné sur {today} des {offers} offres d’aujourd’hui, habituellement {median}.",
+        "action": "Le site a peut-être changé de format. Les offres sont toujours collectées ; cette information peut leur manquer."
+      },
+      "fields": {
+        "title": "titre",
+        "description": "description",
+        "company": "entreprise",
+        "location": "lieu",
+        "published_at": "date de publication",
+        "employment_type": "type de contrat"
+      }
+    },
     "calibration": {
       "title": "Calibrer sur vos propres offres",
       "subtitle": "Indiquez à l'application quelles offres vous conviennent vraiment, quelques-unes à la fois",
