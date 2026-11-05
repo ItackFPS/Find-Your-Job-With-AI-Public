@@ -152,6 +152,14 @@ scoring:
       - French
       - English
 
+  # ADR 0019 v5 AD-2b (stage L5.2): penalty of a WEAK hard-filter violation that ranks instead of
+  # rejecting (filters.yaml weak_evidence_mode). Subtracted from the composite before the gates.
+  # Pre-registered values (docs/lab/preregistered/2026-11-05-ad2-weak-evidence.json), not approved
+  # ones; inert while every check is in reject mode.
+  weak_evidence:
+    penalty_per_flag: 0.10
+    penalty_total_max: 0.25
+
   gates:
     # Fires only when domain_relevance == confirmed_wrong_score (0.05) —
     # i.e. confirmed off-domain evidence, never on merely-undetected domain.

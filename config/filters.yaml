@@ -1014,3 +1014,21 @@ remote_scope:
     - international
     - work from anywhere
     - wfa
+
+# ---------------------------------------------------------------------------
+# Weak evidence (ADR 0019 v5 AD-2b, stage L5.2)
+#
+# Per check: reject (today's behaviour) or rank. In rank mode a WEAK violation of that check
+# (title words, inferred work mode, age, département-level distance...) no longer rejects: the
+# offer reaches scoring with a bounded penalty (scoring.yaml weak_evidence). A STRONG violation
+# rejects in every mode. Every check stays in reject until the pre-registered evaluation
+# (docs/lab/preregistered/2026-11-05-ad2-weak-evidence.json) passes and the owner promotes it.
+# salary cannot rank until the matches_salary correction lands.
+# ---------------------------------------------------------------------------
+weak_evidence_mode:
+  published_age: reject
+  title_keywords: reject
+  seniority: reject
+  work_mode: reject
+  distance: reject
+  contract_type: reject

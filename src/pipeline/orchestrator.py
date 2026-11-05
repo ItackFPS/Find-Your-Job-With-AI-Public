@@ -56,6 +56,9 @@ class ScoredJobRecord:
     personal_model_version: str | None = None
     # Visible position when the personal ranking is ACTIVE (stage L4.2); None means the production order.
     visible_position: int | None = None
+    # WEAK hard-filter violations that ranked instead of rejecting (ADR 0019 v5 AD-2b, stage L5.2).
+    weak_flags: list[dict[str, Any]] = field(default_factory=list)
+    weak_penalty: float = 0.0
 
 
 @dataclass
@@ -283,6 +286,7 @@ def run_pipeline(
         cap_personalization_at_gates,
         load_scoring_config,
         score_jobs_with_breakdown,
+        weak_evidence_penalty,
     )
     from src.pipeline.semantic_matching import (
         apply_semantic_matching,
@@ -698,6 +702,9 @@ def run_pipeline(
         # =================================================================
         _t_filter = time.perf_counter()
         rejection_records: list[RejectionRecord] = []
+        # ADR 0019 v5 AD-2b (L5.2): WEAK violations that ranked (empty while every check rejects).
+        weak_flags_by_job: dict[str, list[Any]] = {}
+        weak_penalties: dict[str, float] = {}
         profile = None
         engine_cfg: dict[str, Any] = {}
 
@@ -714,7 +721,8 @@ def run_pipeline(
             stats.hard_filter_input = len(deduped_jobs)
             _filter_reporter = _stage_reporter(progress_callback, stats, "filter", len(deduped_jobs))
             filtered_jobs, rejection_reasons = filter_jobs(
-                deduped_jobs, filters_config, progress_callback=lambda p, _t: _filter_reporter(p)
+                deduped_jobs, filters_config, progress_callback=lambda p, _t: _filter_reporter(p),
+                weak_flags=weak_flags_by_job,
             )
             stats.hard_filter_passed = len(filtered_jobs)
             recorder.observe_filter(deduped_jobs, rejection_reasons, filter_config=filters_config)
@@ -981,9 +989,12 @@ def run_pipeline(
             if profile is not None:
                 scoring_config = build_scoring_config(scoring_config, profile, engine_cfg)
             _score_reporter = _stage_reporter(progress_callback, stats, "score", len(filtered_jobs))
+            weak_penalties = {jid: weak_evidence_penalty([f.severity for f in flags], scoring_config)
+                              for jid, flags in weak_flags_by_job.items()}
+            recorder.observe_weak_flags(filtered_jobs, weak_flags_by_job, weak_penalties)
             scored_with_breakdown = score_jobs_with_breakdown(
                 filtered_jobs, scoring_config, gate_results=gate_results,
-                progress_callback=lambda p, _t: _score_reporter(p),
+                progress_callback=lambda p, _t: _score_reporter(p), weak_penalties=weak_penalties,
             )
         else:
             logger.warning("Scoring config not found, using default score 0.5")
@@ -1426,6 +1437,8 @@ def run_pipeline(
                 personal_adjustment=shadow_adjustments.get(job.id) if shadow_version else None,
                 personal_model_version=shadow_version,
                 visible_position=visible_positions.get(job.id),
+                weak_flags=[f.as_dict() for f in weak_flags_by_job.get(job.id, [])],
+                weak_penalty=weak_penalties.get(job.id, 0.0),
             ))
 
         recorder.finalize(scored_job_records)

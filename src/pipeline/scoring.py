@@ -835,6 +835,7 @@ def _apply_weights(
     config: dict[str, Any],
     is_top_preferred_location: bool = False,
     location_bonus: float | None = None,
+    weak_penalty: float = 0.0,
 ) -> float:
     """Combine the 5 factor scores into a single 0-1 score.
 
@@ -855,6 +856,9 @@ def _apply_weights(
 
     ``location_bonus``, when given, is the bonus itself (``_location_bonus``, which also
     covers the distance model) and replaces the ``is_top_preferred_location`` flag.
+
+    ``weak_penalty`` (ADR 0019 v5 AD-2b, ``weak_evidence_penalty``) is subtracted after the bonus
+    and before the gates, so a gate still bounds the result.
     """
     weights = _scoring_weights(config)
     total = sum(weights.values())
@@ -867,6 +871,8 @@ def _apply_weights(
             _get_float(config, "scoring.gates.top_location_bonus", 0.08) if is_top_preferred_location else 0.0)
     if location_bonus:
         base = base + location_bonus
+    if weak_penalty:
+        base = base - weak_penalty
 
     if _domain_gate_fired(factors, config):
         domain_cap = _get_float(config, "scoring.gates.domain_cap", 0.40)
@@ -994,8 +1000,18 @@ def _apply_gate_and_language_penalties(
     return min(max(raw, 0.0), 1.0)
 
 
+def weak_evidence_penalty(severities: list[float], config: dict[str, Any]) -> float:
+    """Penalty of a job's weak flags: ``penalty_per_flag`` x severity each, at most
+    ``penalty_total_max`` (``scoring.weak_evidence`` in scoring.yaml; 0.10 and 0.25)."""
+    if not severities:
+        return 0.0
+    per = _get_float(config, "scoring.weak_evidence.penalty_per_flag", 0.10)
+    cap = _get_float(config, "scoring.weak_evidence.penalty_total_max", 0.25)
+    return min(cap, sum(per * max(0.0, min(1.0, s)) for s in severities))
+
+
 def score_job(
-    job: Job, config: dict[str, Any], gate_result: GateResult | None = None
+    job: Job, config: dict[str, Any], gate_result: GateResult | None = None, weak_penalty: float = 0.0
 ) -> float:
     """Compute a deterministic score for a single job (0.0 to 1.0).
 
@@ -1005,7 +1021,7 @@ def score_job(
     """
     raw = _apply_weights(
         _compute_factors(job, config, gate_result), config,
-        location_bonus=_location_bonus(job, config),
+        location_bonus=_location_bonus(job, config), weak_penalty=weak_penalty,
     )
     return _apply_gate_and_language_penalties(raw, job, config, gate_result)
 
@@ -1030,6 +1046,8 @@ class ScoreExplanation:
     location_match: dict[str, Any] | None  # the resolved location preference, if any
     # Distance model only (location_distance.describe): place, road km, remote eligibility.
     location_detail: dict[str, Any] | None = None
+    # ADR 0019 v5 AD-2b: subtracted with the bonus, before the gates (0.0 without weak flags).
+    weak_penalty: float = 0.0
 
 
 def explain_score(
@@ -1037,6 +1055,7 @@ def explain_score(
     config: dict[str, Any],
     gate_result: GateResult | None = None,
     factors: dict[str, float] | None = None,
+    weak_penalty: float = 0.0,
 ) -> ScoreExplanation:
     """Decompose ``score_job`` into its parts. Reuses the very helpers ``score_job`` calls, so
     ``composite``/``final`` equal what production computes (asserted by tests); ``factors`` may be
@@ -1049,9 +1068,9 @@ def explain_score(
     base = sum(factors[k] * weights[k] for k in factors) / total if total else None
     domain_fired = _domain_gate_fired(factors, config)
     seniority_fired = _seniority_gate_fired(factors)
-    composite = _apply_weights(factors, config, location_bonus=location_bonus)
+    composite = _apply_weights(factors, config, location_bonus=location_bonus, weak_penalty=weak_penalty)
     bonus = location_bonus if total else 0.0
-    pre_gate = None if base is None else base + bonus
+    pre_gate = None if base is None else base + bonus - weak_penalty
     cap = _get_float(config, "scoring.gates.domain_cap", 0.40)
     final = _apply_gate_and_language_penalties(composite, job, config, gate_result)
     prefs = config.get("scoring", {}).get("location_fit", {}).get("location_preferences") or []
@@ -1080,7 +1099,7 @@ def explain_score(
             "experience": gate_result.experience_penalty if gate_result else 0.0,
             "language": _detect_language_penalty(job, config),
         },
-        final=final, location_match=match, location_detail=detail,
+        final=final, location_match=match, location_detail=detail, weak_penalty=weak_penalty if total else 0.0,
     )
 
 
@@ -1109,6 +1128,7 @@ def score_jobs_with_breakdown(
     config: dict[str, Any],
     gate_results: dict[str, GateResult] | None = None,
     progress_callback: Callable[[int, int], None] | None = None,
+    weak_penalties: dict[str, float] | None = None,
 ) -> list[tuple[Job, float, dict[str, float]]]:
     """Score all jobs, returning (job, score, factor_breakdown) sorted by score (descending).
 
@@ -1122,14 +1142,18 @@ def score_jobs_with_breakdown(
     ``progress_callback``, if given, is called ``(processed, total)`` after
     each job is scored (before the final sort) — purely observational,
     never affects any score.
+
+    ``weak_penalties`` maps job.id -> ``weak_evidence_penalty`` (ADR 0019 v5 AD-2b); missing = 0.
     """
     gate_results = gate_results or {}
+    weak_penalties = weak_penalties or {}
     result: list[tuple[Job, float, dict[str, float]]] = []
     total = len(jobs)
     for i, job in enumerate(jobs, start=1):
         gate_result = gate_results.get(job.id)
         factors = _compute_factors(job, config, gate_result)
-        raw = _apply_weights(factors, config, location_bonus=_location_bonus(job, config))
+        raw = _apply_weights(factors, config, location_bonus=_location_bonus(job, config),
+                             weak_penalty=weak_penalties.get(job.id, 0.0))
         score = _apply_gate_and_language_penalties(raw, job, config, gate_result)
         result.append((job, score, factors))
         if progress_callback is not None:

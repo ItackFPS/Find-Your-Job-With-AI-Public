@@ -197,6 +197,25 @@ class DecisionRecorder:
                 self._reject(d, "filter")
 
     @_safe
+    def observe_weak_flags(self, jobs_in: list[Any], weak_flags: dict[str, list[Any]],
+                           penalties: dict[str, float]) -> None:
+        """WEAK violations that ranked instead of rejecting (ADR 0019 v5 AD-2b, L5.2)."""
+        for job in jobs_in:
+            flags = weak_flags.get(job.id)
+            if not flags:
+                continue
+            with self._job_guard(job):
+                d = self._draft(job)
+                d.signals["weak_penalty"] = penalties.get(job.id, 0.0)
+                d.signals["weak_flags"] = [f.as_dict() for f in flags]
+                for f in flags:
+                    d.evidence.append(EvidenceItem(
+                        dimension=ev.FILTER_DIMENSION.get(f.code, "other"), polarity="negative", state="violated",
+                        source=SourceRef(stage="filter", rule_id=f"filter.{f.code}", evidence_source="rule"),
+                        message=f"Weak evidence, ranked instead of rejected: {f.code}",
+                        observed=f.observed, expected=f.expected, strength="weak"))
+
+    @_safe
     def observe_gate(self, jobs_in: list[Any], gate_results: dict[str, Any]) -> None:
         for job in jobs_in:
             with self._job_guard(job):
@@ -405,13 +424,16 @@ class DecisionRecorder:
         evidence = list(d.evidence)
         if outcome == "accepted":
             if self._filter_config is not None and self.config.record_passing_filter_evidence:
-                evidence.extend(ev.filter_pass_items(job, self._filter_config, self._filter_expected))
+                flagged = {f"filter.{f['code']}" for f in d.signals.get("weak_flags", [])}
+                evidence.extend(i for i in ev.filter_pass_items(job, self._filter_config, self._filter_expected)
+                                if i.source.rule_id not in flagged)
             if self._scoring_config:
                 try:
                     from src.pipeline.scoring import explain_score
 
                     expl = explain_score(job, self._scoring_config, self._gate_results.get(job_id),
-                                         factors=d.signals.get("factors"))
+                                         factors=d.signals.get("factors"),
+                                         weak_penalty=d.signals.get("weak_penalty", 0.0))
                     stored = fit if fit is not None else d.signals.get("deterministic_score")
                     if stored is not None and abs(expl.final - stored) > 1e-9:
                         # the explanation must be the stored score; if it is not, say so instead of misleading
@@ -426,7 +448,7 @@ class DecisionRecorder:
                             "domain_cap": expl.domain_cap, "domain_cap_applied": expl.domain_cap_applied,
                             "seniority_multiplier": expl.seniority_multiplier, "composite": expl.composite,
                             "penalties": expl.penalties, "final": expl.final, "location_match": expl.location_match,
-                            "location_detail": expl.location_detail}
+                            "location_detail": expl.location_detail, "weak_penalty": expl.weak_penalty}
                 except Exception as exc:  # noqa: BLE001 — the record is still written, without score evidence
                     self._skipped += 1
                     logger.warning("Score explanation skipped for job %s (non-fatal): %s", job_id, exc)

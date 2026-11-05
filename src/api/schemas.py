@@ -298,6 +298,10 @@ class ScoreBreakdownOut(BaseModel):
     final_score: float | None = None
     factors: dict[str, float] = {}
     run_id: str | None = None
+    # ADR 0019 v5 AD-2b (L5.2): WEAK hard-filter violations that ranked instead of rejecting
+    # ({code, observed, expected, severity}) and the penalty they cost; empty / 0.0 otherwise.
+    weak_flags: list[dict[str, Any]] = []
+    weak_penalty: float = 0.0
     # Phase 5 (2026-09-10): expose the same canonical tier every notification
     # channel already uses (src.pipeline.scoring.score_to_tier), so the
     # dashboard/frontend never needs its own copy of the tier thresholds.
