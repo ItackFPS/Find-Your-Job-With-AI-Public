@@ -1282,6 +1282,21 @@
       "resetDone": "L’apprentissage a été réinitialisé.",
       "lastReset": "Dernière réinitialisation : {date}",
       "failed": "La modification n’a pas pu être enregistrée."
+    },
+    "erase": {
+      "title": "Effacer mon activité",
+      "subtitle": "Supprimer ce que vous avez fait dans l’application et tout ce qui en a été appris. Les offres restent.",
+      "help": "Supprime vos offres enregistrées, masquées et vues, vos réponses, ce que l’application en a appris et les anciennes sauvegardes de la base. Aucune sauvegarde n’est faite avant.",
+      "keepTracker": "Conserver mon suivi de candidatures",
+      "eraseCalibration": "Effacer aussi mes réponses de calibration",
+      "action": "Effacer mon activité",
+      "confirm": "Effacer votre activité ? C’est irréversible.",
+      "confirmYes": "Effacer",
+      "running": "Effacement en cours… (étape : {step}). Les modifications sont refusées jusqu’à la fin.",
+      "blocked": "L’effacement est en pause : {reason}. Fermez tout autre programme qui utilise le dossier de données, puis réessayez.",
+      "retry": "Reprendre l’effacement",
+      "complete": "Effacement terminé ({date}) : toutes les vérifications sont passées.",
+      "failed": "L’effacement n’a pas pu démarrer."
     }
   },
   "saveHide": {

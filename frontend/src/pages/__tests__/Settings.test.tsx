@@ -90,6 +90,9 @@ beforeEach(() => {
     'GET /privacy/learning': { paused: false, reset_at: null },
     'PUT /privacy/learning/pause': { paused: true, reset_at: null },
     'POST /privacy/learning/reset': { paused: false, reset_at: '2026-11-05T10:00:00+00:00', cleared: {} },
+    'GET /privacy/erase': { state: null, pending: false, running: false },
+    'POST /privacy/erase': { state: 'COMPLETE', pending: false, running: false, completed_at: '2026-11-05T11:00:00+00:00' },
+    'POST /privacy/erase/retry': { state: 'COMPLETE', pending: false, running: false, completed_at: '2026-11-05T11:00:00+00:00' },
     'POST /sources/remoteok/breaker/reset': { source: 'remoteok', consecutive_failures: 0, paused: false, paused_until: null, last_failure_reason: null },
   }
 })
@@ -192,6 +195,31 @@ describe('Settings › Sources and background', () => {
     const dialog = screen.getByRole('alertdialog', { name: 'Reset learning' })
     await userEvent.click(within(dialog).getByRole('button', { name: 'Reset' }))
     expect(calls).toContainEqual({ method: 'POST', url: '/privacy/learning/reset', body: { confirm: true } })
+  })
+
+  it('erases activity only after a confirmation, with the chosen options', async () => {
+    renderPage()
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Keep my application tracker' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Erase my activity' }))
+    expect(calls.some(c => c.method === 'POST' && c.url === '/privacy/erase')).toBe(false)
+    const dialog = screen.getByRole('alertdialog', { name: 'Erase my activity' })
+    routes['GET /privacy/erase'] = routes['POST /privacy/erase']
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Erase' }))
+    expect(calls).toContainEqual({
+      method: 'POST', url: '/privacy/erase', body: { confirm: true, keep_tracker: true, erase_calibration: true },
+    })
+    expect(await screen.findByText(/Erasure complete/)).toBeInTheDocument()
+  })
+
+  it('shows a blocked erasure and retries it', async () => {
+    routes['GET /privacy/erase'] = {
+      state: 'BLOCKED', pending: true, running: false, last_state: 'WAL_TRUNCATED', last_error: 'file_locked: jobs-1.db',
+    }
+    renderPage()
+    expect(await screen.findByText(/file_locked: jobs-1.db/)).toBeInTheDocument()
+    expect(screen.queryByText(/Erasure complete/)).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Retry the erasure' }))
+    expect(calls).toContainEqual({ method: 'POST', url: '/privacy/erase/retry', body: undefined })
   })
 
   it('reports a section that cannot load', async () => {
