@@ -107,6 +107,16 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
     )
     db_path = application.state.db_path
     config_dir = application.state.config_dir
+
+    # -- Pending "Delete all": checked first, before any database is opened or created (ADR 0015) --
+    from src.privacy import delete_all
+    if delete_all.pending(Path(db_path).parent):
+        st = delete_all.run(Path(db_path).parent)
+        if delete_all.pending(Path(db_path).parent):
+            logger.error("Delete all still pending (%s): starting nothing else.", (st or {}).get("last_error"))
+            application.state.delete_all_blocked = True
+            yield
+            return
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
     # Bind the running event loop so PipelineRunner (on its background
@@ -328,12 +338,33 @@ async def erasure_generation_header(request: Request, call_next):  # type: ignor
     """Every API response carries ``X-Erasure-Generation: <data_epoch>:<generation>`` (ADR 0015), so
     the client stamps each action with the generation it held when the user acted."""
     response = await call_next(request)
-    if request.url.path.startswith("/api/") and request.url.path != "/api/health":
+    if (request.url.path.startswith("/api/") and request.url.path != "/api/health"
+            and not _delete_all_active(request.app)):
         try:
             response.headers[app_state.HEADER] = app_state.current(request.app.state.db_path).token
         except Exception:  # noqa: BLE001 — a header must never break a response
             pass
     return response
+
+
+def _delete_all_active(application: FastAPI) -> bool:
+    """A "Delete all" is pending, blocked, or done and awaiting a restart: nothing may open the database."""
+    from src.privacy import delete_all
+    return (bool(getattr(application.state, "restart_required", False))
+            or bool(getattr(application.state, "delete_all_blocked", False))
+            or delete_all.pending(Path(application.state.db_path).parent))
+
+
+async def delete_all_lock(request: Request, call_next):  # type: ignore[no-untyped-def]
+    """While "Delete all" runs, or once it finished and the app awaits a restart, every API call but
+    its own status and the health check is refused, so nothing recreates the database."""
+    path = request.url.path
+    if (path.startswith("/api/") and path != "/api/health" and not path.startswith("/api/privacy/delete-all")
+            and _delete_all_active(request.app)):
+        if getattr(request.app.state, "restart_required", False):
+            return JSONResponse(status_code=503, content={"detail": "restart_required"})
+        return JSONResponse(status_code=423, content={"detail": "delete_all_running"})
+    return await call_next(request)
 
 
 async def erasure_write_lock(request: Request, call_next):  # type: ignore[no-untyped-def]
@@ -351,6 +382,7 @@ async def erasure_write_lock(request: Request, call_next):  # type: ignore[no-un
 # Innermost (registered first): the security guards below stay outermost.
 app.middleware("http")(erasure_write_lock)
 app.middleware("http")(erasure_generation_header)
+app.middleware("http")(delete_all_lock)
 
 # CORS: allow the Vite dev server to reach the API in dev mode.
 app.add_middleware(

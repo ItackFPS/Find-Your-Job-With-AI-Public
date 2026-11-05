@@ -27,3 +27,10 @@ export function getOutbox(): Promise<Outbox> {
 export function resetOutbox(): void {
   instance = null
 }
+
+/** "Delete all" finished (ADR 0015): drop the outbox database and this browser's local storage. */
+export function clearLocalData(): void {
+  instance = null
+  try { globalThis.indexedDB?.deleteDatabase('fyj-outbox') } catch { /* unavailable */ }
+  try { globalThis.localStorage?.clear() } catch { /* blocked */ }
+}

@@ -1283,6 +1283,19 @@
       "lastReset": "Last reset: {date}",
       "failed": "The change could not be saved."
     },
+    "deleteAll": {
+      "title": "Delete all application data",
+      "subtitle": "Everything the app stored on this computer. It then starts as on its first run.",
+      "help": "Deletes the database, its backups, calibration answers, laboratory files, your profile and the logs. Offers are deleted too. Default settings shipped with the app stay.",
+      "action": "Delete all application data",
+      "confirm": "Delete everything the app stored? This cannot be undone.",
+      "confirmYes": "Delete everything",
+      "running": "Deleting… The app is unavailable until it ends.",
+      "blocked": "The deletion is not finished: {reason}. Close the application and start it again: it resumes at startup. Or retry now.",
+      "retry": "Retry the deletion",
+      "complete": "All application data was deleted. Close the application and start it again.",
+      "failed": "The deletion could not be started."
+    },
     "erase": {
       "title": "Erase my activity",
       "subtitle": "Delete what you did in the app and everything learned from it. Offers stay.",
