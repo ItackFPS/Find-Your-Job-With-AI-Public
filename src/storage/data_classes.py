@@ -33,6 +33,7 @@ JOBS_DB_TABLES: dict[str, DataClass] = {
     "feedback_events": "personal",          # explicit, behaviour, outcome journal (ADR 0009)
     "outcome_events": "personal",           # legacy outcome tracking (viewed, apply link, status)
     "job_feedback": "personal",             # legacy personalization feedback (and its bridge rows)
+    "exposure_log": "personal",             # visible exposures (ADR 0016)
     # -- derived from personal data
     "personalization_score_cache": "derived",
     # -- control

@@ -708,6 +708,17 @@ class Storage:
         row = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
         return Job.from_dict(dict(row)) if row is not None else None
 
+    def get_content_hashes(self, job_ids: list[str]) -> set[str]:
+        """Content hashes of these offers (exact-duplicate detection, ADR 0017)."""
+        out: set[str] = set()
+        conn = self._get_conn()
+        for i in range(0, len(job_ids), 500):
+            chunk = job_ids[i : i + 500]
+            out.update(r[0] for r in conn.execute(
+                f"SELECT content_hash FROM jobs WHERE id IN ({','.join('?' * len(chunk))}) AND content_hash IS NOT NULL",
+                chunk))
+        return out
+
     def get_jobs_by_ids(self, job_ids: list[str]) -> dict[str, Job]:
         """Batch-fetch jobs by id, returning a dict keyed by id (missing ids omitted).
 

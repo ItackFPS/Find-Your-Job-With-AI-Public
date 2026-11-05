@@ -29,3 +29,13 @@ Each slice is committed green and merged before the next starts (K1). Frontend c
   the log lint does not forbid them; it forbids notes and reason lists. A profile free-text field
   (v2 summary, CV import) must be added to the lint when it exists.
 - Calibration answers are files under `<data>/calibration/` (`PERSONAL_FILE_GLOBS`), not tables.
+
+## Notes from L1.2–L1.3
+- The generation header middleware is registered first (innermost); the security guards stay
+  outermost (`tests/test_api_peer_guard.py`).
+- `GET /api/jobs` leaves hidden offers out by default (`include_hidden=true` lists them, flagged), and
+  with them every stored offer with the same `content_hash` (exact duplicates, ADR 0017). The FTS
+  search obeys the same rule. `saved_only=true` lists saved offers whatever the run.
+- `POST /api/jobs/feedback/exposure` stores a visible-exposure batch (≤ 200 items) only with the
+  current generation token; otherwise it answers `{"stored": 0}`. Retention runs at most once a day
+  per database from that endpoint.

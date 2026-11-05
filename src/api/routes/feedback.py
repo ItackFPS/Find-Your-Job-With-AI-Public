@@ -17,6 +17,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from src.feedback.exposure import MAX_BATCH, ExposureItem, ExposureStorage
 from src.feedback.models import ALLOWED_REASONS, CANONICAL_STATUSES, EXPLICIT_TYPES, LIST_TYPES, REASONS
 from src.feedback.service import Delivery, FeedbackError, FeedbackService
 from src.feedback.storage import FeedbackStorage
@@ -59,6 +60,46 @@ class FeedbackOut(BaseModel):
     client_event_id: str | None = None
     generation: int | None = None
     superseded: bool = False
+
+
+class ExposureItemIn(BaseModel):
+    job_id: str = Field(max_length=200)
+    surface: str = Field(max_length=40)
+    position: int | None = Field(default=None, ge=0)
+    visible_ms: int | None = Field(default=None, ge=0)
+    sort_key: str | None = Field(default=None, max_length=40)
+    randomized: bool = False
+    client_created_at: str | None = Field(default=None, max_length=40)
+
+
+class ExposureBatchIn(BaseModel):
+    generation: str | None = Field(default=None, max_length=80)
+    session_id: str | None = Field(default=None, max_length=64)
+    items: list[ExposureItemIn] = Field(default_factory=list, max_length=MAX_BATCH)
+
+
+_RETENTION_DONE: dict[str, str] = {}
+
+
+@router.post("/feedback/exposure")
+def record_exposure(body: ExposureBatchIn, request: Request) -> dict[str, int]:
+    """Best-effort batch of visible exposures (ADR 0016). A missing or stale generation drops the
+    batch silently ("stored": 0); retention runs at most once a day per database."""
+    from datetime import UTC, datetime
+
+    db = request.app.state.db_path
+    store = ExposureStorage(db)
+    try:
+        store.init_db()
+        stored = store.record_batch(body.generation, body.session_id, [
+            ExposureItem(**i.model_dump()) for i in body.items])
+        today = datetime.now(UTC).date().isoformat()
+        if _RETENTION_DONE.get(db) != today:
+            store.apply_retention()
+            _RETENTION_DONE[db] = today
+    finally:
+        store.close()
+    return {"stored": stored}
 
 
 class ListStateOut(BaseModel):

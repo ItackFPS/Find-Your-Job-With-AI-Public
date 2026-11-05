@@ -276,6 +276,10 @@ def list_jobs(
     include_expired: bool = Query(
         default=False, description="Also list offers marked expired (issue #86); hidden by default.",
     ),
+    include_hidden: bool = Query(
+        default=False, description="Also list offers the user hides (ADR 0017); left out by default.",
+    ),
+    saved_only: bool = Query(default=False, description="Only the offers the user saved, whatever the run."),
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> list[JobDetailOut]:
@@ -309,11 +313,25 @@ def list_jobs(
                 )
             ]
 
+
+        # Save / Hide (ADR 0016, ADR 0017). A hidden offer leaves every list with its exact
+        # duplicates (same content hash); the saved view lists saved offers from any run.
+        list_state = _list_state(request)
+        hidden_ids = {j for j, st in list_state.items() if st["hidden"]}
+        if saved_only:
+            saved = {j for j, st in list_state.items() if st["saved"]}
+            in_run = [j for j in (run_job_ids or []) if j in saved]
+            run_job_ids = in_run + sorted(saved - set(in_run))
+        exclude_hashes = set() if include_hidden else s.get_content_hashes(sorted(hidden_ids))
+        exclude_ids = set() if include_hidden else hidden_ids
+
         if q:
             # FTS prefix search: fetch up to 2000 matches then apply all
             # filters in Python so that source/country/remote/department
             # combine correctly with the text search.
             fts_matches = s.search_jobs(q, limit=2000)
+            fts_matches = [j for j in fts_matches
+                           if j.id not in exclude_ids and j.content_hash not in exclude_hashes]
             # Intersect with latest-run scope.
             if run_job_ids is not None:
                 run_id_set = set(run_job_ids)
@@ -361,6 +379,8 @@ def list_jobs(
                     offset=0,
                     job_ids=run_job_ids,
                     include_expired=include_expired,
+                    exclude_ids=exclude_ids,
+                    exclude_hashes=exclude_hashes,
                 )
                 if department is not None:
                     from src.pipeline.departments import extract_department_code
@@ -375,6 +395,7 @@ def list_jobs(
                     raw = _get_jobs_filtered(
                         s, source=source, country=country, remote=remote,
                         limit=5000, offset=0, include_expired=include_expired,
+                        exclude_ids=exclude_ids, exclude_hashes=exclude_hashes,
                     )
                     from src.pipeline.departments import extract_department_code
                     filtered = [
@@ -386,6 +407,7 @@ def list_jobs(
                     jobs = _get_jobs_filtered(
                         s, source=source, country=country, remote=remote,
                         limit=limit, offset=offset, include_expired=include_expired,
+                        exclude_ids=exclude_ids, exclude_hashes=exclude_hashes,
                     )
 
         # Batch-fetch scores in one query instead of N individual lookups.
@@ -395,6 +417,9 @@ def list_jobs(
         result: list[JobDetailOut] = []
         for job in jobs:
             job_out = _job_to_job_detail_out(job, scores_by_id.get(job.id))
+            st = list_state.get(job.id)
+            if st:
+                job_out.saved, job_out.hidden = st["saved"], st["hidden"]
             result.append(job_out)
 
         # When a text search is active, preserve FTS BM25 relevance order.
@@ -593,6 +618,9 @@ def get_job(job_id: str, request: Request) -> JobDetailOut:
             raise HTTPException(status_code=404, detail="Job not found")
         score_row = rs.get_job_latest_score(job_id)
         out = _job_to_job_detail_out(job, score_row)
+        st = _list_state(request, [job_id]).get(job_id)
+        if st:
+            out.saved, out.hidden = st["saved"], st["hidden"]
         try:
             out.provenance = [ProvenanceOut(**p) for p in s.get_provenance([job_id]).get(job_id, [])]
         except Exception as exc:  # noqa: BLE001 — the offer is shown even without its sightings
@@ -897,6 +925,21 @@ def _load_personalization_explanation_safe(
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _list_state(request: Request, job_ids: list[str] | None = None) -> dict[str, dict[str, bool]]:
+    """Save / Hide state per offer; empty (never an error) when the journal cannot be read."""
+    from src.feedback.storage import FeedbackStorage
+
+    store = FeedbackStorage(request.app.state.db_path)
+    try:
+        store.init_db()
+        return store.list_state(job_ids)
+    except Exception as exc:  # noqa: BLE001 — listing offers never fails on the journal
+        logger.warning("Save/Hide state unavailable: %s", exc)
+        return {}
+    finally:
+        store.close()
+
+
 def _get_jobs_filtered(
     storage: Storage,
     source: str | None = None,
@@ -906,6 +949,8 @@ def _get_jobs_filtered(
     offset: int = 0,
     job_ids: list[str] | None = None,
     include_expired: bool = True,
+    exclude_ids: set[str] | None = None,
+    exclude_hashes: set[str] | None = None,
 ) -> list:
     """Filtered job query via SQLite. Builds a WHERE clause from the params.
 
@@ -943,6 +988,12 @@ def _get_jobs_filtered(
         params.append(1 if remote else 0)
     if not include_expired:
         conditions.append("status != 'expired'")
+    if exclude_ids:
+        conditions.append(f"id NOT IN ({','.join('?' * len(exclude_ids))})")
+        params.extend(sorted(exclude_ids))
+    if exclude_hashes:
+        conditions.append(f"(content_hash IS NULL OR content_hash NOT IN ({','.join('?' * len(exclude_hashes))}))")
+        params.extend(sorted(exclude_hashes))
 
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
