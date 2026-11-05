@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { listJobs, listDecouverte, getAllDepartments, getJobCountries, getProfile, type Job, type CountryFacet, type LocationPreference } from '../api/client'
+import { listJobs, listDecouverte, listOutsideCriteria, getAllDepartments, getJobCountries, getProfile, type Job, type CountryFacet, type LocationPreference } from '../api/client'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Chip, EmptyState, LoadingState, Ring } from '../components'
@@ -243,6 +243,19 @@ const PAGE = 50
 // only, switched off via the "Min tier" select below, never a data change).
 const DEFAULT_MIN_TIER = 'relevant'
 
+// Literal keys keep the catalogue check able to see them.
+function missedCriterion(t: (key: string) => string, code: string): string {
+  switch (code) {
+    case 'published_age': return t('outsideCriteria.published_age')
+    case 'seniority': return t('outsideCriteria.seniority')
+    case 'title_keywords': return t('outsideCriteria.title_keywords')
+    case 'contract_type': return t('outsideCriteria.contract_type')
+    case 'work_mode': return t('outsideCriteria.work_mode')
+    case 'distance': return t('outsideCriteria.distance')
+    default: return t('outsideCriteria.other')
+  }
+}
+
 export default function Jobs() {
   const { t } = useTranslation()
   const [country, setCountry] = useState('')
@@ -254,6 +267,7 @@ export default function Jobs() {
   const [savedOnly, setSavedOnly] = useState(false)
   const track = useVisibleExposure('jobs')
   const trackS4 = useVisibleExposure('decouverte', undefined, true)
+  const trackOutside = useVisibleExposure('outside_criteria')
   const [minTier, setMinTier] = useState(DEFAULT_MIN_TIER)
   const [q, setQ] = useState('')         // debounced value sent to API
   const [inputQ, setInputQ] = useState('') // immediate input value
@@ -317,6 +331,12 @@ export default function Jobs() {
   const { data: decouverte } = useQuery({
     queryKey: ['jobs-decouverte'],
     queryFn: listDecouverte,
+    enabled: showDecouverte,
+  })
+  // Weak-evidence lane (ADR 0019 v5 AD-2b): collapsed, never notifies; empty while every check rejects.
+  const { data: outside } = useQuery({
+    queryKey: ['jobs-outside-criteria'],
+    queryFn: listOutsideCriteria,
     enabled: showDecouverte,
   })
 
@@ -471,6 +491,30 @@ export default function Jobs() {
             />
           ))}
         </section>
+      )}
+
+      {showDecouverte && outside && outside.length > 0 && (
+        <details data-testid="outside-criteria" style={{ marginBottom: '1.25rem' }}>
+          <summary style={{ cursor: 'pointer', fontWeight: 600 }}>{t('outsideCriteria.title', { count: outside.length })}</summary>
+          <p style={{ fontSize: '0.82rem', color: 'var(--color-muted)', margin: '0.4rem 0 0.6rem' }}>{t('outsideCriteria.hint')}</p>
+          {outside.map((job, i) => (
+            <div key={job.id}>
+              <p style={{ fontSize: '0.82rem', margin: '0 0 0.25rem' }} data-testid="outside-criteria-misses">
+                {t('outsideCriteria.misses', {
+                  criteria: (job.score?.weak_flags ?? []).map(f => missedCriterion(t, f.code)).join(', ') || t('outsideCriteria.other'),
+                })}
+              </p>
+              <JobCard
+                job={job}
+                position={i}
+                trackRef={trackOutside(job.id, i)}
+                targetSkills={targetSkills}
+                locationPreferences={locationPreferences}
+                departmentNames={departmentNames}
+              />
+            </div>
+          ))}
+        </details>
       )}
 
       {jobs && jobs.length === 0 && (

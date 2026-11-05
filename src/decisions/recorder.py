@@ -414,7 +414,7 @@ class DecisionRecorder:
                 exposure = Exposure(
                     rank=rank, final_score=rec.final_score, deterministic_score=rec.deterministic_score,
                     semantic_score=rec.semantic_score, personalization_adjustment=rec.personalization_adjustment,
-                    tier=score_to_tier(round(rec.final_score * 100)))
+                    tier=score_to_tier(round(rec.final_score * 100)), lane=getattr(rec, "lane", None))
                 fit = rec.deterministic_score
                 trace.append(StageTraceEntry(stage="ranking", result="pass"))
             else:

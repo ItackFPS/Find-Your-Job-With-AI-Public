@@ -159,6 +159,11 @@ scoring:
   weak_evidence:
     penalty_per_flag: 0.10
     penalty_total_max: 0.25
+    # Lanes (stage L5.3, src/pipeline/lanes.py): weak-flagged offers never enter the main list;
+    # the best of them form the collapsed "outside your criteria" lane, the rest is below_threshold.
+    outside_lane_size: 10
+    outside_score_floor: 0.60
+    outside_domain_floor: 0.7
 
   gates:
     # Fires only when domain_relevance == confirmed_wrong_score (0.05) —

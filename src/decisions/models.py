@@ -92,6 +92,8 @@ class Exposure(_Model):
     personalization_adjustment: float | None = None
     tier: str | None = None
     notified_channel: str | None = None
+    # Stage L5.3 (ADR 0019 v5 AD-2b): main | outside_criteria | below_threshold; None on older records.
+    lane: str | None = None
 
 
 class JobMeta(_Model):

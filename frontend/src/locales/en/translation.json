@@ -1360,6 +1360,18 @@
     "title": "Discovery",
     "hint": "Offers drawn at random among those that meet your strict criteria, ignoring the score. Some will fit you less well: that is intended."
   },
+  "outsideCriteria": {
+    "title": "Outside your criteria ({count})",
+    "hint": "Good matches that miss one of your criteria on weak evidence (a title word, the offer's age...). Your strict criteria still exclude offers.",
+    "misses": "Misses: {criteria}",
+    "published_age": "older than your limit",
+    "seniority": "a seniority word in the title",
+    "title_keywords": "title outside your target roles",
+    "contract_type": "contract type named in the title",
+    "work_mode": "work mode may not match",
+    "distance": "beyond your distance",
+    "other": "one of your criteria"
+  },
   "saveHide": {
     "save": "Save",
     "saved": "Saved",
