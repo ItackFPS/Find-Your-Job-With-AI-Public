@@ -315,6 +315,21 @@ def dev_server_from_env(environ: Mapping[str, str] = os.environ) -> bool:
 
 ALLOWED_WEB_ORIGINS: tuple[str, ...] = allowed_web_origins(same_user_only(), dev_server_from_env())
 
+async def erasure_generation_header(request: Request, call_next):  # type: ignore[no-untyped-def]
+    """Every API response carries ``X-Erasure-Generation: <data_epoch>:<generation>`` (ADR 0015), so
+    the client stamps each action with the generation it held when the user acted."""
+    response = await call_next(request)
+    if request.url.path.startswith("/api/") and request.url.path != "/api/health":
+        try:
+            response.headers[app_state.HEADER] = app_state.current(request.app.state.db_path).token
+        except Exception:  # noqa: BLE001 — a header must never break a response
+            pass
+    return response
+
+
+# Innermost (registered first): the security guards below stay outermost.
+app.middleware("http")(erasure_generation_header)
+
 # CORS: allow the Vite dev server to reach the API in dev mode.
 app.add_middleware(
     CORSMiddleware,
@@ -399,19 +414,6 @@ APP_ID = "find-your-job-with-ai"
 # The launcher's instance token (src/launcher/core.py). Taken out of the environment at import so
 # nothing this process starts inherits it; never logged.
 _INSTANCE_TOKEN = os.environ.pop(INSTANCE_TOKEN_ENV, "")
-
-
-@app.middleware("http")
-async def erasure_generation_header(request: Request, call_next):  # type: ignore[no-untyped-def]
-    """Every API response carries ``X-Erasure-Generation: <data_epoch>:<generation>`` (ADR 0015), so
-    the client stamps each action with the generation it held when the user acted."""
-    response = await call_next(request)
-    if request.url.path.startswith("/api/") and request.url.path != "/api/health":
-        try:
-            response.headers[app_state.HEADER] = app_state.current(request.app.state.db_path).token
-        except Exception:  # noqa: BLE001 — a header must never break a response
-            pass
-    return response
 
 
 @app.get("/api/session")
