@@ -1005,7 +1005,7 @@ def _get_jobs_filtered(
         sql = f"SELECT * FROM jobs {where}"
         rows = conn.execute(sql, params).fetchall()
         jobs = [Job.from_dict(dict(r)) for r in rows]
-        # Restore the score order from job_ids (which is final_score DESC).
+        # Restore the run order from job_ids (visible positions, else final_score DESC).
         order = {jid: i for i, jid in enumerate(job_ids)}
         jobs.sort(key=lambda j: order.get(j.id, len(job_ids)))
         return jobs

@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -326,3 +326,40 @@ def resume(db_path: str | Path, now: datetime | None = None) -> bool:
         return cur.rowcount == 1
     finally:
         conn.close()
+
+
+def pause(db_path: str | Path, reason: str, now: datetime | None = None) -> bool:
+    """Guardrail failure during a run (fault injection): ACTIVE/EXPERIMENTAL → PAUSED at once, so the
+    next run uses production. → False when there was nothing to pause."""
+    now = now or datetime.now(UTC)
+    conn = sqlite3.connect(str(db_path))
+    try:
+        ensure_schema(conn)
+        with conn:
+            cur = conn.execute("UPDATE personal_health SET state = ?, state_since = ?, last_event = ?, updated_at = ? "
+                               "WHERE id = 1 AND state IN (?, ?)",
+                               (G.PAUSED, now.isoformat(timespec="seconds"), f"paused:{reason}",
+                                now.isoformat(timespec="seconds"), G.ACTIVE, G.EXPERIMENTAL))
+        return cur.rowcount == 1
+    finally:
+        conn.close()
+
+
+def visible_ranking(production: Sequence[tuple[Any, float]], adjustments: dict[str, float], record: dict[str, Any],
+                    gate_cap: Callable[[list[tuple[Any, float]], list[tuple[Any, float]]], list[tuple[Any, float]]],
+                    ) -> list[tuple[Any, float]] | None:
+    """The ranking the user sees (stage L4.2) → None means production.
+
+    Only an ACTIVE record with the activation flag on changes it: the challenger adjustment (already
+    within ``cap(n)``) is scaled by the monitor's ``cap_factor``, then the scoring gates are re-applied.
+    Scores in the result are ordering keys only; stored scores stay the production ones. Raises
+    ``ValueError`` when the result is not a permutation of production (a guardrail failure)."""
+    if record.get("state") != G.ACTIVE or not record.get("flags", {}).get("activation_enabled"):
+        return None
+    factor = float(record.get("cap_factor", 1.0))
+    ranked = sorted(((job, score + factor * adjustments.get(job.id, 0.0)) for job, score in production),
+                    key=lambda p: p[1], reverse=True)
+    ranked = gate_cap(list(production), ranked)
+    if sorted(job.id for job, _ in ranked) != sorted(job.id for job, _ in production):
+        raise ValueError("personal ranking is not a permutation of production")
+    return ranked
