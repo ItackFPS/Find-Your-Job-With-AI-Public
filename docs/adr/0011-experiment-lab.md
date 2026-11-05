@@ -220,3 +220,10 @@ other `config/` files are not part of a bundle and always come from `config/`; e
 not make a bundle stale. Datasets from `feedback-dataset` below the P4
 thresholds yield `insufficient_evidence`, so no candidate can currently be approved from
 synthetic data alone — by design.
+
+## Amendment (2026-11-05, ADR 0020)
+Layer-1 personal learning — the bounded per-install preference model of ADR 0018, and personal
+algorithm or config changes shipped in releases — is outside the lab's scope. It is governed by the
+shadow evaluation and health monitor of ADR 0019, not by lab experiments or `approve`. Engine
+changes (filters, scoring, evidence rules, occupation relations, knowledge-pack weights) stay under
+this ADR unchanged.
