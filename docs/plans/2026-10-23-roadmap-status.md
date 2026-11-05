@@ -38,8 +38,11 @@ the continuous-learning audit of the same day). The approval covers the directio
 and the 13 owner decisions of its §8. It approves **no parameter**: every [D] number stays an initial
 value until measured. Consequences for this record: Phase 4 is replaced by L1–L4 (AD-13); P3, P5,
 P6 and P7 keep their place, with the P7 gates AD-13 adds; L0 (ADRs 0014+, one per PR, in the v5 §10
-order, docs only) starts now. Still open inside their ADRs: v5 §8 items 14 (EXPERIMENTAL state at
-launch, ADR 6), 15 (two browser profiles, ADR 3), 16 (S4 without a score floor, ADR 6).
+order, docs only) starts now. The owner answered v5 §8 items 14–16 the same day: the EXPERIMENTAL
+state **ships disabled** and is enabled only after simulator scenarios SR-4 and SR-5 pass (ADR 6);
+conflicts between two browser profiles resolve by **server insert order**, a documented limit
+(ADR 3); the "Découverte" pool (S4) has **no score floor** (ADR 6). Testing installs use a **fresh
+separate copy** with its own empty `data/` and the example profile.
 
 ## Learning architecture stages (v5, approved 2026-11-05)
 
