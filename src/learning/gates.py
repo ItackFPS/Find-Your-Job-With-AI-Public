@@ -206,7 +206,7 @@ def evidence(positives: Sequence[Positive], params: GateParams = GateParams()) -
 def p_better(wins: int, discordant: int) -> float:
     """Exact P(win rate > 0.5) under Beta(1 + wins, 1 + losses): P(Bin(n + 1, ½) ≤ wins)."""
     n = discordant + 1
-    return sum(math.comb(n, k) for k in range(wins + 1)) / 2 ** n
+    return sum(math.comb(n, k) for k in range(wins + 1)) / math.pow(2, n)
 
 
 def p_worse(wins: int, discordant: int) -> float:
@@ -225,7 +225,8 @@ def _beta_pdf(a: float, b: float) -> np.ndarray:
     x = _GRID[1:-1]
     log = (a - 1) * np.log(x) + (b - 1) * np.log1p(-x) + math.lgamma(a + b) - math.lgamma(a) - math.lgamma(b)
     pdf = np.concatenate([[0.0], np.exp(log), [0.0]])
-    return pdf / _trapezoid(pdf, _GRID)
+    out: np.ndarray = pdf / _trapezoid(pdf, _GRID)
+    return out
 
 
 def p_less_with_margin(lb: Tally, pf: Tally, margin: float) -> float:
