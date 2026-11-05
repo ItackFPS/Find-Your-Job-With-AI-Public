@@ -91,7 +91,11 @@ def backup_database(conn: sqlite3.Connection, db_path: Path, purpose: str,
     """Copy the database to ``<folder>/backups/<name>-<UTC time>.db`` with SQLite's backup
     API, keeping the last ``BACKUPS_KEPT``, before ``purpose`` (a data migration, a
     cleanup). Returns the copy, or None after logging why it could not be made (not
-    enough free disk space, or an error)."""
+    enough free disk space, or an error). Refuses while an erasure is pending (ADR 0015): a copy
+    taken then would hold the activity being erased."""
+    if (Path(db_path).parent / "ERASURE_PENDING").exists():
+        logger.warning("Database backup before %s refused: an erasure is pending.", purpose)
+        return None
     try:
         size = db_path.stat().st_size
     except OSError as exc:

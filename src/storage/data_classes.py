@@ -39,6 +39,7 @@ JOBS_DB_TABLES: dict[str, DataClass] = {
     # -- control
     "db_migrations": "control",
     "app_state": "control",                # data epoch, erasure generation, learning switches
+    "erasure_jobs": "control",             # erasure state machine: counts, paths, checks (ADR 0015)
     # -- public: offers and what the engine computed from them
     "jobs": "public",
     "job_fts": "public",                    # FTS5 index over jobs (and its shadow tables below)
