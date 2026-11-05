@@ -76,3 +76,9 @@ personal_model:
   shrinkage: 3.0
   cap_max: 0.15
   cap_half_n: 20
+  # Release flags (ADR 0019). Both off: the activation rule is evaluated and recorded, never applied.
+  # The L3 simulator found the rule misses its criteria (docs/reports/2026-11-05-l3-simulator.md);
+  # turning activation on is the owner's decision.
+  activation:
+    activation_enabled: false
+    experimental_enabled: false

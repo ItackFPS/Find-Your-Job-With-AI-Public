@@ -38,6 +38,8 @@ JOBS_DB_TABLES: dict[str, DataClass] = {
     "personalization_score_cache": "derived",
     "personal_model_state": "derived",      # personal model summary (ADR 0018), rebuilt from the journal
     "ranking_shadow": "derived",            # production vs challenger positions per run (ADR 0019)
+    "shadow_positive": "derived",           # one anchored positive per offer, written once (ADR 0019)
+    "personal_health": "derived",           # activation state, decision and monitor (ADR 0019)
     # -- control
     "db_migrations": "control",
     "app_state": "control",                # data epoch, erasure generation, learning switches
@@ -90,6 +92,8 @@ RESET_CLEARED_TABLES: tuple[str, ...] = (
     "personalization_score_cache",
     "personal_model_state",
     "ranking_shadow",
+    "shadow_positive",
+    "personal_health",
     "job_feedback",
     "outcome_events",
 )
