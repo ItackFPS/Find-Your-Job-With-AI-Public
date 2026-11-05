@@ -32,3 +32,4 @@ is the source of truth and the ADR must be updated or superseded.
 | [0023](0023-occupation-model.md) | Offers get a ROME occupation (structured first, then a calibrated per-code classifier); similarity, transferable skills and feasibility stay separate |
 | [0024](0024-market-plane-and-salary-comparability.md) | Market figures describe the collected sample with their coverage; salaries compare only inside one comparability class |
 | [0025](0025-self-monitoring.md) | The application monitors its own pipeline with detectors and alerts; it never modifies itself silently |
+| [0026](0026-home-lanes.md) | Home shows three labelled lanes; exploration and outside-criteria offers are capped and explained |
