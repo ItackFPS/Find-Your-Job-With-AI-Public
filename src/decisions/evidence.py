@@ -17,7 +17,13 @@ from __future__ import annotations
 from typing import Any
 
 from src.decisions.models import ConflictItem, Dimension, EvidenceItem, SourceRef, SpanRef
-from src.pipeline.filter import explain_filter_checks, filter_expected, filter_observed, freshness_reference
+from src.pipeline.filter import (
+    explain_filter_checks,
+    filter_expected,
+    filter_observed,
+    freshness_reference,
+    violation_strength,
+)
 from src.pipeline.location_distance import assess
 from src.requirements.models import GateResult, HardRejectionReason
 
@@ -113,7 +119,7 @@ def filter_failure_items(
         dimension=FILTER_DIMENSION.get(code, "other"), polarity="negative", state="violated",
         source=_src("filter", f"filter.{code}", evidence="rule"),
         message=f"Rejected by hard filter: {code}", observed=filter_observed(code, job, config),
-        expected=exp.get(code))]
+        expected=exp.get(code), strength=violation_strength(code, job, config))]
     if all_failing:
         for o in explain_filter_checks(job, config):
             if not o.passed and o.code != code:
@@ -121,7 +127,7 @@ def filter_failure_items(
                     dimension=FILTER_DIMENSION.get(o.code, "other"), polarity="negative", state="violated",
                     source=_src("filter", f"filter.{o.code}", evidence="rule"),
                     message=f"Also fails hard filter: {o.code} (not the deciding check)",
-                    observed=o.observed, expected=o.expected))
+                    observed=o.observed, expected=o.expected, strength=o.strength))
     return items
 
 

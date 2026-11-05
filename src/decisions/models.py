@@ -65,6 +65,9 @@ class EvidenceItem(_Model):
     expected: str | None = None
     weight: float | None = None
     span: SpanRef | None = None
+    # Hard-filter violations only (schema 2, ADR 0019 v5 AD-2b): "strong" or "weak"; None elsewhere
+    # and on schema 1 records.
+    strength: Literal["strong", "weak"] | None = None
 
 
 class ConflictItem(_Model):
