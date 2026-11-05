@@ -40,6 +40,7 @@ JOBS_DB_TABLES: dict[str, DataClass] = {
     "ranking_shadow": "derived",            # production vs challenger positions per run (ADR 0019)
     "shadow_positive": "derived",           # one anchored positive per offer, written once (ADR 0019)
     "personal_health": "derived",           # activation state, decision and monitor (ADR 0019)
+    "s4_draw": "derived",                   # Découverte draw per run: seed, pool size, pi, slot (ADR 0019)
     # -- control
     "db_migrations": "control",
     "app_state": "control",                # data epoch, erasure generation, learning switches
@@ -94,6 +95,7 @@ RESET_CLEARED_TABLES: tuple[str, ...] = (
     "ranking_shadow",
     "shadow_positive",
     "personal_health",
+    "s4_draw",
     "job_feedback",
     "outcome_events",
 )

@@ -24,6 +24,8 @@ export interface TrackerOptions {
   now?: () => number
   isTabVisible?: () => boolean
   sortKey?: string
+  /** Découverte (S4) slots come from a random draw independent of every ranking (ADR 0019). */
+  randomized?: boolean
 }
 
 export interface IntersectionLike {
@@ -115,7 +117,7 @@ export class ExposureTracker {
         position: t.position,
         visible_ms: Math.max(MIN_VISIBLE_MS, this.now() - t.since),
         sort_key: this.opts.sortKey ?? null,
-        randomized: false,
+        randomized: this.opts.randomized ?? false,
         client_created_at: new Date().toISOString(),
       })
       t.since = null
@@ -139,13 +141,13 @@ export function sendExposure(items: ExposureItem[]): void {
 }
 
 /** Returns a stable ref-callback factory: `ref={track(job.id, index)}`. */
-export function useVisibleExposure(surface: string, sortKey?: string) {
+export function useVisibleExposure(surface: string, sortKey?: string, randomized = false) {
   const trackerRef = useRef<ExposureTracker | null>(null)
   const callbacks = useRef(new Map<string, (el: Element | null) => void>())
   const elements = useRef(new Map<string, Element>())
 
   useEffect(() => {
-    const tracker = new ExposureTracker({ surface, sortKey, send: sendExposure })
+    const tracker = new ExposureTracker({ surface, sortKey, randomized, send: sendExposure })
     trackerRef.current = tracker
     for (const [key, el] of elements.current) {
       const [jobId, pos] = splitKey(key)
@@ -161,7 +163,7 @@ export function useVisibleExposure(surface: string, sortKey?: string) {
       tracker.dispose()
       trackerRef.current = null
     }
-  }, [surface, sortKey])
+  }, [surface, sortKey, randomized])
 
   return (jobId: string, position: number) => {
     const key = `${position}\u0000${jobId}`
