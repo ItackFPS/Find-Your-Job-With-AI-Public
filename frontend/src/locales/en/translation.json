@@ -1270,5 +1270,18 @@
         "cleanup_running": "A cleanup is already running."
       }
     }
+  },
+  "saveHide": {
+    "save": "Save",
+    "saved": "Saved",
+    "hide": "Hide",
+    "unhide": "Show again",
+    "sending": "Sending…",
+    "savedOnly": "Saved offers only",
+    "hiddenCard": "Hidden: {title}",
+    "notDurable": "This browser cannot keep pending actions; keep this tab open until they are sent.",
+    "erased": "Not recorded: your activity was erased since this page loaded. Reload the page.",
+    "rejected": "Not recorded: the server refused this action.",
+    "failed": "Not recorded: something went wrong."
   }
 }

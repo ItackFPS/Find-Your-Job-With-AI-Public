@@ -1270,5 +1270,18 @@
         "cleanup_running": "Un nettoyage est déjà en cours."
       }
     }
+  },
+  "saveHide": {
+    "save": "Enregistrer",
+    "saved": "Enregistrée",
+    "hide": "Masquer",
+    "unhide": "Réafficher",
+    "sending": "Envoi…",
+    "savedOnly": "Offres enregistrées uniquement",
+    "hiddenCard": "Masquée : {title}",
+    "notDurable": "Ce navigateur ne peut pas conserver les actions en attente ; gardez cet onglet ouvert jusqu’à leur envoi.",
+    "erased": "Non enregistré : votre activité a été effacée depuis le chargement de la page. Rechargez la page.",
+    "rejected": "Non enregistré : le serveur a refusé cette action.",
+    "failed": "Non enregistré : une erreur est survenue."
   }
 }
