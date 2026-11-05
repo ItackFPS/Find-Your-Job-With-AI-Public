@@ -246,6 +246,7 @@ export function resolveFixture(path: string): unknown {
     [/^\/lab\/self-check$/, selfCheck],
     [/^\/quality\/health$/, qualityHealth],
     [/^\/quality\/jobs$/, qualityJobs],
+    [/^\/quality\/extractor-agreement$/, { status: 'no_france_travail_offers', offers: 0, limit: 2000, years_tolerance: 1, rome_coverage: { k: 0, n: 0, value: null, ci95: null }, experience: { precision: { k: 0, n: 0, value: null, ci95: null }, recall: { k: 0, n: 0, value: null, ci95: null }, disagreement: { k: 0, n: 0, value: null, ci95: null }, beginner_conflicts: 0 }, education: { precision: { k: 0, n: 0, value: null, ci95: null }, recall: { k: 0, n: 0, value: null, ci95: null }, disagreement: { k: 0, n: 0, value: null, ci95: null } } }],
     [/^\/quality\/ft-coverage$/, { status: 'no_api_offers', window_days: 7, days_with_both: 0, api_offers: 0, web_offers: 12, found_by_web: 0, share: null, ci95: null }],
     [/^\/quality\/calibration$/, { datasets: [], exports_found: [], reasons: ['location', 'other'], max_session: 30 }],
     [/^\/quality\/jobs\/[^/]+$/, qualityJobs.jobs[1]],

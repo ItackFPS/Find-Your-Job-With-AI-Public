@@ -641,6 +641,21 @@
       },
       "error": "Impossible de mesurer la couverture."
     },
+    "agreement": {
+      "title": "Lecture des exigences",
+      "subtitle": "Ce que l’application lit dans le texte des offres, comparé à ce que France Travail indique dans ses propres champs",
+      "rome": "{k} offres France Travail sur {n} portent un code métier (ROME) : {value}.",
+      "experience": "Années d’expérience",
+      "education": "Niveau de diplôme",
+      "precision": "Juste quand trouvé",
+      "recall": "Trouvé quand indiqué",
+      "rate": "{value} ({k} sur {n}, probablement entre {lo} et {hi})",
+      "noData": "pas assez d’offres",
+      "beginnerConflicts": "Offres ouvertes aux débutants mais lues comme demandant 2 ans ou plus : {count}.",
+      "rules": "Sur les {offers} offres France Travail les plus récentes. L’expérience compte comme juste à {years} an près ; le diplôme quand le niveau lu est dans la fourchette indiquée.",
+      "noOffers": "Aucune offre France Travail n’est encore enregistrée : rien à comparer.",
+      "error": "Impossible de mesurer la lecture des exigences."
+    },
     "calibration": {
       "title": "Calibrer sur vos propres offres",
       "subtitle": "Indiquez à l'application quelles offres vous conviennent vraiment, quelques-unes à la fois",
