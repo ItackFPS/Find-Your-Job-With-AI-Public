@@ -1314,6 +1314,15 @@ def run_pipeline(
             except Exception:  # noqa: BLE001 - the shadow path never affects the run
                 logger.exception("Personal model shadow failed; the run keeps its ranking")
                 shadow_adjustments, shadow_version = {}, None
+            if shadow_version:
+                # Live AD-5 counting (stage L4.1): records positives and the health state. Activation is
+                # behind a release flag that is off, so this changes nothing the user sees. Fail-open.
+                try:
+                    from src.learning.health import update_health
+
+                    update_health(db_path, run_id, config_path=Path(config_dir) / "personalization.yaml")
+                except Exception:  # noqa: BLE001 - the health record never affects the run
+                    logger.exception("Personal health update failed; the run keeps its ranking")
         stats.stage_times["shadow"] = time.perf_counter() - _t_shadow
 
         stats.personalized = len(personalized_ranked)
