@@ -1,6 +1,8 @@
 """Feedback API: explicit feedback (with structured reasons) on a job, append-only.
 
-POST /api/jobs/{id}/feedback        — record explicit feedback
+POST /api/jobs/{id}/feedback        — record explicit feedback, or a list action (saved, unsaved,
+                                      hidden, unhidden; ADR 0016/0017)
+GET  /api/jobs/feedback/list-state  — the offers the user currently saves or hides
 GET  /api/jobs/{id}/feedback        — the job's feedback/behaviour/outcome events, newest first
 GET  /api/jobs/feedback/vocabulary  — allowed types and reasons (single source of truth for the UI)
 """
@@ -15,9 +17,10 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from src.feedback.models import ALLOWED_REASONS, CANONICAL_STATUSES, EXPLICIT_TYPES, REASONS
-from src.feedback.service import FeedbackError, FeedbackService
+from src.feedback.models import ALLOWED_REASONS, CANONICAL_STATUSES, EXPLICIT_TYPES, LIST_TYPES, REASONS
+from src.feedback.service import Delivery, FeedbackError, FeedbackService
 from src.feedback.storage import FeedbackStorage
+from src.storage.app_state import GenerationMismatch
 from src.storage.sqlite import Storage
 
 router = APIRouter(prefix="/api/jobs", tags=["feedback"])
@@ -31,6 +34,14 @@ class FeedbackIn(BaseModel):
     source: Literal["ui", "api"] = "api"
     # The decision the client displayed (validated); default = the job's latest decision.
     decision_id: str | None = Field(default=None, max_length=64)
+    # Delivery from the client outbox (ADR 0016). Optional; when ``generation`` is sent it must be
+    # the current ``<data_epoch>:<generation>`` or the write is refused with 409.
+    client_event_id: str | None = Field(default=None, min_length=8, max_length=64)
+    generation: str | None = Field(default=None, max_length=80)
+    client_instance_id: str | None = Field(default=None, max_length=64)
+    client_seq: int | None = Field(default=None, ge=0)
+    client_created_at: str | None = Field(default=None, max_length=40)
+    context: dict[str, Any] | None = None
 
 
 class FeedbackOut(BaseModel):
@@ -45,10 +56,19 @@ class FeedbackOut(BaseModel):
     source: str
     occurred_at: str
     metadata: dict[str, Any]
+    client_event_id: str | None = None
+    generation: int | None = None
+    superseded: bool = False
+
+
+class ListStateOut(BaseModel):
+    saved: list[str]
+    hidden: list[str]
 
 
 class VocabularyOut(BaseModel):
     explicit_types: list[str]
+    list_types: list[str] = Field(default_factory=list)
     reasons: list[str]
     allowed_reasons: dict[str, list[str]]
     canonical_statuses: list[str]
@@ -86,20 +106,43 @@ def _out(e: Any) -> FeedbackOut:
 @router.get("/feedback/vocabulary", response_model=VocabularyOut)
 def feedback_vocabulary() -> VocabularyOut:
     return VocabularyOut(
-        explicit_types=list(EXPLICIT_TYPES), reasons=list(REASONS),
+        explicit_types=list(EXPLICIT_TYPES), list_types=list(LIST_TYPES), reasons=list(REASONS),
         allowed_reasons={k: sorted(v) for k, v in ALLOWED_REASONS.items()},
         canonical_statuses=list(CANONICAL_STATUSES),
     )
 
 
+@router.get("/feedback/list-state", response_model=ListStateOut)
+def list_state(request: Request) -> ListStateOut:
+    store = FeedbackStorage(request.app.state.db_path)
+    try:
+        store.init_db()
+        state = store.list_state()
+    finally:
+        store.close()
+    return ListStateOut(saved=sorted(j for j, s in state.items() if s["saved"]),
+                        hidden=sorted(j for j, s in state.items() if s["hidden"]))
+
+
 @router.post("/{job_id}/feedback", response_model=FeedbackOut, status_code=201)
 def record_feedback(job_id: str, body: FeedbackIn, request: Request) -> FeedbackOut:
     _require_job(request, job_id)
+    delivery = Delivery(
+        client_event_id=body.client_event_id, generation_token=body.generation,
+        client_instance_id=body.client_instance_id, client_seq=body.client_seq,
+        client_created_at=body.client_created_at, context=body.context)
+    service = _service(request)
     try:
-        event = _service(request).record_explicit(
-            job_id, body.type, body.reasons, body.note, source=body.source, decision_id=body.decision_id)
+        if body.type in LIST_TYPES:
+            event = service.record_list(job_id, body.type, body.reasons, source=body.source, delivery=delivery)
+        else:
+            event = service.record_explicit(
+                job_id, body.type, body.reasons, body.note, source=body.source,
+                decision_id=body.decision_id, delivery=delivery)
     except FeedbackError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except GenerationMismatch as exc:
+        raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
     return _out(event)
 
 

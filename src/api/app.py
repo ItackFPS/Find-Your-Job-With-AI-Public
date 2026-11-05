@@ -88,6 +88,7 @@ from src.scheduler.service import (
     SchedulerService,
     SourceHandler,
 )
+from src.storage import app_state
 from src.storage.runs import RunStorage
 from src.storage.sqlite import Storage
 
@@ -398,6 +399,28 @@ APP_ID = "find-your-job-with-ai"
 # The launcher's instance token (src/launcher/core.py). Taken out of the environment at import so
 # nothing this process starts inherits it; never logged.
 _INSTANCE_TOKEN = os.environ.pop(INSTANCE_TOKEN_ENV, "")
+
+
+@app.middleware("http")
+async def erasure_generation_header(request: Request, call_next):  # type: ignore[no-untyped-def]
+    """Every API response carries ``X-Erasure-Generation: <data_epoch>:<generation>`` (ADR 0015), so
+    the client stamps each action with the generation it held when the user acted."""
+    response = await call_next(request)
+    if request.url.path.startswith("/api/") and request.url.path != "/api/health":
+        try:
+            response.headers[app_state.HEADER] = app_state.current(request.app.state.db_path).token
+        except Exception:  # noqa: BLE001 — a header must never break a response
+            pass
+    return response
+
+
+@app.get("/api/session")
+def session_state(request: Request) -> dict[str, str | int | bool | None]:
+    """What the frontend reads at load: the data epoch and erasure generation it stamps on personal
+    writes, and the learning switches (ADR 0015)."""
+    st = app_state.current(request.app.state.db_path)
+    return {"data_epoch": st.data_epoch, "erasure_generation": st.erasure_generation, "token": st.token,
+            "learning_paused": st.learning_paused, "learning_reset_at": st.learning_reset_at}
 
 
 @app.get("/api/health")

@@ -37,6 +37,7 @@ JOBS_DB_TABLES: dict[str, DataClass] = {
     "personalization_score_cache": "derived",
     # -- control
     "db_migrations": "control",
+    "app_state": "control",                # data epoch, erasure generation, learning switches
     # -- public: offers and what the engine computed from them
     "jobs": "public",
     "job_fts": "public",                    # FTS5 index over jobs (and its shadow tables below)

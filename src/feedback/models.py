@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from src.feedback import FEEDBACK_SCHEMA_VERSION, REASON_VOCAB_VERSION
 
-SignalClass = Literal["explicit", "behavior", "outcome"]
+SignalClass = Literal["explicit", "behavior", "outcome", "list"]
 Source = Literal["ui", "api", "cli", "import", "system"]
 
 # explicit: what the user SAYS about the matching
@@ -18,6 +18,18 @@ EXPLICIT_TYPES = ("interested", "not_interested", "ranking_feedback", "unsure")
 BEHAVIOR_TYPES = ("viewed", "apply_link_opened")
 # outcome: what really happened after acting (application status transitions)
 OUTCOME_TYPES = ("application_status_changed",)
+# list: list management (ADR 0016, ADR 0017). Hide is not a judgement: it removes the offer from
+# every list and produces no generalising negative; its optional reason is routed to that feature only.
+LIST_TYPES = ("saved", "unsaved", "hidden", "unhidden")
+
+# State families (ADR 0016 per-offer ordering): within a family, the current state of an offer is
+# its latest non-superseded event in insert order.
+STATE_FAMILIES: dict[str, str] = {
+    "saved": "save", "unsaved": "save",
+    "hidden": "hide", "unhidden": "hide",
+    "interested": "stance", "not_interested": "stance", "unsure": "stance",
+    "application_status_changed": "status",
+}
 
 REASONS = (
     "too_far", "too_senior", "insufficient_skills", "off_domain", "salary", "contract_type",
@@ -32,7 +44,13 @@ ALLOWED_REASONS: dict[str, frozenset[str]] = {
     }),
     "ranking_feedback": frozenset({"mis_ranked", "interesting_despite_low_score", "other"}),
     "unsure": frozenset({"other"}),
+    # the optional "Pourquoi ?" chip of Hide (ADR 0017)
+    "hidden": frozenset({"too_far", "too_senior", "off_domain", "salary", "contract_type", "other"}),
+    "saved": frozenset(), "unsaved": frozenset(), "unhidden": frozenset(),
 }
+
+# Context keys a client may attach to an event (ADR 0016 "Event context"), stored in metadata.
+CONTEXT_KEYS = ("surface", "position", "sort_key", "randomized", "session_id")
 
 # Application-status vocabulary. Legacy values stay stored verbatim in jobs.application_status;
 # the canonical value is derived by an explicit, versioned mapping (never a silent rewrite).
@@ -67,3 +85,11 @@ class FeedbackEvent(BaseModel):
     source: Source
     occurred_at: str
     metadata: dict[str, Any] = Field(default_factory=dict)
+    # Delivery (ADR 0016). All set at insert, never updated (the journal stays append-only).
+    client_event_id: str | None = None
+    generation: int | None = None
+    client_instance_id: str | None = None
+    client_seq: int | None = None
+    client_created_at: str | None = None
+    client_time_trusted: bool | None = None
+    superseded: bool = False

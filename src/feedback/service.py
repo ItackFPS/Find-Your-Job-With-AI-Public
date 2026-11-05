@@ -10,13 +10,15 @@ import json
 import logging
 import sqlite3
 import uuid
-from datetime import UTC, datetime
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from src.decisions.storage import DecisionStorage
 from src.feedback.config import FeedbackConfig, load_feedback_config
 from src.feedback.models import (
-    ALLOWED_REASONS, BEHAVIOR_TYPES, DEFAULT_LEGACY_MAPPING, EXPLICIT_TYPES, FeedbackEvent, Source,
+    ALLOWED_REASONS, BEHAVIOR_TYPES, CONTEXT_KEYS, DEFAULT_LEGACY_MAPPING, EXPLICIT_TYPES, LIST_TYPES,
+    FeedbackEvent, Source,
 )
 from src.feedback.storage import FeedbackStorage
 
@@ -28,8 +30,56 @@ BRIDGE_PREFIX = "bridge:"
 _BRIDGED_TYPES = ("interested", "not_interested", "unsure")
 
 
+# Client time is the effective time only inside [occurred_at - MAX_CLIENT_LAG, occurred_at + MAX_CLIENT_SKEW]
+# (ADR 0016; initial values, not approved parameters).
+MAX_CLIENT_LAG = timedelta(days=30)
+MAX_CLIENT_SKEW = timedelta(minutes=5)
+
+
 class FeedbackError(ValueError):
     """Invalid feedback input (maps to HTTP 422)."""
+
+
+@dataclass(frozen=True)
+class Delivery:
+    """What the client outbox attaches to a durable event (ADR 0016). All optional: server-side and
+    legacy callers send none of it."""
+
+    client_event_id: str | None = None
+    generation_token: str | None = None
+    client_instance_id: str | None = None
+    client_seq: int | None = None
+    client_created_at: str | None = None
+    context: dict[str, Any] | None = None
+
+    def fields(self, occurred_at: str) -> dict[str, Any]:
+        trusted = None
+        if self.client_created_at is not None:
+            trusted = client_time_trusted(self.client_created_at, occurred_at)
+        return {"client_event_id": self.client_event_id, "client_instance_id": self.client_instance_id,
+                "client_seq": self.client_seq, "client_created_at": self.client_created_at,
+                "client_time_trusted": trusted}
+
+    def metadata(self) -> dict[str, Any]:
+        ctx = {k: v for k, v in (self.context or {}).items() if k in CONTEXT_KEYS}
+        return {"context": ctx} if ctx else {}
+
+
+NO_DELIVERY = Delivery()
+
+
+def _parse(ts: str) -> datetime:
+    dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
+
+
+def client_time_trusted(client_created_at: str, occurred_at: str) -> bool:
+    """True when the client time falls inside the trust window around the server receipt time."""
+    try:
+        client, server = _parse(client_created_at), _parse(occurred_at)
+    except ValueError:
+        return False
+    return server - MAX_CLIENT_LAG <= client <= server + MAX_CLIENT_SKEW
 
 
 def _now() -> str:
@@ -100,21 +150,24 @@ class FeedbackService:
             return None, None, {"no_decision": True}
         return rec.decision_id, rec.strategy_version, {"decision_run_id": rec.run_id, "decision_outcome": rec.outcome}
 
-    def _append(self, **fields: Any) -> FeedbackEvent:
+    def _append(self, delivery: Delivery = NO_DELIVERY, **fields: Any) -> FeedbackEvent:
+        """Store a new event and return the stored one (an earlier event on a replayed
+        ``client_event_id``). Raises ``app_state.GenerationMismatch`` on a stale generation token."""
+        fields.update(delivery.fields(fields["occurred_at"]))
+        fields["metadata"] = {**fields.get("metadata", {}), **delivery.metadata()}
         event = FeedbackEvent(event_id=str(uuid.uuid4()), **fields)
         store = FeedbackStorage(self._db_path)
         try:
             store.init_db()
-            store.append(event)
+            return store.append(event, generation_token=delivery.generation_token)
         finally:
             store.close()
-        return event
 
     # -- recording --------------------------------------------------------------------------------
 
     def record_explicit(
         self, job_id: str, type_: str, reasons: list[str] | None = None, note: str | None = None,
-        source: Source = "ui", decision_id: str | None = None,
+        source: Source = "ui", decision_id: str | None = None, delivery: Delivery = NO_DELIVERY,
     ) -> FeedbackEvent:
         if type_ not in EXPLICIT_TYPES:
             raise FeedbackError(f"unknown explicit feedback type {type_!r}")
@@ -127,10 +180,29 @@ class FeedbackService:
             raise FeedbackError(f"note longer than {MAX_NOTE} characters")
         decision_id, strategy, meta = self._link(job_id, decision_id=decision_id)
         event = self._append(
-            job_id=job_id, decision_id=decision_id, strategy_version=strategy, signal_class="explicit",
-            type=type_, reasons=reasons, note=note, source=source, occurred_at=_now(), metadata=meta)
+            delivery, job_id=job_id, decision_id=decision_id, strategy_version=strategy,
+            signal_class="explicit", type=type_, reasons=reasons, note=note, source=source,
+            occurred_at=_now(), metadata=meta)
         self._bridge(event)
         return event
+
+    def record_list(
+        self, job_id: str, type_: str, reasons: list[str] | None = None, source: Source = "ui",
+        delivery: Delivery = NO_DELIVERY,
+    ) -> FeedbackEvent:
+        """Save / unsave / hide / unhide (ADR 0016, ADR 0017): list management, not a judgement. Only
+        ``hidden`` takes reasons (the optional "Pourquoi ?" chip)."""
+        if type_ not in LIST_TYPES:
+            raise FeedbackError(f"unknown list action {type_!r}")
+        reasons = list(dict.fromkeys(reasons or []))
+        bad = [r for r in reasons if r not in ALLOWED_REASONS[type_]]
+        if bad:
+            raise FeedbackError(f"reason(s) {bad} not allowed for {type_!r}; allowed: {sorted(ALLOWED_REASONS[type_])}")
+        decision_id, strategy, meta = self._link(job_id)
+        return self._append(
+            delivery, job_id=job_id, decision_id=decision_id, strategy_version=strategy,
+            signal_class="list", type=type_, reasons=reasons, source=source, occurred_at=_now(),
+            metadata=meta)
 
     def record_behavior(
         self, job_id: str, type_: str, source: Source = "ui", metadata: dict[str, Any] | None = None
