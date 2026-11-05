@@ -25,3 +25,4 @@ is the source of truth and the ADR must be updated or superseded.
 | [0016](0016-signal-capture-and-delivery.md) | Only visible exposure is logged; durable actions go through an acknowledged, ordered outbox |
 | [0017](0017-validity-constraints-and-hiding.md) | Offer validity is operational; only strong user constraints reject; weak ones rank; Hide is list management |
 | [0018](0018-personal-preference-model.md) | Personal preferences are a bounded Bayesian model that only reorders accepted offers |
+| [0019](0019-shadow-evaluation-and-health-monitor.md) | Personal ranking activates only on positive shadow evidence and pauses itself more easily than it activates |
