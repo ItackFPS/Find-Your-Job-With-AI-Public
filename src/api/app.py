@@ -66,6 +66,7 @@ from src.api.routes import (
     lab,
     linkedin,
     pipeline,
+    privacy,
     profile,
     quality,
     scheduler as scheduler_routes,
@@ -406,6 +407,7 @@ app.include_router(quality.router)
 app.include_router(calibration.router)
 app.include_router(ai.router)
 app.include_router(sources.router)
+app.include_router(privacy.router)
 
 # Must match src/launcher/core.py APP_ID: the launcher recognises this backend by it.
 APP_ID = "find-your-job-with-ai"

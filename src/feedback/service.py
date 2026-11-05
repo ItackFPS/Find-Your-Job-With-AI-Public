@@ -257,12 +257,17 @@ class FeedbackService:
         from src.personalization.storage import PersonalizationStorage
         from src.storage.sqlite import Storage
 
+        from src.privacy.learning import after_reset
+        from src.storage import app_state
+
         fs = FeedbackStorage(self._db_path)
         fs.init_db()
         try:
             latest = fs.latest_explicit(_BRIDGED_TYPES, job_ids)
         finally:
             fs.close()
+        # Reset learning (ADR 0015): signals recorded before the marker no longer reach learning.
+        reset_at = app_state.current(self._db_path).learning_reset_at
         st = Storage(db_path=self._db_path)
         ps = PersonalizationStorage(db_path=self._db_path)
         st.init_db()
@@ -272,7 +277,7 @@ class FeedbackService:
             for job_id in (job_ids if job_ids is not None else sorted(latest)):
                 removed += ps.delete_feedback_with_id_prefix(BRIDGE_PREFIX, job_id)
                 event = latest.get(job_id)
-                if event is None or event.type == "unsure":
+                if event is None or event.type == "unsure" or not after_reset(event.occurred_at, reset_at):
                     continue
                 job = st.get_job_by_id(job_id)
                 if job is None:
