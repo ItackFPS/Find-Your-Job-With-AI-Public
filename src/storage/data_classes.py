@@ -83,7 +83,7 @@ JOBS_DB_TABLES: dict[str, DataClass] = {
 PERSONAL_COLUMNS: dict[str, tuple[str, ...]] = {
     "jobs": ("application_status",),
     # what the personal model (in shadow) would have applied, derived from the journal (ADR 0018)
-    "job_scores": ("personal_adjustment", "personal_model_version"),
+    "job_scores": ("personal_adjustment", "personal_model_version", "visible_position"),
 }
 
 # Cleared by "Reset learning" (v5 §4.12): derived learned state plus the legacy learning tables.
