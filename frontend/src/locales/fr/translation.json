@@ -1360,6 +1360,18 @@
     "title": "Découverte",
     "hint": "Offres tirées au hasard parmi celles qui respectent vos critères stricts, sans tenir compte du score. Certaines vous correspondront moins : c'est voulu."
   },
+  "outsideCriteria": {
+    "title": "Hors de vos critères ({count})",
+    "hint": "Bonnes correspondances qui manquent l'un de vos critères sur un indice faible (un mot du titre, l'âge de l'offre…). Vos critères stricts excluent toujours les offres.",
+    "misses": "Ne respecte pas : {criteria}",
+    "published_age": "plus ancienne que votre limite",
+    "seniority": "un mot de séniorité dans le titre",
+    "title_keywords": "titre hors de vos métiers cibles",
+    "contract_type": "type de contrat cité dans le titre",
+    "work_mode": "mode de travail peut-être différent",
+    "distance": "au-delà de votre distance",
+    "other": "l'un de vos critères"
+  },
   "saveHide": {
     "save": "Enregistrer",
     "saved": "Enregistrée",

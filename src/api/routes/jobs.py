@@ -300,6 +300,14 @@ def list_jobs(
 
                 s4_ids = {d["job_id"] for d in drawn_for_run(request.app.state.db_path, latest_run_id)}
                 run_job_ids = [j for j in run_job_ids if j not in s4_ids]
+                # Weak-evidence offers (ADR 0019 v5 AD-2b) never enter the main list: the best of
+                # them have their own collapsed lane (/outside-criteria), the rest stays unshown.
+                from src.pipeline.lanes import has_weak_flags
+
+                weak_ids = {r["job_id"] for r in rs.get_jobs_for_run(latest_run_id, limit=-1)
+                            if has_weak_flags(r.get("score_breakdown"))}
+                if weak_ids:
+                    run_job_ids = [j for j in run_job_ids if j not in weak_ids]
 
         # Reduce the run's job-id scope by tier BEFORE any pagination happens
         # below, so every downstream branch (FTS intersect, Python-paginated
@@ -459,6 +467,47 @@ def list_decouverte(request: Request) -> list[JobDetailOut]:
         ids = [d["job_id"] for d in drawn_for_run(request.app.state.db_path, latest_run["id"])]
         list_state = _list_state(request)
         ids = [j for j in ids if not list_state.get(j, {}).get("hidden")]
+        scores_by_id = rs.get_latest_scores_for_jobs(ids) if ids else {}
+        jobs_by_id = s.get_jobs_by_ids(ids) if ids else {}
+        result: list[JobDetailOut] = []
+        for job_id in ids:
+            job = jobs_by_id.get(job_id)
+            if job is None:
+                continue
+            job_out = _job_to_job_detail_out(job, scores_by_id.get(job_id))
+            st = list_state.get(job_id)
+            if st:
+                job_out.saved, job_out.hidden = st["saved"], st["hidden"]
+            result.append(job_out)
+        return result
+    finally:
+        s.close()
+        rs.close()
+
+
+@router.get("/outside-criteria", response_model=list[JobDetailOut])
+def list_outside_criteria(request: Request) -> list[JobDetailOut]:
+    """The "outside your criteria" lane of the latest completed run (ADR 0019 v5 AD-2b; L5.3).
+
+    Offers that reached scoring with a WEAK hard-filter flag, final score and domain relevance
+    above the lane floors, best first, at most ``outside_lane_size``. Each carries its
+    ``score.weak_flags`` (the criterion it misses). Hidden offers are left out. Empty while every
+    check is in ``reject`` mode."""
+    from src.pipeline.lanes import OUTSIDE, assign_lanes, load_lane_params
+
+    s, rs = _get_storages(request)
+    try:
+        latest_run = rs.get_latest_completed_run()
+        if not latest_run:
+            return []
+        rows = rs.get_jobs_for_run(latest_run["id"], limit=-1)        # -1: every row of the run
+        config_dir = Path(getattr(request.app.state, "config_dir", "config"))
+        lanes = assign_lanes(((r["job_id"], float(r.get("final_score") or 0.0), r.get("score_breakdown"))
+                              for r in rows), load_lane_params(config_dir / "scoring.yaml"))
+        list_state = _list_state(request)
+        score = {r["job_id"]: float(r.get("final_score") or 0.0) for r in rows}
+        ids = sorted((j for j, lane in lanes.items() if lane == OUTSIDE
+                      and not list_state.get(j, {}).get("hidden")), key=lambda j: (-score[j], j))
         scores_by_id = rs.get_latest_scores_for_jobs(ids) if ids else {}
         jobs_by_id = s.get_jobs_by_ids(ids) if ids else {}
         result: list[JobDetailOut] = []

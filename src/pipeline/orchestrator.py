@@ -59,6 +59,8 @@ class ScoredJobRecord:
     # WEAK hard-filter violations that ranked instead of rejecting (ADR 0019 v5 AD-2b, stage L5.2).
     weak_flags: list[dict[str, Any]] = field(default_factory=list)
     weak_penalty: float = 0.0
+    # Lane (stage L5.3, src/pipeline/lanes.py): main | outside_criteria | below_threshold.
+    lane: str = "main"
 
 
 @dataclass
@@ -1441,6 +1443,13 @@ def run_pipeline(
                 weak_penalty=weak_penalties.get(job.id, 0.0),
             ))
 
+        if weak_flags_by_job:
+            from src.pipeline.lanes import assign_lanes, load_lane_params
+
+            lanes = assign_lanes(((r.job_id, r.final_score, {**r.factors, "weak_flags": r.weak_flags})
+                                  for r in scored_job_records), load_lane_params(scoring_path))
+            for r in scored_job_records:
+                r.lane = lanes.get(r.job_id, "main")
         recorder.finalize(scored_job_records)
         stats.decisions = recorder.summary()
 

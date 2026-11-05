@@ -260,6 +260,16 @@ export interface ScoreBreakdown {
   // (src.pipeline.scoring.score_to_tier) — never recomputed on the frontend.
   score_100: number | null
   tier: string | null
+  // ADR 0019 v5 AD-2b (L5.2): weak hard-filter violations that ranked instead of rejecting.
+  weak_flags?: WeakFlag[]
+  weak_penalty?: number
+}
+
+export interface WeakFlag {
+  code: string
+  observed: string | null
+  expected: string | null
+  severity: number
 }
 
 export interface Provenance {
@@ -466,6 +476,7 @@ export const listJobs = (params?: {
 
 // Découverte (S4; ADR 0019): the latest run's random slots, apart from the main list.
 export const listDecouverte = () => api.get<Job[]>('/jobs/decouverte').then(r => r.data)
+export const listOutsideCriteria = () => api.get<Job[]>('/jobs/outside-criteria').then(r => r.data)
 
 // The user reports an offer as no longer available, or available after all (issue #86).
 export const setJobAvailability = (id: string, available: boolean) =>
