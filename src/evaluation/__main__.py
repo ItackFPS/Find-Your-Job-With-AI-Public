@@ -126,6 +126,14 @@ def main(argv: list[str] | None = None) -> int:
     i.add_argument("--labeler", required=True)
     i.add_argument("--version", default=None)
 
+    w = sub.add_parser("weak-evidence", help="AD-2b pre-registered test: baseline vs weak-evidence candidate "
+                                             "(exploratory; counts only)")
+    w.add_argument("dataset")
+    _add_strategy_args(w)
+    w.add_argument("--split", choices=("all", "tuning"), default="tuning",
+                   help="labels to measure on (default tuning). The held-out part is refused: the decisive "
+                        "real-v3 held-out run waits for the owner (docs/lab/preregistered/)")
+
     sc = sub.add_parser("self-check", help="replay frozen datasets, compare with the recorded baseline, report")
     sc.add_argument("--dataset", action="append", metavar="DIR[=GOLDEN]",
                     help="dataset dir, optionally =its baseline golden file (repeatable; "
@@ -207,6 +215,12 @@ def main(argv: list[str] | None = None) -> int:
             if not ns.no_write:
                 out = ns.out or f"{DEFAULT_RUNS_DIR}/{ds.manifest.dataset_id}"
                 print(f"written: {write_run_result(result, out)}", file=sys.stderr)
+            return 0
+        if ns.cmd == "weak-evidence":
+            from src.evaluation.heldout import load_split
+            from src.evaluation.weak_evidence import run as run_weak
+
+            print(json.dumps(run_weak(load_split(ns.dataset, ns.split), _strategy(ns)), indent=2))
             return 0
         if ns.cmd == "compare":
             base, cand = read_run_result(ns.baseline), read_run_result(ns.candidate)

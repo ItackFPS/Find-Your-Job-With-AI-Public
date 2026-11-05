@@ -157,7 +157,9 @@ def run_decisions(
 
     timings: dict[str, float] = {}
     t0 = time.perf_counter()
-    passing, filter_rejections = filter_jobs(jobs, filters_config)
+    # weak flags: only filled for checks the strategy's filters.yaml switches to ``rank`` (AD-2b; L5)
+    weak_flags: dict[str, list[Any]] = {}
+    passing, filter_rejections = filter_jobs(jobs, filters_config, weak_flags=weak_flags)
     timings["filter"] = time.perf_counter() - t0
 
     llm = _build_llm(strategy)
@@ -194,7 +196,12 @@ def run_decisions(
     timings["requirements_gate"] = time.perf_counter() - t1
 
     # -- scoring (accepted jobs only, like the orchestrator) ----------------------------------
-    from src.pipeline.scoring import build_scoring_config, load_scoring_config, score_jobs_with_breakdown
+    from src.pipeline.scoring import (
+        build_scoring_config,
+        load_scoring_config,
+        score_jobs_with_breakdown,
+        weak_evidence_penalty,
+    )
 
     accepted = [j for j in passing if gate_results[j.id].passes]
     scoring_path = config_dir / "scoring.yaml"
@@ -204,7 +211,10 @@ def run_decisions(
         esco = _esco_map(strategy, profile)
         scoring_config = build_scoring_config(load_scoring_config(str(scoring_path)), profile, engine_cfg,
                                               esco_synonyms=esco)
-        for job, score, factors in score_jobs_with_breakdown(accepted, scoring_config, gate_results=gate_results):
+        penalties = {jid: weak_evidence_penalty([f.severity for f in flags], scoring_config)
+                     for jid, flags in weak_flags.items()}
+        for job, score, factors in score_jobs_with_breakdown(accepted, scoring_config, gate_results=gate_results,
+                                                             weak_penalties=penalties):
             scored[job.id] = (score, factors)
     else:                                   # same fallback as the orchestrator
         scored = {j.id: (0.5, {}) for j in accepted}
@@ -225,7 +235,7 @@ def run_decisions(
             verdict="accept" if res.passes else "reject",
             stage="passed" if res.passes else "requirements_gate",
             reasons=[r.message for r in res.reasons],
-            flags=list(res.flags),
+            flags=list(res.flags) + [f"weak:{f.code}" for f in weak_flags.get(job.id, [])],
             extraction_method=req.extraction_method,
             score=scored[job.id][0] if job.id in scored else None,
             factors=scored[job.id][1] if job.id in scored else None,
@@ -242,6 +252,7 @@ def run_decisions(
         "profile": profile,
         "engine_cfg": engine_cfg,
         "profile_path": profile_path,
+        "weak_flags": weak_flags,
     }
     return decisions, timings, llm, extras
 
