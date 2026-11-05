@@ -27,6 +27,10 @@ CURRENT = [name for name in FROZEN if not name.startswith("history")]
 DATASETS = {
     "2026-11-03-real-v3-dataset.json": "ec6ea865a358476fe7acf2ba280a8874e093d8530204ae6ea749fa75dd65480c",
 }
+# Strategy pre-registrations: frozen like the candidates, but they describe a code path behind a flag.
+STRATEGIES = {
+    "2026-11-05-ad2-weak-evidence.json": "2029332684e971f21d7167aaa8c9307eac5d9c447ce8be223af71f84abfcfafe",
+}
 WEIGHTS = ("location_fit", "domain_relevance", "skills_match", "seniority_match", "experience_fit")
 
 
@@ -61,3 +65,14 @@ def test_a_current_candidate_changes_only_existing_weights_and_still_sums_to_one
     total = sum(changed.get(k, base[k])["weight"] for k in WEIGHTS)
     assert total == pytest.approx(1.0)
     create_bundle(ROOT / "config", overrides, tmp_path)      # applies to the configuration as it is now
+
+
+@pytest.mark.parametrize("name", sorted(STRATEGIES))
+def test_a_strategy_preregistration_is_frozen_and_listed(name):
+    path = PRE / name
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == STRATEGIES[name]
+    readme = (PRE / "README.md").read_text(encoding="utf-8")
+    assert re.search(rf"`{re.escape(name)}` \| `{STRATEGIES[name]}`", readme), name
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert set(data["criteria"]) == {"1", "2", "3", "4", "5"}
+    assert "salary" not in data["candidate"]["weak_evidence_mode"]

@@ -1,0 +1,55 @@
+{
+  "preregistration_id": "ad2-weak-evidence",
+  "frozen_on": "2026-11-05",
+  "what": "ADR 0019 v5 AD-2b: user constraints classified STRONG / WEAK / UNKNOWN; WEAK violations reach scoring with a bounded penalty and are routed to the 'outside your criteria' lane instead of being rejected",
+  "why": "in the owner's real-v2 labels 5 of 7 relevant tuning offers (age x3, title x2) and 3 of 4 relevant held-out offers were rejected by weak checks; this file fixes the test before any real-v3 held-out label is read for it",
+  "baseline": "the same code with filters.weak_evidence_mode = reject for every check (today's behaviour), the same profile copy, the same dataset",
+  "candidate": {
+    "weak_evidence_mode": {
+      "published_age": "rank",
+      "title_keywords": "rank",
+      "seniority": "rank"
+    },
+    "unchanged_reject": [
+      "location",
+      "distance",
+      "remote_policy",
+      "remote",
+      "work_mode",
+      "contract_type",
+      "salary"
+    ],
+    "salary": "excluded: stays reject until the matches_salary correction (decisions v5 AD-2b prerequisite) has landed; it is not part of this test",
+    "penalty_per_weak_flag": 0.1,
+    "penalty_total_max": 0.25,
+    "penalty_applied": "to the deterministic composite, before the ADR 0003 gates",
+    "published_age_ramp": "0 at freshness_days, growing linearly to 0.10 at 3 x freshness_days, 0.10 beyond",
+    "lanes": {
+      "main": "no weak flag and final score >= 60 (the relevant tier)",
+      "outside_your_criteria": "weak-flagged, final score >= 60 and domain_relevance >= 0.7; at most 10 per run, best first",
+      "below_threshold": "everything else accepted: stored and journaled, not shown"
+    },
+    "rollout_order": [
+      "published_age",
+      "title_keywords",
+      "seniority"
+    ]
+  },
+  "criteria": {
+    "1": "relevant offers (accept labels) reaching main or outside_your_criteria: at least 2 x the baseline count",
+    "2": "main-list precision (accept labels shown in main / labelled shown in main) not lower than the baseline beyond the paired-bootstrap 95 % CI",
+    "3": "outside_your_criteria holds at most 10 offers in 100 % of runs",
+    "4": "synthetic self-check: 0 new acceptances of a STRONG violation, 0 changes to strong rejections, the ADR 0004 safety cases unchanged",
+    "5": "pipeline runtime increase at most 25 % on a replay of a copy of the owner's database"
+  },
+  "decision": "the candidate passes only if criteria 1-5 all hold on the decisive data; passing makes it eligible for a human promotion decision (ADR 0011), never an automatic switch",
+  "data": {
+    "decisive": "real-v3 held-out part (README rules 1-3 with real-v3, the profile whose sha256 2026-11-03-real-v3-dataset.json records)",
+    "exploratory": "real-v2 tuning part (baseline 2 of 7 relevant reach the list); real-v2 held-out is NOT usable for this test because its labels motivated it",
+    "not_data": "real-v1, synthetic tuning sets other than for criterion 4"
+  },
+  "when_to_run": "the real-v3 held-out measurement runs once, after the owner reports real-v3 labelling finished; nothing on the real-v3 held-out part is computed for this test before that",
+  "evidence_threshold": "README rule 6: below 30 accept labels in the real-v3 held-out cohort the result is exploratory and is not adopted",
+  "report": "both outcomes are reported; any other value set measured on the real-v3 held-out part needs a new dated, hashed file here first",
+  "pooling": "none: real-v2 and real-v3 are reported separately"
+}

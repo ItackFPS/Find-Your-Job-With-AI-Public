@@ -78,3 +78,20 @@ neither the candidates nor rules 1–8.
 - `real-v2` and `real-v3` are decided and reported separately, never pooled.
 - The held-out measurement runs once, after the owner reports labelling finished. No held-out
   result is computed before that.
+
+## Strategy pre-registration: AD-2 weak evidence (frozen 2026-11-05, before L5 code exists)
+
+ADR 0019 v5 AD-2b changes the hard filter for some checks: a WEAK violation reaches scoring with a
+bounded penalty and is routed to the "outside your criteria" lane. This is a global strategy change
+(ADR 0011), so its test is frozen here before any real-v3 held-out label is read for it. It is not a
+weight override and does not change H1, H2 or rules 1–8.
+
+| file | sha256 | what it fixes |
+|---|---|---|
+| `2026-11-05-ad2-weak-evidence.json` | `2029332684e971f21d7167aaa8c9307eac5d9c447ce8be223af71f84abfcfafe` | the candidate (`published_age`, `title_keywords`, `seniority` in `rank`; salary excluded), its parameter values, criteria 1–5, the decisive and exploratory data, and when it is measured |
+
+- Decisive: the real-v3 held-out part, measured once after the owner reports labelling finished.
+  Exploratory: the real-v2 tuning part. The real-v2 held-out part cannot decide it, because its
+  labels motivated AD-2.
+- Rule 6 applies: below 30 accept labels in the real-v3 held-out cohort the result is exploratory.
+- Passing makes the candidate eligible for a human promotion decision, one check at a time.
