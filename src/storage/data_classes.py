@@ -36,6 +36,8 @@ JOBS_DB_TABLES: dict[str, DataClass] = {
     "exposure_log": "personal",             # visible exposures (ADR 0016)
     # -- derived from personal data
     "personalization_score_cache": "derived",
+    "personal_model_state": "derived",      # personal model summary (ADR 0018), rebuilt from the journal
+    "ranking_shadow": "derived",            # production vs challenger positions per run (ADR 0019)
     # -- control
     "db_migrations": "control",
     "app_state": "control",                # data epoch, erasure generation, learning switches
@@ -78,12 +80,16 @@ JOBS_DB_TABLES: dict[str, DataClass] = {
 # ``jobs.application_status`` is the application tracker; the user may choose to keep it.
 PERSONAL_COLUMNS: dict[str, tuple[str, ...]] = {
     "jobs": ("application_status",),
+    # what the personal model (in shadow) would have applied, derived from the journal (ADR 0018)
+    "job_scores": ("personal_adjustment", "personal_model_version"),
 }
 
 # Cleared by "Reset learning" (v5 §4.12): derived learned state plus the legacy learning tables.
 # The journal, exposure log, tracker and stored scores are kept; learning ignores pre-marker signals.
 RESET_CLEARED_TABLES: tuple[str, ...] = (
     "personalization_score_cache",
+    "personal_model_state",
+    "ranking_shadow",
     "job_feedback",
     "outcome_events",
 )
