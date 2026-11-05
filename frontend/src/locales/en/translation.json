@@ -1282,6 +1282,21 @@
       "resetDone": "Learning was reset.",
       "lastReset": "Last reset: {date}",
       "failed": "The change could not be saved."
+    },
+    "erase": {
+      "title": "Erase my activity",
+      "subtitle": "Delete what you did in the app and everything learned from it. Offers stay.",
+      "help": "Deletes your saved, hidden and viewed offers, your answers, what the app learned from them and older backups of the database. No backup is made first.",
+      "keepTracker": "Keep my application tracker",
+      "eraseCalibration": "Also erase my calibration answers",
+      "action": "Erase my activity",
+      "confirm": "Erase your activity? This cannot be undone.",
+      "confirmYes": "Erase",
+      "running": "Erasing… (step: {step}). Changes are refused until it ends.",
+      "blocked": "The erasure is paused: {reason}. Close any other program using the data folder, then retry.",
+      "retry": "Retry the erasure",
+      "complete": "Erasure complete ({date}): every check passed.",
+      "failed": "The erasure could not be started."
     }
   },
   "saveHide": {

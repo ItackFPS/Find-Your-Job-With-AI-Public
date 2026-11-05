@@ -763,6 +763,24 @@ export const setLearningPaused = (paused: boolean) =>
 export const resetLearning = () =>
   api.post<LearningState & { cleared: Record<string, number> }>('/privacy/learning/reset', { confirm: true }).then(r => r.data)
 
+/** Erase my activity (ADR 0015): the latest erasure job; counts and checks only, never content. */
+export interface ErasureStatus {
+  state: string | null
+  pending: boolean
+  running: boolean
+  erasure_id?: string
+  requested_at?: string
+  completed_at?: string | null
+  last_state?: string
+  last_error?: string | null
+  counts?: Record<string, number> | null
+  verification?: Record<string, boolean> | null
+}
+export const getErasure = () => api.get<ErasureStatus>('/privacy/erase').then(r => r.data)
+export const eraseActivity = (opts: { keep_tracker: boolean; erase_calibration: boolean }) =>
+  api.post<ErasureStatus>('/privacy/erase', { confirm: true, ...opts }).then(r => r.data)
+export const retryErasure = () => api.post<ErasureStatus>('/privacy/erase/retry').then(r => r.data)
+
 export const getSession = () => api.get<SessionState>('/session').then(r => {
   setGenerationToken(r.data.token)
   return r.data

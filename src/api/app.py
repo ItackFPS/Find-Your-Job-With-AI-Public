@@ -33,7 +33,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
@@ -113,6 +113,12 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
     # thread) can publish SSE progress events thread-safely. Purely
     # observational — see src/api/progress_stream.py.
     application.state.progress_bus.bind_loop(asyncio.get_running_loop())
+
+    # -- Pending erasure: resumed before migrations and the scheduler (ADR 0015) --
+    from src.privacy import erasure
+    if erasure.pending(db_path):
+        st = erasure.run(db_path)
+        logger.warning("Pending erasure resumed at startup: %s", (st or {}).get("state"))
 
     # -- Core database init --------------------------------------------------
     s = Storage(db_path=db_path)
@@ -230,6 +236,8 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
     )
     scheduler.start()
     application.state.scheduler = scheduler
+    if erasure.pending(db_path):  # BLOCKED erasure: no scheduled run until it completes
+        scheduler.pause_all()
 
     # -- Graceful stop for a launcher without a console (the tray app) -------
     from src.api.stop_signal import start_stop_signal_watcher
@@ -328,7 +336,20 @@ async def erasure_generation_header(request: Request, call_next):  # type: ignor
     return response
 
 
+async def erasure_write_lock(request: Request, call_next):  # type: ignore[no-untyped-def]
+    """While an erasure is pending, API writes get 423 ``erasure_running`` (ADR 0015, owner decision:
+    no queuing; the client outbox keeps them). The privacy routes stay open to follow and retry it."""
+    path = request.url.path
+    if (request.method in ("POST", "PUT", "PATCH", "DELETE") and path.startswith("/api/")
+            and not path.startswith("/api/privacy/")):
+        from src.privacy import erasure
+        if erasure.pending(request.app.state.db_path):
+            return JSONResponse(status_code=423, content={"detail": "erasure_running"})
+    return await call_next(request)
+
+
 # Innermost (registered first): the security guards below stay outermost.
+app.middleware("http")(erasure_write_lock)
 app.middleware("http")(erasure_generation_header)
 
 # CORS: allow the Vite dev server to reach the API in dev mode.
