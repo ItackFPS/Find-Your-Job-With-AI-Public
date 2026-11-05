@@ -7,6 +7,8 @@ GET  /api/quality/jobs/{id}         — one job: status, phase, result summary o
 POST /api/quality/jobs/{id}/cancel  — stop the running job
 GET  /api/quality/ft-coverage       — France Travail web coverage of the API offers over 7 days (P2.7)
 GET  /api/quality/extractor-agreement — requirement extractor vs France Travail structured fields (v5 L2)
+GET  /api/quality/alerts            — self-monitoring alerts (ADR 0025), open by default
+POST /api/quality/alerts/{id}/resolve — mark an open alert resolved
 
 The jobs run the existing evaluation CLI in a child process (``src.api.quality_jobs``); nothing here
 evaluates anything itself, and nothing here can approve or promote a strategy (ADR 0011: promotion
@@ -31,6 +33,7 @@ from src.api.quality_jobs import (
     PROJECT_ROOT, QualityJobBusy, QualityJobManager, QualityJobStore, latest_evaluation, latest_self_check,
 )
 from src.api.routes.lab import _runs_dir, _self_check_dir
+from src.ops import monitor as ops_monitor
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/quality", tags=["quality"])
@@ -143,3 +146,17 @@ def ft_coverage(request: Request) -> dict[str, Any]:
 def extractor_agreement(request: Request) -> dict[str, Any]:
     """Requirement extractor vs France Travail structured fields (v5 L2): counts and rates only."""
     return _run_readonly_tool("src.evaluation.extractor_agreement", request.app.state.db_path, timeout=300)
+
+
+@router.get("/alerts")
+def list_alerts(request: Request, status: Literal["open", "resolved", "all"] = "open") -> dict[str, Any]:
+    """Self-monitoring alerts (ADR 0025): code, scope and evidence; the page words them."""
+    statuses = ("open", "resolved") if status == "all" else (status,)
+    return {"alerts": ops_monitor.alerts(request.app.state.db_path, statuses)}
+
+
+@router.post("/alerts/{alert_id}/resolve")
+def resolve_alert(request: Request, alert_id: str) -> dict[str, Any]:
+    if not ops_monitor.resolve(request.app.state.db_path, alert_id):
+        raise HTTPException(status_code=404, detail={"code": "not_found"})
+    return {"alert_id": alert_id, "status": "resolved"}
