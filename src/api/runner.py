@@ -21,6 +21,7 @@ from src.api.staged_sources import (
     HelloWorkStagedSourceAdapter,
     LinkedInStagedSourceAdapter,
 )
+from src.ops import monitor as ops_monitor
 from src.pipeline.orchestrator import run_pipeline
 from src.storage.runs import RunStorage, load_retention_config
 
@@ -239,6 +240,13 @@ class PipelineRunner:
                     logger.info("Retention: pruned %s", deleted)
             except Exception as exc:
                 logger.warning("Retention sweep failed (non-fatal): %s", exc)
+
+            # Self-monitoring (ADR 0025): metrics and detectors after a completed run. Fail-open.
+            if pipeline_succeeded:
+                try:
+                    ops_monitor.after_run(self._db_path, run_id)
+                except Exception as exc:
+                    logger.warning("Self-monitoring failed (non-fatal): %s", exc)
 
         except Exception as exc:
             logger.exception("Runner thread failed for run %s: %s", run_id, exc)
