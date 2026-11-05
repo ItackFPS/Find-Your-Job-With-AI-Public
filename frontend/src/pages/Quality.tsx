@@ -16,6 +16,7 @@ import Lab from './Lab'
 import CalibrationCard from './Calibration'
 import FtCoverageCard from './FtCoverage'
 import ExtractorAgreementCard from './ExtractorAgreement'
+import LearningCurveCard from './LearningCurve'
 import OpsAlertsCard from './OpsAlerts'
 
 // Plain-language quality page (plan F9.1, §C10). Every sentence is built here from the codes and
@@ -310,6 +311,8 @@ export default function Quality() {
       <FtCoverageCard />
 
       <ExtractorAgreementCard />
+
+      <LearningCurveCard />
 
       <Card title={t('quality.promotion.title')} style={{ marginBottom: 'var(--space-4)' }}>
         {experiments.isLoading && <LoadingState />}

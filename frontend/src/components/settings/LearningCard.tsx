@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { getLearningState, resetLearning, setLearningPaused } from '../../api/client'
+import { getLearningState, getLearningStatus, resetLearning, resumeLearning, setLearningPaused } from '../../api/client'
 import { Button } from '../Button'
 import { Card } from '../Card'
 import { ErrorState } from '../ErrorState'
@@ -13,7 +13,19 @@ import { LEARNING_QUERY_KEY } from './queryKeys'
 /**
  * Settings › Learning (ADR 0015): pause learning (reversible) and reset learning (a marker:
  * learning ignores earlier signals; your actions, hidden offers and application tracker are kept).
+ * It also says where the personal ranking stands (ADR 0019): while observing, one neutral sentence,
+ * no counter and no request; when paused, a notice with "Reprendre" and "Réinitialiser".
  */
+// Literal keys keep the catalogue check able to see them; an unknown server key falls back to "observing".
+function statusWording(t: (key: string) => string, key: string): string {
+  switch (key) {
+    case 'learning.status.experimental': return t('learning.status.experimental')
+    case 'learning.status.active': return t('learning.status.active')
+    case 'learning.status.paused': return t('learning.status.paused')
+    default: return t('learning.status.observing')
+  }
+}
+
 export function LearningCard() {
   const { t, i18n } = useTranslation()
   const toast = useToast()
@@ -24,6 +36,15 @@ export function LearningCard() {
   const pause = useMutation({
     mutationFn: (paused: boolean) => setLearningPaused(paused),
     onSuccess: () => { void refresh() },
+    onError: () => toast.show({ message: t('settings.learning.failed'), tone: 'danger' }),
+  })
+  const status = useQuery({ queryKey: [...LEARNING_QUERY_KEY, 'status'], queryFn: getLearningStatus })
+  const resume = useMutation({
+    mutationFn: resumeLearning,
+    onSuccess: () => {
+      void refresh()
+      toast.show({ message: t('learning.status.resumed'), tone: 'success' })
+    },
     onError: () => toast.show({ message: t('settings.learning.failed'), tone: 'danger' }),
   })
   const reset = useMutation({
@@ -42,6 +63,22 @@ export function LearningCard() {
       {isError && <ErrorState message={t('settings.loadFailed')} onRetry={() => void refetch()} />}
       {data && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+          {status.data && !status.data.paused_notice && (
+            <p data-testid="learning-status" style={{ margin: 0, fontSize: 'var(--font-size-sm)' }}>{statusWording(t, status.data.wording_key)}</p>
+          )}
+          {status.data?.paused_notice && (
+            <div role="status" data-testid="learning-paused" style={{
+              border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', padding: 'var(--space-3)',
+              display: 'flex', flexDirection: 'column', gap: 'var(--space-2)',
+            }}>
+              <p style={{ margin: 0 }}>{t('learning.status.paused')}</p>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>{t('learning.status.resumeHelp')}</p>
+              <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                <Button disabled={resume.isPending} onClick={() => resume.mutate()}>{t('learning.status.resume')}</Button>
+                <Button variant="secondary" onClick={() => setConfirming(true)}>{t('learning.status.resetFromNotice')}</Button>
+              </div>
+            </div>
+          )}
           <Switch
             checked={data.paused}
             disabled={pause.isPending}

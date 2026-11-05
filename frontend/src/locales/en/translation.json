@@ -1372,5 +1372,32 @@
     "erased": "Not recorded: your activity was erased since this page loaded. Reload the page.",
     "rejected": "Not recorded: the server refused this action.",
     "failed": "Not recorded: something went wrong."
+  },
+  "learning": {
+    "status": {
+      "observing": "The app is watching your choices; personalization will turn on once it has proven itself.",
+      "experimental": "A personal ranking is being tried on a small part of the list.",
+      "active": "The ranking takes your choices into account, within a fixed limit.",
+      "paused": "The personal ranking is paused: it no longer matched your recent choices. The list uses the usual ranking.",
+      "resume": "Resume",
+      "resumeHelp": "Personalization goes back to observing and will only apply after proving itself again.",
+      "resumed": "The personal ranking is back to observing.",
+      "resetFromNotice": "Reset"
+    },
+    "curve": {
+      "title": "Personal ranking (offline measure)",
+      "subtitle": "Replays your past choices to compare the usual ranking with the personal ranking. A descriptive measure, not proof.",
+      "run": "Measure",
+      "error": "The measure could not be made.",
+      "none": "Not enough choices to measure yet.",
+      "summary": "Of {n, plural, one {# offer you kept} other {# offers you kept}} that the two rankings placed differently, the personal version would have ranked {x} higher.",
+      "strata": "By kind of list (kept offers ranked differently / higher in the personal version):",
+      "stratum": "{name}: {n} / {x}",
+      "names": {
+        "LB": "lists little shaped by the ranking (Discovery, sorted by date or distance)",
+        "PF": "lists sorted by relevance",
+        "IM": "other"
+      }
+    }
   }
 }
