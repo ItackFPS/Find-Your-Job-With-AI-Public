@@ -168,3 +168,8 @@ def test_monitor_rate_drop_and_experimental():
     assert e == "halved"
     assert monitor(h, T + timedelta(days=1), Tally(6, 1))[1] == "to_shadow"
     assert monitor(Health(SHADOW), T, Tally(20, 0)) == (Health(SHADOW), None)
+
+
+def test_posterior_handles_large_counts():
+    assert p_better(1500, 2000) == pytest.approx(1.0)
+    assert p_better(500, 2000) == pytest.approx(0.0)

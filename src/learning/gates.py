@@ -21,6 +21,7 @@ assumption, not causal proof (ADR 0019 wording rule).
 from __future__ import annotations
 
 import math
+from fractions import Fraction
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -206,7 +207,7 @@ def evidence(positives: Sequence[Positive], params: GateParams = GateParams()) -
 def p_better(wins: int, discordant: int) -> float:
     """Exact P(win rate > 0.5) under Beta(1 + wins, 1 + losses): P(Bin(n + 1, ½) ≤ wins)."""
     n = discordant + 1
-    return sum(math.comb(n, k) for k in range(wins + 1)) / math.pow(2, n)
+    return float(Fraction(sum(math.comb(n, k) for k in range(wins + 1)), 2 ** n))
 
 
 def p_worse(wins: int, discordant: int) -> float:
