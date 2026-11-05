@@ -1317,6 +1317,8 @@
       "help": "Supprime vos offres enregistrées, masquées et vues, vos réponses, ce que l’application en a appris et les anciennes sauvegardes de la base. Aucune sauvegarde n’est faite avant.",
       "keepTracker": "Conserver mon suivi de candidatures",
       "eraseCalibration": "Effacer aussi mes réponses de calibration",
+      "purgeLab": "Effacer aussi les données du laboratoire",
+      "confirmLab": "Les bases du laboratoire, ses expériences et ses rapports sont aussi supprimés. La production doit utiliser la stratégie par défaut.",
       "action": "Effacer mon activité",
       "confirm": "Effacer votre activité ? C’est irréversible.",
       "confirmYes": "Effacer",

@@ -15,6 +15,10 @@ State machine, every step idempotent::
 * DB_ERASED is one transaction: append-only triggers dropped, personal and derived rows deleted,
   personal columns set to NULL, triggers recreated, ``erasure_generation`` incremented.
 * BLOCKED keeps the last completed step in ``last_state``; ``run`` resumes from there.
+* Lab purge (optional, ``Scope.purge_lab``, v5 lab rules 1–7): allowed only while production runs the
+  shipped default strategy; the lab writers are suspended at QUIESCED (``LAB_SUSPENDED`` markers), each
+  ``lab.db`` must give an exclusive lock before both are deleted as files with ``data/lab/`` at
+  COPIES_REMOVED, VERIFIED re-checks that nothing reappeared, the markers go at COMPLETE.
 """
 
 from __future__ import annotations
@@ -32,6 +36,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from src.privacy import lab_suspension
 from src.storage import app_state
 from src.storage.data_classes import JOBS_DB_TABLES, PERSONAL_COLUMNS
 
@@ -77,6 +82,34 @@ class _StopAfter(Exception):
 class Scope:
     keep_tracker: bool = False        # "Conserver mon suivi de candidatures"
     erase_calibration: bool = True    # calibration labels go with the activity (ticked by default)
+    purge_lab: bool = False           # "Effacer aussi les données du laboratoire" (separately confirmed)
+
+
+LAB_STRATEGY_ACTIVE = ("lab_strategy_active: désactivez d'abord la stratégie de laboratoire active "
+                       "(deactivate the active lab strategy first)")
+LAB_BUSY = ("lab_busy: un processus du laboratoire est actif ; arrêtez-le puis réessayez "
+            "(a lab process is running; stop it and retry)")
+
+
+def lab_present(db_path: str | Path) -> bool:
+    """A lab database or lab folder exists in either location (the dialog then offers the purge)."""
+    data = Path(db_path).parent
+    return any(p.exists() for p in lab_suspension.lab_databases(data)) or (data / "lab").is_dir()
+
+
+def production_on_default_strategy(db_path: str | Path) -> bool:
+    """True when every pointer history (``jobs.db`` and each existing ``lab.db``) is empty or ends with
+    ``deactivate``; False when another strategy is active or a history cannot be read."""
+    from src.decisions.active_strategy import read_pointer_history
+    data = Path(db_path).parent
+    for db in [Path(db_path)] + [p for p in lab_suspension.lab_databases(data) if p.exists()]:
+        try:
+            rows, _ = read_pointer_history(db)
+        except sqlite3.Error:
+            return False
+        if rows and rows[0].get("action") != "deactivate":
+            return False
+    return True
 
 
 def _now() -> str:
@@ -235,8 +268,24 @@ class _Job:
     # -- steps --
 
     def step_quiesced(self) -> None:
+        if self.scope.purge_lab:
+            if not production_on_default_strategy(self.db_path):
+                raise Blocked(LAB_STRATEGY_ACTIVE)
+            lab_suspension.suspend(self.db_path.parent)
         if self.quiesce is not None:
             self.quiesce()
+
+    def _lab_files(self) -> list[Path]:
+        if not self.scope.purge_lab:
+            return []
+        data = self.db_path.parent
+        markers = set(lab_suspension.markers(data))
+        files = [p for db in lab_suspension.lab_databases(data)
+                 for p in (db, db.with_name(db.name + "-wal"), db.with_name(db.name + "-shm")) if p.exists()]
+        lab_dir = data / "lab"
+        if lab_dir.is_dir():
+            files += [p for p in lab_dir.rglob("*") if p.is_file() and p not in markers and p not in files]
+        return sorted(set(files))
 
     def step_inventoried(self) -> None:
         tables = self._tables()
@@ -252,7 +301,7 @@ class _Job:
                 "SELECT event_id FROM feedback_events ORDER BY random() LIMIT ?", (SAMPLE_SIZE,))]
         inventory = {"counts": counts, "backups": [p.name for p in self._old_backups()],
                      "calibration": self._calibration_dir().exists() and self.scope.erase_calibration,
-                     "sampled_ids": len(sample)}
+                     "lab_files": len(self._lab_files()), "sampled_ids": len(sample)}
         # The sample stays outside the database (marker file), so the byte search cannot find itself.
         self.marker["sample"] = sample
         _write_marker(marker_path(self.db_path), self.marker)
@@ -348,6 +397,31 @@ class _Job:
                 shutil.rmtree(cal)
             except OSError as exc:
                 raise Blocked(f"file_locked: {CALIBRATION_DIR} ({exc.strerror or exc})") from exc
+        if self.scope.purge_lab:
+            self._purge_lab()
+
+    def _purge_lab(self) -> None:
+        data = self.db_path.parent
+        for db in lab_suspension.lab_databases(data):
+            if db.exists():
+                try:
+                    lab_suspension.prove_no_writer(db)
+                except sqlite3.Error as exc:
+                    raise Blocked(LAB_BUSY) from exc
+        for p in self._lab_files():
+            try:
+                p.unlink(missing_ok=True)
+            except OSError as exc:
+                if p.name.startswith("lab.db"):
+                    raise Blocked(LAB_BUSY) from exc
+                raise Blocked(f"file_locked: {p.relative_to(data)} ({exc.strerror or exc})") from exc
+        lab_dir = data / "lab"
+        if lab_dir.is_dir():
+            for d in sorted((d for d in lab_dir.rglob("*") if d.is_dir()), key=lambda d: len(d.parts), reverse=True):
+                try:
+                    d.rmdir()
+                except OSError:
+                    pass
 
     def step_verified(self) -> None:
         # the state updates since WAL_TRUNCATED went to the WAL (control rows only): flush them first
@@ -355,6 +429,8 @@ class _Job:
         checks = verify(self.db_path, self.conn, self.erasure_id, self.scope,
                         [str(s) for s in self.marker.get("sample", [])], self._old_backups(),
                         self._calibration_dir(), self._wal_size())
+        if self.scope.purge_lab:
+            checks["lab"] = not self._lab_files()
         self.conn.execute("UPDATE erasure_jobs SET verification_json = ? WHERE erasure_id = ?",
                           (json.dumps(checks), self.erasure_id))
         failed = [name for name, ok in checks.items() if not ok]
@@ -362,6 +438,12 @@ class _Job:
             raise Blocked("verification_failed: " + ", ".join(failed))
 
     def step_complete(self) -> None:
+        if self.scope.purge_lab:
+            lab_suspension.resume(self.db_path.parent)
+            try:
+                (self.db_path.parent / "lab").rmdir()     # empty once purged
+            except OSError:
+                pass
         self.conn.execute("UPDATE erasure_jobs SET completed_at = ? WHERE erasure_id = ?",
                           (_now(), self.erasure_id))
         marker_path(self.db_path).unlink(missing_ok=True)

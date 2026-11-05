@@ -786,10 +786,13 @@ export interface ErasureStatus {
   last_error?: string | null
   counts?: Record<string, number> | null
   verification?: Record<string, boolean> | null
+  lab_present?: boolean
 }
 export const getErasure = () => api.get<ErasureStatus>('/privacy/erase').then(r => r.data)
-export const eraseActivity = (opts: { keep_tracker: boolean; erase_calibration: boolean }) =>
-  api.post<ErasureStatus>('/privacy/erase', { confirm: true, ...opts }).then(r => r.data)
+export const eraseActivity = ({ purge_lab, ...opts }: { keep_tracker: boolean; erase_calibration: boolean; purge_lab?: boolean }) =>
+  api.post<ErasureStatus>('/privacy/erase', {
+    confirm: true, ...opts, ...(purge_lab ? { purge_lab: true, confirm_lab: true } : {}),
+  }).then(r => r.data)
 export const retryErasure = () => api.post<ErasureStatus>('/privacy/erase/retry').then(r => r.data)
 
 /** Delete all application data (ADR 0015): state read from a file outside the data folder. */

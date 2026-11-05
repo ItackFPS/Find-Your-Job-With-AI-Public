@@ -1317,6 +1317,8 @@
       "help": "Deletes your saved, hidden and viewed offers, your answers, what the app learned from them and older backups of the database. No backup is made first.",
       "keepTracker": "Keep my application tracker",
       "eraseCalibration": "Also erase my calibration answers",
+      "purgeLab": "Also erase the laboratory data",
+      "confirmLab": "The laboratory databases, experiments and reports are deleted too. Production must run the default strategy.",
       "action": "Erase my activity",
       "confirm": "Erase your activity? This cannot be undone.",
       "confirmYes": "Erase",

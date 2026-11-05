@@ -31,10 +31,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from src.privacy import lab_suspension
+from src.privacy.lab_suspension import LAB_MARKER
+
 logger = logging.getLogger(__name__)
 
 PENDING = "DELETE_ALL_PENDING.json"
-LAB_MARKER = "LAB_SUSPENDED"
+__all__ = ["LAB_MARKER", "PENDING", "STATES", "pending", "read_state", "request", "run", "state_path"]
 STATES = ("REQUESTED", "QUIESCED", "INVENTORIED", "FILES_DELETED", "VERIFIED", "COMPLETE")
 BLOCKED = "BLOCKED"
 DB_PATTERNS = ("*.db", "*.db-wal", "*.db-shm", "*.sqlite")
@@ -152,7 +155,7 @@ class _Procedure:
         self.requested = datetime.fromisoformat(state["requested_at"])
 
     def _markers(self) -> list[Path]:
-        return [self.data / LAB_MARKER, self.data / "lab" / LAB_MARKER]
+        return lab_suspension.markers(self.data)
 
     def _data_files(self) -> list[Path]:
         if not self.data.is_dir():
@@ -170,9 +173,7 @@ class _Procedure:
 
     def step_quiesced(self) -> None:
         # Suspend the lab writers first (v5 lab rule 3), in data/ and, when it exists, data/lab/.
-        for marker in self._markers():
-            if marker.parent.is_dir():
-                marker.write_text("", encoding="utf-8")
+        lab_suspension.suspend(self.data)
         if self.quiesce is not None:
             self.quiesce()
 
@@ -232,7 +233,7 @@ class _Procedure:
             "inventory_absent": not any(p.exists() for p in listed),
             "data_folder_empty": all(p in markers or (p.is_dir() and p == self.data / "lab") for p in left),
             "no_old_database_files": not old,
-            "no_lab_database": not any((d / "lab.db").exists() for d in (self.data, self.data / "lab")),
+            "no_lab_database": not any(p.exists() for p in lab_suspension.lab_databases(self.data)),
         }
         self.state["verification"] = checks
         failed = [k for k, ok in checks.items() if not ok]
@@ -240,8 +241,7 @@ class _Procedure:
             raise Blocked("verification_failed: " + ", ".join(failed))
 
     def step_complete(self) -> None:
-        for marker in self._markers():
-            marker.unlink(missing_ok=True)
+        lab_suspension.resume(self.data)
         for d in (self.data / "lab", self.data):
             try:
                 d.rmdir()
