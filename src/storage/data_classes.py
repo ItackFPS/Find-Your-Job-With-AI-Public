@@ -62,6 +62,8 @@ JOBS_DB_TABLES: dict[str, DataClass] = {
     "hellowork_staging": "public",
     # -- operational
     "pipeline_runs": "operational",
+    "ops_metrics_daily": "operational",    # per-source daily metrics (ADR 0025)
+    "ops_alerts": "operational",           # detector alerts (ADR 0025)
     "source_checkpoints": "operational",
     "source_breakers": "operational",
     "sources": "operational",

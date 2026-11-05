@@ -50,9 +50,9 @@ Exit criteria are proposals until each stage is planned (v5 §6). Sequential, on
 
 | Stage | Contents | Status |
 |---|---|---|
-| L0 Decisions | 14 ADRs, one PR each, in this order: 1 planes and invariants → 2 AD-12 privacy, retention, erasure → 3 AD-6 signal capture → 4 AD-2 validity and constraints → 5 AD-3 personal model → 6 AD-5 shadow and health → 7 AD-4 promotion regimes (+ ADR 0011 amendment) → 8 AD-10 labels → 9 AD-1 knowledge packs → 10 AD-7 occupations → 11 AD-8 market → 12 AD-9 self-monitoring → 13 AD-11 lanes → 14 AD-13 roadmap | **in progress**: ADR 13 = ADR 0026 in review; next: ADR 14 (AD-13) |
-| L1 Signals and privacy | AD-6 visible-exposure logging, Save/Hide, AD-12 four actions, socket guard | blocked on L0 (ADRs 1–3) |
-| L2 Structured evidence + ops base | FT ROME, experience, education as typed evidence; source and field detectors | blocked on L0 |
+| L0 Decisions | 14 ADRs, one PR each, in this order: 1 planes and invariants → 2 AD-12 privacy, retention, erasure → 3 AD-6 signal capture → 4 AD-2 validity and constraints → 5 AD-3 personal model → 6 AD-5 shadow and health → 7 AD-4 promotion regimes (+ ADR 0011 amendment) → 8 AD-10 labels → 9 AD-1 knowledge packs → 10 AD-7 occupations → 11 AD-8 market → 12 AD-9 self-monitoring → 13 AD-11 lanes → 14 AD-13 roadmap | **done** 2026-11-05: ADRs 0014–0027 merged (0027 with this record update) |
+| L1 Signals and privacy | AD-6 visible-exposure logging, Save/Hide, AD-12 four actions, socket guard | **done** 2026-11-05: L1.1–L1.8 merged (exposure log, Save/Hide, outbox, socket guard, pause/reset, erase, delete all, lab purge; up to #128). Not verified in a real browser yet: the IndexedDB outbox, delete-all restart on Windows (fresh-copy install) |
+| L2 Structured evidence + ops base | FT ROME, experience, education as typed evidence; source and field detectors | **PR**: plan `2026-11-05-l2-structured-evidence-plan.md`; L2.1 typed FT evidence + extractor agreement merged (#132); L2.2 Quality card #133; L2.3 metrics and detectors #134; L2.4 Santé UI next |
 | L3 Model in shadow + simulator | AD-3 journaled, not shown; AD-5 simulator incl. SR-1…SR-5 | blocked on L1 |
 | L4 Personal ranking eligible | AD-5 activation rule, panel, health monitor | blocked on L3 |
 | L5 Weak evidence | AD-2 via pre-registration and the lab | blocked on L0 + its pre-registration |
@@ -145,11 +145,11 @@ next (2026-10-25). Order from the completion plan §P (approved 2026-10-30):
    100 blind labels, the v2-profile baseline (P3.1), the 7-day FT coverage figure.
 4. P3 (while labels are collected): profile v2 UI, AI setup UI, embedding download, wizard,
    Settings › Data/Language, CV import.
-5. **L0 (now, from 2026-11-05):** learning-architecture ADRs 0014+, one PR at a time, in the order
-   of the stages table above. Current: ADR 13 = ADR 0026 in review; next: ADR 14 (AD-13).
-6. ~~P4 ranking quality~~ replaced by L1–L4 (AD-13). P5 AI analysis, P6 polish, P7 release
-   qualification (owner approval to release) keep their place. Where L5–L9 sit relative to P5–P7 is
-   fixed by ADR 14 (AD-13 roadmap update, the last L0 ADR).
+5. **L0 done (2026-11-05)**, L1 done; **now L2** (see the stages table), then L3 → L8 (L9 optional),
+   then the fresh-copy install and test, then P3, P5, P6, P7 (ADR 0027).
+6. ~~P4 ranking quality~~ replaced by L1–L4 (ADR 0027). P3 runs after L1–L8 and the fresh-copy
+   install; P5 AI analysis, P6 polish (Home sections per ADR 0026), P7 release qualification (owner
+   approval to release; gains the learning gates listed in ADR 0027).
 
 Blocked on the owner: real-v3 labels (the real-v3 decision run happens once, only after the owner
 says labelling is finished; never pooled with real-v2); France Travail API credentials for the 7-day coverage figure; confirm the everyday database before

@@ -641,6 +641,48 @@
       },
       "error": "Could not measure the coverage."
     },
+    "agreement": {
+      "title": "Requirement extraction",
+      "subtitle": "What the app reads in offer texts, checked against what France Travail states in its own fields",
+      "rome": "{k} of {n} France Travail offers carry an occupation code (ROME): {value}.",
+      "experience": "Years of experience",
+      "education": "Education level",
+      "precision": "Correct when found",
+      "recall": "Found when stated",
+      "rate": "{value} ({k} of {n}, likely between {lo} and {hi})",
+      "noData": "not enough offers",
+      "beginnerConflicts": "Offers open to beginners but read as asking for 2 years or more: {count}.",
+      "rules": "Over the {offers} most recent France Travail offers. Experience counts as correct within {years} year; education when the level read falls in the stated range.",
+      "noOffers": "No France Travail offer is stored yet: nothing to compare.",
+      "error": "Could not measure the requirement extraction."
+    },
+    "alerts": {
+      "title": "Source health",
+      "subtitle": "Changes the app noticed in its own sources. It warns you; it changes nothing by itself.",
+      "none": "Nothing unusual in the latest runs.",
+      "since": "Noticed {date}.",
+      "resolve": "Mark as handled",
+      "error": "Could not load the source alerts.",
+      "unknown": "Alert {code} on {scope}.",
+      "volume": {
+        "title": "{source} brings far fewer offers than usual",
+        "evidence": "Last runs: {recent} offers; usually about {median} (over {runs} runs).",
+        "action": "Check the source in Settings › Sources: credentials, search terms, or a site change."
+      },
+      "completeness": {
+        "title": "{source}: the {field} is missing on many more offers",
+        "evidence": "Filled on {today} of today's {offers} offers, usually {median}.",
+        "action": "The site may have changed its format. Offers are still collected; this information may be missing from them."
+      },
+      "fields": {
+        "title": "title",
+        "description": "description",
+        "company": "company",
+        "location": "place",
+        "published_at": "publication date",
+        "employment_type": "contract type"
+      }
+    },
     "calibration": {
       "title": "Calibrate on your own offers",
       "subtitle": "Tell the app which offers really fit you, a few at a time",

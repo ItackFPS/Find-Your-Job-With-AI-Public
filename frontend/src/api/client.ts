@@ -690,6 +690,28 @@ export interface FtCoverage {
 }
 export const getFtCoverage = () => api.get<FtCoverage>('/quality/ft-coverage').then(r => r.data)
 
+/** Requirement extractor vs France Travail structured fields (v5 L2): counts and rates only. */
+export interface AgreementRate { k: number; n: number; value: number | null; ci95: [number, number] | null }
+export interface ExtractorAgreement {
+  status: 'measured' | 'no_france_travail_offers'; offers: number; limit: number; years_tolerance: number
+  rome_coverage: AgreementRate
+  experience: { precision: AgreementRate; recall: AgreementRate; disagreement: AgreementRate; beginner_conflicts: number }
+  education: { precision: AgreementRate; recall: AgreementRate; disagreement: AgreementRate }
+}
+export const getExtractorAgreement = () =>
+  api.get<ExtractorAgreement>('/quality/extractor-agreement').then(r => r.data)
+
+/** Self-monitoring alerts (ADR 0025): a code, a scope and its evidence; the page words them. */
+export interface OpsAlert {
+  alert_id: string; raised_at: string; updated_at: string; scope: string
+  code: 'source_volume_drop' | 'field_completeness_drop' | string; severity: string
+  status: 'open' | 'resolved'; resolved_at: string | null; resolved_by: string | null
+  evidence: Record<string, unknown>
+}
+export const getOpsAlerts = () => api.get<{ alerts: OpsAlert[] }>('/quality/alerts').then(r => r.data.alerts)
+export const resolveOpsAlert = (id: string) =>
+  api.post<{ alert_id: string; status: string }>(`/quality/alerts/${encodeURIComponent(id)}/resolve`).then(r => r.data)
+
 // ---- Quality › Calibration: blind labelling of an exported real dataset (P2.3) ----
 export type CalibrationAnswer = 'relevant' | 'not_relevant' | 'not_sure'
 export interface CalibrationDataset {
