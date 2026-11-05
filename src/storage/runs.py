@@ -194,6 +194,9 @@ class RunStorage:
         # unconditionally stale (same as the old blanket behavior) since
         # there is no PID/heartbeat evidence to say otherwise.
         ensure_columns(conn, "pipeline_runs", {"pid": "INTEGER", "heartbeat_at": "TEXT"})
+        # Personal model in shadow (ADR 0018, stage L3): the adjustment it would have applied and the
+        # model version. History only; readers filter on the current model version and reset marker.
+        ensure_columns(conn, "job_scores", {"personal_adjustment": "REAL", "personal_model_version": "TEXT"})
 
         conn.commit()
         RunStorage._initialized_paths.add(resolved)
@@ -379,8 +382,9 @@ class RunStorage:
         conn = self._get_conn()
         conn.executemany(
             """INSERT OR REPLACE INTO job_scores
-               (id, run_id, job_id, deterministic_score, semantic_score, final_score, score_breakdown_json)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+               (id, run_id, job_id, deterministic_score, semantic_score, final_score, score_breakdown_json,
+                personal_adjustment, personal_model_version)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 (
                     str(uuid.uuid4()),
@@ -390,6 +394,8 @@ class RunStorage:
                     s.get("semantic_score"),
                     s.get("final_score"),
                     json.dumps(s.get("score_breakdown", {})),
+                    s.get("personal_adjustment"),
+                    s.get("personal_model_version"),
                 )
                 for s in scores
             ],

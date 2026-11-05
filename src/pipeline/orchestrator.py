@@ -51,6 +51,9 @@ class ScoredJobRecord:
     semantic_score: float
     factors: dict[str, float]
     personalization_adjustment: float
+    # Personal model in shadow (ADR 0018, stage L3): journaled, never applied to final_score.
+    personal_adjustment: float | None = None
+    personal_model_version: str | None = None
 
 
 @dataclass
@@ -1189,6 +1192,7 @@ def run_pipeline(
         stats.model_name = semantic_config.get("embedding", {}).get("model_name", "")
 
         sem_scores_by_job: dict[str, float] = {}
+        embedding_model_id = ""            # the personal model reads vectors stored under this id
         final_ranked = scored_jobs
 
         _t_semantic = time.perf_counter()
@@ -1201,6 +1205,7 @@ def run_pipeline(
                     device=semantic_config["embedding"].get("device", "auto"),
                 )
 
+                embedding_model_id = embedding_service.cache_model_id
                 profile_embedding = build_profile_embedding(
                     profile.to_semantic_info(),
                     embedding_service,
@@ -1290,6 +1295,27 @@ def run_pipeline(
             final_ranked, personalized_ranked, factors_by_job_id, scoring_config,
         )
 
+        # Personal model in shadow (ADR 0018, ADR 0019; stage L3): fitted on the journal, the challenger
+        # ranking is journaled in ranking_shadow. Never applied: personalized_ranked, final_score and the
+        # deterministic score are unchanged. Skipped while learning is paused. Fail-open.
+        _t_shadow = time.perf_counter()
+        shadow_adjustments: dict[str, float] = {}
+        shadow_version: str | None = None
+        if not is_paused(db_path):
+            try:
+                from src.learning.shadow import compute_shadow
+
+                shadow_adjustments, shadow_version = compute_shadow(
+                    db_path, run_id, personalized_ranked, factors_by_job_id,
+                    lambda prod, chal: cap_personalization_at_gates(prod, chal, factors_by_job_id, scoring_config),
+                    embedding_model=embedding_model_id, started_at=started_at,
+                    config_path=Path(config_dir) / "personalization.yaml",
+                )
+            except Exception:  # noqa: BLE001 - the shadow path never affects the run
+                logger.exception("Personal model shadow failed; the run keeps its ranking")
+                shadow_adjustments, shadow_version = {}, None
+        stats.stage_times["shadow"] = time.perf_counter() - _t_shadow
+
         stats.personalized = len(personalized_ranked)
         stats.personalization_cache_hits = int(_pers_timing.get("pers_cache_hits", 0))
         stats.personalization_cache_misses = int(_pers_timing.get("pers_cache_misses", 0))
@@ -1344,6 +1370,8 @@ def run_pipeline(
                 semantic_score=sem_scores_by_job.get(job.id, 0.0),
                 factors=breakdown_by_job.get(job.id, {}),
                 personalization_adjustment=exp.clamped_adjustment if exp else 0.0,
+                personal_adjustment=shadow_adjustments.get(job.id) if shadow_version else None,
+                personal_model_version=shadow_version,
             ))
 
         recorder.finalize(scored_job_records)
