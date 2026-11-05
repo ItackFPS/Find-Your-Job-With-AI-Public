@@ -24,3 +24,4 @@ is the source of truth and the ADR must be updated or superseded.
 | [0015](0015-privacy-retention-and-erasure.md) | Personal data has four in-app actions; erasure is a resumable job verified before success (supersedes 0009's owner-side erasure) |
 | [0016](0016-signal-capture-and-delivery.md) | Only visible exposure is logged; durable actions go through an acknowledged, ordered outbox |
 | [0017](0017-validity-constraints-and-hiding.md) | Offer validity is operational; only strong user constraints reject; weak ones rank; Hide is list management |
+| [0018](0018-personal-preference-model.md) | Personal preferences are a bounded Bayesian model that only reorders accepted offers |
