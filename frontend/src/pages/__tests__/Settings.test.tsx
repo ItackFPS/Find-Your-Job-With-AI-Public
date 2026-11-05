@@ -224,6 +224,20 @@ describe('Settings › Sources and background', () => {
     expect(calls).toContainEqual({ method: 'POST', url: '/privacy/erase/retry', body: undefined })
   })
 
+  it('offers the lab purge only when a lab exists, with its own confirmation', async () => {
+    routes['GET /privacy/erase'] = { state: null, pending: false, running: false, lab_present: true }
+    renderPage()
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Also erase the laboratory data' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Erase my activity' }))
+    const dialog = screen.getByRole('alertdialog', { name: 'Erase my activity' })
+    expect(within(dialog).getByText(/laboratory databases/)).toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Erase' }))
+    expect(calls).toContainEqual({
+      method: 'POST', url: '/privacy/erase',
+      body: { confirm: true, keep_tracker: false, erase_calibration: true, purge_lab: true, confirm_lab: true },
+    })
+  })
+
   it('deletes all data only after a confirmation and asks for a restart', async () => {
     renderPage()
     await userEvent.click(await screen.findByRole('button', { name: 'Delete all application data' }))

@@ -50,7 +50,7 @@ Exit criteria are proposals until each stage is planned (v5 §6). Sequential, on
 
 | Stage | Contents | Status |
 |---|---|---|
-| L0 Decisions | 14 ADRs, one PR each, in this order: 1 planes and invariants → 2 AD-12 privacy, retention, erasure → 3 AD-6 signal capture → 4 AD-2 validity and constraints → 5 AD-3 personal model → 6 AD-5 shadow and health → 7 AD-4 promotion regimes (+ ADR 0011 amendment) → 8 AD-10 labels → 9 AD-1 knowledge packs → 10 AD-7 occupations → 11 AD-8 market → 12 AD-9 self-monitoring → 13 AD-11 lanes → 14 AD-13 roadmap | **in progress**: ADR 11 = ADR 0024 in review; next: ADR 12 (AD-9) |
+| L0 Decisions | 14 ADRs, one PR each, in this order: 1 planes and invariants → 2 AD-12 privacy, retention, erasure → 3 AD-6 signal capture → 4 AD-2 validity and constraints → 5 AD-3 personal model → 6 AD-5 shadow and health → 7 AD-4 promotion regimes (+ ADR 0011 amendment) → 8 AD-10 labels → 9 AD-1 knowledge packs → 10 AD-7 occupations → 11 AD-8 market → 12 AD-9 self-monitoring → 13 AD-11 lanes → 14 AD-13 roadmap | **in progress**: ADR 13 = ADR 0026 in review; next: ADR 14 (AD-13) |
 | L1 Signals and privacy | AD-6 visible-exposure logging, Save/Hide, AD-12 four actions, socket guard | blocked on L0 (ADRs 1–3) |
 | L2 Structured evidence + ops base | FT ROME, experience, education as typed evidence; source and field detectors | blocked on L0 |
 | L3 Model in shadow + simulator | AD-3 journaled, not shown; AD-5 simulator incl. SR-1…SR-5 | blocked on L1 |
@@ -146,7 +146,7 @@ next (2026-10-25). Order from the completion plan §P (approved 2026-10-30):
 4. P3 (while labels are collected): profile v2 UI, AI setup UI, embedding download, wizard,
    Settings › Data/Language, CV import.
 5. **L0 (now, from 2026-11-05):** learning-architecture ADRs 0014+, one PR at a time, in the order
-   of the stages table above. Current: ADR 11 = ADR 0024 in review; next: ADR 12 (AD-9).
+   of the stages table above. Current: ADR 13 = ADR 0026 in review; next: ADR 14 (AD-13).
 6. ~~P4 ranking quality~~ replaced by L1–L4 (AD-13). P5 AI analysis, P6 polish, P7 release
    qualification (owner approval to release) keep their place. Where L5–L9 sit relative to P5–P7 is
    fixed by ADR 14 (AD-13 roadmap update, the last L0 ADR).

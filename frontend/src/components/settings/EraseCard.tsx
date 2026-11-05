@@ -27,6 +27,7 @@ export function EraseCard() {
   const [confirming, setConfirming] = useState(false)
   const [keepTracker, setKeepTracker] = useState(false)
   const [eraseCalibration, setEraseCalibration] = useState(true)
+  const [purgeLab, setPurgeLab] = useState(false)
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ERASURE_QUERY_KEY,
     queryFn: getErasure,
@@ -42,7 +43,9 @@ export function EraseCard() {
     toast.show({ message: t('settings.erase.failed'), tone: 'danger' })
   }
   const erase = useMutation({
-    mutationFn: () => eraseActivity({ keep_tracker: keepTracker, erase_calibration: eraseCalibration }),
+    mutationFn: () => eraseActivity({
+      keep_tracker: keepTracker, erase_calibration: eraseCalibration, purge_lab: purgeLab && !!data?.lab_present,
+    }),
     onSuccess: onDone,
     onError: failed,
   })
@@ -83,6 +86,12 @@ export function EraseCard() {
                 <input type="checkbox" checked={eraseCalibration} onChange={e => setEraseCalibration(e.target.checked)} />
                 {t('settings.erase.eraseCalibration')}
               </label>
+              {data.lab_present && (
+                <label style={row}>
+                  <input type="checkbox" checked={purgeLab} onChange={e => setPurgeLab(e.target.checked)} />
+                  {t('settings.erase.purgeLab')}
+                </label>
+              )}
               {!confirming ? (
                 <div>
                   <Button variant="secondary" onClick={() => setConfirming(true)}>{t('settings.erase.action')}</Button>
@@ -90,6 +99,7 @@ export function EraseCard() {
               ) : (
                 <div role="alertdialog" aria-label={t('settings.erase.action')} style={{ ...row, flexWrap: 'wrap' }}>
                   <span>{t('settings.erase.confirm')}</span>
+                  {purgeLab && data.lab_present && <span>{t('settings.erase.confirmLab')}</span>}
                   <Button variant="danger" disabled={erase.isPending} onClick={() => erase.mutate()}>
                     {t('settings.erase.confirmYes')}
                   </Button>

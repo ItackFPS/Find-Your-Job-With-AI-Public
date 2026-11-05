@@ -77,6 +77,8 @@ class EraseIn(BaseModel):
     confirm: bool = False
     keep_tracker: bool = False
     erase_calibration: bool = True
+    purge_lab: bool = False
+    confirm_lab: bool = False         # the lab purge is confirmed separately (ADR 0015)
 
 
 def _quiesce(app: Any) -> None:
@@ -117,6 +119,7 @@ def _start(request: Request) -> None:
 def _status_out(db: str) -> dict[str, Any]:
     st = erasure.status(db) or {"state": None, "pending": erasure.pending(db)}
     st["running"] = _erase_lock.locked()
+    st["lab_present"] = erasure.lab_present(db)
     return st
 
 
@@ -127,12 +130,13 @@ def get_erasure(request: Request) -> dict[str, Any]:
 
 @router.post("/erase", status_code=202)
 def erase_activity(body: EraseIn, request: Request) -> dict[str, Any]:
-    if not body.confirm:
+    if not body.confirm or (body.purge_lab and not body.confirm_lab):
         raise HTTPException(status_code=400, detail="confirm_required")
     db = request.app.state.db_path
     if erasure.pending(db):
         raise HTTPException(status_code=409, detail="erasure_pending")
-    erasure.request(db, erasure.Scope(keep_tracker=body.keep_tracker, erase_calibration=body.erase_calibration))
+    erasure.request(db, erasure.Scope(keep_tracker=body.keep_tracker, erase_calibration=body.erase_calibration,
+                                      purge_lab=body.purge_lab))
     _start(request)
     return _status_out(db)
 

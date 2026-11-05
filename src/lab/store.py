@@ -12,6 +12,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from src.privacy.lab_suspension import check_can_open
+
 _DDL = """
 CREATE TABLE IF NOT EXISTS hypotheses (
     hypothesis_id TEXT PRIMARY KEY, created_at TEXT NOT NULL, statement TEXT NOT NULL,
@@ -46,6 +48,8 @@ def _now() -> str:
 class LabStore:
     def __init__(self, path: str | Path = "data/lab.db"):
         self.path = Path(path)
+        # Refuse to open, and to create, a lab database while a purge suspends the lab (ADR 0015).
+        check_can_open(self.path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self.path))
         self._conn.row_factory = sqlite3.Row
