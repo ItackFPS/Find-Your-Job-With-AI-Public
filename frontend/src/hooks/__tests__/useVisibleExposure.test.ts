@@ -77,3 +77,21 @@ describe('ExposureTracker', () => {
     expect(sent).toEqual([])
   })
 })
+
+describe('ExposureTracker on Découverte', () => {
+  it('marks Découverte exposures as randomized', () => {
+    vi.useFakeTimers()
+    const sent: ExposureItem[][] = []
+    const tracker = new ExposureTracker({
+      surface: 'decouverte', randomized: true, send: items => sent.push(items), isTabVisible: () => true,
+    })
+    const el = document.createElement('div')
+    tracker.observe(el, 'j9', 0)
+    tracker.handle([{ target: el, intersectionRatio: 1 }])
+    vi.advanceTimersByTime(MIN_VISIBLE_MS)
+    tracker.flush()
+    expect(sent[0][0]).toMatchObject({ job_id: 'j9', surface: 'decouverte', position: 0, randomized: true })
+    tracker.dispose()
+    vi.useRealTimers()
+  })
+})

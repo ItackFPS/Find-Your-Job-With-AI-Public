@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { listJobs, getAllDepartments, getJobCountries, getProfile, type Job, type CountryFacet, type LocationPreference } from '../api/client'
+import { listJobs, listDecouverte, getAllDepartments, getJobCountries, getProfile, type Job, type CountryFacet, type LocationPreference } from '../api/client'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Chip, EmptyState, LoadingState, Ring } from '../components'
@@ -253,6 +253,7 @@ export default function Jobs() {
   // Saved offers (ADR 0016), whatever the run.
   const [savedOnly, setSavedOnly] = useState(false)
   const track = useVisibleExposure('jobs')
+  const trackS4 = useVisibleExposure('decouverte', undefined, true)
   const [minTier, setMinTier] = useState(DEFAULT_MIN_TIER)
   const [q, setQ] = useState('')         // debounced value sent to API
   const [inputQ, setInputQ] = useState('') // immediate input value
@@ -309,6 +310,14 @@ export default function Jobs() {
       limit: PAGE,
       offset,
     }),
+  })
+
+  // Découverte (S4): its own section above the list, only on the plain first page.
+  const showDecouverte = !q && !savedOnly && offset === 0
+  const { data: decouverte } = useQuery({
+    queryKey: ['jobs-decouverte'],
+    queryFn: listDecouverte,
+    enabled: showDecouverte,
   })
 
   const filterStyle: React.CSSProperties = {
@@ -445,6 +454,24 @@ export default function Jobs() {
 
       {isLoading && <LoadingState compact />}
       {error && <div style={{ color: 'var(--color-error)' }}>{t('jobs.loadError')}</div>}
+
+      {showDecouverte && decouverte && decouverte.length > 0 && (
+        <section aria-labelledby="decouverte-title" data-testid="decouverte" style={{ marginBottom: '1.25rem' }}>
+          <h2 id="decouverte-title" style={{ fontSize: '1rem', margin: '0 0 0.25rem' }}>{t('decouverte.title')}</h2>
+          <p style={{ fontSize: '0.82rem', color: 'var(--color-muted)', margin: '0 0 0.6rem' }}>{t('decouverte.hint')}</p>
+          {decouverte.map((job, i) => (
+            <JobCard
+              key={job.id}
+              job={job}
+              position={i}
+              trackRef={trackS4(job.id, i)}
+              targetSkills={targetSkills}
+              locationPreferences={locationPreferences}
+              departmentNames={departmentNames}
+            />
+          ))}
+        </section>
+      )}
 
       {jobs && jobs.length === 0 && (
         <EmptyState message={t('jobs.empty')} />

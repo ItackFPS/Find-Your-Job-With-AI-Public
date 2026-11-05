@@ -1356,6 +1356,10 @@
       "failed": "L’effacement n’a pas pu démarrer."
     }
   },
+  "decouverte": {
+    "title": "Découverte",
+    "hint": "Offres tirées au hasard parmi celles qui respectent vos critères stricts, sans tenir compte du score. Certaines vous correspondront moins : c'est voulu."
+  },
   "saveHide": {
     "save": "Enregistrer",
     "saved": "Enregistrée",

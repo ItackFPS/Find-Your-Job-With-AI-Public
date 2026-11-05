@@ -1356,6 +1356,10 @@
       "failed": "The erasure could not be started."
     }
   },
+  "decouverte": {
+    "title": "Discovery",
+    "hint": "Offers drawn at random among those that meet your strict criteria, ignoring the score. Some will fit you less well: that is intended."
+  },
   "saveHide": {
     "save": "Save",
     "saved": "Saved",

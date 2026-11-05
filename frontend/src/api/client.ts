@@ -464,6 +464,9 @@ export const listJobs = (params?: {
   offset?: number
 }) => api.get<Job[]>('/jobs', { params }).then(r => r.data)
 
+// Découverte (S4; ADR 0019): the latest run's random slots, apart from the main list.
+export const listDecouverte = () => api.get<Job[]>('/jobs/decouverte').then(r => r.data)
+
 // The user reports an offer as no longer available, or available after all (issue #86).
 export const setJobAvailability = (id: string, available: boolean) =>
   api.post<Job>(`/jobs/${id}/availability`, { available }).then(r => r.data)
