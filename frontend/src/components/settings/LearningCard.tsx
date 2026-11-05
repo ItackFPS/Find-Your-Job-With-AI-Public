@@ -16,6 +16,16 @@ import { LEARNING_QUERY_KEY } from './queryKeys'
  * It also says where the personal ranking stands (ADR 0019): while observing, one neutral sentence,
  * no counter and no request; when paused, a notice with "Reprendre" and "Réinitialiser".
  */
+// Literal keys keep the catalogue check able to see them; an unknown server key falls back to "observing".
+function statusWording(t: (key: string) => string, key: string): string {
+  switch (key) {
+    case 'learning.status.experimental': return t('learning.status.experimental')
+    case 'learning.status.active': return t('learning.status.active')
+    case 'learning.status.paused': return t('learning.status.paused')
+    default: return t('learning.status.observing')
+  }
+}
+
 export function LearningCard() {
   const { t, i18n } = useTranslation()
   const toast = useToast()
@@ -54,7 +64,7 @@ export function LearningCard() {
       {data && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           {status.data && !status.data.paused_notice && (
-            <p data-testid="learning-status" style={{ margin: 0, fontSize: 'var(--font-size-sm)' }}>{t(status.data.wording_key)}</p>
+            <p data-testid="learning-status" style={{ margin: 0, fontSize: 'var(--font-size-sm)' }}>{statusWording(t, status.data.wording_key)}</p>
           )}
           {status.data?.paused_notice && (
             <div role="status" data-testid="learning-paused" style={{
