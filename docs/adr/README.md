@@ -29,3 +29,4 @@ is the source of truth and the ADR must be updated or superseded.
 | [0020](0020-two-promotion-regimes.md) | Personal learning updates itself within bounds; global strategy changes still need the lab (amends 0011) |
 | [0021](0021-labels-are-developer-instruments.md) | Labels are developer and release instruments, never a user prerequisite |
 | [0022](0022-knowledge-packs.md) | Shared intelligence travels only in versioned, read-only knowledge packs shipped with releases |
+| [0023](0023-occupation-model.md) | Offers get a ROME occupation (structured first, then a calibrated per-code classifier); similarity, transferable skills and feasibility stay separate |
