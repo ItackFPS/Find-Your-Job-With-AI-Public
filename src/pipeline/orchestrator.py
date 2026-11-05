@@ -54,6 +54,8 @@ class ScoredJobRecord:
     # Personal model in shadow (ADR 0018, stage L3): journaled, never applied to final_score.
     personal_adjustment: float | None = None
     personal_model_version: str | None = None
+    # Visible position when the personal ranking is ACTIVE (stage L4.2); None means the production order.
+    visible_position: int | None = None
 
 
 @dataclass
@@ -1301,6 +1303,7 @@ def run_pipeline(
         _t_shadow = time.perf_counter()
         shadow_adjustments: dict[str, float] = {}
         shadow_version: str | None = None
+        visible_positions: dict[str, int] = {}
         if not is_paused(db_path):
             try:
                 from src.learning.shadow import compute_shadow
@@ -1314,6 +1317,33 @@ def run_pipeline(
             except Exception:  # noqa: BLE001 - the shadow path never affects the run
                 logger.exception("Personal model shadow failed; the run keeps its ranking")
                 shadow_adjustments, shadow_version = {}, None
+            if shadow_version:
+                # Live AD-5 counting (stage L4.1): records positives and the health state. Activation is
+                # behind a release flag that is off, so this changes nothing the user sees. Fail-open.
+                try:
+                    from src.learning.health import update_health
+
+                    health_record = update_health(db_path, run_id,
+                                                  config_path=Path(config_dir) / "personalization.yaml")
+                except Exception:  # noqa: BLE001 - the health record never affects the run
+                    logger.exception("Personal health update failed; the run keeps its ranking")
+                    health_record = None
+                # Personal ranking (stage L4.2): only an ACTIVE record with the release flag on changes
+                # the visible order; stored scores stay the production ones. A guardrail failure pauses.
+                if health_record:
+                    from src.learning.health import pause, visible_ranking
+
+                    try:
+                        visible = visible_ranking(
+                            personalized_ranked, shadow_adjustments, health_record,
+                            lambda prod, chal: cap_personalization_at_gates(prod, chal, factors_by_job_id,
+                                                                            scoring_config))
+                    except Exception:  # noqa: BLE001 - fail to production and pause
+                        logger.exception("Personal ranking failed a guardrail; pausing, production is used")
+                        pause(db_path, "guardrail")
+                        visible = None
+                    if visible is not None:
+                        visible_positions = {job.id: i for i, (job, _) in enumerate(visible, start=1)}
         stats.stage_times["shadow"] = time.perf_counter() - _t_shadow
 
         stats.personalized = len(personalized_ranked)
@@ -1372,6 +1402,7 @@ def run_pipeline(
                 personalization_adjustment=exp.clamped_adjustment if exp else 0.0,
                 personal_adjustment=shadow_adjustments.get(job.id) if shadow_version else None,
                 personal_model_version=shadow_version,
+                visible_position=visible_positions.get(job.id),
             ))
 
         recorder.finalize(scored_job_records)

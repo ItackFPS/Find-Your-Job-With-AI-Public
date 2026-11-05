@@ -7,6 +7,7 @@ GET  /api/quality/jobs/{id}         — one job: status, phase, result summary o
 POST /api/quality/jobs/{id}/cancel  — stop the running job
 GET  /api/quality/ft-coverage       — France Travail web coverage of the API offers over 7 days (P2.7)
 GET  /api/quality/extractor-agreement — requirement extractor vs France Travail structured fields (v5 L2)
+GET  /api/quality/learning-curve    — offline learning curve of the personal model, counts only (v5 L3)
 GET  /api/quality/alerts            — self-monitoring alerts (ADR 0025), open by default
 POST /api/quality/alerts/{id}/resolve — mark an open alert resolved
 
@@ -146,6 +147,12 @@ def ft_coverage(request: Request) -> dict[str, Any]:
 def extractor_agreement(request: Request) -> dict[str, Any]:
     """Requirement extractor vs France Travail structured fields (v5 L2): counts and rates only."""
     return _run_readonly_tool("src.evaluation.extractor_agreement", request.app.state.db_path, timeout=300)
+
+
+@router.get("/learning-curve")
+def learning_curve(request: Request) -> dict[str, Any]:
+    """Offline learning curve of the personal model (v5 L3): counts only, never offer content."""
+    return _run_readonly_tool("src.evaluation.learning_curve", request.app.state.db_path, timeout=300)
 
 
 @router.get("/alerts")
