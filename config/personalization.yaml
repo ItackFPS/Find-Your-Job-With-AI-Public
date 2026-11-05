@@ -50,3 +50,29 @@ personalization:
   # counts a little) — 0.05 means feedback older than ~6 half-lives (~540
   # days) contributes at roughly this fraction of its original weight.
   recency_min_factor: 0.05
+
+# Personal preference model (ADR 0018, stage L3: computed in shadow, never shown).
+# Every value is an initial value, not approved until measured (v5 §9). Defaults live in
+# src/learning/config.py; a key set here overrides its default.
+personal_model:
+  weights:
+    opened: 0.25            # once per offer, routed to the embedding and occupation
+    saved: 1.0
+    to_apply: 1.0
+    apply_link_opened: 1.2
+    applied: 1.5
+    interview: 2.0
+    offer: 2.0
+    accepted_offer: 2.0
+    interested: 1.2
+    not_interested: -1.2    # with a reason: only that reason's feature
+    hidden_with_reason: -1.2
+    ignored: 0.0            # logged only at launch (owner decision)
+  clamp: 2.0
+  half_life_days: 90
+  min_recency: 0.05
+  profile_change_discount: 0.5
+  prior_strength: 4.0
+  shrinkage: 3.0
+  cap_max: 0.15
+  cap_half_n: 20
