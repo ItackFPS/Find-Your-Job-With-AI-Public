@@ -87,6 +87,9 @@ beforeEach(() => {
       removable_expired: { '30': 300, '90': 120, '180': 40 }, backups: [], cleanup: { state: 'idle' },
     },
     'POST /settings/data/cleanup': { state: 'running' },
+    'GET /privacy/learning': { paused: false, reset_at: null },
+    'PUT /privacy/learning/pause': { paused: true, reset_at: null },
+    'POST /privacy/learning/reset': { paused: false, reset_at: '2026-11-05T10:00:00+00:00', cleared: {} },
     'POST /sources/remoteok/breaker/reset': { source: 'remoteok', consecutive_failures: 0, paused: false, paused_until: null, last_failure_reason: null },
   }
 })
@@ -173,6 +176,22 @@ describe('Settings › Sources and background', () => {
     expect(dialog).toHaveTextContent(/cannot be undone/i)
     await userEvent.click(within(dialog).getByRole('button', { name: 'Remove' }))
     expect(calls).toContainEqual({ method: 'POST', url: '/settings/data/cleanup', body: { older_than_days: 90 } })
+  })
+
+  it('pauses learning', async () => {
+    renderPage()
+    const toggle = await screen.findByRole('switch', { name: /pause learning/i })
+    await userEvent.click(toggle)
+    expect(calls).toContainEqual({ method: 'PUT', url: '/privacy/learning/pause', body: { paused: true } })
+  })
+
+  it('resets learning only after a confirmation', async () => {
+    renderPage()
+    await userEvent.click(await screen.findByRole('button', { name: 'Reset learning' }))
+    expect(calls.some(c => c.url === '/privacy/learning/reset')).toBe(false)
+    const dialog = screen.getByRole('alertdialog', { name: 'Reset learning' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Reset' }))
+    expect(calls).toContainEqual({ method: 'POST', url: '/privacy/learning/reset', body: { confirm: true } })
   })
 
   it('reports a section that cannot load', async () => {

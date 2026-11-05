@@ -1264,10 +1264,17 @@ def run_pipeline(
 
         _pers_timing: dict = {}
         _pers_reporter = _stage_reporter(progress_callback, stats, "personalize", len(final_ranked))
-        personalized_ranked, pers_explanations = apply_personalization(
-            final_ranked, pers_storage, pers_config, timing=_pers_timing,
-            progress_callback=lambda p, _t: _pers_reporter(p),
-        )
+        from src.privacy.learning import is_paused
+
+        if is_paused(db_path):
+            # Pause learning (ADR 0015): the ranking passes through with no personal adjustment.
+            logger.info("Personalization skipped: learning is paused")
+            personalized_ranked, pers_explanations = list(final_ranked), {}
+        else:
+            personalized_ranked, pers_explanations = apply_personalization(
+                final_ranked, pers_storage, pers_config, timing=_pers_timing,
+                progress_callback=lambda p, _t: _pers_reporter(p),
+            )
 
         # Personalization has no visibility into the domain/seniority
         # dealbreaker gates applied upstream in scoring.py's _apply_weights

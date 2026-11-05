@@ -1269,6 +1269,19 @@
         "scan_running": "Une analyse est en cours. Réessayez quand elle sera terminée.",
         "cleanup_running": "Un nettoyage est déjà en cours."
       }
+    },
+    "learning": {
+      "title": "Apprentissage",
+      "subtitle": "Comment l’application apprend de vos actions. Vos actions restent toujours sur cet ordinateur.",
+      "pause": "Mettre l’apprentissage en pause",
+      "pauseHelp": "Vos actions sont toujours enregistrées, mais le classement cesse de s’y adapter jusqu’à la reprise.",
+      "reset": "Réinitialiser l’apprentissage",
+      "resetHelp": "L’apprentissage repart de vos prochaines actions. Vos offres enregistrées et masquées et votre suivi de candidatures sont conservés.",
+      "confirm": "Réinitialiser l’apprentissage ? Ce qu’il a appris jusqu’ici est effacé.",
+      "confirmYes": "Réinitialiser",
+      "resetDone": "L’apprentissage a été réinitialisé.",
+      "lastReset": "Dernière réinitialisation : {date}",
+      "failed": "La modification n’a pas pu être enregistrée."
     }
   },
   "saveHide": {

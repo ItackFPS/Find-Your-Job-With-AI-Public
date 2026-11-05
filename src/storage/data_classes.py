@@ -77,6 +77,14 @@ PERSONAL_COLUMNS: dict[str, tuple[str, ...]] = {
     "jobs": ("application_status",),
 }
 
+# Cleared by "Reset learning" (v5 §4.12): derived learned state plus the legacy learning tables.
+# The journal, exposure log, tracker and stored scores are kept; learning ignores pre-marker signals.
+RESET_CLEARED_TABLES: tuple[str, ...] = (
+    "personalization_score_cache",
+    "job_feedback",
+    "outcome_events",
+)
+
 # Separate read-only or developer databases. They never hold application-user activity, except the
 # lab, whose results may hold per-offer content derived from labels (ADR 0015, lab purge rules).
 OTHER_DB_TABLES: dict[str, dict[str, DataClass]] = {

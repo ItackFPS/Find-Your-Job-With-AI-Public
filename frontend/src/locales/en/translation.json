@@ -1269,6 +1269,19 @@
         "scan_running": "A scan is running. Try again when it has finished.",
         "cleanup_running": "A cleanup is already running."
       }
+    },
+    "learning": {
+      "title": "Learning",
+      "subtitle": "How the app learns from what you do. Your actions always stay on this computer.",
+      "pause": "Pause learning",
+      "pauseHelp": "Your actions are still recorded, but the ranking stops adapting to them until you resume.",
+      "reset": "Reset learning",
+      "resetHelp": "Learning starts over from your next actions. Your saved and hidden offers and your application tracker are kept.",
+      "confirm": "Reset learning? What it learned so far is cleared.",
+      "confirmYes": "Reset",
+      "resetDone": "Learning was reset.",
+      "lastReset": "Last reset: {date}",
+      "failed": "The change could not be saved."
     }
   },
   "saveHide": {

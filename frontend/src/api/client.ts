@@ -756,6 +756,13 @@ export interface SessionState {
   learning_reset_at: string | null
 }
 
+export interface LearningState { paused: boolean; reset_at: string | null }
+export const getLearningState = () => api.get<LearningState>('/privacy/learning').then(r => r.data)
+export const setLearningPaused = (paused: boolean) =>
+  api.put<LearningState>('/privacy/learning/pause', { paused }).then(r => r.data)
+export const resetLearning = () =>
+  api.post<LearningState & { cleared: Record<string, number> }>('/privacy/learning/reset', { confirm: true }).then(r => r.data)
+
 export const getSession = () => api.get<SessionState>('/session').then(r => {
   setGenerationToken(r.data.token)
   return r.data
