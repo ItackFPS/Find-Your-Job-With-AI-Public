@@ -3,6 +3,8 @@
 GET  /api/privacy/learning        — {"paused": bool, "reset_at": str | null}
 PUT  /api/privacy/learning/pause  — {"paused": true}: pause or resume learning
 POST /api/privacy/learning/reset  — {"confirm": true}: set the reset marker, clear derived state
+GET  /api/privacy/learning/status — personal ranking state and its wording key (ADR 0019, v5 L4.4)
+POST /api/privacy/learning/resume — "Reprendre" after a pause: back to observation (guarded)
 GET  /api/privacy/erase           — the latest erasure job (state, counts, checks; no content)
 POST /api/privacy/erase           — {"confirm": true, "keep_tracker": bool, "erase_calibration": bool}
 POST /api/privacy/erase/retry     — resume a BLOCKED erasure from its last completed step
@@ -69,6 +71,49 @@ def reset_learning(body: ResetIn, request: Request) -> ResetOut:
     _, cleared = learning.reset(db)
     st = learning.state(db)
     return ResetOut(paused=st.paused, reset_at=st.reset_at, cleared=cleared)
+
+
+class LearningStatusOut(BaseModel):
+    """Personal ranking state (ADR 0019). ``wording_key`` names the sentence the page shows; while
+    observing, the page shows no counter and asks for nothing. ``strata`` (discordant positives and
+    challenger wins per stratum) is for the Quality page only."""
+    state: str
+    wording_key: str
+    activation_enabled: bool
+    paused_notice: bool
+    state_since: str | None = None
+    last_event: str | None = None
+    strata: dict[str, dict[str, int]] = {}
+
+
+_WORDING = {"shadow": "learning.status.observing", "experimental_unconfirmed": "learning.status.experimental",
+            "active": "learning.status.active", "paused": "learning.status.paused"}
+
+
+@router.get("/learning/status", response_model=LearningStatusOut)
+def learning_status(request: Request) -> LearningStatusOut:
+    from src.learning import health
+
+    rec = health.current_health(request.app.state.db_path) or {}
+    state = rec.get("state") or "shadow"
+    strata = {k: {"discordant": int(v.get("discordant", 0)), "challenger_wins": int(v.get("wins", 0))}
+              for k, v in (rec.get("decision", {}).get("strata") or {}).items()}
+    return LearningStatusOut(
+        state=state, wording_key=_WORDING.get(state, _WORDING["shadow"]),
+        activation_enabled=bool((rec.get("flags") or {}).get("activation_enabled")),
+        paused_notice=state == "paused", state_since=rec.get("state_since"), last_event=rec.get("last_event"),
+        strata=strata)
+
+
+@router.post("/learning/resume", response_model=LearningStatusOut)
+def resume_learning(request: Request) -> LearningStatusOut:
+    """"Reprendre": a paused personal ranking goes back to observation; the full rule must pass
+    again before it applies (the monitor stays on)."""
+    from src.learning import health
+
+    if not health.resume(request.app.state.db_path):
+        raise HTTPException(status_code=409, detail="not_paused")
+    return learning_status(request)
 
 
 # -- Erase my activity (ADR 0015) ----------------------------------------------------------------

@@ -90,6 +90,14 @@ beforeEach(() => {
     'GET /privacy/learning': { paused: false, reset_at: null },
     'PUT /privacy/learning/pause': { paused: true, reset_at: null },
     'POST /privacy/learning/reset': { paused: false, reset_at: '2026-11-05T10:00:00+00:00', cleared: {} },
+    'GET /privacy/learning/status': {
+      state: 'shadow', wording_key: 'learning.status.observing', activation_enabled: false, paused_notice: false,
+      state_since: null, last_event: null, strata: { LB: { discordant: 3, challenger_wins: 2 } },
+    },
+    'POST /privacy/learning/resume': {
+      state: 'shadow', wording_key: 'learning.status.observing', activation_enabled: false, paused_notice: false,
+      state_since: null, last_event: 'resumed', strata: {},
+    },
     'GET /privacy/erase': { state: null, pending: false, running: false },
     'POST /privacy/erase': { state: 'COMPLETE', pending: false, running: false, completed_at: '2026-11-05T11:00:00+00:00' },
     'POST /privacy/erase/retry': { state: 'COMPLETE', pending: false, running: false, completed_at: '2026-11-05T11:00:00+00:00' },
@@ -188,6 +196,28 @@ describe('Settings › Sources and background', () => {
     const toggle = await screen.findByRole('switch', { name: /pause learning/i })
     await userEvent.click(toggle)
     expect(calls).toContainEqual({ method: 'PUT', url: '/privacy/learning/pause', body: { paused: true } })
+  })
+
+  it('says the personal ranking is observing, with no counter', async () => {
+    renderPage()
+    const status = await screen.findByTestId('learning-status')
+    expect(status).toHaveTextContent(/watching your choices/i)
+    expect(status.textContent).not.toMatch(/\d/)
+    expect(document.body.textContent).not.toMatch(/better|95 ?%/i)
+  })
+
+  it('shows the pause notice with resume and reset', async () => {
+    routes['GET /privacy/learning/status'] = {
+      state: 'paused', wording_key: 'learning.status.paused', activation_enabled: true, paused_notice: true,
+      state_since: '2026-11-05T10:00:00+00:00', last_event: 'paused', strata: {},
+    }
+    renderPage()
+    const notice = await screen.findByTestId('learning-paused')
+    expect(notice).toHaveTextContent(/paused/i)
+    await userEvent.click(within(notice).getByRole('button', { name: 'Resume' }))
+    expect(calls).toContainEqual({ method: 'POST', url: '/privacy/learning/resume', body: undefined })
+    await userEvent.click(within(notice).getByRole('button', { name: 'Reset' }))
+    expect(screen.getByRole('alertdialog', { name: 'Reset learning' })).toBeInTheDocument()
   })
 
   it('resets learning only after a confirmation', async () => {

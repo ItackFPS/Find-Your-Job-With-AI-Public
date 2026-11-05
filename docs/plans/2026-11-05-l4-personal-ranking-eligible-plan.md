@@ -133,7 +133,7 @@ Tests:
 
 ### L4.4 Transparency panel, pause notice, Quality section
 
-- `GET /api/learning/status`: state, flags, counts, wording keys. While SHADOW, the neutral status
+- `GET /api/privacy/learning/status`: state, flags, per-stratum counts (Quality only), wording key; `POST /api/privacy/learning/resume`. While SHADOW, the neutral status
   ("L'application observe vos choix ; la personnalisation s'activera quand elle aura fait ses
   preuves"), with no counter and no request for labels.
 - Pause notice with "Reprendre" (guarded; the monitor stays on) and "Réinitialiser" (the existing

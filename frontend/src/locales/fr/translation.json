@@ -1372,5 +1372,32 @@
     "erased": "Non enregistré : votre activité a été effacée depuis le chargement de la page. Rechargez la page.",
     "rejected": "Non enregistré : le serveur a refusé cette action.",
     "failed": "Non enregistré : une erreur est survenue."
+  },
+  "learning": {
+    "status": {
+      "observing": "L’application observe vos choix ; la personnalisation s’activera quand elle aura fait ses preuves.",
+      "experimental": "Un classement personnel est à l’essai sur une petite partie de la liste.",
+      "active": "Le classement tient compte de vos choix, dans une limite fixe.",
+      "paused": "Le classement personnel est en pause : il ne suivait plus vos choix récents. La liste suit le classement habituel.",
+      "resume": "Reprendre",
+      "resumeHelp": "La personnalisation repart en observation et ne s’appliquera qu’après avoir de nouveau fait ses preuves.",
+      "resumed": "Le classement personnel est repassé en observation.",
+      "resetFromNotice": "Réinitialiser"
+    },
+    "curve": {
+      "title": "Classement personnel (mesure hors ligne)",
+      "subtitle": "Rejoue vos choix passés pour comparer le classement habituel et le classement personnel. Mesure descriptive, pas une preuve.",
+      "run": "Mesurer",
+      "error": "La mesure n’a pas pu être faite.",
+      "none": "Pas encore assez de choix pour mesurer.",
+      "summary": "Sur {n, plural, one {# offre que vous avez retenue} other {# offres que vous avez retenues}} et que les deux classements plaçaient différemment, la version personnalisée les aurait classées plus haut dans {x} cas.",
+      "strata": "Par type de liste (offres retenues classées différemment / plus haut dans la version personnalisée) :",
+      "stratum": "{name} : {n} / {x}",
+      "names": {
+        "LB": "listes peu influencées par le classement (Découverte, tri par date ou distance)",
+        "PF": "listes triées par pertinence",
+        "IM": "autres"
+      }
+    }
   }
 }
