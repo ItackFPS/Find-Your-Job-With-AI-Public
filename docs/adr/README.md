@@ -20,3 +20,4 @@ is the source of truth and the ADR must be updated or superseded.
 | [0011](0011-experiment-lab.md) | Strategy changes are tested in a separate lab and promoted only by explicit human approval |
 | [0012](0012-freshness-dates.md) | Listing age comes from the source date, else our first sighting — never the last collection |
 | [0013](0013-distance-and-remote-policy-location.md) | Location is matched on distance from home and a typed remote policy (supersedes 0005 once a home is set) |
+| [0014](0014-learning-planes-and-invariants.md) | Learning is split into four planes (personal, engine, market, operational) bound by shared invariants |
