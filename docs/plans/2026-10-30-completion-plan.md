@@ -228,6 +228,12 @@ Each phase lists: objective · already exists · to do (tagged) · acceptance ·
 
 #### Phase 4 — Ranking quality on real offers [review R-C1]
 
+> **Replaced on 2026-11-05.** The owner approved the learning architecture
+> (`2026-11-05-learning-architecture-decisions.md`, v5). Its decision AD-13 replaces this phase's
+> ranking and personalization work with stages L1–L4 (signals and privacy, structured evidence,
+> personal model in shadow, personal ranking eligible). R-C1 still governs engine changes. F7.3
+> (posting language) is unaffected. The text below is kept as history.
+
 - **Objective:** better ranking of genuinely relevant offers without weakening eligibility safety.
 - **To do:** test the pre-registered candidates on held-out real-v2; investigate FPs by category
   and source; improvements through ranking (weights, distance decay, domain cap, semantic

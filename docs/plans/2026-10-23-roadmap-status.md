@@ -2,8 +2,9 @@
 
 The living execution record for `2026-10-23-final-update-plan.md` (the plan stays the source of
 truth for scope and acceptance criteria). Since 2026-10-30 the execution **order**, the audit's
-corrections and the owner's review decisions are in `2026-10-30-completion-plan.md`. A new session
-resumes from **Next actions**.
+corrections and the owner's review decisions are in `2026-10-30-completion-plan.md`. Since
+2026-11-05 the learning architecture (`2026-11-05-learning-architecture-decisions.md`, v5) adds
+stages L0–L9 and replaces Phase 4. A new session resumes from **Next actions**.
 
 Tiers: **R** release-blocking, **T** release-targeted (own toggle), **O** optional. Status:
 `done` (merged, criterion verified), `merged` (merged, criterion partly verified), `PR` (open),
@@ -31,6 +32,41 @@ stay unmet (R-Q6); the 3-user usability test is release-blocking, 2 of 3 machine
 hardware check (R-A3); every user-facing feature ships with its UI (R-C2); measurement before
 matching changes, judged on held-out labels (R-C1).
 
+Owner decision 2026-11-05: the **learning architecture v5 is approved**
+(`2026-11-05-learning-architecture-decisions.md`, after four review passes over the v1 proposal and
+the continuous-learning audit of the same day). The approval covers the direction of AD-1 to AD-13
+and the 13 owner decisions of its §8. It approves **no parameter**: every [D] number stays an initial
+value until measured. Consequences for this record: Phase 4 is replaced by L1–L4 (AD-13); P3, P5,
+P6 and P7 keep their place, with the P7 gates AD-13 adds; L0 (ADRs 0014+, one per PR, in the v5 §10
+order, docs only) starts now. Still open inside their ADRs: v5 §8 items 14 (EXPERIMENTAL state at
+launch, ADR 6), 15 (two browser profiles, ADR 3), 16 (S4 without a score floor, ADR 6).
+
+## Learning architecture stages (v5, approved 2026-11-05)
+
+Exit criteria are proposals until each stage is planned (v5 §6). Sequential, one at a time.
+
+| Stage | Contents | Status |
+|---|---|---|
+| L0 Decisions | 14 ADRs, one PR each, in this order: 1 planes and invariants → 2 AD-12 privacy, retention, erasure → 3 AD-6 signal capture → 4 AD-2 validity and constraints → 5 AD-3 personal model → 6 AD-5 shadow and health → 7 AD-4 promotion regimes (+ ADR 0011 amendment) → 8 AD-10 labels → 9 AD-1 knowledge packs → 10 AD-7 occupations → 11 AD-8 market → 12 AD-9 self-monitoring → 13 AD-11 lanes → 14 AD-13 roadmap | **in progress**: ADR 1 next |
+| L1 Signals and privacy | AD-6 visible-exposure logging, Save/Hide, AD-12 four actions, socket guard | blocked on L0 (ADRs 1–3) |
+| L2 Structured evidence + ops base | FT ROME, experience, education as typed evidence; source and field detectors | blocked on L0 |
+| L3 Model in shadow + simulator | AD-3 journaled, not shown; AD-5 simulator incl. SR-1…SR-5 | blocked on L1 |
+| L4 Personal ranking eligible | AD-5 activation rule, panel, health monitor | blocked on L3 |
+| L5 Weak evidence | AD-2 via pre-registration and the lab | blocked on L0 + its pre-registration |
+| L6 Occupations | ROME pack (ESCO not in the first pack), prototype classifier, three concepts | blocked on L0 + ROME licence and appellation checks |
+| L7 Market | coverage descriptor, three claim levels, salary comparability | blocked on L6 + `matches_salary` correction |
+| L8 Full self-monitoring | AD-9 | blocked on L4, L6 |
+| L9 (optional) Estimated position correction | AD-3.2 | optional |
+
+Preparation work that gates ADRs or implementation (v5 §8, §10), in the order it is needed:
+- before **finalizing ADR 2**: check whether lab writers store label-derived per-offer content;
+  whether the isolated lab agent can read `LAB_SUSPENDED` in `data/lab/`; whether the app's account
+  can delete files the lab account created there (drafting ADR 2 does not wait for these);
+- before **L1/L7 salary work**: the `matches_salary` correction (owner priority, item 8), then the
+  profile salary contract (item 7); the France Travail salary basis before AD-8 statistics;
+- before **L6**: the ROME licence PDF and the per-code appellation distribution in the ROME export;
+- before **L4 activation**: the SR-1…SR-5 simulator results.
+
 ## Dependency waves (original plan)
 
 | Wave | Items | Depends on |
@@ -50,7 +86,7 @@ The phase order that supersedes the waves from 2026-10-30 is in the completion p
 | Item | Tier | Status | Where / evidence |
 |---|---|---|---|
 | F0.1 baselines | R | done #45 | `docs/baselines/v1.0.0.md`; full run duration not measured |
-| F0.2 personal labels | T | flow merged #99, #104; labels pending | blind in-app labelling of real-v2 (Quality › Calibration) and held-out measurement with CIs are merged; real-v2 has 0 labels until the owner labels it |
+| F0.2 personal labels | T | flow merged #99, #104; 100 labels done (owner, 2026-11-03) | blind in-app labelling of real-v2 (Quality › Calibration) and held-out measurement with CIs are merged; the owner labelled 100 real-v2 offers (held-out 31, of which 4 accept); the pre-registered H1/H2 decision run found neither supported (ΔAUC 0), exploratory; real-v3 pre-registered (#109) and exported, 0 labels |
 | F0.3 FT coverage benchmark | T | report merged #103; measurement pending | Quality shows the share of API offers the website reader also found; needs FT API credentials and 7 days of both sources |
 | F1.1–F1.3 removals | R | done #40, #58, #74, #83 | source health, last error and breaker reset in Settings › Sources (#83); leftover wording cleaned in #74 (the 5678 probe stays) |
 | F1.4 APEC, WTTJ browser, crawl4ai | R | done #51 | old configs listing them are skipped with a reason |
@@ -106,10 +142,14 @@ next (2026-10-25). Order from the completion plan §P (approved 2026-10-30):
    100 blind labels, the v2-profile baseline (P3.1), the 7-day FT coverage figure.
 4. P3 (while labels are collected): profile v2 UI, AI setup UI, embedding download, wizard,
    Settings › Data/Language, CV import.
-5. P4 ranking quality, P5 AI analysis, P6 polish, P7 release qualification (owner approval to release).
+5. **L0 (now, from 2026-11-05):** learning-architecture ADRs 0014+, one PR at a time, in the order
+   of the stages table above; next is ADR 1 (planes and invariants).
+6. ~~P4 ranking quality~~ replaced by L1–L4 (AD-13). P5 AI analysis, P6 polish, P7 release
+   qualification (owner approval to release) keep their place. Where L5–L9 sit relative to P5–P7 is
+   fixed by ADR 14 (AD-13 roadmap update, the last L0 ADR).
 
-Blocked on the owner: 100 blind labels in Quality › Calibration (from a 2.0 build: v1.0.0 has no such
-page); France Travail API credentials for the 7-day coverage figure; confirm the everyday database before
+Blocked on the owner: real-v3 labels (the real-v3 decision run happens once, only after the owner
+says labelling is finished; never pooled with real-v2); France Travail API credentials for the 7-day coverage figure; confirm the everyday database before
 any migration runs on it. The Desktop and Start-menu shortcuts open the v1.0.0 install, so it is most
 likely `%LOCALAPPDATA%\Programs\Find Your Job With AI V1\data\jobs.db` (27 MB, last written
 2026-10-23); real-v1/real-v2 come from the private `data/jobs.db` (3.5 GB). Usability testers and machines (P7).
@@ -130,3 +170,6 @@ Follow-ups recorded from reviews: the D12 items (dev origins, installer hashes, 
 - 2026-10-30: live check of a fresh copy of `main` 371cd6d (own empty `data/`, example profile): before the profile was saved nothing ran and LinkedIn/HelloWork showed "not chosen"; once it was saved the scheduler started `pipeline_daily` by itself (trigger `scheduled`), which completed in 8.4 min (FT web 640 collected, EURES 1,824 with its 10 s Crawl-delay, RemoteOK 401, WWR 195, Jobicy 75; 691 offers stored; FT API and Indeed skipped with reasons; no source claimed a complete listing, so no miss was counted). Settings showed the run, its time, the next run (next day 08:00) and each source's result. No cross-source duplicate occurred in that run. Not done: the 24 h window-closed run. UX gap noted: the FT API row shows a raw environment-variable message and "Collected" while skipped.
 - 2026-10-30: final P1 checks on `main` 371cd6d: `pytest -m "not network"` 5396 passed, 9 skipped, 0 failed; frontend lint clean, 294 tests passed, build OK. Phase 1 merged; next: Phase 2.
 - 2026-10-30: P2 merged: #94–#104 (see the completion plan, P2 status). Final check on the P2 head (all of #94–#104): `pytest -m "not network"` 5456 passed, 9 skipped, 0 failed; frontend 301 tests passed, build OK. One timing-flaky test seen once (`test_scheduler_service.py::TestAutoPipelineTrigger::test_successful_scan_triggers_pipeline`, passes 3/3 alone), proposed as an issue.
+- 2026-10-31: #106 (calibration answers crash-safe), #107 (lab agent refused the held-out labels of a real dataset), #108 (follow-redirects advisory) merged.
+- 2026-11-03: the owner finished 100 blind real-v2 labels; the pre-registered H1/H2 run found neither supported (exploratory). Filter investigation: no code bug, rejections follow profile choices; the owner kept the profile. #109 pre-registered real-v3 before collection. Main 6207a7c.
+- 2026-11-05: continuous-learning audit, then the learning-architecture proposal and four review passes; the owner approved **v5**. Recorded in `2026-11-05-learning-architecture-decisions.md` (with the v1 proposal and the audit it builds on); Phase 4 replaced by L1–L4; L0 started.
