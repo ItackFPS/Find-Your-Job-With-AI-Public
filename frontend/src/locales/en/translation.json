@@ -641,6 +641,21 @@
       },
       "error": "Could not measure the coverage."
     },
+    "agreement": {
+      "title": "Requirement extraction",
+      "subtitle": "What the app reads in offer texts, checked against what France Travail states in its own fields",
+      "rome": "{k} of {n} France Travail offers carry an occupation code (ROME): {value}.",
+      "experience": "Years of experience",
+      "education": "Education level",
+      "precision": "Correct when found",
+      "recall": "Found when stated",
+      "rate": "{value} ({k} of {n}, likely between {lo} and {hi})",
+      "noData": "not enough offers",
+      "beginnerConflicts": "Offers open to beginners but read as asking for 2 years or more: {count}.",
+      "rules": "Over the {offers} most recent France Travail offers. Experience counts as correct within {years} year; education when the level read falls in the stated range.",
+      "noOffers": "No France Travail offer is stored yet: nothing to compare.",
+      "error": "Could not measure the requirement extraction."
+    },
     "calibration": {
       "title": "Calibrate on your own offers",
       "subtitle": "Tell the app which offers really fit you, a few at a time",

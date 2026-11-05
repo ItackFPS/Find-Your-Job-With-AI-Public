@@ -15,6 +15,7 @@ import { formatDateTime, promotionCommand } from '../utils'
 import Lab from './Lab'
 import CalibrationCard from './Calibration'
 import FtCoverageCard from './FtCoverage'
+import ExtractorAgreementCard from './ExtractorAgreement'
 
 // Plain-language quality page (plan F9.1, §C10). Every sentence is built here from the codes and
 // numbers the API returns; nothing from the lab is rendered as HTML or as an acting link (ADR 0011:
@@ -304,6 +305,8 @@ export default function Quality() {
       <RunsSection />
 
       <FtCoverageCard />
+
+      <ExtractorAgreementCard />
 
       <Card title={t('quality.promotion.title')} style={{ marginBottom: 'var(--space-4)' }}>
         {experiments.isLoading && <LoadingState />}
