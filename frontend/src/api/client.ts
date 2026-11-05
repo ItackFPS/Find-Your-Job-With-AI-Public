@@ -781,6 +781,23 @@ export const eraseActivity = (opts: { keep_tracker: boolean; erase_calibration: 
   api.post<ErasureStatus>('/privacy/erase', { confirm: true, ...opts }).then(r => r.data)
 export const retryErasure = () => api.post<ErasureStatus>('/privacy/erase/retry').then(r => r.data)
 
+/** Delete all application data (ADR 0015): state read from a file outside the data folder. */
+export interface DeleteAllStatus {
+  state: string | null
+  pending: boolean
+  running: boolean
+  restart_required: boolean
+  last_state?: string | null
+  last_error?: string | null
+  requested_at?: string | null
+  completed_at?: string | null
+  skipped?: string[] | null
+}
+export const getDeleteAll = () => api.get<DeleteAllStatus>('/privacy/delete-all').then(r => r.data)
+export const deleteAllData = () =>
+  api.post<DeleteAllStatus>('/privacy/delete-all', { confirm: true }).then(r => r.data)
+export const retryDeleteAll = () => api.post<DeleteAllStatus>('/privacy/delete-all/retry').then(r => r.data)
+
 export const getSession = () => api.get<SessionState>('/session').then(r => {
   setGenerationToken(r.data.token)
   return r.data

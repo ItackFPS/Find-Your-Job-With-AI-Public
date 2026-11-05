@@ -93,6 +93,8 @@ beforeEach(() => {
     'GET /privacy/erase': { state: null, pending: false, running: false },
     'POST /privacy/erase': { state: 'COMPLETE', pending: false, running: false, completed_at: '2026-11-05T11:00:00+00:00' },
     'POST /privacy/erase/retry': { state: 'COMPLETE', pending: false, running: false, completed_at: '2026-11-05T11:00:00+00:00' },
+    'GET /privacy/delete-all': { state: null, pending: false, running: false, restart_required: false },
+    'POST /privacy/delete-all': { state: 'COMPLETE', pending: false, running: false, restart_required: true },
     'POST /sources/remoteok/breaker/reset': { source: 'remoteok', consecutive_failures: 0, paused: false, paused_until: null, last_failure_reason: null },
   }
 })
@@ -220,6 +222,25 @@ describe('Settings › Sources and background', () => {
     expect(screen.queryByText(/Erasure complete/)).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Retry the erasure' }))
     expect(calls).toContainEqual({ method: 'POST', url: '/privacy/erase/retry', body: undefined })
+  })
+
+  it('deletes all data only after a confirmation and asks for a restart', async () => {
+    renderPage()
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete all application data' }))
+    expect(calls.some(c => c.method === 'POST' && c.url === '/privacy/delete-all')).toBe(false)
+    const dialog = screen.getByRole('alertdialog', { name: 'Delete all application data' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete everything' }))
+    expect(calls).toContainEqual({ method: 'POST', url: '/privacy/delete-all', body: { confirm: true } })
+    expect(await screen.findByText(/All application data was deleted/)).toBeInTheDocument()
+  })
+
+  it('explains a blocked deletion resumes at the next start', async () => {
+    routes['GET /privacy/delete-all'] = {
+      state: 'BLOCKED', pending: true, running: false, restart_required: false, last_error: 'file_locked: jobs.db',
+    }
+    renderPage()
+    expect(await screen.findByText(/file_locked: jobs.db/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry the deletion' })).toBeInTheDocument()
   })
 
   it('reports a section that cannot load', async () => {

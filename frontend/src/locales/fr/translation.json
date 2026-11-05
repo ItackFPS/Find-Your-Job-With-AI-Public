@@ -1283,6 +1283,19 @@
       "lastReset": "Dernière réinitialisation : {date}",
       "failed": "La modification n’a pas pu être enregistrée."
     },
+    "deleteAll": {
+      "title": "Supprimer toutes les données de l’application",
+      "subtitle": "Tout ce que l’application a enregistré sur cet ordinateur. Elle redémarre ensuite comme au premier lancement.",
+      "help": "Supprime la base de données, ses sauvegardes, les réponses de calibration, les fichiers du laboratoire, votre profil et les journaux. Les offres sont supprimées aussi. Les réglages par défaut fournis avec l’application restent.",
+      "action": "Supprimer toutes les données de l’application",
+      "confirm": "Supprimer tout ce que l’application a enregistré ? C’est irréversible.",
+      "confirmYes": "Tout supprimer",
+      "running": "Suppression en cours… L’application est indisponible jusqu’à la fin.",
+      "blocked": "La suppression n’est pas terminée : {reason}. Fermez l’application puis relancez-la : elle reprend au démarrage. Ou réessayez maintenant.",
+      "retry": "Réessayer la suppression",
+      "complete": "Toutes les données de l’application ont été supprimées. Fermez l’application puis relancez-la.",
+      "failed": "La suppression n’a pas pu démarrer."
+    },
     "erase": {
       "title": "Effacer mon activité",
       "subtitle": "Supprimer ce que vous avez fait dans l’application et tout ce qui en a été appris. Les offres restent.",
