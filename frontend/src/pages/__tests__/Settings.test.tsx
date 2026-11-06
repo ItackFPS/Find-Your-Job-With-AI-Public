@@ -22,7 +22,7 @@ const respond = (method: string) => async (url: string, body?: unknown) => {
 const cleared = vi.fn()
 vi.mock('../../api/feedbackOutbox', async importOriginal => ({
   ...await importOriginal<typeof import('../../api/feedbackOutbox')>(),
-  clearLocalData: () => cleared(),
+  clearLocalData: () => { cleared(); return Promise.resolve() },
 }))
 
 vi.mock('axios', () => {
@@ -317,6 +317,23 @@ describe('Settings › Sources and background', () => {
     expect(await screen.findByText(/The app restarted/, {}, { timeout: 5000 })).toBeInTheDocument()
     expect(cleared).toHaveBeenCalled()
   }, 15000)
+
+  it('clears local data once per completed deletion, not on every visit', async () => {
+    cleared.mockClear()
+    localStorage.clear()
+    routes['GET /privacy/delete-all'] = {
+      state: 'COMPLETE', pending: false, running: false, restart_required: false, restarting: false,
+      completed_at: '2026-11-06T12:00:00+00:00',
+    }
+    const first = renderPage()
+    expect(await screen.findByText(/The app restarted/)).toBeInTheDocument()
+    await vi.waitFor(() => expect(localStorage.getItem('fyj-delete-all-cleared')).toBe('2026-11-06T12:00:00+00:00'))
+    expect(cleared).toHaveBeenCalledTimes(1)
+    first.unmount()
+    renderPage()
+    expect(await screen.findByText(/The app restarted/)).toBeInTheDocument()
+    expect(cleared).toHaveBeenCalledTimes(1)
+  })
 
   it('explains what to do when the deletion is still blocked after a restart', async () => {
     routes['GET /privacy/delete-all'] = {

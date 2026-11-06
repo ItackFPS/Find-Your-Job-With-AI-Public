@@ -12,6 +12,9 @@ import { DELETE_ALL_QUERY_KEY } from './queryKeys'
 
 const ongoing = (s?: DeleteAllStatus) => !!s && ((s.pending && s.state !== 'BLOCKED') || !!s.restarting)
 const POLL_MS = 2000
+const CLEARED_KEY = 'fyj-delete-all-cleared'
+const readCleared = () => { try { return globalThis.localStorage?.getItem(CLEARED_KEY) ?? null } catch { return null } }
+const writeCleared = (v: string) => { try { globalThis.localStorage?.setItem(CLEARED_KEY, v) } catch { /* blocked */ } }
 
 /**
  * Settings › Delete all application data (ADR 0015): every file of the app (database, backups,
@@ -40,7 +43,13 @@ export function DeleteAllCard() {
   })
   const done = data?.state === 'COMPLETE' && !data.pending
   const restarting = !done && (!!data?.restarting || (awaitingRestart && isError))
-  useEffect(() => { if (done) void clearLocalData() }, [done])
+  // once per completed deletion: the server keeps reporting COMPLETE until its next restart, and
+  // actions queued after the deletion must survive later visits to this page
+  const completedAt = done ? (data?.completed_at ?? 'complete') : null
+  useEffect(() => {
+    if (!completedAt || readCleared() === completedAt) return
+    void clearLocalData().then(() => writeCleared(completedAt))
+  }, [completedAt])
   const onDone = (s: DeleteAllStatus) => {
     setConfirming(false)
     queryClient.setQueryData(DELETE_ALL_QUERY_KEY, track(s))
