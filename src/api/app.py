@@ -29,11 +29,12 @@ from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
@@ -516,14 +517,35 @@ def spa_file(dist: Path, full_path: str) -> Path | None:
     return root / "index.html"
 
 
+# Cache policy: the page and other unhashed files are revalidated on every load, so an updated app
+# never runs a stale dashboard; the build's assets carry a content hash in their names, so they can
+# be kept forever.
+NO_CACHE = "no-cache"
+IMMUTABLE = "public, max-age=31536000, immutable"
+
+
+class HashedAssets(StaticFiles):
+    """``/assets``: Vite's content-hashed build output, cached as immutable."""
+
+    def file_response(self, *args: Any, **kwargs: Any) -> Response:
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = IMMUTABLE
+        return response
+
+
+def spa_response(dist: Path, full_path: str) -> FileResponse:
+    """The SPA's answer to a non-API path, revalidated on every load (``NO_CACHE``)."""
+    path = spa_file(dist, full_path)
+    if path is None:
+        raise HTTPException(status_code=404, detail="Not Found")
+    return FileResponse(str(path), headers={"Cache-Control": NO_CACHE})
+
+
 if _FRONTEND_DIST.exists():
     # Serve static assets (JS, CSS, images) under /assets
-    app.mount("/assets", StaticFiles(directory=str(_FRONTEND_DIST / "assets")), name="assets")
+    app.mount("/assets", HashedAssets(directory=str(_FRONTEND_DIST / "assets")), name="assets")
 
     @app.get("/{full_path:path}", include_in_schema=False)
     def serve_spa(full_path: str) -> FileResponse:
         """Serve the React SPA for all non-API routes."""
-        path = spa_file(_FRONTEND_DIST, full_path)
-        if path is None:
-            raise HTTPException(status_code=404, detail="Not Found")
-        return FileResponse(str(path))
+        return spa_response(_FRONTEND_DIST, full_path)
