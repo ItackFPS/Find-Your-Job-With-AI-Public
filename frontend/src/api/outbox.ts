@@ -36,6 +36,8 @@ export interface OutboxStore {
   put(entry: OutboxEntry): Promise<void>
   remove(id: string): Promise<void>
   all(): Promise<OutboxEntry[]>
+  /** Release the underlying database (IndexedDB cannot delete a database a connection holds). */
+  close?(): void
 }
 
 export type Outcome =
@@ -108,6 +110,7 @@ export class IdbStore implements OutboxStore {
   async put(entry: OutboxEntry) { await this.run('readwrite', s => s.put(entry)) }
   async remove(id: string) { await this.run('readwrite', s => s.delete(id)) }
   async all() { return (await this.run('readonly', s => s.getAll())) as OutboxEntry[] }
+  close() { this.db.close() }
 }
 
 function randomId(): string {
@@ -135,6 +138,8 @@ export class Outbox {
   }
 
   get durable(): boolean { return this.o.store.durable }
+  /** Stop using the store and release it (before "Delete all" drops the database). */
+  close(): void { this.o.store.close?.() }
 
   /** Writes the action to the outbox, then tries to send it. `done` settles on ack or drop. */
   async enqueue(jobId: string, body: OutboxBody): Promise<{ client_event_id: string; done: Promise<Outcome> }> {

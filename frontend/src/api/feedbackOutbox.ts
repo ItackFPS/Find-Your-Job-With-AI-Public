@@ -34,9 +34,18 @@ export function resetOutbox(): void {
   instance = null
 }
 
-/** "Delete all" finished (ADR 0015): drop the outbox database and this browser's local storage. */
-export function clearLocalData(): void {
+/** "Delete all" finished (ADR 0015): drop the outbox database and this browser's local storage.
+ *  The open outbox is closed first: IndexedDB would otherwise hold the deletion until the tab closes. */
+export function clearLocalData(): Promise<void> {
+  const current = instance
   instance = null
-  try { globalThis.indexedDB?.deleteDatabase('fyj-outbox') } catch { /* unavailable */ }
   try { globalThis.localStorage?.clear() } catch { /* blocked */ }
+  const drop = () => {
+    try { globalThis.indexedDB?.deleteDatabase('fyj-outbox') } catch { /* unavailable */ }
+  }
+  if (!current) {
+    drop()
+    return Promise.resolve()
+  }
+  return current.then(o => o.close(), () => undefined).then(drop)
 }

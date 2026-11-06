@@ -40,7 +40,7 @@ export function DeleteAllCard() {
   })
   const done = data?.state === 'COMPLETE' && !data.pending
   const restarting = !done && (!!data?.restarting || (awaitingRestart && isError))
-  useEffect(() => { if (done) clearLocalData() }, [done])
+  useEffect(() => { if (done) void clearLocalData() }, [done])
   const onDone = (s: DeleteAllStatus) => {
     setConfirming(false)
     queryClient.setQueryData(DELETE_ALL_QUERY_KEY, track(s))
