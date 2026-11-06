@@ -77,7 +77,7 @@ from src.api.routes import (
 from src.api.progress_stream import ProgressBus
 from src.api.runner import PipelineRunner
 from src.hellowork.scanner import HelloWorkScanner
-from src.launcher.core import DEV_SERVER_ENV, INSTANCE_TOKEN_ENV
+from src.launcher.core import DEV_SERVER_ENV, INSTANCE_TOKEN_ENV, SUPERVISED_ENV
 from src.hellowork.staging import HelloWorkStagingStorage
 from src.linkedin.scanner import LinkedInConfig, LinkedInScanner
 from src.linkedin.staging import LinkedInStagingStorage
@@ -112,6 +112,10 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
     from src.privacy import delete_all
     if delete_all.pending(Path(db_path).parent):
         st = delete_all.run(Path(db_path).parent)
+        if st is not None and st.get("state") == "COMPLETE":
+            # shown by GET /api/privacy/delete-all until the next restart: the UI confirms the
+            # deletion (and only then clears the browser's data) after the restart that finished it
+            application.state.delete_all_last = st
         if delete_all.pending(Path(db_path).parent):
             logger.error("Delete all still pending (%s): starting nothing else.", (st or {}).get("last_error"))
             application.state.delete_all_blocked = True
@@ -469,6 +473,8 @@ APP_ID = "find-your-job-with-ai"
 # The launcher's instance token (src/launcher/core.py). Taken out of the environment at import so
 # nothing this process starts inherits it; never logged.
 _INSTANCE_TOKEN = os.environ.pop(INSTANCE_TOKEN_ENV, "")
+# A launcher watches this process and restarts it on RESTART_EXIT_CODE (src/launcher/core.py).
+app.state.supervised = os.environ.pop(SUPERVISED_ENV, "") == "1"
 
 
 @app.get("/api/session")

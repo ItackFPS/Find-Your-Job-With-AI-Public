@@ -854,6 +854,9 @@ export interface DeleteAllStatus {
   requested_at?: string | null
   completed_at?: string | null
   skipped?: string[] | null
+  // the backend is about to exit so its launcher restarts it (Windows locked files)
+  restarting?: boolean
+  auto_restarts?: number | null
 }
 export const getDeleteAll = () => api.get<DeleteAllStatus>('/privacy/delete-all').then(r => r.data)
 export const deleteAllData = () =>

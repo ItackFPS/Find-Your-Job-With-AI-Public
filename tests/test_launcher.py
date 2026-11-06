@@ -733,3 +733,88 @@ def test_only_dev_mode_lets_the_backend_allow_the_dev_server(tmp_path, monkeypat
     monkeypatch.setattr(launcher, "_wait_until", lambda *a, **k: False)
     assert launcher._ensure_backend() is False
     assert envs and envs[0].get(core.DEV_SERVER_ENV) == dev_server
+
+
+# -- intentional restart (core.RESTART_EXIT_CODE: "Delete all" on Windows) ------------------------
+
+RESTARTING_BACKEND = """\
+import http.server, json, os, sys, threading
+TOKEN = os.environ.pop("FYJ_INSTANCE_TOKEN", "")
+starts = sys.argv[2]
+with open(starts, "a", encoding="utf-8") as f:
+    f.write(os.environ.get("FYJ_SUPERVISED", "") + "\\n")
+n = len(open(starts, encoding="utf-8").read().splitlines())
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        body = json.dumps({"status": "ok", "app": "find-your-job-with-ai", "pid": os.getpid(),
+                           "version": "9.9.9", "instance_token": TOKEN}).encode()
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+    def log_message(self, *a):
+        pass
+class S(http.server.HTTPServer):
+    allow_reuse_address = False
+server = S(("127.0.0.1", int(sys.argv[1])), H)
+if n <= int(sys.argv[3]):                        # ask for a restart once healthy
+    def leave():
+        server.shutdown()
+        server.server_close()
+        os._exit(75)
+    threading.Timer(1.5, leave).start()
+server.serve_forever()
+"""
+
+
+def _restarting_launcher(tmp_path: Path, port: int, monkeypatch, restarts_asked: int) -> run.Launcher:
+    script = tmp_path / "restarting_backend.py"
+    script.write_text(RESTARTING_BACKEND, encoding="utf-8")
+    starts = tmp_path / "starts.txt"
+    launcher = _launcher(tmp_path, port, monkeypatch)              # patches backend_command: override after
+    monkeypatch.setattr(core, "backend_command", lambda python, p, reload=False:
+                        [python, str(script), str(p), str(starts), str(restarts_asked)])
+    launcher.s = Settings(root=tmp_path, backend_port=0, llm_endpoint=launcher.s.llm_endpoint,
+                          startup_timeout_s=60)                     # dynamic port: the restart keeps it
+    return launcher
+
+
+@windows_only
+def test_backend_asking_for_a_restart_is_restarted_on_its_port(tmp_path, monkeypatch):
+    launcher = _restarting_launcher(tmp_path, free_port(), monkeypatch, restarts_asked=1)
+    notes: list[str] = []
+    launcher.notify = notes.append
+    seen: dict[str, object] = {}
+
+    def watch() -> None:
+        deadline = time.monotonic() + 90
+        while time.monotonic() < deadline and launcher.port is None:
+            time.sleep(0.1)
+        seen["port"], first = launcher.port, launcher.children.get("backend")
+        while time.monotonic() < deadline:
+            current = launcher.children.get("backend")
+            if current is not None and current is not first and launcher.port is not None and \
+                    core.probe_backend(launcher.port, 0.5, token=launcher.token) is Backend.OURS:
+                seen["restarted_port"] = launcher.port
+                seen["state"] = core.State.load(launcher.s.state_file)
+                seen["instance"] = core.Instance.load(launcher.s.instance_file)
+                break
+            time.sleep(0.2)
+        launcher.stop_requested = True
+
+    threading.Thread(target=watch, daemon=True).start()
+    assert launcher.run() == 0
+    assert seen.get("restarted_port") == seen["port"]               # same port: the dashboard keeps working
+    assert notes == []                                              # intentional: not reported as a crash
+    assert (tmp_path / "starts.txt").read_text(encoding="utf-8").splitlines() == ["1", "1"]   # supervised
+    instance = seen["instance"]
+    assert isinstance(instance, core.Instance) and instance.port == seen["port"]
+    assert isinstance(seen["state"], core.State) and "backend" in seen["state"].components
+
+
+@windows_only
+def test_a_backend_that_keeps_asking_cannot_loop(tmp_path, monkeypatch):
+    launcher = _restarting_launcher(tmp_path, free_port(), monkeypatch, restarts_asked=99)
+    assert launcher.run() == 1                                      # the third request is a stop
+    starts = (tmp_path / "starts.txt").read_text(encoding="utf-8").splitlines()
+    assert len(starts) == run.INTENTIONAL_RESTARTS + 1

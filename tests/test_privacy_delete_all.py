@@ -160,7 +160,8 @@ def app_in_root(isolated_app, root, monkeypatch):
     monkeypatch.setitem(isolated_app.state._state, "settings_path", str(root / "data" / "settings.json"))
     monkeypatch.setitem(isolated_app.state._state, "runner", PipelineRunner(
         db_path=db, config_dir=str(root / "config"), progress_bus=isolated_app.state.progress_bus))
-    for key in ("restart_required", "delete_all_blocked", "delete_all_last"):
+    for key in ("restart_required", "delete_all_blocked", "delete_all_last", "supervised",
+                "delete_all_restarting", "exit_process"):
         monkeypatch.setitem(isolated_app.state._state, key, None)
     monkeypatch.setitem(isolated_app.state._state, "erasure_sync", True)
     return isolated_app
@@ -226,3 +227,94 @@ def test_startup_with_a_blocked_procedure_starts_nothing(app_in_root, root, monk
         st = client.get("/api/privacy/delete-all").json()
         assert st["state"] == "BLOCKED" and st["pending"] is True
     assert not (data / "jobs.db").exists()                     # no new database was created
+
+
+# -- launcher-owned files and the automatic restart (Windows locked files) ------------------------
+
+def _launcher_files(root: Path) -> list[Path]:
+    files = [root / "data" / "state" / "instance.json", root / "data" / "state" / "api-port.json",
+             root / "logs" / "launcher" / "state.json", root / "logs" / "launcher" / "launcher.log",
+             root / "logs" / "launcher" / "backend.log"]
+    for f in files:
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("{}", encoding="utf-8")
+    return files
+
+
+def test_launcher_owned_files_are_never_deleted(root):
+    kept = _launcher_files(root)
+    (root / "data" / "state" / "other.json").write_text("{}", encoding="utf-8")   # app state: deleted
+    data = _request(root)
+    st = delete_all.run(data)
+    assert st["state"] == "COMPLETE", st
+    assert st["verification"]["data_folder_empty"] is True
+    assert all(f.exists() for f in kept)
+    assert sorted(p.name for p in (root / "data").rglob("*")) == ["api-port.json", "instance.json", "state"]
+    assert not (root / "logs" / "backend").exists() or not list((root / "logs" / "backend").iterdir())
+    assert sorted(p.name for p in (root / "config").iterdir()) == ["profile.yaml", "scoring.yaml"]
+    assert not any(e["path"].endswith(("instance.json", "api-port.json")) for e in st["inventory"]["data"])
+    assert not any(Path(e["path"]).is_relative_to(root / "logs" / "launcher") for e in st["inventory"]["logs"])
+
+
+def test_one_automatic_restart_per_request(root):
+    data = root / "data"
+    assert delete_all.claim_auto_restart(data) is False                     # nothing pending
+    _request(root)
+    assert delete_all.claim_auto_restart(data) is True
+    assert delete_all.claim_auto_restart(data) is False                     # used: never loops
+    assert delete_all.read_state(data)["auto_restarts"] == 1
+
+
+def _lock_files(monkeypatch) -> None:
+    def blocked(self):
+        raise delete_all.Blocked("file_locked: jobs.db (in use)")
+    monkeypatch.setattr(delete_all._Procedure, "step_files_deleted", blocked)
+
+
+def _wait_for(cond, timeout=5.0):
+    import time
+    end = time.monotonic() + timeout
+    while time.monotonic() < end and not cond():
+        time.sleep(0.05)
+    return cond()
+
+
+def test_supervised_backend_restarts_once_on_a_locked_file(app_in_root, root, monkeypatch):
+    from src.api.routes import privacy
+    from src.launcher.core import RESTART_EXIT_CODE
+
+    _lock_files(monkeypatch)
+    monkeypatch.setattr(privacy, "RESTART_DELAY_S", 0.0)
+    exits: list[int] = []
+    app_in_root.state.supervised = True
+    app_in_root.state.exit_process = exits.append
+    with TestClient(app_in_root) as client:
+        body = client.post("/api/privacy/delete-all", json={"confirm": True}).json()
+        assert body["state"] == "BLOCKED" and body["restarting"] is True and body["auto_restarts"] == 1
+        assert _wait_for(lambda: exits == [RESTART_EXIT_CODE])
+        # the restart failed to release the file: the retry reports it and never restarts again
+        app_in_root.state.delete_all_restarting = False
+        body = client.post("/api/privacy/delete-all/retry").json()
+        assert body["state"] == "BLOCKED" and body["restarting"] is False and body["pending"] is True
+    assert exits == [RESTART_EXIT_CODE]
+    assert delete_all.pending(root / "data")                                 # still pending: recoverable
+
+
+def test_unsupervised_backend_never_exits(app_in_root, root, monkeypatch):
+    _lock_files(monkeypatch)
+    exits: list[int] = []
+    app_in_root.state.exit_process = exits.append
+    with TestClient(app_in_root) as client:
+        body = client.post("/api/privacy/delete-all", json={"confirm": True}).json()
+        assert body["state"] == "BLOCKED" and body["restarting"] is False
+    assert exits == [] and delete_all.read_state(root / "data")["auto_restarts"] == 0
+
+
+def test_completion_at_startup_is_reported_after_the_restart(app_in_root, root):
+    data = _request(root)
+    delete_all.run(data, stop_after="QUIESCED")
+    _forget_schema_caches()
+    with TestClient(app_in_root) as client:
+        st = client.get("/api/privacy/delete-all").json()
+        assert st["state"] == "COMPLETE" and st["pending"] is False and st["completed_at"]
+        assert st["restart_required"] is False and st["restarting"] is False
