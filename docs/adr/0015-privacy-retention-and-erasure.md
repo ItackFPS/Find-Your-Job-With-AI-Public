@@ -38,7 +38,11 @@ a checkpoint.
   decision: no queuing), and `backup_database` refuses while the marker exists.
 - **Delete all** uses its own database-free procedure: an atomic `DELETE_ALL_PENDING.json` in the
   data folder's parent holds the step, the inventory and the checks, so it resumes after the
-  database file is gone.
+  database file is gone. Amended 2026-11-06 (owner-approved): launcher-owned files
+  (`data/state/instance.json`, `data/state/api-port.json`, `logs/launcher/`) are out of scope, and
+  when a launcher supervises the backend and a file stays locked (Windows: the backend's own
+  database handle), the backend restarts **once** per request so the startup step finishes it;
+  a failure after that keeps the request pending for the user's retry or restart.
 - **Lab data.** Erase keeps `lab.db` and `data/lab/` by default (they hold the `active_strategy`
   pointer and the engine audit trail, ADR 0011). When a lab file exists in either location, the
   dialog says so and offers a separately confirmed "Effacer aussi les données du laboratoire". The

@@ -42,7 +42,8 @@ from src.privacy.lab_suspension import LAB_MARKER
 logger = logging.getLogger(__name__)
 
 PENDING = "DELETE_ALL_PENDING.json"
-__all__ = ["LAB_MARKER", "PENDING", "STATES", "pending", "read_state", "request", "run", "state_path"]
+__all__ = ["LAB_MARKER", "PENDING", "STATES", "claim_auto_restart", "pending", "read_state", "request", "run",
+           "state_path"]
 STATES = ("REQUESTED", "QUIESCED", "INVENTORIED", "FILES_DELETED", "VERIFIED", "COMPLETE")
 BLOCKED = "BLOCKED"
 DB_PATTERNS = ("*.db", "*.db-wal", "*.db-shm", "*.sqlite")
