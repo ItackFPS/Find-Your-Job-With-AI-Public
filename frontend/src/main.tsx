@@ -6,9 +6,12 @@ import './index.css'
 import App from './App.tsx'
 import { ToastProvider } from './components'
 import { initTheme } from './theme/theme'
+import { startOutbox } from './api/feedbackOutbox'
 
 // Before the first render, so the page never flashes the wrong theme.
 initTheme()
+// Deliver Save/Hide actions a previous page load could not send (ADR 0016).
+startOutbox()
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 10_000, retry: 1 } },
