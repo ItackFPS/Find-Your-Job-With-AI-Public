@@ -1336,7 +1336,10 @@
       "blocked": "La suppression n’est pas terminée : {reason}. Fermez l’application puis relancez-la : elle reprend au démarrage. Ou réessayez maintenant.",
       "retry": "Réessayer la suppression",
       "complete": "Toutes les données de l’application ont été supprimées. Fermez l’application puis relancez-la.",
-      "failed": "La suppression n’a pas pu démarrer."
+      "failed": "La suppression n’a pas pu démarrer.",
+      "restarting": "Fin de la suppression : l’application redémarre pour libérer ses fichiers. Cela prend quelques secondes.",
+      "completeRestarted": "Toutes les données de l’application ont été supprimées. L’application a redémarré et démarre comme au premier lancement.",
+      "blockedAfterRestart": "La suppression n’est toujours pas terminée après un redémarrage : {reason}. Fermez tout autre programme qui utilise le dossier de l’application, puis réessayez. Ou fermez l’application et relancez-la : elle reprend au démarrage."
     },
     "erase": {
       "title": "Effacer mon activité",

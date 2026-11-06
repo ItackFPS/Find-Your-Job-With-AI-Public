@@ -1336,7 +1336,10 @@
       "blocked": "The deletion is not finished: {reason}. Close the application and start it again: it resumes at startup. Or retry now.",
       "retry": "Retry the deletion",
       "complete": "All application data was deleted. Close the application and start it again.",
-      "failed": "The deletion could not be started."
+      "failed": "The deletion could not be started.",
+      "restarting": "Finishing the deletion: the app restarts to release its files. This takes a few seconds.",
+      "completeRestarted": "All application data was deleted. The app restarted and now starts as on its first run.",
+      "blockedAfterRestart": "The deletion is still not finished after a restart: {reason}. Close any other program that uses the app's folder, then retry. Or close the application and start it again: it resumes at startup."
     },
     "erase": {
       "title": "Erase my activity",

@@ -19,6 +19,12 @@ const respond = (method: string) => async (url: string, body?: unknown) => {
   return Promise.reject(Object.assign(new Error('fail'), { response: { status: 404 } }))
 }
 
+const cleared = vi.fn()
+vi.mock('../../api/feedbackOutbox', async importOriginal => ({
+  ...await importOriginal<typeof import('../../api/feedbackOutbox')>(),
+  clearLocalData: () => cleared(),
+}))
+
 vi.mock('axios', () => {
   const client = {
     get: (url: string) => respond('GET')(url),
@@ -284,6 +290,41 @@ describe('Settings › Sources and background', () => {
     }
     renderPage()
     expect(await screen.findByText(/file_locked: jobs.db/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry the deletion' })).toBeInTheDocument()
+  })
+
+  it('follows a deletion across the backend restart and clears local data only once confirmed', async () => {
+    cleared.mockClear()
+    routes['POST /privacy/delete-all'] = {
+      state: 'BLOCKED', pending: true, running: false, restart_required: false, restarting: true,
+      auto_restarts: 1, last_error: 'file_locked: jobs.db',
+    }
+    renderPage()
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete all application data' }))
+    delete routes['GET /privacy/delete-all']                       // the backend is restarting
+    const dialog = screen.getByRole('alertdialog', { name: 'Delete all application data' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete everything' }))
+    expect(await screen.findByText(/the app restarts to release its files/i)).toBeInTheDocument()
+    expect(screen.queryByText(/file_locked/)).not.toBeInTheDocument()   // no raw error on the normal path
+    await new Promise(r => setTimeout(r, 2500))                    // a poll fails meanwhile
+    expect(screen.getByText(/the app restarts to release its files/i)).toBeInTheDocument()
+    expect(screen.queryByText(/could not load this section/i)).not.toBeInTheDocument()
+    expect(cleared).not.toHaveBeenCalled()
+    routes['GET /privacy/delete-all'] = {
+      state: 'COMPLETE', pending: false, running: false, restart_required: false, restarting: false,
+      completed_at: '2026-11-06T12:00:00+00:00',
+    }
+    expect(await screen.findByText(/The app restarted/, {}, { timeout: 5000 })).toBeInTheDocument()
+    expect(cleared).toHaveBeenCalled()
+  }, 15000)
+
+  it('explains what to do when the deletion is still blocked after a restart', async () => {
+    routes['GET /privacy/delete-all'] = {
+      state: 'BLOCKED', pending: true, running: false, restart_required: false, restarting: false,
+      auto_restarts: 1, last_error: 'file_locked: jobs.db',
+    }
+    renderPage()
+    expect(await screen.findByText(/still not finished after a restart/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Retry the deletion' })).toBeInTheDocument()
   })
 
