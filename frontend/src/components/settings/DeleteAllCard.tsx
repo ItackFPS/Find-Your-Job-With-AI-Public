@@ -31,9 +31,13 @@ export function DeleteAllCard() {
   // set once a deletion started here, or the server said it restarts: an unreachable backend is
   // then the restart in progress, not a failure
   const [awaitingRestart, setAwaitingRestart] = useState(false)
+  // a run still unresolved (started here, running, or restarting) keeps an unreachable backend
+  // read as the restart; a final answer (COMPLETE, BLOCKED and idle, nothing pending) ends it
+  const settled = (s: DeleteAllStatus) =>
+    !s.restarting && !s.running && (s.state === 'COMPLETE' || s.state === 'BLOCKED' || !s.pending)
   const track = (s: DeleteAllStatus) => {
     if (s.restarting) setAwaitingRestart(true)
-    else if (s.state === 'COMPLETE' || s.state === 'BLOCKED' || !s.pending) setAwaitingRestart(false)
+    else if (settled(s)) setAwaitingRestart(false)
     return s
   }
   const { data, isLoading, isError, refetch } = useQuery({
@@ -53,6 +57,7 @@ export function DeleteAllCard() {
   }, [completedAt])
   const onDone = (s: DeleteAllStatus) => {
     setConfirming(false)
+    if (!settled(s)) setAwaitingRestart(true)     // a run started here: the backend may restart under it
     queryClient.setQueryData(DELETE_ALL_QUERY_KEY, track(s))
   }
   const failed = () => {

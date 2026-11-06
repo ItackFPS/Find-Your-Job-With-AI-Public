@@ -335,6 +335,20 @@ describe('Settings › Sources and background', () => {
     expect(cleared).toHaveBeenCalledTimes(1)
   })
 
+  it('reads an unreachable backend as the restart even when no poll saw "restarting"', async () => {
+    routes['POST /privacy/delete-all'] = {
+      state: 'REQUESTED', pending: true, running: true, restart_required: false, restarting: false,
+    }
+    renderPage()
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete all application data' }))
+    delete routes['GET /privacy/delete-all']                       // gone before any poll
+    const dialog = screen.getByRole('alertdialog', { name: 'Delete all application data' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete everything' }))
+    await new Promise(r => setTimeout(r, 2500))
+    expect(screen.getByText(/the app restarts to release its files/i)).toBeInTheDocument()
+    expect(screen.queryByText(/could not load this section/i)).not.toBeInTheDocument()
+  }, 10000)
+
   it('follows a retry until the server reports its result', async () => {
     routes['GET /privacy/delete-all'] = {
       state: 'BLOCKED', pending: true, running: false, restart_required: false, auto_restarts: 1,
