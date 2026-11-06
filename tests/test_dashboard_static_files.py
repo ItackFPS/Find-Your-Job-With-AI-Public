@@ -35,3 +35,28 @@ def test_no_file_outside_the_build_is_served(tmp_path):
     dist = _dist(tmp_path)
     assert spa_file(dist, "../secret.txt") == dist.resolve() / "index.html"
     assert spa_file(dist, "assets/../../secret.txt") == dist.resolve() / "index.html"
+
+
+def test_the_page_is_revalidated_on_every_load(tmp_path):
+    from src.api.app import NO_CACHE, spa_response
+
+    dist = _dist(tmp_path)
+    for path in ("", "jobs/123", "favicon.svg"):
+        assert spa_response(dist, path).headers["cache-control"] == NO_CACHE
+
+
+def test_hashed_assets_are_immutable(tmp_path):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from src.api.app import IMMUTABLE, HashedAssets
+
+    dist = _dist(tmp_path)
+    (dist / "assets" / "index-abc123.js").write_text("console.log(1)", encoding="utf-8")
+    app = FastAPI()
+    app.mount("/assets", HashedAssets(directory=str(dist / "assets")), name="assets")
+    with TestClient(app) as client:
+        r = client.get("/assets/index-abc123.js")
+        assert r.status_code == 200 and r.headers["cache-control"] == IMMUTABLE
+        assert client.get("/assets/missing.js").status_code == 404
+
