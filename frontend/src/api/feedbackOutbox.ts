@@ -23,6 +23,12 @@ export function getOutbox(): Promise<Outbox> {
   return instance
 }
 
+/** At app start: open the outbox now, so entries left by an earlier page load (a Save or Hide made
+ *  while the backend was unreachable) are delivered without waiting for the next action. */
+export function startOutbox(): void {
+  void getOutbox()
+}
+
 /** Tests only: forget the singleton. */
 export function resetOutbox(): void {
   instance = null
