@@ -335,6 +335,24 @@ describe('Settings › Sources and background', () => {
     expect(cleared).toHaveBeenCalledTimes(1)
   })
 
+  it('follows a retry until the server reports its result', async () => {
+    routes['GET /privacy/delete-all'] = {
+      state: 'BLOCKED', pending: true, running: false, restart_required: false, auto_restarts: 1,
+      last_error: 'file_locked: jobs.db',
+    }
+    routes['POST /privacy/delete-all/retry'] = {
+      state: 'BLOCKED', pending: true, running: true, restart_required: false, auto_restarts: 1,
+      last_error: 'file_locked: jobs.db',
+    }
+    renderPage()
+    await userEvent.click(await screen.findByRole('button', { name: 'Retry the deletion' }))
+    expect(await screen.findByText(/Deleting/)).toBeInTheDocument()
+    routes['GET /privacy/delete-all'] = {
+      state: 'COMPLETE', pending: false, running: false, restart_required: true, completed_at: '2026-11-06T13:19:43+00:00',
+    }
+    expect(await screen.findByText(/Close the application and start it again/, {}, { timeout: 5000 })).toBeInTheDocument()
+  }, 10000)
+
   it('explains what to do when the deletion is still blocked after a restart', async () => {
     routes['GET /privacy/delete-all'] = {
       state: 'BLOCKED', pending: true, running: false, restart_required: false, restarting: false,

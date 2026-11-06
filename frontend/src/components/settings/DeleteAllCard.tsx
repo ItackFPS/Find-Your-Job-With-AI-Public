@@ -10,7 +10,8 @@ import { LoadingState } from '../LoadingState'
 import { useToast } from '../toastContext'
 import { DELETE_ALL_QUERY_KEY } from './queryKeys'
 
-const ongoing = (s?: DeleteAllStatus) => !!s && ((s.pending && s.state !== 'BLOCKED') || !!s.restarting)
+const ongoing = (s?: DeleteAllStatus) =>
+  !!s && ((s.pending && (s.state !== 'BLOCKED' || s.running)) || !!s.restarting)
 const POLL_MS = 2000
 const CLEARED_KEY = 'fyj-delete-all-cleared'
 const readCleared = () => { try { return globalThis.localStorage?.getItem(CLEARED_KEY) ?? null } catch { return null } }
@@ -69,7 +70,7 @@ export function DeleteAllCard() {
       {data && !restarting && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           {ongoing(data) && <p role="status" style={{ margin: 0 }}>{t('settings.deleteAll.running')}</p>}
-          {data.pending && data.state === 'BLOCKED' && (
+          {data.pending && data.state === 'BLOCKED' && !data.running && (
             <div role="alert" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
               <span>{(data.auto_restarts ?? 0) > 0
                 ? t('settings.deleteAll.blockedAfterRestart', { reason: data.last_error ?? '' })

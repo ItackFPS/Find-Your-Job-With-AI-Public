@@ -302,7 +302,16 @@ def delete_all_data(body: DeleteAllIn, request: Request) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=409, detail="not_a_data_folder") from exc
     _start_delete_all(request)
-    return _delete_all_out(request.app)
+    return _started_out(request.app)
+
+
+def _started_out(app: Any) -> dict[str, Any]:
+    """The state right after starting a run: ``running`` until the run reports, so the UI polls
+    even when the background thread has not taken the lock yet."""
+    out = _delete_all_out(app)
+    if out["pending"]:
+        out["running"] = True
+    return out
 
 
 @router.post("/delete-all/retry", status_code=202)
@@ -310,4 +319,4 @@ def retry_delete_all(request: Request) -> dict[str, Any]:
     if not delete_all.pending(_data_dir(request.app)):
         raise HTTPException(status_code=409, detail="no_pending_delete_all")
     _start_delete_all(request)
-    return _delete_all_out(request.app)
+    return _started_out(request.app)
