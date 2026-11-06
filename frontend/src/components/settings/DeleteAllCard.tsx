@@ -10,28 +10,55 @@ import { LoadingState } from '../LoadingState'
 import { useToast } from '../toastContext'
 import { DELETE_ALL_QUERY_KEY } from './queryKeys'
 
-const ongoing = (s?: DeleteAllStatus) => !!s && s.pending && s.state !== 'BLOCKED'
+const ongoing = (s?: DeleteAllStatus) =>
+  !!s && ((s.pending && (s.state !== 'BLOCKED' || s.running)) || !!s.restarting)
+const POLL_MS = 2000
+const CLEARED_KEY = 'fyj-delete-all-cleared'
+const readCleared = () => { try { return globalThis.localStorage?.getItem(CLEARED_KEY) ?? null } catch { return null } }
+const writeCleared = (v: string) => { try { globalThis.localStorage?.setItem(CLEARED_KEY, v) } catch { /* blocked */ } }
 
 /**
  * Settings › Delete all application data (ADR 0015): every file of the app (database, backups,
- * calibration, lab, personal profile, logs). It resumes at the next start if it cannot finish now;
- * once done, the app must be restarted and starts as a first run.
+ * calibration, lab, personal profile, logs). When Windows keeps a file locked, the launcher restarts
+ * the backend once and its startup finishes the deletion; the card keeps polling across that gap and
+ * confirms the result. The browser's own data is cleared only once the server reports COMPLETE.
  */
 export function DeleteAllCard() {
   const { t } = useTranslation()
   const toast = useToast()
   const queryClient = useQueryClient()
   const [confirming, setConfirming] = useState(false)
+  // set once a deletion started here, or the server said it restarts: an unreachable backend is
+  // then the restart in progress, not a failure
+  const [awaitingRestart, setAwaitingRestart] = useState(false)
+  // a run still unresolved (started here, running, or restarting) keeps an unreachable backend
+  // read as the restart; a final answer (COMPLETE, BLOCKED and idle, nothing pending) ends it
+  const settled = (s: DeleteAllStatus) =>
+    !s.restarting && !s.running && (s.state === 'COMPLETE' || s.state === 'BLOCKED' || !s.pending)
+  const track = (s: DeleteAllStatus) => {
+    if (s.restarting) setAwaitingRestart(true)
+    else if (settled(s)) setAwaitingRestart(false)
+    return s
+  }
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: DELETE_ALL_QUERY_KEY,
-    queryFn: getDeleteAll,
-    refetchInterval: q => (ongoing(q.state.data) ? 2000 : false),
+    queryFn: () => getDeleteAll().then(track),
+    retry: false,
+    refetchInterval: q => (ongoing(q.state.data) || (awaitingRestart && q.state.status === 'error') ? POLL_MS : false),
   })
-  const done = data?.state === 'COMPLETE' && data.restart_required
-  useEffect(() => { if (done) clearLocalData() }, [done])
+  const done = data?.state === 'COMPLETE' && !data.pending
+  const restarting = !done && (!!data?.restarting || (awaitingRestart && isError))
+  // once per completed deletion: the server keeps reporting COMPLETE until its next restart, and
+  // actions queued after the deletion must survive later visits to this page
+  const completedAt = done ? (data?.completed_at ?? 'complete') : null
+  useEffect(() => {
+    if (!completedAt || readCleared() === completedAt) return
+    void clearLocalData().then(() => writeCleared(completedAt))
+  }, [completedAt])
   const onDone = (s: DeleteAllStatus) => {
     setConfirming(false)
-    queryClient.setQueryData(DELETE_ALL_QUERY_KEY, s)
+    if (!settled(s)) setAwaitingRestart(true)     // a run started here: the backend may restart under it
+    queryClient.setQueryData(DELETE_ALL_QUERY_KEY, track(s))
   }
   const failed = () => {
     setConfirming(false)
@@ -43,13 +70,16 @@ export function DeleteAllCard() {
   return (
     <Card title={t('settings.deleteAll.title')} subtitle={t('settings.deleteAll.subtitle')}>
       {isLoading && <LoadingState />}
-      {isError && <ErrorState message={t('settings.loadFailed')} onRetry={() => void refetch()} />}
-      {data && (
+      {isError && !restarting && <ErrorState message={t('settings.loadFailed')} onRetry={() => void refetch()} />}
+      {restarting && <p role="status" style={{ margin: 0 }}>{t('settings.deleteAll.restarting')}</p>}
+      {data && !restarting && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           {ongoing(data) && <p role="status" style={{ margin: 0 }}>{t('settings.deleteAll.running')}</p>}
-          {data.pending && data.state === 'BLOCKED' && (
+          {data.pending && data.state === 'BLOCKED' && !data.running && (
             <div role="alert" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-              <span>{t('settings.deleteAll.blocked', { reason: data.last_error ?? '' })}</span>
+              <span>{(data.auto_restarts ?? 0) > 0
+                ? t('settings.deleteAll.blockedAfterRestart', { reason: data.last_error ?? '' })
+                : t('settings.deleteAll.blocked', { reason: data.last_error ?? '' })}</span>
               <div>
                 <Button variant="secondary" disabled={retry.isPending} onClick={() => retry.mutate()}>
                   {t('settings.deleteAll.retry')}
@@ -57,7 +87,11 @@ export function DeleteAllCard() {
               </div>
             </div>
           )}
-          {done && <p role="status" style={{ margin: 0 }}>{t('settings.deleteAll.complete')}</p>}
+          {done && (
+            <p role="status" style={{ margin: 0 }}>
+              {data.restart_required ? t('settings.deleteAll.complete') : t('settings.deleteAll.completeRestarted')}
+            </p>
+          )}
           {!data.pending && !done && (
             <>
               <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>

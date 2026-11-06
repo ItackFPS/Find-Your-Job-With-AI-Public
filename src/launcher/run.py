@@ -36,6 +36,7 @@ GRACEFUL_STOP_S = 20.0
 # a launch while the previous launcher is still stopping waits for it, then starts the app
 STOPPING_WAIT_S = GRACEFUL_STOP_S + 40.0
 STARTING_GRACE_S = 30.0  # how long a port that is open but silent may take to answer
+INTENTIONAL_RESTARTS = 2  # backend restarts it may ask for per launcher session (core.RESTART_EXIT_CODE)
 
 
 class Output:
@@ -197,6 +198,9 @@ class Launcher:
         self.handle_signals = handle_signals
         # How many times a backend that crashes is started again (the tray app: 1).
         self.backend_restarts = backend_restarts
+        # Intentional restarts the backend may ask for (core.RESTART_EXIT_CODE: "Delete all" on
+        # Windows), never counted as crashes; capped so a backend that keeps asking cannot loop.
+        self.intentional_restarts = INTENTIONAL_RESTARTS
         self.notify: Callable[[str], None] = lambda _message: None
         self._stop_events: dict[str, str] = {}  # child name -> its graceful-stop event
         self.out = out
@@ -356,6 +360,16 @@ class Launcher:
                 if proc.poll() is None:
                     continue
                 del self.children[name]
+                if (name == "backend" and proc.returncode == core.RESTART_EXIT_CODE
+                        and self.intentional_restarts > 0):
+                    self.intentional_restarts -= 1
+                    self.out("The backend restarts to finish deleting all data ...")
+                    if self._ensure_backend(prefer_port=self.port):
+                        continue
+                    self.notify("The app's background service could not restart. See the logs folder.")
+                    self.out("The backend did not start again; stopping. Start the app again to "
+                             "finish deleting all data.")
+                    return 1
                 self.out(f"[!!] {name} exited unexpectedly (code {proc.returncode}). Last log lines:")
                 for line in core.log_tail(self._log(name)):
                     self.out(f"     {line}")
@@ -432,7 +446,7 @@ class Launcher:
             return True
         return False
 
-    def _ensure_backend(self) -> bool:
+    def _ensure_backend(self, prefer_port: int | None = None) -> bool:
         """Start our backend and wait until it answers with this instance's token.
 
         Nothing that does not return the token is ever connected to: on a fixed port, a
@@ -441,8 +455,13 @@ class Launcher:
         before uvicorn binds it; if another program takes it in between, another is tried."""
         self.port = None
         attempts = 1 if self.s.fixed_port else 3
-        for _attempt in range(attempts):
-            port = self.s.backend_port if self.s.fixed_port else core.free_port()
+        for attempt in range(attempts):
+            if self.s.fixed_port:
+                port = self.s.backend_port
+            elif attempt == 0 and prefer_port and not core.port_in_use(prefer_port):
+                port = prefer_port      # a restart keeps its port: the open dashboard keeps working
+            else:
+                port = core.free_port()
             if self.s.fixed_port and not self._fixed_port_free(port):
                 return False
             url = f"http://{core.LOOPBACK}:{port}"
@@ -451,6 +470,9 @@ class Launcher:
             env = _environ()
             env[core.INSTANCE_TOKEN_ENV] = self.token
             env.pop(core.DEV_SERVER_ENV, None)
+            env.pop(core.SUPERVISED_ENV, None)
+            if not self.reload:     # a --reload server's exit code is uvicorn's, not the app's
+                env[core.SUPERVISED_ENV] = "1"
             if self.mode == "dev":
                 env[core.DEV_SERVER_ENV] = "1"
             proc = self._spawn("backend", cmd, cwd=self.s.root, port=port, env=env)

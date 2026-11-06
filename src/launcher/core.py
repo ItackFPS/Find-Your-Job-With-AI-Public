@@ -45,6 +45,11 @@ INSTANCE_TOKEN_ENV = "FYJ_INSTANCE_TOKEN"
 # Set on the backend only by dev mode, which runs the Vite dev server: its origins are
 # allowed then and only then (src/api/app.py ``allowed_web_origins``).
 DEV_SERVER_ENV = "FYJ_DEV_SERVER"
+# Set on the backend by the launcher in start and tray modes: a launcher watches this process and
+# restarts it when it exits with RESTART_EXIT_CODE (intentional, never counted as a crash). Used
+# once per "Delete all" request, when Windows keeps the database locked (src/api/routes/privacy.py).
+SUPERVISED_ENV = "FYJ_SUPERVISED"
+RESTART_EXIT_CODE = 75
 DEFAULT_LLM_ENDPOINT = "http://localhost:1234"
 
 # Imports the backend cannot start without (module name -> pip distribution).
