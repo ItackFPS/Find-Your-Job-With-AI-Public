@@ -16,6 +16,7 @@ POST /api/privacy/delete-all/retry
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
 from pathlib import Path
@@ -222,6 +223,30 @@ def _quiesce_all(app: Any) -> None:
             handler.close()
 
 
+RESTART_DELAY_S = 1.5   # long enough for the UI's next poll to read "restarting"
+
+
+def _exit_for_restart(app: Any) -> None:
+    """End this process with RESTART_EXIT_CODE: the supervising launcher starts the backend again,
+    whose startup finishes the deletion before any database is opened (src/api/app.py)."""
+    from src.launcher.core import RESTART_EXIT_CODE
+
+    time.sleep(RESTART_DELAY_S)
+    logger.info("Delete all: restarting the backend to release the files Windows keeps locked.")
+    logging.shutdown()
+    exit_process = getattr(app.state, "exit_process", None) or os._exit   # tests replace it
+    exit_process(RESTART_EXIT_CODE)
+
+
+def _wants_restart(app: Any, st: dict[str, Any] | None) -> bool:
+    """A locked file (Windows: this process still holds the database), a launcher to restart us, and
+    the request's one automatic restart not used yet (claimed now, so a repeat failure never loops)."""
+    return (st is not None and st.get("state") == "BLOCKED"
+            and str(st.get("last_error") or "").startswith("file_locked")
+            and bool(getattr(app.state, "supervised", False))
+            and delete_all.claim_auto_restart(_data_dir(app)))
+
+
 def _run_delete_all(app: Any) -> None:
     if not _delete_all_lock.acquire(blocking=False):
         return
@@ -232,6 +257,10 @@ def _run_delete_all(app: Any) -> None:
             if st.get("state") == "COMPLETE":
                 app.state.restart_required = True
                 app.state.delete_all_blocked = False
+            elif _wants_restart(app, st):
+                app.state.delete_all_restarting = True
+                threading.Thread(target=_exit_for_restart, args=(app,), daemon=True,
+                                 name="delete-all-restart").start()
     except Exception:  # noqa: BLE001 — logged; the state file keeps it pending for a retry
         logger.exception("Delete all failed")
     finally:
@@ -241,10 +270,12 @@ def _run_delete_all(app: Any) -> None:
 def _delete_all_out(app: Any) -> dict[str, Any]:
     st = delete_all.read_state(_data_dir(app)) or getattr(app.state, "delete_all_last", None) or {"state": None}
     out = {k: st.get(k) for k in ("state", "last_state", "last_error", "requested_at", "completed_at",
-                                  "attempts", "verification", "skipped")}
+                                  "attempts", "verification", "skipped", "auto_restarts")}
     out["pending"] = delete_all.pending(_data_dir(app))
     out["running"] = _delete_all_lock.locked()
     out["restart_required"] = bool(getattr(app.state, "restart_required", False))
+    # this process is about to exit so the launcher restarts it; the UI keeps polling across the gap
+    out["restarting"] = bool(getattr(app.state, "delete_all_restarting", False))
     return out
 
 

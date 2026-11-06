@@ -8,6 +8,11 @@ rewritten at each step. It holds paths, sizes, counts and check results, never c
 States: REQUESTED -> QUIESCED -> INVENTORIED -> FILES_DELETED -> VERIFIED -> COMPLETE, or BLOCKED
 (with the file named). Every step reads only the state file and the filesystem.
 
+Launcher-owned files are never in scope: the launcher's instance lock and port file
+(``data/state/instance.json``, ``data/state/api-port.json``) and everything under ``logs/launcher/``.
+The launcher keeps supervising the app across the restart that finishes a deletion; these files hold
+no personal content.
+
 In scope: the whole data folder (``jobs.db`` and its WAL, backups, calibration, settings, lab
 databases and ``data/lab/``), the personal configuration (``config/*.local.yaml``: profile and its
 backups) and the logs. Tracked configuration defaults stay, so the next start is a first run.
@@ -41,6 +46,12 @@ __all__ = ["LAB_MARKER", "PENDING", "STATES", "pending", "read_state", "request"
 STATES = ("REQUESTED", "QUIESCED", "INVENTORIED", "FILES_DELETED", "VERIFIED", "COMPLETE")
 BLOCKED = "BLOCKED"
 DB_PATTERNS = ("*.db", "*.db-wal", "*.db-shm", "*.sqlite")
+# Launcher-owned (src/launcher/core.py Settings: instance_file, port_file, logs_dir). Never deleted.
+LAUNCHER_STATE_FILES = ("instance.json", "api-port.json")
+LAUNCHER_LOGS_DIR = "launcher"
+# Automatic restarts one request may use to get past a locked file (Windows): after that, the
+# pending request waits for the user's own restart or retry, so a failure can never loop.
+MAX_AUTO_RESTARTS = 1
 
 
 class Blocked(Exception):
@@ -106,11 +117,23 @@ def request(db_path: str | Path, config_dir: str | Path, logs_dir: str | Path | 
         "data_dir": str(data_dir), "config_dir": str(Path(config_dir).resolve()),
         "logs_dir": str(Path(logs_dir).resolve()) if logs_dir else str(data_dir.parent / "logs"),
         "state": "REQUESTED", "last_state": "REQUESTED", "attempts": 0, "last_error": None,
-        "inventory": None, "skipped": [], "verification": None,
+        "inventory": None, "skipped": [], "verification": None, "auto_restarts": 0,
     }
     _write(state_path(data_dir), state)
     logger.info("Delete all requested for %s.", data_dir)
     return state
+
+
+def claim_auto_restart(data_dir: str | Path) -> bool:
+    """Record one automatic restart for the pending request → ``False`` when none is left (or nothing
+    is pending). Written before the process exits, so a restart that fails again is not retried."""
+    path = state_path(data_dir)
+    state = read_state(data_dir)
+    if state is None or state.get("auto_restarts", 0) >= MAX_AUTO_RESTARTS:
+        return False
+    state["auto_restarts"] = state.get("auto_restarts", 0) + 1
+    _write(path, state)
+    return True
 
 
 def run(data_dir: str | Path, quiesce: Callable[[], None] | None = None,
@@ -153,6 +176,12 @@ class _Procedure:
         self.config = Path(state["config_dir"])
         self.logs = Path(state["logs_dir"])
         self.requested = datetime.fromisoformat(state["requested_at"])
+        self.kept = {self.data / "state" / name for name in LAUNCHER_STATE_FILES}
+        self.kept_logs = self.logs / LAUNCHER_LOGS_DIR
+
+    def _keep_dir(self, d: Path) -> bool:
+        """A folder that holds (or leads to) a launcher-owned file."""
+        return any(k.is_relative_to(d) for k in self.kept if k.exists())
 
     def _markers(self) -> list[Path]:
         return lab_suspension.markers(self.data)
@@ -161,13 +190,16 @@ class _Procedure:
         if not self.data.is_dir():
             return []
         markers = set(self._markers())
-        return sorted(p for p in self.data.rglob("*") if p.is_file() and p not in markers)
+        return sorted(p for p in self.data.rglob("*")
+                      if p.is_file() and p not in markers and p not in self.kept)
 
     def _config_files(self) -> list[Path]:
         return sorted(self.config.glob("*.local.yaml")) if self.config.is_dir() else []
 
     def _log_files(self) -> list[Path]:
-        return sorted(p for p in self.logs.rglob("*") if p.is_file()) if self.logs.is_dir() else []
+        if not self.logs.is_dir():
+            return []
+        return sorted(p for p in self.logs.rglob("*") if p.is_file() and not p.is_relative_to(self.kept_logs))
 
     # -- steps --
 
@@ -207,7 +239,7 @@ class _Procedure:
             markers = set(self._markers())
             for d in sorted((d for d in self.data.rglob("*") if d.is_dir()), key=lambda d: len(d.parts),
                             reverse=True):
-                if not any(m.parent == d for m in markers):
+                if not any(m.parent == d for m in markers) and not self._keep_dir(d):
                     try:
                         d.rmdir()
                     except OSError as exc:
@@ -231,7 +263,8 @@ class _Procedure:
                             old.append(p)
         checks = {
             "inventory_absent": not any(p.exists() for p in listed),
-            "data_folder_empty": all(p in markers or (p.is_dir() and p == self.data / "lab") for p in left),
+            "data_folder_empty": all(p in markers or p in self.kept or (p.is_dir() and p == self.data / "lab")
+                                     or (p.is_dir() and self._keep_dir(p)) for p in left),
             "no_old_database_files": not old,
             "no_lab_database": not any(p.exists() for p in lab_suspension.lab_databases(self.data)),
         }
