@@ -59,8 +59,8 @@ Then:
    put `FRANCE_TRAVAIL_CLIENT_ID` and `FRANCE_TRAVAIL_CLIENT_SECRET` in `.env` in the install
    folder and restart the app.
 
-   This version is tuned for IT and digital roles. Other occupations work through keyword
-   search, with fewer offers from France Travail.
+   Searches are built from your profile, so any line of work can be searched. The remote
+   boards (RemoteOK, Jobicy, We Work Remotely) list mostly digital roles.
 3. **Run pipeline** on the Dashboard (or **Scan now** on a scanner card). The first run
    downloads the multilingual embedding model (~470 MB) from Hugging Face once.
 
