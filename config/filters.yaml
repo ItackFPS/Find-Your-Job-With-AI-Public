@@ -231,7 +231,14 @@ domain_keywords:
       - systèmes d'information
       - responsable si
       - dsi
-    description: []
+      - admin sys
+      - administratrice systèmes
+      - exploitation informatique
+    # Added for G-MO-T (ADR 0028): the literal product names of the job, unambiguous in a description.
+    description:
+      - windows server
+      - active directory
+      - vmware
 
   networking:
     title:
@@ -501,6 +508,7 @@ domain_keywords:
       - nurse
       - healthcare assistant
       - caregiver
+      - ide                # infirmier diplômé d'État, in titles (G-MO-T, ADR 0028)
     description: []
 
   accounting:
@@ -552,6 +560,66 @@ domain_keywords:
       - factory worker
       - laborer
       - labourer
+      # The picker calls this domain "Manual Labor & Warehouse" (G-MO-T, ADR 0028).
+      - magasinier
+      - magasinière
+      - cariste
+      - préparateur de commandes
+      - préparatrice de commandes
+      - agent logistique
+      - opérateur logistique
+      - opératrice logistique
+      - agent de quai
+      - réceptionnaire
+      - entrepôt
+      - warehouse
+      - picker packer
+    description: []
+
+  # Offered by the Profile page's domain picker, with no vocabulary until G-MO-T (ADR 0028): a
+  # domain without one only matches its own name literally, so every real offer was rejected.
+  hospitality:
+    title:
+      - cuisinier
+      - cuisinière
+      - chef de partie
+      - chef de cuisine
+      - second de cuisine
+      - commis de cuisine
+      - commis de salle
+      - sous-chef
+      - chef de rang
+      - pâtissier
+      - pâtissière
+      - serveur
+      - serveuse
+      - plongeur
+      - réceptionniste
+      - employé de restaurant
+      - cook
+      - chef cook
+      - line cook
+      - head chef
+      - waiter
+      - waitress
+    description:
+      - haccp
+
+  logistics:
+    title:
+      - logisticien
+      - logisticienne
+      - logistique
+      - supply chain
+      - chauffeur
+      - conducteur routier
+      - livreur
+      - livreuse
+      - magasinier
+      - cariste
+      - logistics
+      - truck driver
+      - delivery driver
     description: []
 
   recruitment:

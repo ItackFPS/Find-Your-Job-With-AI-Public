@@ -1,0 +1,997 @@
+{
+ "dataset": {
+  "as_of": "2026-11-08T00:00:00+00:00",
+  "id": "g-mo-t-nurse",
+  "jobs_sha256": "8deb4de979e34c24b9319c80fe87b578f48f3262f0f96a44acc1000e7c1140e8",
+  "labels_sha256": "1e400a0f657db9558fb37b6c8990765947b8fb526ac8dc84c65bc605df849287",
+  "version": "1"
+ },
+ "decisions": [
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "accountant-01",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "accountant-02",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "accountant-03",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "accountant-04",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "accountant-05",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "accountant-06",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "accountant-07",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "accountant-08",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "accountant-09",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "accountant-10",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "accountant-11",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "accountant-12",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "chef-01",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "chef-02",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "chef-03",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "chef-04",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "chef-05",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "chef-06",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "chef-07",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "chef-08",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "chef-09",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "chef-10",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "chef-11",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "chef-12",
+   "reasons": [
+    "filter:seniority"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 0.05,
+    "experience_fit": 0.5,
+    "location_fit": 0.999902,
+    "seniority_match": 0.5,
+    "skills_match": 1.0
+   },
+   "flags": [],
+   "job_id": "nurse-01",
+   "reasons": [],
+   "score": 0.4,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "assessment": null,
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 0.05,
+    "experience_fit": 0.5,
+    "location_fit": 0.999902,
+    "seniority_match": 0.5,
+    "skills_match": 1.0
+   },
+   "flags": [],
+   "job_id": "nurse-02",
+   "reasons": [],
+   "score": 0.4,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "assessment": null,
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.999902,
+    "seniority_match": 0.5,
+    "skills_match": 1.0
+   },
+   "flags": [],
+   "job_id": "nurse-03",
+   "reasons": [],
+   "score": 0.9536330157293316,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "assessment": null,
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 0.05,
+    "experience_fit": 0.5,
+    "location_fit": 0.999902,
+    "seniority_match": 0.5,
+    "skills_match": 1.0
+   },
+   "flags": [],
+   "job_id": "nurse-04",
+   "reasons": [],
+   "score": 0.4,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "assessment": null,
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 0.05,
+    "experience_fit": 0.5,
+    "location_fit": 0.999902,
+    "seniority_match": 0.5,
+    "skills_match": 1.0
+   },
+   "flags": [],
+   "job_id": "nurse-05",
+   "reasons": [],
+   "score": 0.4,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "assessment": null,
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.999902,
+    "seniority_match": 0.5,
+    "skills_match": 1.0
+   },
+   "flags": [],
+   "job_id": "nurse-06",
+   "reasons": [],
+   "score": 0.9536330157293316,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "assessment": null,
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 0.05,
+    "experience_fit": 0.5,
+    "location_fit": 0.999902,
+    "seniority_match": 0.5,
+    "skills_match": 1.0
+   },
+   "flags": [],
+   "job_id": "nurse-07",
+   "reasons": [],
+   "score": 0.4,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "assessment": null,
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 0.05,
+    "experience_fit": 0.5,
+    "location_fit": 0.999902,
+    "seniority_match": 0.5,
+    "skills_match": 1.0
+   },
+   "flags": [],
+   "job_id": "nurse-08",
+   "reasons": [],
+   "score": 0.4,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "assessment": null,
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 0.05,
+    "experience_fit": 0.5,
+    "location_fit": 0.999902,
+    "seniority_match": 0.5,
+    "skills_match": 1.0
+   },
+   "flags": [],
+   "job_id": "nurse-09",
+   "reasons": [],
+   "score": 0.4,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "assessment": null,
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 0.05,
+    "experience_fit": 0.5,
+    "location_fit": 0.999902,
+    "seniority_match": 0.5,
+    "skills_match": 1.0
+   },
+   "flags": [],
+   "job_id": "nurse-10",
+   "reasons": [],
+   "score": 0.4,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "assessment": null,
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.999902,
+    "seniority_match": 0.5,
+    "skills_match": 1.0
+   },
+   "flags": [],
+   "job_id": "nurse-11",
+   "reasons": [],
+   "score": 0.9536330157293316,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "assessment": null,
+   "extraction_method": "heuristic",
+   "factors": {
+    "domain_relevance": 1.0,
+    "experience_fit": 0.5,
+    "location_fit": 0.999902,
+    "seniority_match": 0.0,
+    "skills_match": 1.0
+   },
+   "flags": [],
+   "job_id": "nurse-12",
+   "reasons": [],
+   "score": 0.4832481586511324,
+   "stage": "passed",
+   "verdict": "accept"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "sales-01",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "sales-02",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "sales-03",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "sales-04",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "sales-05",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "sales-06",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "sales-07",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "sales-08",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "sales-09",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "sales-10",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "sales-11",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "sales-12",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "sysadmin-01",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "sysadmin-02",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "sysadmin-03",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "sysadmin-04",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "sysadmin-05",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "sysadmin-06",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "sysadmin-07",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "sysadmin-08",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "sysadmin-09",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "sysadmin-10",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "sysadmin-11",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "sysadmin-12",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "warehouse-01",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "warehouse-02",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "warehouse-03",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "warehouse-04",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "warehouse-05",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "warehouse-06",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "warehouse-07",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "warehouse-08",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "warehouse-09",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "warehouse-10",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "warehouse-11",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  },
+  {
+   "assessment": null,
+   "extraction_method": null,
+   "factors": null,
+   "flags": [],
+   "job_id": "warehouse-12",
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
+  }
+ ],
+ "schema_version": 1,
+ "strategy_fingerprint": "957dabb5567a382c7c5526748a6ca5c5abe0ff6d3029a7fcadc40e87c82899e0"
+}
