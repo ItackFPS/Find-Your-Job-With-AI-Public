@@ -16,6 +16,7 @@ from src.collectors import france_travail_web as ftw
 from src.collectors.france_travail_web import (
     OCCUPATIONS,
     FranceTravailWebCollector,
+    label_names_occupation,
     parse_listing,
     parse_robots,
     resolve_occupation_domains,
@@ -228,7 +229,7 @@ def test_a_lasting_server_error_is_reported_per_page(monkeypatch) -> None:
 
 
 @pytest.mark.parametrize("cfg,needle", [
-    ({"target_domains": ["sales"], "departments": ["83"]}, "target domain"),
+    ({"target_domains": [], "departments": ["83"]}, "target domain"),
     ({"target_domains": ["data"], "departments": []}, "département"),
 ])
 def test_nothing_to_search_is_reported_not_raised(cfg, needle) -> None:  # noqa: ANN001
@@ -417,3 +418,41 @@ def test_free_text_profile_domains_are_searched(monkeypatch) -> None:
     assert not result.errors
     # the occupation keeps the profile's own entry, which is what the title filter compares
     assert result.jobs[0]["occupation"]["target_domains"] == ["Développement web"]
+
+
+@pytest.mark.parametrize(("label", "slug", "named"), [
+    ("Agriculture", "agriculteur", True),
+    ("Comptabilité", "comptable", True),
+    ("Cuisine", "chef-cuisinier", True),
+    ("Infirmier", "infirmier", True),
+    ("Développement web", "developpeur-web", True),
+    ("Chef de projet", "chef-cuisinier", False),  # "chef" is too short to name an occupation
+    ("Finance", "comptable", False),
+    ("Cuisine", "plombier", False),
+])
+def test_label_names_occupation(label: str, slug: str, named: bool) -> None:
+    assert label_names_occupation(label, slug) is named
+
+
+def test_any_sector_label_reads_matching_occupation_pages(monkeypatch) -> None:
+    """The app is not IT-only: "Agriculture" reads the sitemap's agriculteur pages."""
+    class _Agri(_Client):
+        sitemap_text = SITEMAP.replace(
+            "</urlset>", "<url><loc>https://candidat.francetravail.fr/offres/emploi/"
+                         "agriculteur/var/s1m8d83</loc></url></urlset>")
+
+    monkeypatch.setattr(ftw.httpx, "Client", _Agri)
+    result = FranceTravailWebCollector({"target_domains": ["Agriculture"], "departments": ["83"],
+                                        "rate_limit_delay": 0}).collect()
+    assert not result.errors
+    assert [u.rsplit("/", 2)[-2] for u in _Agri.last.urls[2:]] == ["var"]
+    assert "agriculteur" in _Agri.last.urls[2]
+    assert result.jobs[0]["occupation"] == {"scheme": "france-travail", "slug": "agriculteur",
+                                            "code": "s1m8", "target_domains": ["Agriculture"]}
+
+
+def test_domains_matching_no_occupation_page_are_reported(monkeypatch) -> None:
+    monkeypatch.setattr(ftw.httpx, "Client", _Client)
+    result = FranceTravailWebCollector({"target_domains": ["Finance"], "departments": ["83"],
+                                        "rate_limit_delay": 0}).collect()
+    assert result.jobs == [] and "target domain" in result.errors[0]
