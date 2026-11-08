@@ -10,7 +10,7 @@ import {
 import { Link } from 'react-router-dom'
 import { Trans, useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
-import { Card, StatTile, StatusBadge, SourceStatus, Chip, ProgressBar, EmptyState, LoadingState, DataTable, GettingStarted, type DataTableColumn } from '../components'
+import { Card, StatTile, StatusBadge, SourceStatus, Chip, ProgressBar, EmptyState, LoadingState, DataTable, GettingStarted, TodayCard, type DataTableColumn } from '../components'
 import { PIPELINE_STAGES, type PipelineStageDef } from '../config/pipelineStages'
 import { usePipelineEvents, stageLabel, type ConnectionState, type ActivityEntry } from '../hooks/usePipelineEvents'
 import {
@@ -550,7 +550,8 @@ export default function Dashboard() {
           )}
           {runError && (
             <span style={{ color: 'var(--color-error)', fontSize: 'var(--font-size-sm)' }}>
-              {(runError as Error).message}
+              {t((runError as { response?: { status?: number } }).response?.status === 409
+                ? 'dashboard.run.alreadyRunning' : 'dashboard.run.failed')}
             </span>
           )}
           <button
@@ -572,7 +573,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {!currentRun && d.total_jobs_in_db === 0 && <GettingStarted />}
+      {!currentRun && d.total_jobs_in_db === 0 ? <GettingStarted /> : <TodayCard dashboard={d} />}
 
       <ScannerStatusRow />
 

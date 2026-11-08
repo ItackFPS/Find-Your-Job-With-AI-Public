@@ -121,7 +121,19 @@
     "title": "Tableau de bord",
     "jobsInDb": "{count, number} offres en base",
     "pipelineRunning": "⟳ Pipeline en cours…",
+    "today": {
+      "title": "Aujourd’hui",
+      "lastRun": "Dernière recherche : {date}. {count, number} offres correspondent à votre profil.",
+      "noRun": "Aucune recherche pour le moment.",
+      "nextRun": "Prochaine recherche : {date}.",
+      "problems": "{count, plural, one {# source a eu} other {# sources ont eu}} un problème lors de la dernière recherche",
+      "top": "Meilleures correspondances",
+      "untitled": "Offre sans titre",
+      "noMatch": "Aucune correspondance forte lors de la dernière recherche."
+    },
     "run": {
+      "alreadyRunning": "Une recherche est déjà en cours.",
+      "failed": "La recherche n’a pas pu démarrer. Réessayez.",
       "start": "Lancer le pipeline",
       "starting": "Démarrage…",
       "running": "En cours…"
@@ -189,6 +201,7 @@
   "app": {
     "name": "Find Your Job",
     "nav": {
+      "advanced": "Avancé",
       "dashboard": "Tableau de bord",
       "jobs": "Offres",
       "review": "À vérifier",
@@ -251,6 +264,12 @@
     "unknown": "Lieu inconnu"
   },
   "jobs": {
+    "filters": {
+      "country": "Pays",
+      "department": "Département",
+      "workMode": "Mode de travail",
+      "tier": "Niveau de correspondance minimum"
+    },
     "title": "Offres",
     "noTitle": "(sans titre)",
     "daysAgo": " · il y a {days, number} j",

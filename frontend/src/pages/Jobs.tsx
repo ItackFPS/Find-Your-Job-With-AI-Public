@@ -369,6 +369,7 @@ export default function Jobs() {
 
         {/* Country — selecting resets department; France enables department filter */}
         <select
+          aria-label={t('jobs.filters.country')}
           value={country}
           onChange={e => {
             setCountry(e.target.value)
@@ -389,6 +390,7 @@ export default function Jobs() {
 
         {/* Department — enabled only when Country = France */}
         <select
+          aria-label={t('jobs.filters.department')}
           value={department}
           onChange={e => { setDepartment(e.target.value); setOffset(0) }}
           disabled={!isFrance}
@@ -410,6 +412,7 @@ export default function Jobs() {
 
         {/* Work mode */}
         <select
+          aria-label={t('jobs.filters.workMode')}
           value={remote === undefined ? '' : remote ? 'true' : 'false'}
           onChange={e => {
             setOffset(0)
@@ -426,6 +429,7 @@ export default function Jobs() {
         {/* Min tier — dashboard visibility floor. Default hides low_priority;
             jobs stay fully stored/queryable, "All tiers" shows everything. */}
         <select
+          aria-label={t('jobs.filters.tier')}
           value={minTier}
           onChange={e => { setMinTier(e.target.value); setOffset(0) }}
           title={t('jobs.minTierTitle')}
