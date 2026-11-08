@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 # Source types that shipped in 1.x and were removed in 2.0. A config written
 # for 1.x may still list them; the pipeline skips such a source with this
 # reason instead of reporting it as failed. Offers they collected stay stored.
-_REMOVE_HINT = "delete this source from sources.yaml"
+_REMOVE_HINT = "it is skipped, and offers it found stay saved"
 REMOVED_SOURCE_TYPES: dict[str, str] = {
     "apec": "APEC was removed in 2.0 (its bot protection blocks every "
     f"request); {_REMOVE_HINT}",

@@ -9,8 +9,10 @@
 ; below keep them apart:
 ;   * code, runtime and dashboard are replaced on every upgrade;
 ;   * config/*.yaml defaults are installed only when missing and never uninstalled, so
-;     an upgrade never rewrites a setting (personal values live in config/*.local.yaml,
-;     which no installer ever writes);
+;     the installer never rewrites a setting (personal values live in config/*.local.yaml,
+;     which no installer ever writes). config_defaults/ carries this version's defaults, and
+;     the first start of a version replaces only files still equal to an earlier default,
+;     after backing them up (src/upgrade/config_migration.py);
 ;   * data/, logs/, .env and *.local.yaml are never installed, so never touched;
 ;   * uninstalling removes the application and asks, default No, before deleting data.
 
@@ -72,6 +74,7 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 [InstallDelete]
 ; Upgrades replace the application wholesale so no module of an older version lingers.
 Type: filesandordirs; Name: "{app}\src"
+Type: filesandordirs; Name: "{app}\config_defaults"
 Type: filesandordirs; Name: "{app}\runtime"
 Type: filesandordirs; Name: "{app}\frontend\dist"
 Type: filesandordirs; Name: "{app}\scripts"

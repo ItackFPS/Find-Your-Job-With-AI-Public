@@ -128,6 +128,8 @@ $Items = @("src", "config", "scripts", "docs", "FindYourJob.cmd", "README.md", "
 foreach ($item in $Items) {
     Copy-Item -Recurse -Force (Join-Path $Export $item) (Join-Path $Stage $item)
 }
+# The defaults of this version, read by the first start after an upgrade (src/upgrade/config_migration.py).
+Copy-Item -Recurse -Force (Join-Path $Export "config") (Join-Path $Stage "config_defaults")
 New-Item -ItemType Directory -Force (Join-Path $Stage "frontend") | Out-Null
 Copy-Item -Recurse -Force (Join-Path $Export "frontend\dist") (Join-Path $Stage "frontend\dist")
 # The self-check's committed benchmark and its recorded baseline (src/evaluation/__main__.py).
