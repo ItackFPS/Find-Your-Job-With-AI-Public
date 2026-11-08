@@ -1,4 +1,5 @@
-import { NavLink } from 'react-router-dom'
+import { useState } from 'react'
+import { NavLink, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { getHealth } from '../api/client'
@@ -102,6 +103,9 @@ const NAV_ITEMS: { to: string; label: string; icon: React.ReactNode; end?: boole
   },
 ]
 
+// Pages for curious users, folded so that the everyday ones stand out (ADR 0028, D5).
+const ADVANCED = new Set(['/pipeline', '/stats', '/skills', '/quality'])
+
 function StatusRow({ label, connected }: { label: string; connected: boolean | undefined }) {
   const color = connected === undefined ? 'var(--color-muted)' : connected ? 'var(--color-success)' : 'var(--color-error)'
   return (
@@ -112,8 +116,37 @@ function StatusRow({ label, connected }: { label: string; connected: boolean | u
   )
 }
 
+function NavEntry({ to, label, icon, end }: (typeof NAV_ITEMS)[number]) {
+  const { t } = useTranslation()
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      style={({ isActive }) => ({
+        display: 'flex',
+        alignItems: 'center',
+        gap: 'var(--space-3)',
+        padding: '0.55rem 0.75rem',
+        borderRadius: 'var(--radius-md)',
+        textDecoration: 'none',
+        fontSize: 'var(--font-size-base)',
+        color: isActive ? 'var(--color-on-accent)' : 'var(--color-muted)',
+        background: isActive ? 'var(--color-accent)' : 'transparent',
+        fontWeight: isActive ? 'var(--font-weight-semibold)' : 'var(--font-weight-normal)',
+        transition: 'background-color var(--motion-duration-fast), color var(--motion-duration-fast)',
+      })}
+    >
+      {icon}
+      {t(`app.nav.${label}`)}
+    </NavLink>
+  )
+}
+
 export function Sidebar() {
   const { t } = useTranslation()
+  const { pathname } = useLocation()
+  const [opened, setOpened] = useState(false)
+  const showAdvanced = opened || ADVANCED.has(pathname)
   const { data: health, isError } = useQuery({
     queryKey: ['backend-health'],
     queryFn: getHealth,
@@ -141,29 +174,17 @@ export function Sidebar() {
       </div>
 
       <nav aria-label={t('app.nav.label')} style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', padding: '0 0.75rem', flex: 1 }}>
-        {NAV_ITEMS.map(({ to, label, icon, end }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            style={({ isActive }) => ({
-              display: 'flex',
-              alignItems: 'center',
-              gap: 'var(--space-3)',
-              padding: '0.55rem 0.75rem',
-              borderRadius: 'var(--radius-md)',
-              textDecoration: 'none',
-              fontSize: 'var(--font-size-base)',
-              color: isActive ? 'var(--color-on-accent)' : 'var(--color-muted)',
-              background: isActive ? 'var(--color-accent)' : 'transparent',
-              fontWeight: isActive ? 'var(--font-weight-semibold)' : 'var(--font-weight-normal)',
-              transition: 'background-color var(--motion-duration-fast), color var(--motion-duration-fast)',
-            })}
-          >
-            {icon}
-            {t(`app.nav.${label}`)}
-          </NavLink>
-        ))}
+        {NAV_ITEMS.filter(i => !ADVANCED.has(i.to)).map(item => <NavEntry key={item.to} {...item} />)}
+        <button
+          type="button"
+          aria-expanded={showAdvanced}
+          onClick={() => setOpened(!showAdvanced)}
+          style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', color: 'var(--color-muted)',
+            fontSize: 'var(--font-size-sm)', padding: '0.55rem 0.75rem', marginTop: 'var(--space-2)' }}
+        >
+          {t('app.nav.advanced')}
+        </button>
+        {showAdvanced && NAV_ITEMS.filter(i => ADVANCED.has(i.to)).map(item => <NavEntry key={item.to} {...item} />)}
       </nav>
 
       <div style={{ padding: '0.75rem', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>

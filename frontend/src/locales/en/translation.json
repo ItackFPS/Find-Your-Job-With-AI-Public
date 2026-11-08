@@ -93,6 +93,16 @@
     "title": "Dashboard",
     "jobsInDb": "{count, number} jobs in DB",
     "pipelineRunning": "⟳ Pipeline running…",
+    "today": {
+      "title": "Today",
+      "lastRun": "Last search: {date}. {count, number} offers matched your profile.",
+      "noRun": "No search yet.",
+      "nextRun": "Next search: {date}.",
+      "problems": "{count, plural, one {# source} other {# sources}} had a problem in the last search",
+      "top": "Best matches",
+      "untitled": "Untitled offer",
+      "noMatch": "No strong match in the last search."
+    },
     "run": {
       "start": "Run pipeline",
       "starting": "Starting…",
@@ -161,6 +171,7 @@
   "app": {
     "name": "Find Your Job",
     "nav": {
+      "advanced": "Advanced",
       "dashboard": "Dashboard",
       "jobs": "Jobs",
       "review": "Review",
@@ -223,6 +234,12 @@
     "unknown": "Unknown location"
   },
   "jobs": {
+    "filters": {
+      "country": "Country",
+      "department": "Department",
+      "workMode": "Work mode",
+      "tier": "Minimum match level"
+    },
     "title": "Jobs",
     "noTitle": "(no title)",
     "daysAgo": " · {days, number}d ago",
