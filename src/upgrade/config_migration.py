@@ -259,12 +259,16 @@ def migrate_config(config_dir: Path, data_dir: Path, version: str,
         return None
     report = ConfigMigrationReport(version=version)
     backup = _Backup(data_dir / "backups", now or datetime.now(UTC))
-    shipped = {p.name: p for p in defaults_dir.iterdir() if p.is_file()}
+    try:
+        shipped = {p.name: p for p in defaults_dir.iterdir() if p.is_file()}
+    except OSError as exc:
+        logger.warning("Upgrade: cannot read %s (%s); retrying at the next start.", defaults_dir, exc)
+        return None
     retired = {n for n in KNOWN_RELEASED_DEFAULTS if n not in shipped and (config_dir / n).is_file()}
     for name in sorted(set(shipped) | retired):
         try:
             _migrate_file(name, config_dir / name, shipped.get(name), backup, report)
-        except (OSError, UnicodeDecodeError) as exc:
+        except Exception as exc:  # any cause: a start must not fail because of this file
             logger.warning("Upgrade: %s not migrated (%s); retrying at the next start.", name, exc)
             report.failed.append(name)
     if backup.folder.is_dir():

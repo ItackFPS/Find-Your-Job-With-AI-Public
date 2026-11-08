@@ -259,3 +259,16 @@ def test_a_start_on_a_v1_install_upgrades_config_and_backs_up_the_database(start
     assert conn.execute("SELECT COUNT(*) FROM jobs").fetchone() == (2,)  # as it was before migrating
     assert conn.execute("PRAGMA integrity_check").fetchone() == ("ok",)
     conn.close()
+
+
+def test_a_corrupt_default_never_stops_the_start(install: Path):
+    edited = install / "config" / "schedules.yaml"
+    edited.write_text(edited.read_text(encoding="utf-8") + "# mine
+", encoding="utf-8")
+    (install / "config_defaults" / "schedules.yaml").write_bytes(b"schedules: [
+- id: pipeline_daily
+")
+    report = run(install)
+    assert report is not None and "schedules.yaml" in report.failed + report.kept
+    assert edited.read_text(encoding="utf-8").endswith("# mine
+")
