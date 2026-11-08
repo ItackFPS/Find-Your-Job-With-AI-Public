@@ -23,6 +23,7 @@ from src.collectors.base import (
 from src.collectors.canary import PARSER_CHANGED, has_canary, parse_fixture, parser_canary
 from src.collectors.registry import CollectorRegistry
 from src.collectors.weworkremotely import WeWorkRemotelyCollector
+from src.discovery.presets import load_presets
 from src.pipeline.normalize import normalize_jobs
 
 REGISTRY = CollectorRegistry()
@@ -226,11 +227,17 @@ def test_france_travail_web_reuses_the_shared_parser() -> None:
     assert france_travail_web.robots_allows is robots.robots_allows
 
 
+# The occupation codes and feed categories these collectors need come from the IT preset: the
+# orchestrator passes them in as config (src/discovery/presets.py), no collector has a default.
+_IT = next(p for p in load_presets() if p.name == "it").collector_config
+_FT_OCCUPATIONS = _IT["france_travail_web"]["occupations"]
+_WWR_CATEGORIES = _IT["weworkremotely"]["categories"]
+
 # -- no public_page collector requests a disallowed URL (fake transport) -----------------
 
 _FEED_URL = "https://jobs.example.org/feed.rss"
 PUBLIC_PAGE_CONFIGS: dict[str, dict[str, Any]] = {
-    "france_travail_web": {"target_domains": ["web_development"], "departments": ["83"]},
+    "france_travail_web": {"occupations": _FT_OCCUPATIONS, "target_domains": ["web_development"], "departments": ["83"]},
     "hellowork": {"metier_slugs": ["developpeur"]},
     "eures": {"queries": [{"keyword": "python", "location_codes": ["fr"]}], "max_pages_per_query": 1},
     "weworkremotely": {"category_rss": False},
@@ -347,7 +354,7 @@ def test_robots_and_sitemap_answers_are_not_pages_served(monkeypatch) -> None:  
     profile's département) is not a parser change, however large the sitemap."""
     web = _FakeWeb("User-agent: *\nAllow: /\n" + "# padding\n" * 400, lambda url: _BIG_SITEMAP)
     web.install(monkeypatch)
-    collector = _make("france_travail_web", {"target_domains": ["web_development"], "departments": ["13"]})
+    collector = _make("france_travail_web", {"occupations": _FT_OCCUPATIONS, "target_domains": ["web_development"], "departments": ["13"]})
     result = collector.collect()
     assert result.jobs == [] and len(_BIG_SITEMAP) > 4 * collector.canary_min_bytes
     assert parser_canary(collector, 0) is None
@@ -359,7 +366,7 @@ def test_a_served_listing_page_without_offers_is_still_flagged(monkeypatch) -> N
     web = _FakeWeb("User-agent: *\nAllow: /\n",
                    lambda url: _FT_SITEMAP if url.endswith(".xml") else redesigned)
     web.install(monkeypatch)
-    collector = _make("france_travail_web", {"target_domains": ["web_development"], "departments": ["83"]})
+    collector = _make("france_travail_web", {"occupations": _FT_OCCUPATIONS, "target_domains": ["web_development"], "departments": ["83"]})
     assert collector.collect().jobs == []
     assert parser_canary(collector, 0) == PARSER_CHANGED
 
@@ -457,7 +464,7 @@ def test_a_collector_reaching_its_cap_still_returns_what_it_read(monkeypatch) ->
                                                                           max_requests_per_run=2))
     web = _FakeWeb("User-agent: *\nAllow: /\n", _fixture_page("weworkremotely"))
     web.install(monkeypatch)
-    collector = WeWorkRemotelyCollector({})  # global feed + 6 category feeds
+    collector = WeWorkRemotelyCollector({"categories": _WWR_CATEGORIES})  # global feed + 6 category feeds
     result = collector.collect()
     assert len([u for u in web.urls if not u.endswith("/robots.txt")]) == 2
     assert result.jobs
