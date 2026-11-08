@@ -1653,6 +1653,15 @@ class TestProfileLanguagesString:
 # double-counting the same signal.
 # ---------------------------------------------------------------------------
 
+# The mid-tier role hint comes from the IT line-of-work preset (config/presets/it.yaml): the
+# scoring config builder injects it for an IT profile, and these configs stand for one.
+from src.discovery.presets import load_presets as _load_presets  # noqa: E402
+
+_IT_BROAD_TITLE_INDICATORS = list(
+    next(p for p in _load_presets() if p.name == "it").broad_title_indicators
+)
+
+
 def _domain_rel_config(
     domain_title_kws: list[str] | None = None,
     domain_desc_kws: list[str] | None = None,
@@ -1666,6 +1675,7 @@ def _domain_rel_config(
                 "domain_title_keywords": domain_title_kws or [],
                 "domain_description_keywords": domain_desc_kws or [],
                 "off_domain_keywords": off_domain_kws or [],
+                "broad_title_indicators": list(_IT_BROAD_TITLE_INDICATORS),
             },
         }
     }
