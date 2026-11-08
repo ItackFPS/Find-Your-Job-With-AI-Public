@@ -4,7 +4,7 @@ Status: accepted (2026-11-05). Not implemented yet: the code-level checks below 
 
 ## Context
 The owner approved the learning architecture v5
-(`docs/plans/2026-11-05-learning-architecture-decisions.md`, §2–§3, with the four-plane table of the
+(`docs/design/learning-architecture-decisions.md`, §2–§3, with the four-plane table of the
 v1 proposal §2). The application is to learn from the user's behaviour, from the collected market
 and from its own operation, with no labels asked of the user, no server and no paid AI. Learning
 that mixes those sources, or that can reject offers or move the stored score, would break

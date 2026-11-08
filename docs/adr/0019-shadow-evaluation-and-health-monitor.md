@@ -2,7 +2,7 @@
 
 Status: accepted (2026-11-05). Not implemented yet (simulator in stage L3, activation in L4). Rules,
 arithmetic, schema and simulator scenarios:
-`docs/plans/2026-11-05-learning-architecture-decisions.md` §4.5 (AD-5).
+`docs/design/learning-architecture-decisions.md` §4.5 (AD-5).
 
 ## Context
 A personal model (ADR 0018) must not change what the user sees until it has shown it agrees with the

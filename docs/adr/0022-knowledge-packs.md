@@ -1,7 +1,7 @@
 # 0022 — Shared intelligence travels only in versioned, read-only knowledge packs shipped with releases
 
 Status: accepted (2026-11-05). Not implemented yet (stage L6). Source:
-`docs/plans/2026-11-05-learning-architecture-decisions.md` §1.1–§1.5 and §4.1 (AD-1), with the v1
+`docs/design/learning-architecture-decisions.md` §1.1–§1.5 and §4.1 (AD-1), with the v1
 proposal's AD-1.
 
 ## Context

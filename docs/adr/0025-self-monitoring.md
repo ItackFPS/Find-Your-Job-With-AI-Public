@@ -1,7 +1,7 @@
 # 0025 — The application monitors its own pipeline with detectors and alerts; it never modifies itself silently
 
 Status: accepted (2026-11-05). Not implemented yet (base in stage L2, full set in stage L8).
-Source: `docs/plans/2026-11-05-learning-architecture-decisions.md` §4.9 (AD-9), with the v1
+Source: `docs/design/learning-architecture-decisions.md` §4.9 (AD-9), with the v1
 proposal's AD-9.
 
 ## Context

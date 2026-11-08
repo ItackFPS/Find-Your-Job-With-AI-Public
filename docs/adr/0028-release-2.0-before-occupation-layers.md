@@ -2,7 +2,7 @@
 
 Status: accepted (2026-11-08). Roadmap decision; no code. Supersedes, for release 2.0 only, the order
 and one release gate of ADR 0027. Source:
-`docs/plans/2026-11-08-2.0-release-decision-readiness.md` §4 and §14.
+`docs/plans/2026-11-08-2.0-release-decision-readiness.md` (removed from the tree, see git history before d90444a) §4 and §14.
 
 ## Context
 ADR 0027 ordered L1 to L8, then P3, P5, P6, P7, and added the multi-occupation self-check (ADR 0023)
@@ -41,5 +41,5 @@ a Today card instead of the ADR 0026 Home sections, which move to 2.1.
 - ADR 0027 stays as written and governs the L6–L8 order after 2.0.
 - A later occupation and salary contract means another profile version bump.
 - ADR 0026's "Reconversion" lane cannot be complete before L6.
-- `docs/plans/2026-10-23-roadmap-status.md` records this order.
+- `docs/plans/2026-10-23-roadmap-status.md` (removed from the tree, see git history before d90444a) records this order.
 - Any release still needs explicit owner approval.

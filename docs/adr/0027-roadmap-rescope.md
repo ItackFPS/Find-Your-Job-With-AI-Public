@@ -1,11 +1,11 @@
 # 0027 — The learning stages L1–L9 replace Phase 4 and run before the remaining P3, P5–P7 work; P7 gains learning gates
 
 Status: accepted (2026-11-05). Roadmap decision; no code. Source:
-`docs/plans/2026-11-05-learning-architecture-decisions.md` §4.13 (AD-13) and §6, the v1 proposal's
+`docs/design/learning-architecture-decisions.md` §4.13 (AD-13) and §6, the v1 proposal's
 AD-13, and the owner's mandate of 2026-11-05.
 
 ## Context
-The 2.0 completion plan (`docs/plans/2026-10-30-completion-plan.md`) had Phase 4 "ranking quality"
+The 2.0 completion plan (`docs/plans/2026-10-30-completion-plan.md` (removed from the tree, see git history before d90444a)) had Phase 4 "ranking quality"
 built on owner labels. The approved learning architecture (ADRs 0014–0026) replaces it and adds
 stages that touch the same pages as P3, P5, P6 and P7. The order between them was left open in the
 roadmap status record. On 2026-11-05 the owner asked to implement the architecture first, install
@@ -35,7 +35,7 @@ and test it in a fresh copy, then continue the rest of the roadmap without stopp
   personal ranking is never a stage exit criterion; it happens only when the evidence exists.
 
 ## Consequences
-- `docs/plans/2026-10-23-roadmap-status.md` records this order, and marks L0 done when this ADR
+- `docs/plans/2026-10-23-roadmap-status.md` (removed from the tree, see git history before d90444a) records this order, and marks L0 done when this ADR
   merges.
 - Each stage gets its own plan before code (CLAUDE.md §11.4), since every stage changes a contract
   or a schema.

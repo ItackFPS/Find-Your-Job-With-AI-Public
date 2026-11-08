@@ -1,7 +1,7 @@
 # 0026 — Home shows three labelled lanes; exploration and "outside criteria" offers are capped and explained
 
 Status: accepted (2026-11-05). Not implemented yet (Home sections in P6; lane inputs arrive with
-stages L4–L6). Source: `docs/plans/2026-11-05-learning-architecture-decisions.md` §4.11 (AD-11),
+stages L4–L6). Source: `docs/design/learning-architecture-decisions.md` §4.11 (AD-11),
 with the v1 proposal's AD-11.
 
 ## Context

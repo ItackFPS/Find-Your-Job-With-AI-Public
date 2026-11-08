@@ -1,7 +1,7 @@
 # 0024 — Market figures describe the collected sample, carry their coverage, and compare salaries only inside one comparability class
 
 Status: accepted (2026-11-05). Not implemented yet (stage L7; the `matches_salary` correction is a
-prerequisite that lands first). Source: `docs/plans/2026-11-05-learning-architecture-decisions.md`
+prerequisite that lands first). Source: `docs/design/learning-architecture-decisions.md`
 §4.8 (AD-8), with the v1 proposal's AD-8.
 
 ## Context
