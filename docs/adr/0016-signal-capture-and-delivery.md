@@ -1,7 +1,7 @@
 # 0016 — Signals: only visible exposure is logged; durable actions go through an acknowledged, ordered outbox
 
 Status: accepted (2026-11-05). Not implemented yet (stage L1). Details and tests:
-`docs/plans/2026-11-05-learning-architecture-decisions.md` §4.6 (AD-6), with Save, Hide and active
+`docs/design/learning-architecture-decisions.md` §4.6 (AD-6), with Save, Hide and active
 questions as in the v1 proposal.
 
 ## Context

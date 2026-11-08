@@ -1,7 +1,7 @@
 # 0018 — Personal ranking is a bounded Bayesian model with a profile prior, learned from the journals without labels
 
 Status: accepted (2026-11-05). Not implemented yet (stage L3 in shadow, L4 eligible). Signal table,
-formulas and tests: `docs/plans/2026-11-05-learning-architecture-decisions.md` §4.3 (AD-3), with the
+formulas and tests: `docs/design/learning-architecture-decisions.md` §4.3 (AD-3), with the
 v1 proposal's AD-3 for the model structure.
 
 ## Context

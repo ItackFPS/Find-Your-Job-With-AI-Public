@@ -1,7 +1,7 @@
 # 0021 — Labels are developer and release instruments, never a user prerequisite
 
 Status: accepted (2026-11-05). Mostly a rule on product flows; UI test lands with stage L1.
-Source: `docs/plans/2026-11-05-learning-architecture-decisions.md` §4.10 (AD-10, approved unchanged
+Source: `docs/design/learning-architecture-decisions.md` §4.10 (AD-10, approved unchanged
 from the v1 proposal).
 
 ## Context

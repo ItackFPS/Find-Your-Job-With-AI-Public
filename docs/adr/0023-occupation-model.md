@@ -2,7 +2,7 @@
 
 Status: accepted (2026-11-05). Not implemented yet (stage L2 for structured fields, L6 for the
 classifier). Design, data splits and evaluation tables:
-`docs/plans/2026-11-05-learning-architecture-decisions.md` §1 and §4.7 (AD-7).
+`docs/design/learning-architecture-decisions.md` §1 and §4.7 (AD-7).
 
 ## Context
 Matching today rests on keyword vocabularies and the embedding. Professional potential (objective

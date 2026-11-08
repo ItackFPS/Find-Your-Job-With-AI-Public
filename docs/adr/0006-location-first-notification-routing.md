@@ -1,7 +1,7 @@
 # Job notifications are routed by location, one channel per job, no fallback
 
 **Status: superseded (2.0).** Discord and n8n notifications were removed with the 2.0
-update (`docs/plans/2026-10-23-final-update-plan.md`, §C8). This record is kept for
+update (`docs/plans/2026-10-23-final-update-plan.md` (removed from the tree, see git history before d90444a), §C8). This record is kept for
 history; the code it cites no longer exists.
 
 `NotificationEngine` (`src/notifications/engine.py`) sends one Discord batch per

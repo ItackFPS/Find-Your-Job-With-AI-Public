@@ -1,7 +1,7 @@
 # 0015 — Personal data has four in-app actions; erasure is a resumable, verified job
 
 Status: accepted (2026-11-05). Not implemented yet (stage L1). Full procedure, tables and tests:
-`docs/plans/2026-11-05-learning-architecture-decisions.md` §4.12 (AD-12).
+`docs/design/learning-architecture-decisions.md` §4.12 (AD-12).
 
 ## Context
 Learning (ADR 0014) turns user actions into stored personal data. ADR 0009 treated erasure as a

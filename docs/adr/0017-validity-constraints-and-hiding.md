@@ -2,7 +2,7 @@
 
 Status: accepted (2026-11-05). Not implemented yet (stage L5 for weak evidence; salary check after
 the `matches_salary` correction). Classification table, routing and criteria:
-`docs/plans/2026-11-05-learning-architecture-decisions.md` §4.2 (AD-2), with the v1 proposal's AD-2.
+`docs/design/learning-architecture-decisions.md` §4.2 (AD-2), with the v1 proposal's AD-2.
 
 ## Context
 In the owner's blind labels, 5 of 7 relevant tuning offers and 3 of 4 relevant held-out offers were
