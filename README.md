@@ -15,13 +15,15 @@ or rejected — is recorded with its evidence, so you can see *why* a job was ra
 dropped.
 
 Your profile, feedback and job data stay in a SQLite database on your machine. No paid
-cloud AI is used. The optional LLM stages target a model running on your own machine
-(LM Studio or Ollama).
+cloud AI is used.
 
-**Who it is for:** one person who is comfortable editing a YAML file and running a
-Python project, and wants a job-search tool they fully control. It is a single-user,
-single-machine app, developed and used on Windows 11 — not a hosted service, and it has
-no login.
+**Who it is for:** one person looking for a job, on Windows 10 or 11, who wants a search tool
+they fully control. Version 2.0 installs and configures without a terminal or a file to edit. It
+is a single-user, single-machine app, not a hosted service, and it has no login.
+
+**Stated limit:** 2.0 is tuned for IT and digital roles. Other occupations work through keyword
+search, with fewer offers from France Travail, whose website is read only for IT occupations
+([measured baseline](docs/reports/2026-11-08-g-mo-t-baseline.md)).
 
 ---
 
@@ -54,13 +56,14 @@ feedback, evaluation, lab) · [ADRs](docs/adr/README.md) · [Windows app](docs/w
 | LinkedIn / HelloWork background scanners with pause/resume | ✅ opt-in; daily once chosen, stop on a 429 and resume after a cooldown |
 | Background scheduler (recurring scans/runs) | ✅ config-gated |
 | Feedback journal, disagreement/abstention review queue ([ADR 0009](docs/adr/0009-feedback-journal.md), [0010](docs/adr/0010-disagreement-and-abstention.md)) | ✅ |
-| Local-LLM enrichment and LLM eligibility gate | ✅ implemented, **off by default** |
+| Local-LLM enrichment and LLM eligibility gate | ⚙️ backend only, **off**, no control in the 2.0 interface; setup comes in 2.1 ([ADR 0028](docs/adr/0028-release-2.0-before-occupation-layers.md)) |
 | Evaluation harness (labelled datasets, metrics, comparisons; [ADR 0007](docs/adr/0007-evaluation-harness-outside-production-path.md)) | 🧪 developer tooling, outside the production path |
 | Experiment lab with human-approved promotion ([ADR 0011](docs/adr/0011-experiment-lab.md)) | 🧪 experimental; the lab agent is OS-isolated only when you run it in its sandbox (`python -m src.lab sandbox`, Windows AppContainer) |
 | Greenhouse, Lever, SmartRecruiters, WorkingNomads collectors | ⚙️ implemented, no source configured |
 | macOS / Linux | ⚠️ backend, CLI and tests run (CI is Linux); the launcher and startup scripts are Windows-only |
 | Docker | ⚠️ the image runs the CLI pipeline only, not the web UI |
-| Windows installer: per-user, bundled Python, desktop + Start Menu shortcuts ([docs](docs/windows-installer.md)) | ✅ 1.0.0, not code-signed |
+| Windows installer: per-user, bundled Python, desktop + Start Menu shortcuts ([docs](docs/windows-installer.md)) | ✅ 1.0.0 released, 2.0 in qualification; not code-signed |
+| First-run setup: language, your search, sources, matching model, daily search | ✅ no terminal, resumable |
 
 ---
 
@@ -70,7 +73,7 @@ feedback, evaluation, lab) · [ADRs](docs/adr/README.md) · [Windows app](docs/w
 from the [latest release](https://github.com/ItackFPS/Find-Your-Job-With-AI-Public/releases/latest),
 check the hash (`Get-FileHash .\FindYourJobWithAI-Setup-<version>.exe` in PowerShell), run it,
 then double-click **Find Your Job With AI** on the desktop. No Python, Node.js or Git needed, no administrator
-rights; nothing is collected until you start a run. Install, first run, sources and
+rights; nothing is collected until you have saved your profile, then the app searches once a day. Install, first run, sources and
 credentials, stopping, logs, upgrades and uninstalling: [docs/windows-installer.md](docs/windows-installer.md).
 To build the installer yourself: `powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1`
 (same page, "Building the installer").
