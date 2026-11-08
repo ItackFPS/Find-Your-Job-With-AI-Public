@@ -127,6 +127,7 @@
       "noRun": "Aucune recherche pour le moment.",
       "nextRun": "Prochaine recherche : {date}.",
       "problems": "{count, plural, one {# source a eu} other {# sources ont eu}} un problème lors de la dernière recherche",
+      "offline": "Aucune source n'a répondu lors de la dernière recherche. Vérifiez votre connexion internet ; la prochaine recherche réessaiera.",
       "top": "Meilleures correspondances",
       "untitled": "Offre sans titre",
       "noMatch": "Aucune correspondance forte lors de la dernière recherche."
