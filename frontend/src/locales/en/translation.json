@@ -89,6 +89,34 @@
       "metierPages": "{count, plural, one {# metier page done} other {# metier pages done}}"
     }
   },
+  "onboarding": {
+    "title": "Set up Find Your Job With AI",
+    "progress": "Setup progress",
+    "loadFailed": "Could not load the setup. Is the app still running?",
+    "next": "Next",
+    "back": "Back",
+    "skip": "Skip setup",
+    "steps": { "welcome": "Welcome", "profile": "Your search", "sources": "Sources", "model": "Matching", "background": "Daily search", "done": "Finish" },
+    "welcome": {
+      "title": "Welcome",
+      "intro": "A few steps, no file to edit, no command to type. Everything stays on this computer, and you can change it all later.",
+      "scope": "This version is tuned for IT and digital roles. Other occupations work through keyword search, with fewer offers from France Travail."
+    },
+    "profile": {
+      "title": "What are you looking for?",
+      "subtitle": "The search is built from this. Nothing is collected until you save it.",
+      "later": "You can add your skills, jobs and qualifications later in Profile.",
+      "needed": "Choose at least one field and your home town.",
+      "saveFailed": "Could not save your profile. Try again."
+    },
+    "done": {
+      "title": "You are ready",
+      "body": "From now on the app searches by itself once a day. You can start the first search now; it may take several minutes.",
+      "search": "Start my first search",
+      "later": "Not now",
+      "failed": "Could not start. Try again."
+    }
+  },
   "dashboard": {
     "title": "Dashboard",
     "jobsInDb": "{count, number} jobs in DB",

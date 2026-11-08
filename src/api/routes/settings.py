@@ -4,6 +4,8 @@ GET /api/settings/notifications  — the desktop notification categories, their 
 PUT /api/settings/notifications  — turn categories on or off: {"categories": {"source_paused": true}}
 GET /api/settings/background     — background collection: {"enabled": true, "daily_time": "08:00"}
 PUT /api/settings/background     — change either value (issue #80)
+GET /api/settings/onboarding     — first-run setup: {"started": false, "step": 0, "completed": false}
+PUT /api/settings/onboarding     — record progress: {"step": 2} or {"completed": true}
 GET /api/settings/autostart      — start with Windows: {"supported": true, "enabled": false}
 PUT /api/settings/autostart      — turn it on or off: {"enabled": true}
 GET /api/settings/data           — database size, offers by status, cleanup choices and state (issue #86)
@@ -25,10 +27,13 @@ from src.app_settings import (
     NOTIFICATION_AVAILABLE,
     background_settings,
     notification_settings,
+    onboarding_state,
     update_background_settings,
+    update_onboarding,
     update_notification_settings,
 )
 
+from src.config_files import local_config_path
 from src.launcher.autostart import Autostart
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -75,6 +80,34 @@ def put_background_settings(body: BackgroundSettingsIn, request: Request) -> dic
     changes = body.model_dump(exclude_none=True)
     try:
         return update_background_settings(_path(request), changes)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# First-run setup (M3)
+# ---------------------------------------------------------------------------
+
+
+class OnboardingIn(BaseModel):
+    # Validated in app_settings: an invalid type is a 422 with one message there.
+    step: Any = None
+    completed: Any = None
+
+
+def _profile_saved(request: Request) -> bool:
+    return local_config_path(request.app.state.config_dir, "profile.yaml").exists()
+
+
+@router.get("/onboarding")
+def get_onboarding(request: Request) -> dict[str, Any]:
+    return onboarding_state(_path(request), _profile_saved(request))
+
+
+@router.put("/onboarding")
+def put_onboarding(body: OnboardingIn, request: Request) -> dict[str, Any]:
+    try:
+        return update_onboarding(_path(request), body.model_dump(exclude_none=True), _profile_saved(request))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

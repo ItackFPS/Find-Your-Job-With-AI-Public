@@ -1,5 +1,6 @@
 // React Query keys shared by the Settings cards (issue #82), kept apart so each card file
 // exports components only (fast refresh).
+export const ONBOARDING_QUERY_KEY = ['onboarding']
 export const BACKGROUND_QUERY_KEY = ['background-settings']
 export const EMBEDDING_MODEL_QUERY_KEY = ['embedding-model']
 export const AUTOSTART_QUERY_KEY = ['autostart-settings']

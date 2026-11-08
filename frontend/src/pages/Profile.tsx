@@ -475,7 +475,7 @@ interface DomainSuggestion {
   badge: 'Curated' | 'ESCO' | null
 }
 
-function DomainPicker({ values, onChange }: { values: string[]; onChange: (v: string[]) => void }) {
+export function DomainPicker({ values, onChange }: { values: string[]; onChange: (v: string[]) => void }) {
   const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const trimmedQuery = query.trim()
@@ -879,7 +879,7 @@ function LocationPreferencesEditor({ values, onChange }: {
 // HomePicker — offline commune autocomplete for profile.geography.home
 // ---------------------------------------------------------------------------
 
-function HomePicker({ value, onChange }: { value: HomePlace | null; onChange: (v: HomePlace | null) => void }) {
+export function HomePicker({ value, onChange }: { value: HomePlace | null; onChange: (v: HomePlace | null) => void }) {
   const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<PlaceSuggestion[]>([])
@@ -948,7 +948,7 @@ const REMOTE_POLICY_KEYS: (keyof RemotePolicy)[] = ['remote_france', 'remote_eu'
 
 // `labelFor` translates an option code; without it the code is shown as is, marked translate="no"
 // (the excluded-seniority keywords are matched literally in job titles).
-function CheckboxGroup({ options, values, onChange, labelFor }: {
+export function CheckboxGroup({ options, values, onChange, labelFor }: {
   options: string[]; values: string[]; onChange: (v: string[]) => void; labelFor?: (opt: string) => string
 }) {
   const toggle = (opt: string) => {
