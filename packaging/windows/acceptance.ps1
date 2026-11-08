@@ -21,6 +21,11 @@
     instead and runs steps 2-5: it checks the runtime and the launcher, not the setup
     program.
 
+    With -Stage and -UpgradeFrom (an installed v1 folder, which is only read), rehearses
+    an upgrade on a copy: applies the installer's file rules over the v1 data and
+    configuration, starts this version, and checks the backup, the migrated configuration,
+    the scheduler and the row counts.
+
     Uses port 8765 by default so a development backend on 8000 is not disturbed.
 
 .EXAMPLE
@@ -30,6 +35,8 @@
 param(
     [string]$Installer = "",
     [string]$Stage = "",
+    # With -Stage: a COPY-able v1 install folder. Rehearses v1 -> this version on a copy of it.
+    [string]$UpgradeFrom = "",
     [string]$TestDir = (Join-Path $env:TEMP "fyj-acceptance"),
     [int]$Port = 8765,
     [switch]$KeepTestDir
@@ -49,6 +56,10 @@ function Step([string]$Text) { Write-Host "==> $Text" -ForegroundColor Cyan }
 if (-not $Installer -and -not $Stage) { throw "pass -Installer <setup.exe> or -Stage <stage folder>" }
 if ($Installer) { $Installer = (Resolve-Path $Installer).Path }
 if ($Stage) { $Stage = (Resolve-Path $Stage).Path }
+if ($UpgradeFrom) {
+    if (-not $Stage) { throw "-UpgradeFrom needs -Stage" }
+    $UpgradeFrom = (Resolve-Path $UpgradeFrom).Path
+}
 $Base = "http://127.0.0.1:$Port"
 $env:FYJ_PORT = "$Port"   # read by the launcher (shell environment beats .env)
 
@@ -117,6 +128,91 @@ New-Item -ItemType Directory -Force $TestDir | Out-Null
 $Marker = "acceptance-marker-$(Get-Random)"
 
 try {
+    # -- upgrade rehearsal: a copy of a real v1 install, then this version over it -------------------
+    if ($UpgradeFrom) {
+        Step "Copying the v1 install (data and configuration only) into $App"
+        $RoboArgs = @($UpgradeFrom, $App, "/E", "/NFL", "/NDL", "/NJH", "/NJS", "/NP", "/XD", "runtime", "src", "frontend", "scripts", "docs", "__pycache__")
+        & robocopy @RoboArgs | Out-Null
+        if ($LASTEXITCODE -ge 8) { throw "copying $UpgradeFrom failed (robocopy $LASTEXITCODE)" }
+        $Before = @{}
+        foreach ($name in "schedules.yaml", "sources.yaml", "profile.local.yaml") {
+            $f = Join-Path $App "config\$name"
+            if (Test-Path $f) { $Before[$name] = (Get-FileHash $f -Algorithm SHA256).Hash }
+        }
+        Step "Applying the installer's file rules (code replaced, config only when missing, data untouched)"
+        foreach ($item in Get-ChildItem $Stage -Force) {
+            if ($item.Name -eq "config") { continue }
+            $target = Join-Path $App $item.Name
+            if ($item.PSIsContainer -and (Test-Path $target)) { Remove-Item -Recurse -Force $target }
+            Copy-Item -Recurse -Force $item.FullName $target
+        }
+        Get-ChildItem (Join-Path $Stage "config") -File | ForEach-Object {
+            $target = Join-Path $App "config\$($_.Name)"
+            if (-not (Test-Path $target)) { Copy-Item $_.FullName $target }
+        }
+        $Python = Join-Path $App "runtime\python.exe"
+        $Db = Join-Path $App "data\jobs.db"
+        $CountScript = Join-Path $TestDir "counts.py"
+        Set-Content -Encoding ascii $CountScript @"
+import json, sqlite3, sys
+c = sqlite3.connect(sys.argv[1])
+tables = {r[0] for r in c.execute("select name from sqlite_master where type='table'")}
+out = {t: c.execute(f'select count(*) from {t}').fetchone()[0] for t in ('jobs', 'feedback_events', 'outcome_events') if t in tables}
+out['integrity'] = c.execute('pragma integrity_check').fetchone()[0]
+print(json.dumps(out))
+"@
+        $CountsBefore = (& $Python $CountScript $Db) | ConvertFrom-Json
+        Check ($CountsBefore.integrity -eq "ok") "v1 database is intact before the upgrade"
+
+        Step "First start of the new version on the v1 data"
+        Start-App $App
+        $h = Wait-Health
+        Check ($null -ne $h) "upgraded app starts"
+        if (-not $h) { throw "backend did not start; see $App\logs\launcher" }
+        $info = Get-Content -Raw (Join-Path $App "build-info.json") | ConvertFrom-Json
+        Check ($h.version -eq $info.version) "runs the new version ($($h.version))"
+        Check ((Get-Item $Db).FullName -eq $Db) "database is <install>\data\jobs.db"
+        $copies = @(Get-ChildItem (Join-Path $App "data\backups") -Filter "jobs-upgrade-*.db" -ErrorAction SilentlyContinue)
+        Check ($copies.Count -eq 1) "one upgrade backup of the database ($($copies.Count))"
+        $migrated = Join-Path $App "config\schedules.yaml"
+        Check (Select-String -Quiet -SimpleMatch "id: pipeline_daily" $migrated) "schedules.yaml has pipeline_daily"
+        Check (Select-String -Quiet -SimpleMatch "name: france-travail-web" (Join-Path $App "config\sources.yaml")) "sources.yaml has france-travail-web"
+        if ($Before.ContainsKey("profile.local.yaml")) {
+            Check ((Get-FileHash (Join-Path $App "config\profile.local.yaml") -Algorithm SHA256).Hash -eq $Before["profile.local.yaml"]) "profile.local.yaml unchanged"
+        }
+        $sched = (Invoke-WebRequest -Uri "$Base/api/scheduler/status" -UseBasicParsing -TimeoutSec 10).Content
+        Check ($sched -match "pipeline_daily") "scheduler knows pipeline_daily"
+        # The daily search must really start on an upgraded install with a saved profile.
+        $deadline = (Get-Date).AddSeconds(150)
+        $dispatched = $false
+        while (-not $dispatched -and (Get-Date) -lt $deadline) {
+            $raw = (Invoke-WebRequest -Uri "$Base/api/scheduler/executions" -UseBasicParsing -TimeoutSec 10).Content
+            $dispatched = $raw -match "pipeline_daily"
+            if (-not $dispatched) { Start-Sleep 3 }
+        }
+        Check $dispatched "the daily search was dispatched by the scheduler"
+        $learning = Get-Json "/api/learning/health"
+        if ($learning) { Check (-not $learning.activation_enabled) "learning activation stays off" }
+
+        Step "Stop, then check the data"
+        Check ((Invoke-Launcher $App @("stop")) -eq 0) "stop exits 0"
+        Check (Wait-Down) "backend stopped"
+        $CountsAfter = (& $Python $CountScript $Db) | ConvertFrom-Json
+        Check ($CountsAfter.integrity -eq "ok") "PRAGMA integrity_check is ok after the upgrade"
+        foreach ($t in "jobs", "feedback_events", "outcome_events") {
+            if ($CountsBefore.PSObject.Properties.Name -contains $t) {
+                Write-Host "     $t : $($CountsBefore.$t) before, $($CountsAfter.$t) after"
+                Check ($CountsAfter.$t -ge $CountsBefore.$t) "$t kept"
+            }
+        }
+        Start-App $App
+        $again = Wait-Health
+        Check ($null -ne $again) "second start after the upgrade"
+        $copies = @(Get-ChildItem (Join-Path $App "data\backups") -Filter "jobs-upgrade-*.db" -ErrorAction SilentlyContinue)
+        Check ($copies.Count -eq 1) "second start makes no new backup"
+        Invoke-Launcher $App @("stop") | Out-Null
+        Wait-Down | Out-Null
+    } else {
     # -- 1. install -----------------------------------------------------------------------------
     if ($Installer) {
         Step "Installing silently into $App"
@@ -232,6 +328,7 @@ try {
         foreach ($kept in "data\jobs.db", "config\profile.local.yaml", "config\retention.yaml", "logs") {
             Check (Test-Path (Join-Path $App $kept)) "user data kept: $kept"
         }
+    }
     }
 } finally {
     if (Get-Json "/api/health") {
