@@ -50,18 +50,17 @@ Then:
 
 1. **Profile** page: your target roles, skills, locations, languages. It is saved to
    `config\profile.local.yaml`.
-2. **Sources.** These work without any account: RemoteOK, Jobicy, We Work Remotely and
-   EURES (pipeline run), HelloWork and LinkedIn (**Scan now** on their dashboard cards).
-   France Travail needs credentials and is *skipped* until you add them (Indeed needs none, but
-   it is an unofficial source and only runs if you choose it):
+2. **Sources.** These work without any account: the France Travail website, EURES, RemoteOK,
+   Jobicy and We Work Remotely. HelloWork, LinkedIn and Indeed are unofficial: they run only if
+   you choose them. A run's **Sources** table shows each source as *completed*, *partial*,
+   *failed* or *skipped*, with the reason for a skip.
 
-   | Source | What to set in `.env` | Where to get it |
-   |---|---|---|
-   | France Travail | `FRANCE_TRAVAIL_CLIENT_ID`, `FRANCE_TRAVAIL_CLIENT_SECRET` | free application at <https://developer.francetravail.fr> |
+   Advanced: the France Travail API is restricted and not required. If you already hold access,
+   put `FRANCE_TRAVAIL_CLIENT_ID` and `FRANCE_TRAVAIL_CLIENT_SECRET` in `.env` in the install
+   folder and restart the app.
 
-   To add them: in the install folder, copy `.env.example` to `.env`, fill in only those
-   lines, then stop and start the app. A run's **Sources** table shows each source as
-   *completed*, *partial*, *failed* or *skipped*, with the reason for a skip.
+   This version is tuned for IT and digital roles. Other occupations work through keyword
+   search, with fewer offers from France Travail.
 3. **Run pipeline** on the Dashboard (or **Scan now** on a scanner card). The first run
    downloads the multilingual embedding model (~470 MB) from Hugging Face once.
 

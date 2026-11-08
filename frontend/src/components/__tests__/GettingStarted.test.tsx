@@ -8,17 +8,19 @@ function renderGuide() {
 }
 
 describe('GettingStarted', () => {
-  it('says nothing runs on its own', () => {
+  it('says the daily search waits for a saved profile', () => {
     renderGuide()
-    expect(screen.getByText(/opening the app starts no scan and no run/)).toBeInTheDocument()
+    expect(screen.getByText(/Once you have saved your profile, the app searches by itself/)).toBeInTheDocument()
   })
 
-  it('names the credentials each optional source needs', () => {
+  it('asks for no file edit and no credential', () => {
+    const { container } = renderGuide()
+    expect(container.textContent).not.toMatch(/\.env|FRANCE_TRAVAIL_CLIENT|credential/i)
+  })
+
+  it('states who this version is tuned for', () => {
     renderGuide()
-    expect(screen.getByText('FRANCE_TRAVAIL_CLIENT_ID')).toBeInTheDocument()
-    expect(screen.getByText('FRANCE_TRAVAIL_CLIENT_SECRET')).toBeInTheDocument()
-    // Indeed needs no key since it goes through python-jobspy (F6.3)
-    expect(screen.queryByText('INDEED_API_KEY')).not.toBeInTheDocument()
+    expect(screen.getByText(/tuned for IT and digital roles/)).toBeInTheDocument()
   })
 
   it('links to the profile page', () => {

@@ -10,7 +10,7 @@ import {
 import { Link } from 'react-router-dom'
 import { Trans, useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
-import { Card, StatTile, StatusBadge, SourceStatus, Chip, ProgressBar, EmptyState, LoadingState, DataTable, Switch, GettingStarted, type DataTableColumn } from '../components'
+import { Card, StatTile, StatusBadge, SourceStatus, Chip, ProgressBar, EmptyState, LoadingState, DataTable, GettingStarted, type DataTableColumn } from '../components'
 import { PIPELINE_STAGES, type PipelineStageDef } from '../config/pipelineStages'
 import { usePipelineEvents, stageLabel, type ConnectionState, type ActivityEntry } from '../hooks/usePipelineEvents'
 import {
@@ -501,13 +501,11 @@ export default function Dashboard() {
   })
   const { connection, liveEvent, activity } = usePipelineEvents()
 
-  const [useAi, setUseAi] = useState(false)
-
   // Runs the pipeline directly from the Dashboard — the SSE connection above
   // (usePipelineEvents) picks up its progress automatically, so there's no
   // need to navigate to the Pipeline page to watch it run.
   const { mutate: triggerRun, isPending: runPending, error: runError } = useMutation({
-    mutationFn: () => startRun(useAi),
+    mutationFn: () => startRun(),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
   })
 
@@ -555,13 +553,6 @@ export default function Dashboard() {
               {(runError as Error).message}
             </span>
           )}
-          <Switch
-            checked={useAi}
-            onChange={setUseAi}
-            disabled={runPending || isAlreadyRunning}
-            label={t('dashboard.ai.label')}
-            description={t('dashboard.ai.description')}
-          />
           <button
             onClick={() => triggerRun()}
             disabled={runPending || isAlreadyRunning}
