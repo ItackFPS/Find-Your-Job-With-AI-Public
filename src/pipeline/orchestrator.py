@@ -503,13 +503,9 @@ def run_pipeline(
                 # What the profile's line of work (a discovery preset) supplies for this
                 # source; only for keys the source's own config leaves empty.
                 try:
-                    from src.discovery.query_expansion import DiscoveryQueryExpander
+                    from src.discovery.query_expansion import apply_preset_collector_config
 
-                    for key, value in DiscoveryQueryExpander().collector_config(
-                        early_profile, src_type
-                    ).items():
-                        if not merged_cfg.get(key):
-                            merged_cfg[key] = value
+                    merged_cfg = apply_preset_collector_config(merged_cfg, early_profile, src_type)
                 except Exception as exc:
                     logger.warning("Preset collector config for %s skipped: %s", src_type, exc)
             if src_type == "france_travail_web" and early_profile is not None:

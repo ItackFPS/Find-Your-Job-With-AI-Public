@@ -1,7 +1,7 @@
-# IT discovery preset.
+# IT line-of-work preset.
 #
-# Search vocabulary for information-technology profiles, moved out of
-# src/discovery/query_expansion.py so the code carries no profession-specific
+# Vocabulary for information-technology profiles (search terms, scoring hints,
+# Stats page groupings), kept here so the code carries no profession-specific
 # terms. It applies when the profile's target_domains contains one of
 # applies_to_domains (case-insensitive). Add your own preset for another line of
 # work as another file in this folder: same keys, your own applies_to_domains.
@@ -14,6 +14,11 @@
 # discovery.noisy_replacements  query -> safer query (null rejects the query)
 # discovery.collector_config    per source type: collector config keys (queries, categories,
 #                               occupations...) used when config/sources.yaml leaves them out
+# scoring.broad_title_indicators  title words that make an unmatched title a mid-tier role
+#                               guess in domain_relevance scoring (0.35 instead of 0.45)
+# stats.technologies_only       Stats page: keep only known technology names as skills
+# stats.tool_keywords           technologies the Stats page lists as tools, not skills
+# stats.title_categories        Stats page: title buckets (name + keywords)
 name: it
 description: Discovery vocabulary for information-technology profiles. Applied when the profile selects
   one of applies_to_domains.
@@ -282,3 +287,133 @@ discovery:
         - s28m2
         - s28m3
         - s28m1
+    linkedin:
+      queries:
+      - search_term: cloud engineer
+        location: France
+        results_wanted: 50
+      - search_term: devops engineer
+        location: France
+        results_wanted: 50
+      - search_term: backend developer
+        location: France
+        results_wanted: 50
+      - search_term: software engineer
+        location: France
+        results_wanted: 50
+      - search_term: cybersecurity engineer
+        location: France
+        results_wanted: 50
+      - search_term: network engineer
+        location: France
+        results_wanted: 50
+      - search_term: systems administrator
+        location: France
+        results_wanted: 50
+      - search_term: support informatique
+        location: France
+        results_wanted: 50
+      - search_term: automation engineer
+        location: France
+        results_wanted: 50
+      - search_term: développeur backend
+        location: France
+        results_wanted: 50
+      - search_term: ingénieur devops
+        location: France
+        results_wanted: 50
+      - search_term: ingénieur cybersécurité
+        location: France
+        results_wanted: 50
+    hellowork:
+      domains:
+      - informatique
+      - data-et-ia
+scoring:
+  broad_title_indicators:
+  - engineer
+  - developer
+  - programmer
+  - scientist
+  - analyst
+  - administrator
+  - architect
+  - devops
+  - ingenieur
+  - developpeur
+  - programmeur
+  - analyste
+  - administrateur
+  - architecte
+  - technicien
+stats:
+  technologies_only: true
+  tool_keywords:
+  - ansible
+  - aws
+  - azure
+  - bash
+  - ci/cd
+  - docker
+  - gcp
+  - git
+  - github
+  - gitlab
+  - grafana
+  - jenkins
+  - jira
+  - kubernetes
+  - linux
+  - n8n
+  - nginx
+  - prometheus
+  - terraform
+  title_categories:
+  - name: Python / Data
+    keywords:
+    - python
+    - data engineer
+    - data analyst
+    - data scientist
+  - name: Web / Backend (JS, PHP, Node)
+    keywords:
+    - javascript
+    - ' php'
+    - node.js
+    - développeur web
+    - developpeur web
+  - name: Frontend / Backend / Fullstack
+    keywords:
+    - frontend
+    - front-end
+    - backend
+    - back-end
+    - fullstack
+    - full stack
+    - software engineer
+    - ingénieur logiciel
+    - ingenieur logiciel
+  - name: QA / Test / Automation
+    keywords:
+    - qa engineer
+    - ingénieur test
+    - ingenieur test
+    - automation engineer
+  - name: DevOps / Cloud
+    keywords:
+    - devops
+    - cloud engineer
+  - name: Cybersecurity
+    keywords:
+    - cybersecurity
+    - cybersécurité
+    - cybersecurite
+    - ingénieur sécurité
+    - ingenieur securite
+  - name: IT Support / Network
+    keywords:
+    - support informatique
+    - administrateur système
+    - administrateur systeme
+    - ingénieur réseau
+    - ingenieur reseau

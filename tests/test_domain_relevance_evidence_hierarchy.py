@@ -46,6 +46,15 @@ _GENERIC_BUZZWORDS = {
 }
 
 
+# The mid-tier role hint comes from the IT line-of-work preset (config/presets/it.yaml): the
+# scoring config builder injects it for an IT profile, and these configs stand for one.
+from src.discovery.presets import load_presets as _load_presets  # noqa: E402
+
+_IT_BROAD_TITLE_INDICATORS = list(
+    next(p for p in _load_presets() if p.name == "it").broad_title_indicators
+)
+
+
 def _cfg(
     domain_title: list[str] | None = None,
     domain_desc: list[str] | None = None,
@@ -57,6 +66,7 @@ def _cfg(
                 "domain_title_keywords": domain_title or [],
                 "domain_description_keywords": domain_desc or [],
                 "off_domain_keywords": off_domain or [],
+                "broad_title_indicators": list(_IT_BROAD_TITLE_INDICATORS),
             }
         }
     }

@@ -1,11 +1,13 @@
-"""Discovery vocabulary loaded from configuration, not from code.
+"""Line-of-work vocabulary loaded from configuration, not from code.
 
 Two kinds of files under ``config/``:
 
 * ``discovery.yaml`` — profession-neutral vocabulary used for every profile.
-* ``presets/*.yaml`` — search vocabulary for one line of work (``it.yaml`` ships
-  with the project). A preset applies to a profile when the profile's
-  ``target_domains`` contains one of the preset's ``applies_to_domains``.
+* ``presets/*.yaml`` — vocabulary for one line of work (``it.yaml`` ships with the
+  project): discovery queries, scoring hints and Stats page groupings. A preset
+  applies to a profile when the profile's ``target_domains`` contains one of the
+  preset's ``applies_to_domains``. Used by discovery (``src/discovery``), scoring
+  (``src/pipeline/scoring.py``) and the Stats API (``src/api/routes/jobs.py``).
 
 A missing or malformed file never raises: discovery degrades to the profile's own
 terms and the problem is logged (collectors must not crash the pipeline).
@@ -66,6 +68,13 @@ class DiscoveryPreset:
     # ``occupations`` …) the preset supplies when the user's own source config
     # leaves them out.
     collector_config: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # Scoring: title words that make an unmatched title a mid-tier role guess.
+    broad_title_indicators: tuple[str, ...] = ()
+    # Stats page: title buckets (name, keywords), tools listed apart from skills, and
+    # whether skills are limited to known technology names.
+    title_categories: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    tool_keywords: frozenset[str] = frozenset()
+    technologies_only: bool = False
 
     def owns(self, domain: str) -> bool:
         return normalize_domain(domain) in self.domains
@@ -94,12 +103,24 @@ def _collector_config(value: Any) -> dict[str, dict[str, Any]]:
     return {str(k): dict(v) for k, v in value.items() if isinstance(v, dict)}
 
 
+def _title_categories(value: Any) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    if not isinstance(value, list):
+        return ()
+    out: list[tuple[str, tuple[str, ...]]] = []
+    for item in value:
+        if isinstance(item, dict) and str(item.get("name") or "").strip():
+            out.append((str(item["name"]).strip(), tuple(_str_list(item.get("keywords")))))
+    return tuple(out)
+
+
 def _parse_preset(path: Path, raw: dict[str, Any]) -> DiscoveryPreset | None:
     domains = frozenset(normalize_domain(d) for d in _str_list(raw.get("applies_to_domains")))
     if not domains:
         logger.warning("Discovery preset %s has no applies_to_domains — ignoring it", path)
         return None
     d = raw.get("discovery") if isinstance(raw.get("discovery"), dict) else {}
+    scoring = raw.get("scoring") if isinstance(raw.get("scoring"), dict) else {}
+    stats = raw.get("stats") if isinstance(raw.get("stats"), dict) else {}
     noisy_raw = d.get("noisy_replacements")
     noisy: dict[str, str | None] = {}
     if isinstance(noisy_raw, dict):
@@ -116,6 +137,10 @@ def _parse_preset(path: Path, raw: dict[str, Any]) -> DiscoveryPreset | None:
         partition_affinity=_list_map(d.get("partition_affinity")),
         noisy_replacements=noisy,
         collector_config=_collector_config(d.get("collector_config")),
+        broad_title_indicators=tuple(_str_list(scoring.get("broad_title_indicators"))),
+        title_categories=_title_categories(stats.get("title_categories")),
+        tool_keywords=frozenset(k.casefold() for k in _str_list(stats.get("tool_keywords"))),
+        technologies_only=bool(stats.get("technologies_only", False)),
     )
 
 
