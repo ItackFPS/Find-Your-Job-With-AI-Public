@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from src.config_files import local_config_path
+
 
 @pytest.fixture
 def client(tmp_path: Path, isolated_app, monkeypatch) -> TestClient:
@@ -17,11 +19,12 @@ def client(tmp_path: Path, isolated_app, monkeypatch) -> TestClient:
 
 
 def _saved_profile(tmp_path: Path) -> None:
-    (tmp_path / "config" / "profile.local.yaml").write_text("target_domains: []\n", encoding="utf-8")
+    local_config_path(tmp_path / "config", "profile.yaml").write_text("target_domains: []\n", encoding="utf-8")
 
 
 def test_a_fresh_install_needs_the_setup(client):
-    assert client.get("/api/settings/onboarding").json() == {"started": False, "step": 0, "completed": False}
+    assert client.get("/api/settings/onboarding").json() == {
+        "started": False, "step": 0, "completed": False, "profile_saved": False}
 
 
 def test_an_upgraded_install_with_a_profile_does_not(client, tmp_path):
@@ -31,7 +34,8 @@ def test_an_upgraded_install_with_a_profile_does_not(client, tmp_path):
 
 def test_the_step_survives_a_restart(client):
     assert client.put("/api/settings/onboarding", json={"step": 3}).json()["step"] == 3
-    assert client.get("/api/settings/onboarding").json() == {"started": True, "step": 3, "completed": False}
+    assert client.get("/api/settings/onboarding").json() == {
+        "started": True, "step": 3, "completed": False, "profile_saved": False}
 
 
 def test_saving_the_profile_during_the_setup_does_not_end_it(client, tmp_path):
@@ -43,7 +47,7 @@ def test_saving_the_profile_during_the_setup_does_not_end_it(client, tmp_path):
 def test_it_can_be_completed(client):
     client.put("/api/settings/onboarding", json={"step": 5})
     assert client.put("/api/settings/onboarding", json={"completed": True}).json() == {
-        "started": True, "step": 5, "completed": True}
+        "started": True, "step": 5, "completed": True, "profile_saved": False}
 
 
 @pytest.mark.parametrize("body", [{"step": -1}, {"step": 6}, {"step": True}, {"step": "2"},

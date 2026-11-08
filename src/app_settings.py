@@ -196,21 +196,22 @@ def parse_daily_time(value: Any) -> tuple[int, int] | None:
 
 
 def onboarding_state(path: Path | None, profile_saved: bool) -> dict[str, Any]:
-    """The first-run setup: ``{"started", "step", "completed"}``. Once begun, its stored state
-    decides. Before that, an install with a saved profile counts as set up (an upgraded install
-    is not sent through a setup it does not need)."""
+    """The first-run setup: ``{"started", "step", "completed", "profile_saved"}``. Once begun, its
+    stored state decides. Before that, an install with a saved profile counts as set up (an
+    upgraded install is not sent through a setup it does not need)."""
     stored = _read(path).get("onboarding") if path is not None else None
     if not isinstance(stored, dict):
-        return {"started": False, "step": 0, "completed": profile_saved}
+        return {"started": False, "step": 0, "completed": profile_saved, "profile_saved": profile_saved}
     step = stored.get("step")
     return {
         "started": True,
         "step": step if isinstance(step, int) and not isinstance(step, bool) and 0 <= step <= ONBOARDING_MAX_STEP else 0,
         "completed": stored.get("completed") is True,
+        "profile_saved": profile_saved,
     }
 
 
-def update_onboarding(path: Path, changes: Mapping[str, Any]) -> dict[str, Any]:
+def update_onboarding(path: Path, changes: Mapping[str, Any], profile_saved: bool = False) -> dict[str, Any]:
     """Apply ``changes`` (``step``: int, ``completed``: bool) and return the state. Raises
     ValueError for an unknown key or an invalid value; nothing is written then."""
     unknown = sorted(set(changes) - {"step", "completed"})
@@ -231,7 +232,7 @@ def update_onboarding(path: Path, changes: Mapping[str, Any]) -> dict[str, Any]:
         tmp = path.with_name(path.name + ".tmp")
         tmp.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
         os.replace(tmp, path)
-    return onboarding_state(path, False)
+    return onboarding_state(path, profile_saved)
 
 
 def background_settings(path: Path | None) -> dict[str, Any]:

@@ -13,6 +13,16 @@ const STEPS = ['welcome', 'profile', 'sources', 'model', 'background', 'done'] a
 const LEVELS: CareerLevel[] = ['internship', 'alternance', 'graduate', 'junior', 'mid', 'senior', 'lead', 'manager']
 
 const stack = { display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' } as const
+// Before the first save, the profile on offer is the shipped example: never the user's search.
+const blank = (p: Profile): Profile => ({
+  ...p,
+  target_domains: [],
+  target_skills: [],
+  target_skills_esco: [],
+  geography: { ...p.geography, home: null },
+  targets: { levels: [], stretch: false, years_override: null },
+})
+
 const fieldLabel = { display: 'block', fontWeight: 600, marginBottom: 'var(--space-2)' }
 
 function ProfileStep({ draft, onChange }: { draft: Profile; onChange: (p: Profile) => void }) {
@@ -59,9 +69,11 @@ export default function Onboarding() {
   const current = step ?? state.data?.step ?? 0
   const name = STEPS[Math.min(current, STEPS.length - 1)]
 
+  const loaded = state.data !== undefined
+  const profileSaved = state.data?.profile_saved === true
   useEffect(() => {
-    if (remote.data && !draft) setDraft(remote.data)
-  }, [remote.data, draft])
+    if (remote.data && loaded && !draft) setDraft(profileSaved ? remote.data : blank(remote.data))
+  }, [remote.data, loaded, profileSaved, draft])
 
   // Marks the setup as begun at once: its own profile save must not read as "already set up".
   const persist = useMutation({
@@ -95,7 +107,7 @@ export default function Onboarding() {
     onSuccess: () => navigate('/'),
   })
 
-  if (state.isLoading || remote.isLoading) return <LoadingState />
+  if (state.isLoading || remote.isLoading || (state.data && remote.data && !draft)) return <LoadingState />
   if (state.isError || remote.isError || !draft) {
     return <ErrorState message={t('onboarding.loadFailed')} onRetry={() => { void state.refetch(); void remote.refetch() }} />
   }

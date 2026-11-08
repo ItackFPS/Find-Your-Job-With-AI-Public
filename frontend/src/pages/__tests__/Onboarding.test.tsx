@@ -83,8 +83,16 @@ describe('Onboarding', () => {
     expect(net.puts.some(p => p.url === '/profile')).toBe(false)
   })
 
+  it('never offers the shipped example as the search', async () => {
+    net.onboarding = { started: true, step: 1, completed: false, profile_saved: false }
+    net.profile = { ...v2, target_domains: ['software_development'], geography: { ...v2.geography, home } as ProfileT['geography'] }
+    show()
+    expect(await screen.findByRole('button', { name: 'Next' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: /software_development/ })).not.toBeInTheDocument()
+  })
+
   it('saves the profile only on Next', async () => {
-    net.onboarding = { started: true, step: 1, completed: false }
+    net.onboarding = { started: true, step: 1, completed: false, profile_saved: true }
     net.profile = { ...v2, target_domains: ['healthcare'], geography: { ...v2.geography, home } as ProfileT['geography'] }
     show()
     await screen.findByRole('button', { name: 'Next' })

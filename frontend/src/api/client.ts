@@ -1132,6 +1132,7 @@ export interface OnboardingState {
   started: boolean
   step: number
   completed: boolean
+  profile_saved: boolean
 }
 export const getOnboarding = () =>
   api.get<OnboardingState>('/settings/onboarding').then(r => r.data)

@@ -95,16 +95,19 @@ class OnboardingIn(BaseModel):
     completed: Any = None
 
 
+def _profile_saved(request: Request) -> bool:
+    return local_config_path(request.app.state.config_dir, "profile.yaml").exists()
+
+
 @router.get("/onboarding")
 def get_onboarding(request: Request) -> dict[str, Any]:
-    profile_saved = local_config_path(request.app.state.config_dir, "profile.yaml").exists()
-    return onboarding_state(_path(request), profile_saved)
+    return onboarding_state(_path(request), _profile_saved(request))
 
 
 @router.put("/onboarding")
 def put_onboarding(body: OnboardingIn, request: Request) -> dict[str, Any]:
     try:
-        return update_onboarding(_path(request), body.model_dump(exclude_none=True))
+        return update_onboarding(_path(request), body.model_dump(exclude_none=True), _profile_saved(request))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
