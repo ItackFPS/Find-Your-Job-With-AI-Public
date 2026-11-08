@@ -184,6 +184,10 @@ class FranceTravailWebCollector(BaseCollector):
         self._before_request(url)  # robots.txt (rules seeded by collect()) and the request cap
         self._enforce_rate_limit()
         assert self._client is not None
+        # No session between pages. The site's load balancer sets a cookie that pins a client to one
+        # backend: observed 2026-11-08, one such session got HTTP 500 on all 60 pages while a new
+        # client got 200 on the same URLs.
+        self._client.cookies.clear()
         try:
             resp = self._client.get(url)
         except httpx.TransportError:
@@ -238,6 +242,8 @@ class FranceTravailWebCollector(BaseCollector):
                     continue
                 try:
                     resp = self._get(url)
+                    if resp.status_code >= 500:  # once more, through the rate limit and the cap
+                        resp = self._get(url)
                 except (httpx.HTTPError, RuntimeError) as exc:
                     errors.append(f"{path}: {exc}")
                     continue

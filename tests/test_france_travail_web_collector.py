@@ -135,6 +135,7 @@ class _Client:
     robots_status = 200
     robots_text = ROBOTS
     sitemap_text = SITEMAP
+    cookies = httpx.Cookies()
 
 
 def test_collect_reads_only_pages_published_in_the_sitemap(monkeypatch) -> None:
@@ -166,6 +167,63 @@ def test_page_cap_is_shared_across_departements(monkeypatch) -> None:
                                "max_pages": 2, "rate_limit_delay": 0}).collect()
     listing_urls = _Client.last.urls[2:]
     assert len(listing_urls) == 2 and "/var/" in listing_urls[0] and "/corse-du-sud/" in listing_urls[1]
+
+
+class _PinnedToABrokenNode(_Client):
+    """A load balancer pins a client to a node with a cookie; that node answers 500."""
+
+    def __init__(self, *a, **k) -> None:  # noqa: ANN002, ANN003
+        super().__init__(*a, **k)
+        self.cookies = httpx.Cookies()
+
+    def get(self, url: str) -> httpx.Response:
+        pinned = "node" in self.cookies
+        response = super().get(url)
+        self.cookies.set("node", "broken")
+        if pinned and not url.endswith((".xml", "/robots.txt")):
+            return httpx.Response(500, request=response.request)
+        return response
+
+
+def test_no_session_pins_every_page_to_a_broken_backend(monkeypatch) -> None:
+    monkeypatch.setattr(ftw.httpx, "Client", _PinnedToABrokenNode)
+    result = FranceTravailWebCollector({"target_domains": ["web_development"], "departments": ["83"],
+                                        "rate_limit_delay": 0}).collect()
+    assert result.errors == []
+    assert result.jobs
+
+
+class _FailsOnce(_Client):
+    seen: set[str] = set()
+
+    def get(self, url: str) -> httpx.Response:
+        response = super().get(url)
+        if url.endswith((".xml", "/robots.txt")) or url in _FailsOnce.seen:
+            return response
+        _FailsOnce.seen.add(url)
+        return httpx.Response(500, request=response.request)
+
+
+def test_a_server_error_is_tried_once_more(monkeypatch) -> None:
+    _FailsOnce.seen = set()
+    monkeypatch.setattr(ftw.httpx, "Client", _FailsOnce)
+    result = FranceTravailWebCollector({"target_domains": ["web_development"], "departments": ["83"],
+                                        "rate_limit_delay": 0}).collect()
+    assert result.errors == [] and result.jobs
+
+
+def test_a_lasting_server_error_is_reported_per_page(monkeypatch) -> None:
+    class Down(_Client):
+        def get(self, url: str) -> httpx.Response:
+            response = super().get(url)
+            if url.endswith((".xml", "/robots.txt")):
+                return response
+            return httpx.Response(500, request=response.request)
+
+    monkeypatch.setattr(ftw.httpx, "Client", Down)
+    result = FranceTravailWebCollector({"target_domains": ["web_development"], "departments": ["83"],
+                                        "rate_limit_delay": 0}).collect()
+    assert result.jobs == [] and all(e.endswith("HTTP 500") for e in result.errors) and result.errors
 
 
 @pytest.mark.parametrize("cfg,needle", [
