@@ -452,6 +452,22 @@ class DiscoveryQueryExpander:
 # Module-level helpers (public — imported by tests and callers)
 # ---------------------------------------------------------------------------
 
+def apply_preset_collector_config(
+    cfg: dict[str, Any],
+    profile: "JobSearchProfile",
+    source: str,
+    config_dir: "str | Path | None" = None,
+) -> dict[str, Any]:
+    """``cfg`` plus the collector config the profile's line-of-work presets supply for
+    *source*, only for keys ``cfg`` leaves empty: explicit configuration always wins."""
+    merged = dict(cfg)
+    expander = DiscoveryQueryExpander(config_dir=config_dir)
+    for key, value in expander.collector_config(profile, source).items():
+        if not merged.get(key):
+            merged[key] = value
+    return merged
+
+
 def _occupation_terms(profile: "JobSearchProfile") -> list[str]:
     """Search words for the profile's target occupations (French label, else keyword)."""
     terms: list[str] = []

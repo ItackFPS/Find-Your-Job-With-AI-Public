@@ -261,9 +261,9 @@ sources:
     #   its own daily schedule via src/hellowork/scanner.py, not inside the
     #   main pipeline run.
     config:
-      domains:
-        - informatique
-        - data-et-ia
+      # domains: HelloWork's own domain slugs (e.g. "informatique", "sante"). None by
+      # default: a line of work with a preset (config/presets/) gets that preset's domains;
+      # otherwise list the HelloWork domains to read here.
       max_jobs_per_slug: 3
       rate_limit_delay: 1.0
       timeout: 20
