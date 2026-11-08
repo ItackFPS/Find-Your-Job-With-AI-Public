@@ -108,6 +108,11 @@ OTHER_DB_TABLES: dict[str, dict[str, DataClass]] = {
         "esco_concepts": "public",
         "esco_fts": "public",
     },
+    "rome": {  # France Travail's public ROME directory (src/rome/db.py)
+        "rome_entries": "public",
+        "rome_fts": "public",
+        "rome_meta": "public",
+    },
     "lab": {
         "hypotheses": "operational",
         "candidate_strategies": "operational",
