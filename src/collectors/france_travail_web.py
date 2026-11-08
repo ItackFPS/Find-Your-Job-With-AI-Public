@@ -7,8 +7,9 @@ département (``/offres/emploi/<occupation>/<département>/s<sector>m<occupation
 listed in its own sitemaps), and nothing else:
 
 * **Only published pages**: the occupation x département pages France Travail lists in
-  its sitemap (it answers 410 Gone for other combinations). Today that is ten IT-related
-  occupations (see ``OCCUPATIONS``).
+  its sitemap (it answers 410 Gone for other combinations). The occupations read are the
+  profile's: codes from a discovery preset where one exists, otherwise any sitemap
+  occupation whose name matches a target domain or occupation (see ``_slug_matches``).
 * **robots.txt is respected**: the rules are fetched at the start of every run and
   every URL is checked against them (``*`` wildcards included). The keyword search
   (``motsCles=``) and the pages that load an offer's full text (``t:ac=``) are
@@ -36,6 +37,7 @@ from __future__ import annotations
 
 import logging
 import re
+import unicodedata
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -56,34 +58,36 @@ USER_AGENT = ("FindYourJobWithAI/2.0 (local job-search app; "
 ROBOTS_AGENT = "FindYourJobWithAI"  # product token of USER_AGENT, matched in robots.txt groups
 MIN_RATE_LIMIT_DELAY = 1.0  # seconds between requests; a lower configured value is raised to it
 
-# France Travail occupation codes (sector + occupation, from its sector sitemap:
-# "Informatique et télécoms" is sector 28, "Audit, conseil" 6, sector 29 holds web,
-# design and business-analysis jobs) per profile target domain. France Travail only
-# publishes occupation x département pages for some occupations (on 2026-10-23, of
-# these: s28m7/s29m2 développeur web, s28m8/s29m3 webmaster, s28m15 data scientist,
-# s28m16 product owner, s28m18 data analyst, s28m28 scrum master, s29m7 business
-# analyst, s29m20 CTO, s6m2 consultant informatique, s6m3 consultant SI). Pages are
-# taken from its sitemap, so a code listed here without published pages is simply
-# not read, and starts being read when France Travail publishes it.
-OCCUPATIONS: dict[str, list[str]] = {
-    "software_development": ["s28m7", "s29m2", "s28m1", "s28m9", "s28m6", "s28m24", "s28m20",
-                             "s28m21", "s29m4", "s28m16", "s28m28", "s29m20", "s6m2"],
-    "web_development": ["s28m7", "s29m2", "s28m8", "s29m3", "s28m24", "s28m6"],
-    "qa_testing": ["s28m10", "s6m2"],
-    "data": ["s28m18", "s28m15", "s29m7", "s28m22", "s6m12"],
-    "it_support": ["s28m5", "s6m2"],
-    "systems": ["s28m11", "s28m23", "s6m3"],
-    "networking": ["s28m11", "s28m19"],
-    "devops": ["s28m23", "s28m11", "s6m2"],
-    "cloud": ["s28m11", "s28m21", "s6m2"],
-    "cybersecurity": ["s28m25", "s6m3"],
-    "automation": ["s28m1", "s28m10", "s6m2"],
-    "informatique": ["s6m2", "s6m3", "s28m7", "s28m2", "s28m3", "s28m1"],
-}
+# France Travail occupation codes (sector + occupation, e.g. "s28m7") per profile target
+# domain come from a discovery preset (config/presets/, key
+# collector_config.france_travail_web.occupations), passed in as ``occupations``. Any
+# other target domain or occupation is matched against the occupation slugs France Travail
+# publishes in its sitemap (see _slug_matches), so every line of work can be read. France
+# Travail only publishes occupation x département pages for some occupations; pages are
+# taken from its sitemap, so a code without published pages is simply not read.
 
 _PAGE_IN_SITEMAP = re.compile(r"/offres/emploi/([^/]+)/([^/]+)/(s\d+m\d+)d(\d{2,3}|2[ab])$", re.I)
 _SUBTEXT_SPLIT = re.compile(r"\s+[-–]\s+(?=\d{2,3}\s*[-–]|\(?\d{2,3}\)?\s)")
 _AGE_DAYS = re.compile(r"(\d+)\s+jour", re.I)
+
+
+def _fold(text: str) -> list[str]:
+    """Lowercase, accent-free words of ``text``."""
+    plain = unicodedata.normalize("NFKD", text.replace("_", " ")).encode("ascii", "ignore").decode()
+    return re.findall(r"[a-z0-9]+", plain.lower())
+
+
+def _slug_matches(term: str, slug: str) -> bool:
+    """Whether an occupation slug names ``term``: every word of the term starts a slug word
+    (or the reverse for words of five letters or more, so "infirmiere" finds "infirmier")."""
+    words = _fold(term)
+    slug_words = _fold(slug)
+    if not words or not slug_words:
+        return False
+    return all(
+        any(sw.startswith(w) or (len(sw) >= 5 and w.startswith(sw)) for sw in slug_words)
+        for w in words
+    )
 
 
 # -- listing parsing ------------------------------------------------------------------------
@@ -176,7 +180,11 @@ class FranceTravailWebCollector(BaseCollector):
                          rate_limit_delay=max(MIN_RATE_LIMIT_DELAY,
                                               float(cfg.get("rate_limit_delay", MIN_RATE_LIMIT_DELAY))))
         self.max_pages = int(cfg.get("max_pages", 60))
-        self.target_domains = [d for d in cfg.get("target_domains") or [] if d in OCCUPATIONS]
+        self.occupations: dict[str, list[str]] = {
+            str(k): [str(c) for c in v] for k, v in (cfg.get("occupations") or {}).items()
+        }
+        self.target_domains = [str(d) for d in cfg.get("target_domains") or [] if str(d).strip()]
+        self.target_terms = [str(t) for t in cfg.get("target_terms") or [] if str(t).strip()]
         self.departments = [str(d).upper().zfill(2) for d in cfg.get("departments") or []]
         self._client: httpx.Client | None = None
 
@@ -201,9 +209,9 @@ class FranceTravailWebCollector(BaseCollector):
                                self._load_fixture("france_travail_web_listing.html"), parse_listing)
 
     def collect(self) -> CollectorResult:
-        if not self.target_domains:
+        if not self.target_domains and not self.target_terms:
             return CollectorResult(source_name="france-travail-web", jobs=[], errors=[
-                "no target domain in the profile matches a France Travail occupation; nothing to search"])
+                "no target domain or occupation in the profile; nothing to search"])
         if not self.departments:
             return CollectorResult(source_name="france-travail-web", jobs=[], errors=[
                 "no département in the profile's locations; add a place to search France Travail"])
@@ -284,13 +292,18 @@ class FranceTravailWebCollector(BaseCollector):
         """Pages to read, round-robin across départements so a page cap stays fair."""
         wanted: dict[str, list[str]] = {}
         for domain in self.target_domains:
-            for code in OCCUPATIONS[domain]:
+            for code in self.occupations.get(domain, []):
                 wanted.setdefault(code, []).append(domain)
+        # Domains and occupations with no code table are read by occupation name.
+        by_name = [t for t in (*self.target_domains, *self.target_terms) if t not in self.occupations]
         by_dept: dict[str, list[tuple[str, dict[str, Any]]]] = {d: [] for d in self.departments}
         for url, slug, code, dept in published:
-            if code in wanted and dept in by_dept:
+            if dept not in by_dept:
+                continue
+            hits = list(wanted.get(code, [])) + [t for t in by_name if _slug_matches(t, slug)]
+            if hits:
                 by_dept[dept].append((url, {"scheme": "france-travail", "slug": slug, "code": code,
-                                            "target_domains": sorted(set(wanted[code]))}))
+                                            "target_domains": sorted(set(hits))}))
         lists = [by_dept[d] for d in self.departments]
         pages: list[tuple[str, dict[str, Any]]] = []
         for i in range(max((len(p) for p in lists), default=0)):

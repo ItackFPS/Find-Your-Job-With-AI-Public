@@ -29,7 +29,8 @@ Discovery flow:
 Configuration keys (config: sub-section in sources.yaml):
     careers_url         Global RSS URL (default: https://weworkremotely.com/remote-jobs.rss).
     category_rss        bool — fetch category-specific RSS feeds (default: true).
-    categories          list — WWR category slugs to try as RSS feeds (default: see below).
+    categories          list — WWR category slugs to try as RSS feeds (default: none; the
+                        global feed only. A line of work's preset can supply them).
     rate_limit_delay    float — seconds between feed requests (default: 1.5).
     timeout             int   — per-request timeout in seconds (default: 30).
 """
@@ -63,24 +64,6 @@ _RSS_HEADERS: dict[str, str] = {
     "User-Agent": "Mozilla/5.0 (compatible; job-aggregator/1.0)",
 }
 
-# Category slugs whose RSS feeds are verified accessible (HTTP 200).
-# Some slugs (e.g. remote-python-jobs) return HTTP 403 as of 2026-08-28;
-# they are tried anyway — the collector logs and skips 403s gracefully.
-# Measured discovery per feed (2026-08-28):
-#   remote-programming-jobs              →  25 entries, ~18 new unique
-#   remote-full-stack-programming-jobs   → 119 entries, ~82 new unique  ★ high-value
-#   remote-back-end-programming-jobs     →   5 entries,  ~0 new unique
-#   remote-front-end-programming-jobs    →   4 entries,  ~0 new unique
-#   remote-devops-sysadmin-jobs          →  12 entries,  ~2 new unique
-#   remote-design-jobs                   →  63 entries, ~40 new unique
-_DEFAULT_CATEGORIES: list[str] = [
-    "remote-programming-jobs",
-    "remote-full-stack-programming-jobs",
-    "remote-back-end-programming-jobs",
-    "remote-front-end-programming-jobs",
-    "remote-devops-sysadmin-jobs",
-    "remote-design-jobs",
-]
 
 
 # ---------------------------------------------------------------------------
@@ -117,7 +100,7 @@ class WeWorkRemotelyCollector(BaseCollector):
         )
         self.rss_url: str = cfg.get("careers_url") or _DEFAULT_RSS_URL
         self.category_rss: bool = bool(cfg.get("category_rss", True))
-        self.categories: list[str] = list(cfg.get("categories") or _DEFAULT_CATEGORIES)
+        self.categories: list[str] = list(cfg.get("categories") or [])
 
     # ------------------------------------------------------------------
     # Public entry point

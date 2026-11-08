@@ -563,7 +563,7 @@ class TestExpandAll:
         assert "architecture microservices" in queries
 
     def test_llm_called_once_per_source(self) -> None:
-        # expand_all expands 3 sources (france_travail, jobicy, remoteok),
+        # expand_all expands 5 sources (france_travail, jobicy, remoteok, indeed, eures),
         # each of which calls the LLM endpoint once.
         expander = DiscoveryQueryExpander(
             llm_endpoint="http://localhost:1234",
@@ -574,7 +574,7 @@ class TestExpandAll:
         with patch("requests.post", return_value=resp) as mock_post:
             expander.expand_all(_FULL_PROFILE)
 
-        assert mock_post.call_count == 3
+        assert mock_post.call_count == 5
 
     # --- New sources added by Phase 2 ---
 
@@ -864,3 +864,62 @@ class TestProfessionNeutralDiscovery:
             "infirmier",
             "soins infirmiers",
         ]
+
+
+# ---------------------------------------------------------------------------
+# Tests: occupations, Indeed/EURES queries, preset collector config
+# ---------------------------------------------------------------------------
+
+def _occupation_profile() -> JobSearchProfile:
+    return JobSearchProfile(
+        target_occupations=[
+            {"label": "nurse responsible for general care", "keyword": "nurse",
+             "label_fr": "infirmier responsable des soins généraux (H/F)"},
+            {"label": "Electrician", "keyword": "Electrician"},
+        ]
+    )
+
+
+class TestOccupationsAndCollectorConfig:
+    def _expander(self) -> DiscoveryQueryExpander:
+        return DiscoveryQueryExpander(llm_endpoint=None, max_queries=20)
+
+    def test_occupations_become_french_queries_without_parentheses(self) -> None:
+        for source in ("france_travail", "indeed", "eures"):
+            result = self._expander().expand(_occupation_profile(), source=source, language="fr")
+            assert result == ["infirmier responsable des soins généraux", "Electrician"], source
+
+    def test_indeed_and_eures_are_expanded_for_a_non_it_profile(self) -> None:
+        result = self._expander().expand_all(_NURSE_PROFILE)
+        assert result["indeed"] == ["infirmier"]
+        assert result["eures"] == ["infirmier"]
+
+    def test_it_preset_supplies_indeed_eures_and_wework_config(self) -> None:
+        expander = self._expander()
+        indeed = expander.collector_config(_IT_PROFILE, "indeed")
+        assert len(indeed["queries"]) == 23
+        assert {"keyword": "devops engineer", "location": "France"} in indeed["queries"]
+        eures = expander.collector_config(_IT_PROFILE, "eures")
+        assert {"keyword": "software engineer", "location_codes": ["be", "lu", "ch"]} in eures["queries"]
+        assert "remote-programming-jobs" in expander.collector_config(
+            _IT_PROFILE, "weworkremotely")["categories"]
+        assert "web_development" in expander.collector_config(
+            _IT_PROFILE, "france_travail_web")["occupations"]
+
+    def test_no_preset_means_no_collector_config(self) -> None:
+        for source in ("indeed", "eures", "weworkremotely", "france_travail_web"):
+            assert self._expander().collector_config(_NURSE_PROFILE, source) == {}
+
+    def test_collector_config_of_several_presets_is_merged(self, tmp_path) -> None:
+        presets = tmp_path / "presets"
+        presets.mkdir()
+        for name, domain, slug in (("a", "alpha", "x"), ("b", "beta", "y")):
+            (presets / f"{name}.yaml").write_text(
+                f"name: {name}\napplies_to_domains: [{domain}]\n"
+                f"discovery:\n  collector_config:\n    weworkremotely:\n      categories: [{slug}, shared]\n",
+                encoding="utf-8",
+            )
+        expander = DiscoveryQueryExpander(llm_endpoint=None, config_dir=tmp_path)
+        profile = _make_profile(domains=["alpha", "beta"])
+        assert expander.collector_config(profile, "weworkremotely") == {
+            "categories": ["x", "shared", "y"]}

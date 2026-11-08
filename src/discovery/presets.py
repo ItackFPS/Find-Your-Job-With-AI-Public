@@ -62,6 +62,10 @@ class DiscoveryPreset:
     partition_vocabulary: list[str] = field(default_factory=list)
     partition_affinity: dict[str, list[str]] = field(default_factory=dict)
     noisy_replacements: dict[str, str | None] = field(default_factory=dict)
+    # Per source type: collector config keys (``queries``, ``categories``,
+    # ``occupations`` …) the preset supplies when the user's own source config
+    # leaves them out.
+    collector_config: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def owns(self, domain: str) -> bool:
         return normalize_domain(domain) in self.domains
@@ -82,6 +86,12 @@ def _read_yaml(path: Path) -> dict[str, Any]:
         logger.warning("Discovery config %s unreadable (%s) — ignoring it", path, exc)
         return {}
     return loaded if isinstance(loaded, dict) else {}
+
+
+def _collector_config(value: Any) -> dict[str, dict[str, Any]]:
+    if not isinstance(value, dict):
+        return {}
+    return {str(k): dict(v) for k, v in value.items() if isinstance(v, dict)}
 
 
 def _parse_preset(path: Path, raw: dict[str, Any]) -> DiscoveryPreset | None:
@@ -105,6 +115,7 @@ def _parse_preset(path: Path, raw: dict[str, Any]) -> DiscoveryPreset | None:
         partition_vocabulary=_str_list(d.get("partition_vocabulary")),
         partition_affinity=_list_map(d.get("partition_affinity")),
         noisy_replacements=noisy,
+        collector_config=_collector_config(d.get("collector_config")),
     )
 
 

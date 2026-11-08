@@ -53,10 +53,10 @@ _RETRYABLE_STATUS_CODES: frozenset[int] = frozenset({408, 429, 500, 502, 503, 50
 _MAX_RETRY_ATTEMPTS: int = 3
 _RETRY_BACKOFF_BASE: float = 1.0  # seconds; doubles on each successive retry
 
-# Default keyword for the motsCles parameter.  "informatique" is the broadest
-# French IT category on France Travail, covering software, systems, networking,
-# data, and support roles.  Override via sources.yaml config.keywords.
-_DEFAULT_SEARCH_KEYWORDS = "informatique"
+# Default keyword for the motsCles parameter: none. What to search comes from the
+# profile (discovery_queries, injected by the orchestrator) or from sources.yaml
+# config.keywords; no profession is assumed.
+_DEFAULT_SEARCH_KEYWORDS = ""
 
 
 class _RateLimiter:
@@ -114,7 +114,7 @@ class FranceTravailCollector(BaseCollector):
     are deduplicated by source_job_id so the pipeline sees each offer once.
 
     ``discovery_queries`` (list[str]) in config takes priority over the legacy
-    ``keywords`` (str) config key.  Defaults to ``[_DEFAULT_SEARCH_KEYWORDS]``.
+    ``keywords`` (str) config key.  With neither, nothing is searched.
 
     ``max_jobs`` (optional int): safety ceiling on total unique jobs collected.
     When unset (the default), collection is exhaustive — every available result
@@ -168,7 +168,7 @@ class FranceTravailCollector(BaseCollector):
         if cfg_queries:
             self.discovery_queries: list[str] = cfg_queries
         else:
-            self.discovery_queries = [self.search_keywords]
+            self.discovery_queries = [self.search_keywords] if self.search_keywords else []
 
         # _page_size is exposed for testing; production code uses _PAGE_SIZE
         self._page_size: int = _page_size or _PAGE_SIZE
@@ -206,6 +206,20 @@ class FranceTravailCollector(BaseCollector):
                 "source config keys 'client_id'/'client_secret'). "
                 "Register at https://developer.francetravail.fr to obtain credentials. "
                 "Skipping collection."
+            )
+            duration = time.time() - start_time
+            self._log_collection("france_travail", 0, errors, duration)
+            return CollectorResult(
+                source_name="france_travail",
+                jobs=jobs,
+                errors=errors,
+                duration_seconds=duration,
+            )
+
+        if not self.discovery_queries:
+            errors.append(
+                "France Travail: no search terms. Add target domains, occupations or skills "
+                "to the profile, or set 'keywords' in the source config. Skipping collection."
             )
             duration = time.time() - start_time
             self._log_collection("france_travail", 0, errors, duration)
