@@ -1206,6 +1206,9 @@
       "time": "Daily time (your local time)",
       "saveTime": "Save time",
       "timeHelp": "If the computer is off at that time, the run starts as soon as the app does. After several days off, it runs once.",
+      "autostart": "Start with Windows",
+      "autostartHelp": "The app starts in the notification area when you sign in, with no window, so the daily search can run.",
+      "autostartFailed": "Could not change Start with Windows. Try again.",
       "saved": "Background collection updated.",
       "saveFailed": "Could not save. Try again."
     },

@@ -8,6 +8,7 @@ import { ErrorState } from '../ErrorState'
 import { LoadingState } from '../LoadingState'
 import { Switch } from '../Switch'
 import { useToast } from '../toastContext'
+import { AutostartSwitch } from './AutostartSwitch'
 import { BACKGROUND_QUERY_KEY, SCHEDULER_QUERY_KEY } from './queryKeys'
 
 /**
@@ -47,6 +48,7 @@ export function BackgroundCard() {
             label={t('settings.background.enabled')}
             description={t(data.enabled ? 'settings.background.enabledOn' : 'settings.background.enabledOff')}
           />
+          <AutostartSwitch />
           <form
             onSubmit={e => { e.preventDefault(); save.mutate({ daily_time: time }) }}
             style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--space-2)', flexWrap: 'wrap' }}
