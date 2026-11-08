@@ -63,6 +63,14 @@ _DDL_MIGRATIONS_TABLE = """
         """
 
 
+_DDL_APP_VERSIONS_TABLE = """
+            CREATE TABLE IF NOT EXISTS app_versions (
+                version        TEXT PRIMARY KEY,
+                first_opened_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """
+
+
 def pending_data_migrations(conn: sqlite3.Connection, migrations: Iterable[DataMigration]) -> list[str]:
     """Names of the migrations not yet recorded in ``db_migrations``."""
     conn.execute(_DDL_MIGRATIONS_TABLE)
@@ -86,11 +94,33 @@ def backup_before_migrating(conn: sqlite3.Connection, db_path: Path, now: dateti
     return backup_database(conn, db_path, "migrating", now) is not None
 
 
+def backup_on_version_change(conn: sqlite3.Connection, db_path: Path, version: str, existed: bool,
+                             now: datetime | None = None) -> str:
+    """Copy an existing database the first time ``version`` opens it, whatever its size.
+
+    Recorded in the ``app_versions`` table. Returns ``"done"`` when a copy was
+    made now, ``"none"`` when none was needed (new database, or this version already opened it),
+    ``"failed"`` when it could not be made: the caller then leaves data migrations for the next
+    start, and the copy is attempted again."""
+    conn.execute(_DDL_APP_VERSIONS_TABLE)
+    if conn.execute("SELECT 1 FROM app_versions WHERE version = ?", (version,)).fetchone():
+        return "none"
+    made = False
+    if existed:
+        if backup_database(conn, db_path, f"upgrading to {version}", now, label=f"upgrade-{version}") is None:
+            return "failed"
+        made = True
+    conn.execute("INSERT INTO app_versions (version) VALUES (?)", (version,))
+    conn.commit()
+    return "done" if made else "none"
+
+
 def backup_database(conn: sqlite3.Connection, db_path: Path, purpose: str,
-                    now: datetime | None = None) -> Path | None:
+                    now: datetime | None = None, label: str | None = None) -> Path | None:
     """Copy the database to ``<folder>/backups/<name>-<UTC time>.db`` with SQLite's backup
     API, keeping the last ``BACKUPS_KEPT``, before ``purpose`` (a data migration, a
-    cleanup). Returns the copy, or None after logging why it could not be made (not
+    cleanup). A ``label`` puts the copy in its own series (``<name>-<label>-<UTC time>.db``)
+    so that routine backups never rotate it away. Returns the copy, or None after logging why it could not be made (not
     enough free disk space, or an error). Refuses while an erasure is pending (ADR 0015): a copy
     taken then would hold the activity being erased."""
     if (Path(db_path).parent / "ERASURE_PENDING").exists():
@@ -113,7 +143,7 @@ def backup_database(conn: sqlite3.Connection, db_path: Path, purpose: str,
                        purpose, size // 2**20, free // 2**20, backups)
         return None
     stamp = (now or datetime.now(UTC)).strftime("%Y%m%dT%H%M%SZ")
-    target = backups / f"{db_path.stem}-{stamp}.db"
+    target = backups / (f"{db_path.stem}-{label}-{stamp}.db" if label else f"{db_path.stem}-{stamp}.db")
     started = time.perf_counter()
     try:
         conn.commit()
@@ -128,7 +158,8 @@ def backup_database(conn: sqlite3.Connection, db_path: Path, purpose: str,
         return None
     logger.info("Database backed up to %s before %s (%d MB in %.1f s).",
                 target, purpose, size // 2**20, time.perf_counter() - started)
-    for old in sorted(backups.glob(f"{db_path.stem}-*.db"))[:-BACKUPS_KEPT]:
+    series = f"{db_path.stem}-upgrade-*.db" if label else f"{db_path.stem}-[0-9]*.db"
+    for old in sorted(backups.glob(series), key=lambda p: p.stat().st_mtime)[:-BACKUPS_KEPT]:
         old.unlink(missing_ok=True)
     return target
 

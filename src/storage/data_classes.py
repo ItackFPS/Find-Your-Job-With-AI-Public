@@ -43,6 +43,7 @@ JOBS_DB_TABLES: dict[str, DataClass] = {
     "s4_draw": "derived",                   # Découverte draw per run: seed, pool size, pi, slot (ADR 0019)
     # -- control
     "db_migrations": "control",
+    "app_versions": "control",
     "app_state": "control",                # data epoch, erasure generation, learning switches
     "erasure_jobs": "control",             # erasure state machine: counts, paths, checks (ADR 0015)
     # -- public: offers and what the engine computed from them

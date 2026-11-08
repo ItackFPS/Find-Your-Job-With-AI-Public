@@ -18,9 +18,11 @@ from src.storage.migrations import (
     JOBS_DATA_MIGRATIONS,
     apply_data_migrations,
     backup_before_migrating,
+    backup_on_version_change,
     ensure_columns,
     pending_data_migrations,
 )
+from src.version import APP_VERSION
 
 
 # ---------------------------------------------------------------------------
@@ -101,6 +103,11 @@ class Storage:
         if resolved in Storage._initialized_paths:
             return
         conn = self._get_conn()
+        # Before anything below alters an existing database: one copy per version change.
+        existed = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'jobs'"
+        ).fetchone() is not None
+        upgrade_backup = backup_on_version_change(conn, self._db_path, APP_VERSION, existed)
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS sources (
                 id TEXT PRIMARY KEY,
@@ -177,9 +184,13 @@ class Storage:
         # migrations recorded in db_migrations (src/storage/migrations.py).
         ensure_columns(conn, "jobs", JOBS_COLUMNS)
         conn.executescript(JOB_PROVENANCE_DDL)
-        # A large database is copied before its data migrations run (issue #86); without
-        # room for the copy they wait for a later start.
-        if not pending_data_migrations(conn, JOBS_DATA_MIGRATIONS) or backup_before_migrating(conn, self._db_path):
+        # A large database is copied before its data migrations run (issue #86), unless the
+        # version change above just did; without room for the copy they wait for a later start.
+        if upgrade_backup != "failed" and (
+            upgrade_backup == "done"
+            or not pending_data_migrations(conn, JOBS_DATA_MIGRATIONS)
+            or backup_before_migrating(conn, self._db_path)
+        ):
             apply_data_migrations(conn, JOBS_DATA_MIGRATIONS)
 
         # FTS5 table with accent-stripping tokenizer.
