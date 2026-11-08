@@ -218,8 +218,9 @@ class TestPipelinePreflightWiring:
         # listed as skipped, with what to set up -- never as a source that ran
         skipped = result.stats.by_source["france_travail"]
         assert (skipped["status"], skipped["collected"], skipped["errors"]) == ("skipped", 0, 0)
-        assert "FRANCE_TRAVAIL_CLIENT_ID" in skipped["reason"]
-        assert any("France Travail skipped" in e for e in result.stats.errors)
+        # a user-facing reason: never a variable name to set in a file (D4, ADR 0028)
+        assert skipped["reason"].startswith("Not required.") and "FRANCE_TRAVAIL_CLIENT_ID" not in skipped["reason"]
+        assert not any("France Travail" in e for e in result.stats.errors)  # normal state, not an error
 
     def test_indeed_not_chosen_is_skipped_visibly_and_never_called(self, tmp_path, monkeypatch):
         from src.pipeline.orchestrator import run_pipeline
@@ -383,7 +384,7 @@ class TestOverallPreflightStatus:
         assert result.errors == []
         assert result.france_travail.status == "CONFIG_MISSING"
         assert result.skipped_source_types == ["france_travail"]
-        assert any("France Travail skipped" in e for e in result.degraded_errors)
+        assert result.degraded_errors == []  # normal state of a new install, not a run error
         report = "\n".join(result.report_lines)
         assert "skipped for this run" in report
         assert "Pipeline aborted." not in report

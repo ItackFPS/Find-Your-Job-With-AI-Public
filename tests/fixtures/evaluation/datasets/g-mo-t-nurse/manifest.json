@@ -1,0 +1,14 @@
+{
+  "as_of": "2026-11-08T00:00:00+00:00",
+  "created_at": "2026-11-08T00:00:00+00:00",
+  "dataset_id": "g-mo-t-nurse",
+  "job_count": 72,
+  "jobs_sha256": "8deb4de979e34c24b9319c80fe87b578f48f3262f0f96a44acc1000e7c1140e8",
+  "kind": "synthetic",
+  "label_scheme_version": 1,
+  "labels_sha256": "1e400a0f657db9558fb37b6c8990765947b8fb526ac8dc84c65bc605df849287",
+  "notes": "G-MO-T temporary gate (ADR 0028): synthetic, not the ADR 0023 criterion.",
+  "profile_sha256": "c5c2fafcf81583284e0aa2f4dd2bdf69203bc0022607f6dc90437bb754d06885",
+  "schema_version": 1,
+  "version": "1"
+}

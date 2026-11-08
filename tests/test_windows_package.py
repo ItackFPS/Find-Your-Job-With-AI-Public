@@ -106,6 +106,14 @@ def test_uninstall_turns_autostart_off_stops_the_app_and_asks_before_deleting_da
     assert code.index("MsgBox") < code.index("DelTree")
 
 
+def test_the_installer_ships_this_versions_config_defaults():
+    # src/upgrade/config_migration.py reads them on the first start of a new version
+    assert 'Join-Path $Export "config") (Join-Path $Stage "config_defaults")' in BUILD
+    assert '{app}\\config_defaults"' in " ".join(_section("InstallDelete"))
+    app = next(ln for ln in _section("Files") if 'DestDir: "{app}";' in ln)
+    assert "ignoreversion" in app and "\\config_defaults" not in app  # not excluded
+
+
 def test_upgrade_stops_a_running_copy_through_its_launcher():
     assert _setup("CloseApplications") == "no"
     assert "function PrepareToInstall" in ISS and "-m src.launcher stop" in ISS

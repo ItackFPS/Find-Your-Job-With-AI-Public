@@ -50,18 +50,17 @@ Then:
 
 1. **Profile** page: your target roles, skills, locations, languages. It is saved to
    `config\profile.local.yaml`.
-2. **Sources.** These work without any account: RemoteOK, Jobicy, We Work Remotely and
-   EURES (pipeline run), HelloWork and LinkedIn (**Scan now** on their dashboard cards).
-   France Travail needs credentials and is *skipped* until you add them (Indeed needs none, but
-   it is an unofficial source and only runs if you choose it):
+2. **Sources.** These work without any account: the France Travail website, EURES, RemoteOK,
+   Jobicy and We Work Remotely. HelloWork, LinkedIn and Indeed are unofficial: they run only if
+   you choose them. A run's **Sources** table shows each source as *completed*, *partial*,
+   *failed* or *skipped*, with the reason for a skip.
 
-   | Source | What to set in `.env` | Where to get it |
-   |---|---|---|
-   | France Travail | `FRANCE_TRAVAIL_CLIENT_ID`, `FRANCE_TRAVAIL_CLIENT_SECRET` | free application at <https://developer.francetravail.fr> |
+   Advanced: the France Travail API is restricted and not required. If you already hold access,
+   put `FRANCE_TRAVAIL_CLIENT_ID` and `FRANCE_TRAVAIL_CLIENT_SECRET` in `.env` in the install
+   folder and restart the app.
 
-   To add them: in the install folder, copy `.env.example` to `.env`, fill in only those
-   lines, then stop and start the app. A run's **Sources** table shows each source as
-   *completed*, *partial*, *failed* or *skipped*, with the reason for a skip.
+   This version is tuned for IT and digital roles. Other occupations work through keyword
+   search, with fewer offers from France Travail.
 3. **Run pipeline** on the Dashboard (or **Scan now** on a scanner card). The first run
    downloads the multilingual embedding model (~470 MB) from Hugging Face once.
 
@@ -111,15 +110,16 @@ The install folder holds both the application and your data:
 | Path | Owner | On upgrade | On uninstall |
 |---|---|---|---|
 | `src\`, `runtime\`, `frontend\dist\`, `scripts\`, `docs\` | application | replaced | removed |
-| `config\*.yaml` (defaults) | you, once installed | **kept as you left them** (only missing files are added) | kept |
+| `config\*.yaml` (defaults) | you, once installed | a file you never edited moves to the new default; **a file you edited is kept**, and gains only the entries the new version needs (the daily search, France Travail web) | kept |
 | `config\*.local.yaml` (profile, notifications) | you | never touched | kept |
 | `data\` (jobs, decisions, feedback, lab) | you | never touched | kept |
 | `.env`, `logs\` | you | never touched | kept |
 
 - **Upgrade:** run the newer installer. It stops the running app through its launcher
-  first, replaces the application files and keeps everything else. The database is
-  upgraded in place when the new version starts. Back up `data\` first if you want a way
-  back (copy the folder while the app is stopped).
+  first, replaces the application files and keeps everything else. When the new version
+  first starts, it copies the database to `data\backups\jobs-upgrade-<version>-<time>.db`
+  and every configuration file it changes to `data\backups\config-<time>\`, then upgrades
+  the database and the configuration in place.
 - **Uninstall:** Settings → Apps → **Find Your Job With AI** → Uninstall (or the Start
   Menu entry). The application files and shortcuts are removed; you are then asked whether
   to delete your data too (default **No**). A silent uninstall always keeps the data. To

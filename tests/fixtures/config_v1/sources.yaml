@@ -1,0 +1,392 @@
+# Source configurations for the job discovery pipeline.
+# Each source defines how to collect jobs from that platform.
+#
+# POLICY: only set active: true when the collector is fully implemented,
+# tested, and verified to collect real jobs successfully.
+# A disabled entry with a clear reason is better than a silently broken one.
+
+sources:
+  # ---- ACTIVE SOURCES ---------------------------------------------------
+
+  - name: france-travail
+    type: france_travail
+    domain: "francetravail.fr"
+    careers_url: "https://api.francetravail.io/partenaire/offresdemploi/v2/offres/search"
+    ats: null
+    board_identifier: null
+    active: true
+    # Credentials are read from environment variables:
+    #   FRANCE_TRAVAIL_CLIENT_ID and FRANCE_TRAVAIL_CLIENT_SECRET
+    # Register at https://developer.francetravail.fr to obtain credentials.
+    # max_jobs is intentionally absent: collection is exhaustive by default.
+    config:
+      max_workers: 4  # parallel independent queries; pages within a query stay sequential
+
+  - name: remoteok
+    type: remoteok
+    domain: "remoteok.com"
+    careers_url: "https://remoteok.com/api"
+    ats: null
+    board_identifier: null
+    active: true
+    # Free, unauthenticated. Remote-only board. ~100 jobs per run.
+    # Rate limit: 2 s between requests (single request per run).
+    config: {}
+
+  - name: jobicy
+    type: jobicy
+    domain: "jobicy.com"
+    careers_url: "https://jobicy.com/api/v2/remote-jobs"
+    ats: null
+    board_identifier: null
+    active: true
+    # Free, unauthenticated. Remote-only board.
+    # Multi-query: always runs unfiltered baseline, then discovery_queries as industry slugs
+    # (verified slugs: engineering, cybersecurity, admin; data-science removed — returns 0).
+    # geo=anywhere maximises recall; each slug issues one 200-job request.
+    # API verified params: count, industry, geo (slugs from ?get=industries / ?get=locations).
+    config:
+      count: 200    # max jobs per request (API hard cap)
+      geo: "anywhere"  # verified geoSlug; "europe" or "france" for narrower scope
+
+  - name: bundesagentur
+    type: bundesagentur
+    domain: "arbeitsagentur.de"
+    careers_url: "https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v6/jobs"
+    ats: null
+    board_identifier: null
+    active: false
+    # Audited 2026-08-27: Germany-only on-site jobs. 200 collected / 0 accepted
+    # in every test run — all jobs fail the location filter (Germany ≠ France,
+    # no European remote scope). Expected filtering, not a bug. Disabled to
+    # avoid wasting ~20-30 s of collection time per run.
+    config: {}
+
+  - name: arbetsformedlingen
+    type: arbetsformedlingen
+    domain: "jobsearch.api.jobtechdev.se"
+    careers_url: "https://jobsearch.api.jobtechdev.se/search"
+    ats: null
+    board_identifier: null
+    active: false
+    # Audited 2026-08-27: Sweden-only on-site jobs. 200 collected / 0 accepted
+    # in every test run — all jobs fail the location filter (Sweden ≠ France,
+    # no European remote scope). Expected filtering, not a bug. Disabled to
+    # avoid wasting collection time per run.
+    config: {}
+
+  - name: weworkremotely
+    type: weworkremotely
+    domain: "weworkremotely.com"
+    careers_url: "https://weworkremotely.com/remote-jobs.rss"
+    ats: null
+    board_identifier: null
+    active: true
+    # Upgraded 2026-08-28: replaced the RSS-only collector with a multi-feed
+    # collector that combines the global RSS (~89 recent jobs) with
+    # category-specific RSS feeds to discover well beyond the RSS window.
+    #
+    # Why RSS-only (no HTML scraping):
+    #   All WWR HTML pages (including /categories/* and /remote-jobs) are
+    #   protected by Cloudflare bot-challenge ("Just a moment...", HTTP 403
+    #   for plain httpx).  The /categories/{slug}.rss endpoints are publicly
+    #   accessible without JavaScript challenges and provide equivalent coverage.
+    #
+    # Measured improvement (2026-08-28, live run):
+    #   Global RSS alone:         89 jobs
+    #   + category feeds below:  +140 new unique jobs
+    #   Total unique:             229 jobs  (2.6× improvement)
+    #
+    # Note: some category feeds return HTTP 403 (e.g. remote-python-jobs.rss
+    # as of 2026-08-28 — likely different Cloudflare rule per slug).  The
+    # collector logs and skips those gracefully; others continue unaffected.
+    #
+    # rate_limit_delay of 1.5 s is conservative (WWR Crawl-delay: 2 s).
+    config:
+      category_rss: true
+      categories:
+        - remote-programming-jobs
+        - remote-full-stack-programming-jobs
+        - remote-back-end-programming-jobs
+        - remote-front-end-programming-jobs
+        - remote-devops-sysadmin-jobs
+        - remote-design-jobs
+      rate_limit_delay: 1.5
+      timeout: 30
+
+  - name: indeed
+    type: indeed
+    domain: "indeed.com"
+    careers_url: "https://apis.indeed.com/graphql"
+    ats: null
+    board_identifier: null
+    active: true
+    # Indeed mobile GraphQL API — same endpoint as Indeed's iOS app.
+    # No browser or Crawl4AI required.  Verified 2026-08-31 (Phase 0 benchmark):
+    #   500 jobs collected across 5 pages in 7.1 s, zero blocking, full descriptions.
+    #
+    # API key: Indeed's iOS app key, read from INDEED_API_KEY (.env); not shipped
+    # in this repository (python-jobspy, MIT, ships a working value). Without it
+    # the collector makes no request and reports one error.
+    #
+    # Terms: automated access is prohibited by Indeed ToS.  Use only for personal,
+    # local, research purposes.
+    #
+    # Stopping conditions: no cursor / empty page / all-duplicate page /
+    # max_pages_per_query / max_jobs_per_query / API error / key revocation.
+    #
+    # Pagination: 100 jobs/page, cursor-based (nextCursor in pageInfo).
+    # Rate limit: 0.5 s between page requests (conservative; no documented limit).
+    config:
+      max_pages_per_query: 5      # 5 pages × 100 jobs = 500 max per keyword
+      rate_limit_delay: 0.5       # seconds between page requests
+      date_filter_hours: 720      # jobs posted in the last 30 days (set null to disable)
+      timeout: 20
+      default_location: "France"  # used when discovery_queries are injected by orchestrator
+      queries:
+        # Python / data
+        - keyword: "développeur python"
+          location: "France"
+        - keyword: "data engineer"
+          location: "France"
+        - keyword: "data analyst"
+          location: "France"
+        # JavaScript / web / PHP
+        - keyword: "développeur javascript"
+          location: "France"
+        - keyword: "développeur php"
+          location: "France"
+        - keyword: "développeur node.js"
+          location: "France"
+        - keyword: "développeur web"
+          location: "France"
+        # Frontend / Backend / Fullstack
+        - keyword: "développeur frontend"
+          location: "France"
+        - keyword: "développeur backend"
+          location: "France"
+        - keyword: "développeur fullstack"
+          location: "France"
+        # Generic software engineering
+        - keyword: "software engineer"
+          location: "France"
+        - keyword: "ingénieur logiciel"
+          location: "France"
+        # QA / Test / Automation
+        - keyword: "ingénieur test"
+          location: "France"
+        - keyword: "qa engineer"
+          location: "France"
+        - keyword: "automation engineer"
+          location: "France"
+        # DevOps / Cloud / SRE
+        - keyword: "devops engineer"
+          location: "France"
+        - keyword: "cloud engineer"
+          location: "France"
+        # Cybersecurity
+        - keyword: "cybersecurity engineer"
+          location: "France"
+        - keyword: "ingénieur sécurité"
+          location: "France"
+        # IT Support / Sysadmin / Network
+        - keyword: "support informatique"
+          location: "France"
+        - keyword: "administrateur système"
+          location: "France"
+        - keyword: "ingénieur réseau"
+          location: "France"
+        # Alternance / apprentissage
+        - keyword: "alternance développeur"
+          location: "France"
+
+  # ---- Browser-based collectors (require: pip install crawl4ai) ----------
+  # These use Crawl4AI (Playwright) to render JavaScript-heavy pages.
+  # Set active: true only after crawl4ai is installed and live test passes.
+
+  - name: wttj
+    type: wttj
+    domain: "welcometothejungle.com"
+    careers_url: "https://www.welcometothejungle.com/fr/companies"
+    ats: null
+    board_identifier: null
+    active: false
+    # Robots.txt (verified 2026-08-27): allows /fr/companies/{slug}/jobs and
+    # /fr/companies/{slug}/jobs/{slug} — clean URLs, no query params.
+    # Disallows /*? (any URL with ?), so no paginated search is used.
+    # Strategy: per-company listing page → job-detail pages → JSON-LD extraction.
+    # Requires: pip install crawl4ai && playwright install --with-deps chromium
+    # BLOCKED (live test 2026-08-27): WTTJ deploys AWS WAF bot protection.
+    # Headless Playwright receives HTTP 202 + WAF cookie challenge (2KB HTML)
+    # instead of the actual job listing (~80KB+). WAF is an access control;
+    # bypassing it is prohibited by project constraints. Keeping the collector
+    # code as a valid implementation; activate only if WTTJ provides API access.
+    config:
+      company_slugs:
+        - doctolib
+        - ledger
+        - qonto
+        - alan
+        - contentsquare
+        - aircall
+        - swile
+        - ankorstore
+        - malt
+      max_jobs_per_company: 20
+      rate_limit_delay: 3.0
+      timeout: 60
+
+  - name: eures
+    type: eures
+    domain: "eures.europa.eu"
+    careers_url: "https://europa.eu/eures/api/jv-searchengine/public/jv-search/search"
+    ats: null
+    board_identifier: null
+    active: true
+    # Free, unauthenticated. The same public POST API used by the EURES SPA.
+    # robots.txt (eures.europa.eu, verified 2026-08-27): no /api/ restrictions.
+    # Coverage: 2.8M+ jobs across 31 EU/EEA countries (France 469K, Germany 646K,
+    # Netherlands 257K, Belgium 237K, Sweden 132K, …).
+    # Many French results originate from France Travail; deduplication handles the overlap.
+    # Pagination: 1-indexed 'page' field in the POST body.
+    # Rate limit: 2s between requests (conservative, no documented limit).
+    #
+    # Query strategy (2026-08-28):
+    #   France-first approach — all queries include FR to maximise jobs that
+    #   pass the location filter (France preferred_country).  The former broad
+    #   EU "developer" query for 8 non-France countries was removed: EURES
+    #   summary responses have no remote-flag, so those jobs all arrive with
+    #   remote=False + a known non-France country and are rejected by the
+    #   location filter.  Replacing that query with additional FR-scoped IT
+    #   terms increases both collected volume and filter yield simultaneously.
+    config:
+      max_pages_per_query: 5       # 5 pages × 50 results = 250 max per query
+      results_per_page: 50        # API hard cap: >50 returns HTTP 400
+      rate_limit_delay: 2.0
+      timeout: 30
+      queries:
+        # France: French-language IT keywords
+        - keyword: "développeur logiciel"
+          location_codes: ["fr"]
+        - keyword: "ingénieur informatique"
+          location_codes: ["fr"]
+        - keyword: "développeur web"
+          location_codes: ["fr"]
+        - keyword: "cybersécurité"
+          location_codes: ["fr"]
+        - keyword: "data"
+          location_codes: ["fr"]
+        - keyword: "devops"
+          location_codes: ["fr"]
+        # France: English-language IT keywords (EURES indexes both)
+        - keyword: "software engineer"
+          location_codes: ["fr"]
+        - keyword: "developer"
+          location_codes: ["fr"]
+        # French-speaking neighbours (BE/LU/CH): often bilingual or
+        # remote-friendly roles compatible with French candidates.
+        - keyword: "software engineer"
+          location_codes: ["be", "lu", "ch"]
+
+  - name: hellowork
+    type: hellowork
+    domain: "hellowork.com"
+    careers_url: "https://www.hellowork.com/fr-fr/emploi.html"
+    ats: null
+    board_identifier: null
+    active: false
+    # DECOUPLED FROM THE MAIN PIPELINE RUN (2026-09-05), same pattern as
+    # LinkedIn: active is false here so the normal per-run collector loop
+    # (src/pipeline/orchestrator.py's ThreadPoolExecutor over active_sources)
+    # never invokes this synchronously -- a ~30 minute collection would
+    # otherwise be added to every pipeline run (which otherwise takes only
+    # ~200-250s). Instead, src/hellowork/scanner.py's HelloWorkScanner reads
+    # THIS entry's `config` sub-dict directly (via SourceRegistry, bypassing
+    # the active filter) and runs on its own daily schedule
+    # (config/schedules.yaml: hellowork_daily), writing results into
+    # src/hellowork/staging.py's HelloWorkStagingStorage. The next pipeline
+    # run then snapshots whatever is waiting there in ~0s (src/api/runner.py)
+    # instead of waiting on a live scan -- see src/linkedin/staging.py for
+    # the original version of this pattern.
+    #
+    # No public API/RSS (robots.txt disallows /api/ and /rss/, verified
+    # 2026-09-05). Discovery via role ("metier") listing pages (allowed by
+    # robots.txt), which embed a schema.org/ItemList JSON-LD block of job
+    # URLs; job-detail pages (/emplois/{id}.html, also allowed) embed a full
+    # schema.org/JobPosting JSON-LD block. Verified live via plain httpx GET
+    # with an honest, self-identifying User-Agent — no browser/JS rendering
+    # needed, no blocking observed on these paths.
+    # Coverage ceiling (verified 2026-09-05): each metier page's ItemList
+    # exposes exactly 20 jobs, and robots.txt's blanket "Disallow: /*?"
+    # rules out query-string pagination; no path-based pagination exists
+    # either. So per-slug coverage is capped at 20 jobs; breadth comes from
+    # the number of distinct metier slugs queried, not from paging one slug.
+    # TAXONOMY-DRIVEN DISCOVERY (verified 2026-09-05): rather than a hand-
+    # picked slug list, `domains` is expanded at runtime via HelloWork's own
+    # index-domaine_{domain}.html pages, which enumerate every metier slug
+    # under that domain -- confirmed live: 344 slugs under "informatique",
+    # 93 under "data-et-ia" (432 unique combined, 5 overlap). This self-
+    # updates as HelloWork's taxonomy changes and matches the project
+    # profile's target_domains (it_support, cybersecurity, informatique,
+    # reseaux, developpement logiciel, systemes, automatisation) far more
+    # completely than any short hard-coded list could.
+    #
+    # VALIDATION (2026-09-05): baseline (previous 11-slug config, max_jobs_
+    # per_slug=20, rate_limit_delay=2.0) vs. a 53-slug stratified sample of
+    # the full taxonomy, both run live end-to-end through hard filter +
+    # semantic pre-rank:
+    #   baseline: 11 slugs -> 220 raw/unique URLs, 204 parsed (100% valid,
+    #     98.5% unique post-dedup), 108 hard-filter+semantic survivors
+    #     (52.9%), 460s runtime, 0 errors.
+    #   53-slug sample @ max_jobs_per_slug=8, rate_limit_delay=2.0: 963 raw
+    #     / 943 unique URLs (only 4/53 slugs fully overlapped with an
+    #     earlier slug), 387 parsed (100% valid, 98% unique post-dedup),
+    #     129 hard-filter+semantic survivors (33.3%), 981s runtime, 0 errors.
+    #   Extrapolated to the full 432-slug taxonomy at that depth: ~2-2.5
+    #     HOURS runtime -- too long for a routine background job.
+    #   Same 53-slug sample re-run @ max_jobs_per_slug=3, rate_limit_delay=
+    #     1.0 (current settings below): 147 parsed, 0 errors, 214.5s.
+    # FULL-SCALE LIVE RUN (2026-09-05, all 432 slugs, current settings):
+    #   1231 collected, 0 collector errors, 1231 validated (100%), 1209
+    #   unique after dedup (98.2%), 437 hard-filter+semantic-pre-rank
+    #   survivors (35.5%), 1773.7s (29.6 min) runtime -- matched the 29 min
+    #   extrapolation almost exactly. HelloWork has no bulk/list endpoint
+    #   (unlike Indeed's paged API): the listing page's JSON-LD carries only
+    #   job URLs, and the client-rendered job cards are populated from an
+    #   /api/ endpoint that robots.txt disallows, so one HTTP request per
+    #   job is unavoidable here. Raise max_jobs_per_slug for more depth per
+    #   role (at a proportional runtime cost) once this baseline is
+    #   comfortable. See the DECOUPLED note above: this ~30 minutes runs on
+    #   its own daily schedule via src/hellowork/scanner.py, not inside the
+    #   main pipeline run.
+    config:
+      domains:
+        - informatique
+        - data-et-ia
+      max_jobs_per_slug: 3
+      rate_limit_delay: 1.0
+      timeout: 20
+
+  - name: apec
+    type: apec
+    domain: "apec.fr"
+    careers_url: "https://www.apec.fr/cms/webservices/rechercheOffre"
+    ats: null
+    board_identifier: null
+    active: true
+    # Robots.txt (verified 2026-08-27): "All robots will spider the domain".
+    # No Disallow rules — fully permissive.
+    # Strategy: POST to the public JSON search API (same endpoint as the SPA).
+    # No browser or Crawl4AI required.
+    # Pagination: startIndex-based (20 jobs/page). max_pages controls collection depth.
+    # Work mode: idNomTeletravail field (20765=on_site, 20766=hybrid, else unknown).
+    # Employment type: typeContrat codes don't reliably decode; left as None.
+    # Keyword search (2026-08-28): 'motsCles' field in POST body verified to work.
+    # discovery_queries (French keywords) injected by orchestrator; one paginated
+    # search cycle per keyword. APEC covers France exclusively; all jobs pass the
+    # location filter, so multi-keyword search directly improves candidate volume.
+    config:
+      max_pages: 4
+      page_size: 50
+      rate_limit_delay: 2.0
+      timeout: 30

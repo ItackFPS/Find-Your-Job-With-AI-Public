@@ -1,0 +1,14 @@
+{
+  "as_of": "2026-11-08T00:00:00+00:00",
+  "created_at": "2026-11-08T00:00:00+00:00",
+  "dataset_id": "g-mo-t-accountant",
+  "job_count": 72,
+  "jobs_sha256": "8deb4de979e34c24b9319c80fe87b578f48f3262f0f96a44acc1000e7c1140e8",
+  "kind": "synthetic",
+  "label_scheme_version": 1,
+  "labels_sha256": "fbb5c0e8acff45b6d1f53934dbf236e21e46a6504c815ec0858f349eb99d8dfe",
+  "notes": "G-MO-T temporary gate (ADR 0028): synthetic, not the ADR 0023 criterion.",
+  "profile_sha256": "386d1cb440bb52ddf51f76b46eb6c1d162f0620cd2d1a726ec36ce602f5cf402",
+  "schema_version": 1,
+  "version": "1"
+}

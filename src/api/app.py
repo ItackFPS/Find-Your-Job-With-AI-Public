@@ -94,6 +94,8 @@ from src.scheduler.service import (
 from src.storage import app_state
 from src.storage.runs import RunStorage
 from src.storage.sqlite import Storage
+from src.upgrade.config_migration import migrate_config
+from src.version import APP_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +126,9 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
             yield
             return
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+
+    # -- First start of a new version: bring config/ up to it, before anything reads it --
+    migrate_config(Path(config_dir), Path(db_path).parent, APP_VERSION)
 
     # Bind the running event loop so PipelineRunner (on its background
     # thread) can publish SSE progress events thread-safely. Purely
@@ -309,7 +314,7 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title="Find Your Job With AI",
     description="Local-first job discovery pipeline with web UI.",
-    version="2.0.0.dev0",  # = pyproject.toml [project] version (tests/test_windows_package.py)
+    version=APP_VERSION,  # = pyproject.toml [project] version (tests/test_windows_package.py)
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",

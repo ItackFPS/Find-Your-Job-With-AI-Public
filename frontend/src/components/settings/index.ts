@@ -1,4 +1,5 @@
 export { BackgroundCard } from './BackgroundCard'
+export { AutostartSwitch } from './AutostartSwitch'
 export { DailyRunsCard } from './DailyRunsCard'
 export { SourcesCard } from './SourcesCard'
 export { DataCard } from './DataCard'
