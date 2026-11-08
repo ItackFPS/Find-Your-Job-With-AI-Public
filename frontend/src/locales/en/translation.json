@@ -1054,6 +1054,7 @@
       "noMatch": "No match for “{value}” — press Enter to add it as a custom domain."
     },
     "location": {
+      "statusLabel": "Priority of this location",
       "status": {
         "preferred": "Preferred",
         "acceptable": "Acceptable",

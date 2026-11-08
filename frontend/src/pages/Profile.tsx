@@ -796,6 +796,7 @@ function LocationPreferencesEditor({ values, onChange }: {
               <span style={{ fontSize: '1rem', flexShrink: 0 }}>{p.type === 'remote' ? '🌍' : '📍'}</span>
               <span style={{ flex: 1, fontSize: '0.88rem', minWidth: 0 }}>{locationPreferenceLabel(p, byCode)}</span>
               <select
+                aria-label={t('profile.location.statusLabel')}
                 value={p.status}
                 onChange={e => setStatus(idx, e.target.value as LocationPreference['status'])}
                 style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: '6px', padding: '0.3rem 0.5rem', fontSize: '0.8rem', color: 'var(--color-text)' }}
@@ -1241,6 +1242,7 @@ export default function ProfilePage() {
         <div style={fieldGroup}>
           <span style={label}>{t('profile.fields.freshness')}</span>
           <input
+            aria-label={t('profile.fields.freshness')}
             type="number"
             value={profile.freshness_days}
             min={1}
@@ -1307,6 +1309,7 @@ export default function ProfilePage() {
         <div style={{ ...fieldGroup, marginTop: 'var(--space-4)' }}>
           <span style={label}>{t('profile.fields.maxEducation')}</span>
           <select
+            aria-label={t('profile.fields.maxEducation')}
             value={profile.max_education ?? ''}
             onChange={e => set('max_education', e.target.value === '' ? null : e.target.value)}
             style={{ ...inputStyle, width: '160px' }}

@@ -1054,6 +1054,7 @@
       "noMatch": "Aucun résultat pour « {value} » — appuyez sur Entrée pour l’ajouter comme domaine personnalisé."
     },
     "location": {
+      "statusLabel": "Priorité de ce lieu",
       "status": {
         "preferred": "Préféré",
         "acceptable": "Acceptable",
