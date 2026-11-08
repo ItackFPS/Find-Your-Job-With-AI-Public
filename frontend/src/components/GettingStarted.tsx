@@ -5,7 +5,7 @@ import { Card } from './Card'
 // First-run guide, shown on the Dashboard while the database has no job yet.
 // Mirrors docs/windows-installer.md ("First run") and config/sources.yaml: keep the
 // two source lists in step with the shipped configuration.
-const NO_ACCOUNT = ['France Travail (website)', 'EURES', 'RemoteOK', 'Jobicy', 'We Work Remotely']
+const NO_ACCOUNT = ['France Travail', 'EURES', 'RemoteOK', 'Jobicy', 'We Work Remotely']
 const SCANNERS = ['LinkedIn', 'HelloWork']
 
 const item = { marginBottom: 'var(--space-3)', lineHeight: 1.5 }
