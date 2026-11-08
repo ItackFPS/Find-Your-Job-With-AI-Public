@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from src.models.job import Job
 from src.pipeline.departments import PACA_NEIGHBOR_DEPARTMENTS, extract_department_code
+from src.pipeline.domain_scope import groups_outside_profile
 from src.pipeline.location_distance import assess as assess_location
 from src.pipeline.location_distance import describe as describe_location
 from src.pipeline.location_distance import distance_config
@@ -665,10 +666,11 @@ def build_scoring_config(
     # keywords, for domain_relevance scoring. Title/description
     # keywords are the per-domain vocabulary from filters.yaml for
     # each domain the user selected; off-domain keywords are the
-    # SAME non-IT/off-domain vocabulary the hard filter already
-    # uses (excluded_title_keywords + non_it_title_functions) —
-    # reused here as defense-in-depth evidence that a job is
-    # *confirmed* wrong-domain, not merely undetected.
+    # SAME other-lines-of-work vocabulary the hard filter already
+    # uses (excluded_title_keywords + non_it_title_functions, minus the
+    # groups that are the candidate's own line of work) — reused here as
+    # defense-in-depth evidence that a job is *confirmed* wrong-domain,
+    # not merely undetected.
     domain_rel_cfg = (
         scoring_config
         .setdefault("scoring", {})
@@ -683,10 +685,12 @@ def build_scoring_config(
     domain_rel_cfg["domain_title_keywords"] = list(dict.fromkeys(domain_title_kws))
     domain_rel_cfg["domain_description_keywords"] = list(dict.fromkeys(domain_desc_kws))
     off_domain_kws: list[str] = []
-    for group in engine_cfg.get("excluded_title_keywords", {}).values():
-        off_domain_kws.extend(group)
-    for group in engine_cfg.get("non_it_title_functions", {}).values():
-        off_domain_kws.extend(group)
+    for section in ("excluded_title_keywords", "non_it_title_functions"):
+        groups = engine_cfg.get(section, {})
+        if isinstance(groups, dict):
+            off_domain_kws.extend(groups_outside_profile(groups, profile))
+        else:
+            off_domain_kws.extend(groups)
     domain_rel_cfg["off_domain_keywords"] = list(dict.fromkeys(off_domain_kws))
 
     # Inject profile languages for F3 language penalty detection.
