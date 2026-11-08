@@ -1191,6 +1191,23 @@
     "title": "Settings",
     "subtitle": "Sources and background collection: what the app collects, when, and how it went.",
     "loadFailed": "Could not load this section. Is the app still running?",
+    "model": {
+      "title": "Local matching model",
+      "subtitle": "Compares each offer with your profile, on this computer. Nothing is sent to a cloud service.",
+      "ready": "The model is installed.",
+      "missing": "The model is not installed yet. It takes about {size} MB, downloaded once from Hugging Face.",
+      "download": "Download the model",
+      "retry": "Try again",
+      "downloading": "Downloading the model…",
+      "progress": "{done} / {total} MB",
+      "optional": "You can keep using the app meanwhile. Searches still work without the model: offers are then ranked by the rules alone.",
+      "error": {
+        "offline": "The download could not start or finish. Check your internet connection, then try again.",
+        "disk_full": "There is not enough free disk space. Free some space, then try again.",
+        "corrupt": "The downloaded file failed its integrity check and was deleted. Try again.",
+        "failed": "The download failed. Try again."
+      }
+    },
     "background": {
       "title": "Background collection",
       "subtitle": "The app searches for new offers once a day, even with its window closed.",
