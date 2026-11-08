@@ -1,9 +1,10 @@
 """Discovery query expansion: derive broad search terms from a user profile.
 
 Converts profile domains/skills into source-specific discovery queries using:
-  1. Static baseline — a small, carefully chosen set that always runs
-  2. Profile-aware generation — domain/contract terms derived from the profile
-  3. Local LLM (additive) — language-appropriate extra queries; never replaces baseline
+  1. Preset baseline — vocabulary for the profile's line of work, read from
+     ``config/presets/*.yaml`` (nothing profession-specific lives in this module)
+  2. Profile-aware generation — the profile's own domains, skills and contract terms
+  3. Local LLM (additive) — language-appropriate extra queries; never replaces (1)+(2)
 
 The final query set is: union(baseline + profile_queries, llm_queries), deduplicated
 and capped at max_queries.  The LLM cannot remove baseline coverage.
@@ -22,8 +23,17 @@ from typing import TYPE_CHECKING, Any
 import requests
 
 from src.discovery.adaptive import QueryYieldStats, prioritize_queries
+from src.discovery.presets import (
+    DiscoveryPreset,
+    load_neutral,
+    load_presets,
+    matching_presets,
+    normalize_domain,
+)
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from src.models.profile import JobSearchProfile
 
 logger = logging.getLogger(__name__)
@@ -33,124 +43,6 @@ _DEFAULT_MAX_QUERIES = 12
 
 # Minimum query count to accept from LLM (reject suspiciously small outputs).
 _MIN_LLM_QUERIES = 1
-
-# Static baseline per source — always used regardless of profile or LLM availability.
-# Chosen for broad IT recall; keep short and non-noisy.
-_STATIC_BASELINE: dict[str, list[str]] = {
-    "france_travail": [
-        "informatique",
-        "développement logiciel",
-        "data",
-        "cybersécurité",
-        "intelligence artificielle",
-        "test logiciel",
-        "alternance informatique",
-    ],
-    # Jobicy industry slugs (verified 2026-08-28 via /api/v2/remote-jobs?get=industries).
-    # Used as ?industry= filter in multi-query collection.
-    "jobicy": [
-        "engineering",       # Software Engineering
-        "cybersecurity",     # Cybersecurity
-        "admin",             # DevOps & Infrastructure
-    ],
-    # RemoteOK tag filter (verified 2026-08-28 via /api?tags=).
-    # Each tag drives one API call returning tag-filtered jobs.
-    "remoteok": [
-        "python",
-        "javascript",
-        "devops",
-        "react",
-    ],
-}
-
-# Domain → extra French IT search queries (additive to baseline).
-# Only add where the baseline does not already provide recall.
-_DOMAIN_TO_FR_QUERIES: dict[str, list[str]] = {
-    "software_development": [],         # covered by "développement logiciel"
-    "web_development": ["développement web"],
-    "qa_testing": [],                   # covered by "test logiciel"
-    "automation": [],                   # covered by "informatique"
-    "data": [],                         # covered by "data"
-    "it_support": ["support informatique"],
-    "systems": ["administrateur systèmes"],
-    "networking": ["réseau informatique"],
-    "cybersecurity": [],                # covered by "cybersécurité"
-    "devops": ["devops"],
-    "cloud": ["cloud computing"],
-}
-
-# Contract type → extra French IT discovery queries.
-_CONTRACT_TO_FR_QUERIES: dict[str, list[str]] = {
-    "internship": ["stage informatique"],
-    "alternance": [],                   # covered by "alternance informatique"
-}
-
-# Domain → extra Jobicy industry slugs (verified 2026-08-28 via ?get=industries).
-# Slugs not already in the static baseline.
-_DOMAIN_TO_JOBICY_INDUSTRIES: dict[str, list[str]] = {
-    "software_development": [],         # covered by "engineering"
-    "web_development": ["web-app-design"],
-    "qa_testing": ["qa-testing"],
-    "automation": [],                   # covered by "admin" (DevOps/Infra)
-    "data": [],                         # covered by "data-science"
-    "it_support": [],                   # no direct slug
-    "systems": [],                      # covered by "admin"
-    "networking": [],                   # covered by "admin"
-    "cybersecurity": [],                # covered by "cybersecurity"
-    "devops": [],                       # covered by "admin"
-    "cloud": [],                        # covered by "admin"
-}
-
-# ---------------------------------------------------------------------------
-# Saturated-query partition vocabulary (France Travail, French)
-# ---------------------------------------------------------------------------
-
-# Role/domain terms used to build compound queries when a broad query
-# (e.g. "informatique") hits the France Travail API's 3000-result offset
-# limit.  Compound: "informatique" + "développeur" → "informatique développeur".
-# Keep this list concise — broad role/domain concepts only.
-_FT_PARTITION_VOCABULARY: list[str] = [
-    "développeur",
-    "logiciel",
-    "ingénieur",
-    "technicien",
-    "data",
-    "cybersécurité",
-    "devops",
-    "web",
-    "test",
-    "cloud",
-    "réseaux",
-    "systèmes",
-    "support",
-]
-
-# Domain → partition terms ordered by profile relevance.
-# Used to put profile-aligned terms first in the vocabulary.
-_FT_DOMAIN_PARTITION_AFFINITY: dict[str, list[str]] = {
-    "software_development": ["développeur", "logiciel", "ingénieur"],
-    "web_development": ["web", "développeur"],
-    "qa_testing": ["test", "logiciel"],
-    "automation": ["devops", "logiciel"],
-    "data": ["data", "logiciel"],
-    "it_support": ["support", "technicien"],
-    "systems": ["systèmes", "ingénieur"],
-    "networking": ["réseaux"],
-    "cybersecurity": ["cybersécurité"],
-    "devops": ["devops", "cloud"],
-    "cloud": ["cloud", "devops"],
-}
-
-# Noisy queries known to pollute France Travail results with non-IT jobs.
-# None → reject entirely; str → replace with the safer variant.
-_NOISY_QUERY_REPLACEMENTS: dict[str, str | None] = {
-    "réseau": "réseau informatique",    # bare "réseau" returns roads, civil engineering
-    "reseau": "réseau informatique",
-    "numérique": None,                  # "numérique" returns CNC machine operators
-    "numerique": None,
-    "système": None,                    # too ambiguous alone
-    "systeme": None,
-}
 
 _MAX_QUERY_LENGTH = 50
 
@@ -165,10 +57,9 @@ User's key skills: {skills}
 Rules:
 - Use broad category words (not specific job titles)
 - Output terms appropriate for a {language}-language job board
+- Stay within the user's own line of work; do not add unrelated fields
 - Include 5-8 terms
-- Return ONLY a JSON array of strings, no explanation
-
-Example: ["informatique", "développement", "logiciel", "data", "test"]"""
+- Return ONLY a JSON array of strings, no explanation, for example ["term one", "term two"]"""
 
 
 @dataclass
@@ -216,7 +107,9 @@ class DiscoveryQueryExpander:
         llm_model: str = "local-model",
         llm_timeout: int = 10,
         max_queries: int = _DEFAULT_MAX_QUERIES,
+        config_dir: "str | Path | None" = None,
     ) -> None:
+        self._config_dir = config_dir
         self._llm_endpoint = llm_endpoint
         self._llm_model = llm_model
         self._llm_timeout = llm_timeout
@@ -269,8 +162,10 @@ class DiscoveryQueryExpander:
     ) -> list[str]:
         """Generate broad discovery queries for a single source.
 
-        Returns a non-empty deduplicated list of query strings that always
-        includes the static baseline for the source.
+        Returns a deduplicated list of query strings: the baseline of every
+        preset that applies to the profile, plus the profile's own terms. The
+        list is empty when the profile gives nothing to search for (collectors
+        then use the queries from their own source configuration).
 
         LLM queries are ADDITIVE: they extend the baseline, never replace it.
 
@@ -281,13 +176,17 @@ class DiscoveryQueryExpander:
         deterministic reordering rules. Never changes which queries are
         included, only their order.
         """
-        # 1. Static baseline (guaranteed floor).
-        baseline = list(_STATIC_BASELINE.get(source, ["informatique"]))
+        # 1. Preset baseline (guaranteed floor while a preset applies).
+        presets = self._presets_for(profile)
+        baseline = _deduplicate_preserve_order(
+            [q for p in presets for q in p.baseline.get(source, [])]
+        )
+        noisy = _noisy_replacements(presets)
 
         # 2. Profile-derived additions.
         profile_extra = self._profile_queries(profile, source)
         pre_llm_raw = _deduplicate_preserve_order(baseline + profile_extra)
-        pre_llm, rejected_pre = _apply_quality_filter(pre_llm_raw)
+        pre_llm, rejected_pre = _apply_quality_filter(pre_llm_raw, noisy)
 
         # 2b. Adaptive reordering (Phase LATER / I15) — bounded to a pure
         # permutation of the exact same query list computed above.
@@ -305,15 +204,16 @@ class DiscoveryQueryExpander:
         rejected_llm: list[str] = []
         llm_available = False
 
-        if self._llm_endpoint:
-            domains = list(profile.target_domains)
-            skills = list(profile.target_skills)
+        domains = list(profile.target_domains)
+        skills = list(profile.target_skills)
+        # Nothing to describe means nothing to expand: never invent a field.
+        if self._llm_endpoint and (domains or skills):
             try:
                 llm_raw = self._try_llm_expansion(domains, skills, language)
                 llm_available = True
                 pre_lower = {q.lower() for q in pre_llm}
                 llm_candidates = [q for q in llm_raw if q.lower() not in pre_lower]
-                llm_filtered, rejected_llm = _apply_quality_filter(llm_candidates)
+                llm_filtered, rejected_llm = _apply_quality_filter(llm_candidates, noisy)
                 llm_extra = llm_filtered
             except Exception as exc:
                 logger.warning(
@@ -359,34 +259,59 @@ class DiscoveryQueryExpander:
     # Profile-aware query generation
     # ------------------------------------------------------------------
 
+    def _presets_for(self, profile: "JobSearchProfile") -> list[DiscoveryPreset]:
+        return matching_presets(load_presets(self._config_dir), list(profile.target_domains))
+
     def _profile_queries(
         self,
         profile: "JobSearchProfile",
         source: str,
     ) -> list[str]:
-        """Derive extra queries from the profile (domains + contracts + skills)."""
+        """Derive extra queries from the profile (domains + contracts + skills).
+
+        Order: the profile's own domains first (so the cap never drops them in
+        favour of preset extras), then preset extras per selected domain and
+        contract, then skills.
+        """
         extra: list[str] = []
+        presets = self._presets_for(profile)
+        # Domains no preset owns (free text, an ESCO occupation label…): the user's
+        # own words are the query.
+        custom = [
+            d.strip().replace("_", " ")
+            for d in profile.target_domains
+            if d.strip() and not any(p.owns(d) for p in presets)
+        ]
 
-        if source == "france_travail":
-            for domain in profile.target_domains:
-                extra.extend(_DOMAIN_TO_FR_QUERIES.get(domain, []))
-
+        if source in ("france_travail", "apec"):
+            fr_terms = load_neutral(self._config_dir).contract_terms.get("fr", {})
+            extra.extend(custom)
             for contract in profile.contract_types:
-                extra.extend(_CONTRACT_TO_FR_QUERIES.get(contract, []))
+                term = fr_terms.get(contract)
+                if term:
+                    extra.extend(f"{term} {domain}" for domain in custom)
+            for preset in presets:
+                by_domain = preset.domain_queries.get(source, {})
+                for domain in profile.target_domains:
+                    extra.extend(by_domain.get(normalize_domain(domain), []))
+                for contract in profile.contract_types:
+                    extra.extend(preset.contract_queries.get(source, {}).get(contract, []))
 
-            # Tech skills work as-is on France Travail (FT indexes English tech terms).
-            for skill in profile.target_skills:
-                skill = skill.strip()
-                if skill and 2 <= len(skill) <= 25:
-                    extra.append(skill)
+            if source == "france_travail":
+                # Skills work as-is on France Travail.
+                for skill in profile.target_skills:
+                    skill = skill.strip()
+                    if skill and 2 <= len(skill) <= 25:
+                        extra.append(skill)
 
         elif source == "jobicy":
-            # Jobicy industry slugs: map domains to verified industry slugs.
-            for domain in profile.target_domains:
-                extra.extend(_DOMAIN_TO_JOBICY_INDUSTRIES.get(domain, []))
+            # Jobicy industry slugs only exist for the presets that map them.
+            for preset in presets:
+                for domain in profile.target_domains:
+                    extra.extend(preset.jobicy_industries.get(normalize_domain(domain), []))
 
         elif source == "remoteok":
-            # RemoteOK tags: short English tech skills from profile.
+            # RemoteOK tags: short lowercase skills from the profile.
             for skill in profile.target_skills:
                 skill = skill.strip().lower()
                 if skill and 2 <= len(skill) <= 20:
@@ -411,8 +336,8 @@ class DiscoveryQueryExpander:
         """
         prompt = _EXPANSION_PROMPT.format(
             language=language,
-            domains=", ".join(domains) if domains else "software, technology",
-            skills=", ".join(skills) if skills else "programming",
+            domains=", ".join(domains) if domains else "not specified",
+            skills=", ".join(skills) if skills else "not specified",
         )
 
         from src.ai.endpoint import require_local_endpoint
@@ -458,54 +383,65 @@ class DiscoveryQueryExpander:
         """Return a profile-prioritised list of partition terms for *source*.
 
         Used by the France Travail collector to build compound queries when a
-        broad query (e.g. "informatique") is saturated.  Profile-relevant
-        terms appear first; the remaining vocabulary follows in a fixed order.
+        broad query is saturated. With a matching preset, its profile-relevant
+        terms come first, then the rest of its vocabulary; without one, the
+        profession-neutral vocabulary from ``config/discovery.yaml``.
 
         Returns [] for unsupported sources.
         """
         if source != "france_travail":
             return []
 
+        presets = self._presets_for(profile)
+        if not presets:
+            return _deduplicate_preserve_order(
+                load_neutral(self._config_dir).partition_vocabulary.get(source, [])
+            )
+
         result: list[str] = []
         seen: set[str] = set()
 
-        # Profile-relevant terms first (affinity order per domain)
-        for domain in profile.target_domains:
-            for term in _FT_DOMAIN_PARTITION_AFFINITY.get(domain, []):
-                if term not in seen:
-                    seen.add(term)
-                    result.append(term)
-
-        # Fill with remaining vocabulary
-        for term in _FT_PARTITION_VOCABULARY:
+        def add(term: str) -> None:
             if term not in seen:
                 seen.add(term)
                 result.append(term)
 
+        # Profile-relevant terms first (affinity order per domain)
+        for preset in presets:
+            for domain in profile.target_domains:
+                for term in preset.partition_affinity.get(normalize_domain(domain), []):
+                    add(term)
+        for preset in presets:
+            for term in preset.partition_vocabulary:
+                add(term)
+
         return result
-
-    # ------------------------------------------------------------------
-    # Legacy helper (kept for callers that may call it directly)
-    # ------------------------------------------------------------------
-
-    def _static_fallback(self, source: str) -> list[str]:
-        """Return a minimal safe fallback for the given source."""
-        return list(_STATIC_BASELINE.get(source, ["informatique"]))
 
 
 # ---------------------------------------------------------------------------
 # Module-level helpers (public — imported by tests and callers)
 # ---------------------------------------------------------------------------
 
+def _noisy_replacements(presets: list[DiscoveryPreset]) -> dict[str, str | None]:
+    """Merged noisy-query rules of the presets that apply."""
+    merged: dict[str, str | None] = {}
+    for preset in presets:
+        merged.update(preset.noisy_replacements)
+    return merged
+
+
 def _apply_quality_filter(
     queries: list[str],
+    noisy_replacements: dict[str, str | None] | None = None,
 ) -> tuple[list[str], list[str]]:
     """Apply quality rules to a list of queries.
 
     Returns (accepted, rejected).  Handles noisy term replacement/rejection
+    (``noisy_replacements``: lowercase query -> safer query, ``None`` rejects)
     and length limits.  Does NOT deduplicate — call _deduplicate_preserve_order
     before or after as needed.
     """
+    noisy = noisy_replacements or {}
     accepted: list[str] = []
     rejected: list[str] = []
 
@@ -517,8 +453,8 @@ def _apply_quality_filter(
             rejected.append(q)
             continue
         q_lower = q.lower()
-        if q_lower in _NOISY_QUERY_REPLACEMENTS:
-            replacement = _NOISY_QUERY_REPLACEMENTS[q_lower]
+        if q_lower in noisy:
+            replacement = noisy[q_lower]
             if replacement is None:
                 rejected.append(q)
             else:
