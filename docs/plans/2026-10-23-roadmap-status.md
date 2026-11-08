@@ -4,7 +4,8 @@ The living execution record for `2026-10-23-final-update-plan.md` (the plan stay
 truth for scope and acceptance criteria). Since 2026-10-30 the execution **order**, the audit's
 corrections and the owner's review decisions are in `2026-10-30-completion-plan.md`. Since
 2026-11-05 the learning architecture (`2026-11-05-learning-architecture-decisions.md`, v5) adds
-stages L0–L9 and replaces Phase 4. A new session resumes from **Next actions**.
+stages L0–L9 and replaces Phase 4. Since 2026-11-08 the 2.0 release order is ADR 0028 and
+`2026-11-08-2.0-release-decision-readiness.md`. A new session resumes from **Next actions**.
 
 Tiers: **R** release-blocking, **T** release-targeted (own toggle), **O** optional. Status:
 `done` (merged, criterion verified), `merged` (merged, criterion partly verified), `PR` (open),
@@ -51,14 +52,14 @@ Exit criteria are proposals until each stage is planned (v5 §6). Sequential, on
 | Stage | Contents | Status |
 |---|---|---|
 | L0 Decisions | 14 ADRs, one PR each, in this order: 1 planes and invariants → 2 AD-12 privacy, retention, erasure → 3 AD-6 signal capture → 4 AD-2 validity and constraints → 5 AD-3 personal model → 6 AD-5 shadow and health → 7 AD-4 promotion regimes (+ ADR 0011 amendment) → 8 AD-10 labels → 9 AD-1 knowledge packs → 10 AD-7 occupations → 11 AD-8 market → 12 AD-9 self-monitoring → 13 AD-11 lanes → 14 AD-13 roadmap | **done** 2026-11-05: ADRs 0014–0027 merged (0027 with this record update) |
-| L1 Signals and privacy | AD-6 visible-exposure logging, Save/Hide, AD-12 four actions, socket guard | **done** 2026-11-05: L1.1–L1.8 merged (exposure log, Save/Hide, outbox, socket guard, pause/reset, erase, delete all, lab purge; up to #128). Fresh-copy install 2026-11-06: Save/Hide and exposure logging verified in a browser; delete-all on Windows completes only after a restart (the in-process attempt is BLOCKED by `file_locked` on `jobs.db`; the UI says to restart). Still not verified: the IndexedDB outbox offline replay |
+| L1 Signals and privacy | AD-6 visible-exposure logging, Save/Hide, AD-12 four actions, socket guard | **done** 2026-11-05: L1.1–L1.8 merged (exposure log, Save/Hide, outbox, socket guard, pause/reset, erase, delete all, lab purge; up to #128). Fresh-copy install 2026-11-06: Save/Hide and exposure logging verified in a browser; delete-all on Windows completes only after a restart (the in-process attempt is BLOCKED by `file_locked` on `jobs.db`; the UI says to restart); fixed by #154 (automatic restart, real fresh-copy test). IndexedDB outbox replay at load: #152 |
 | L2 Structured evidence + ops base | FT ROME, experience, education as typed evidence; source and field detectors | **PR**: plan `2026-11-05-l2-structured-evidence-plan.md`; L2.1 typed FT evidence + extractor agreement merged (#132); L2.2 Quality card #133; L2.3 metrics and detectors #134; L2.4 Santé UI #136. **Done** |
-| L3 Model in shadow + simulator | AD-3 journaled, not shown; AD-5 simulator incl. SR-1…SR-5 | plan `2026-11-05-l3-personal-model-shadow-plan.md`; L3.1 signals #137, L3.2 model + shadow journal #138, L3.3 activation rule #139, L3.5 learning curve #140, L3.4 simulator #143. **Done.** **Simulator verdict: criteria not met** (false activation up to 21.6 %, true activation within 90 d ≈ 0 %); no G3b values adopted; owner decision needed before any activation (report `docs/reports/2026-11-05-l3-simulator.md`) |
-| L4 Personal ranking eligible | AD-5 activation rule, panel, health monitor | plan `2026-11-05-l4-personal-ranking-eligible-plan.md`; L4.1 live counting + health record #141, L4.2 ranking when ACTIVE #142, L4.3 Découverte (S4) #144, L4.4 status, pause notice, Quality card (this PR). **Done with activation off** (`activation_enabled: false`): the rule is evaluated and recorded, the user always sees production; fault-injection pause tested. Turning activation on waits for the owner decision on the L3 verdict |
+| L3 Model in shadow + simulator | AD-3 journaled, not shown; AD-5 simulator incl. SR-1…SR-5 | plan `2026-11-05-l3-personal-model-shadow-plan.md`; L3.1 signals #137, L3.2 model + shadow journal #138, L3.3 activation rule #139, L3.5 learning curve #140, L3.4 simulator #143. **Done.** **Simulator verdict: criteria not met** (false activation up to 21.6 %, true activation within 90 d ≈ 0 %); no G3b values adopted; owner decision needed before any activation (report `docs/reports/2026-11-05-l3-simulator.md`). **SHADOW for 2.0** (ADR 0028); research: `docs/reports/2026-11-06-safe-passive-personalization-research.md` and `2026-11-06-l3-sequential-evaluation-correction.md` (the correction prevails where they conflict; nothing in them is approved) |
+| L4 Personal ranking eligible | AD-5 activation rule, panel, health monitor | plan `2026-11-05-l4-personal-ranking-eligible-plan.md`; L4.1 live counting + health record #141, L4.2 ranking when ACTIVE #142, L4.3 Découverte (S4) #144, L4.4 status, pause notice, Quality card (this PR). **Done with activation off** (`activation_enabled: false`): the rule is evaluated and recorded, the user always sees production; fault-injection pause tested. Turning activation on waits for the owner decision on the L3 verdict. **SHADOW for 2.0** (ADR 0028) |
 | L5 Weak evidence | AD-2 via pre-registration and the lab | built, shipped inert: plan + pre-registration #146, strength #147, `weak_evidence_mode` + penalty #148, lanes #149, exploratory evaluation (`docs/reports/2026-11-05-l5-weak-evidence-exploratory.md`: criterion 1 fails on real-v2 tuning, lane domain floor). Every check stays `reject`; the decisive real-v3 held-out run waits for the owner (labelling finished, and keep or re-register the candidate) |
-| L6 Occupations | ROME pack (ESCO not in the first pack), prototype classifier, three concepts | blocked on L0 + ROME licence and appellation checks |
-| L7 Market | coverage descriptor, three claim levels, salary comparability | blocked on L6 + `matches_salary` correction |
-| L8 Full self-monitoring | AD-9 | blocked on L4, L6 |
+| L6 Occupations | ROME pack (ESCO not in the first pack), prototype classifier, three concepts | after 2.0 (ADR 0028); needs ROME licence and appellation checks |
+| L7 Market | coverage descriptor, three claim levels, salary comparability | after 2.0 (ADR 0028); needs L6 + `matches_salary` correction |
+| L8 Full self-monitoring | AD-9 | after 2.0 (ADR 0028); needs L6 |
 | L9 (optional) Estimated position correction | AD-3.2 | optional |
 
 Preparation work that gates ADRs or implementation (v5 §8, §10), in the order it is needed:
@@ -99,7 +100,7 @@ The phase order that supersedes the waves from 2026-10-30 is in the completion p
 | F3.1 ONNX | R | done #43, #46 | Spearman 1.000 on 1,000 jobs; installer 62.1 MB without the model; first-run download UI = P3.3 |
 | F4.1–F4.2 geo | R | merged #41 | resolver 100 % on 483 FT; remote extractor: 100 owner labels **not met** (R-Q6) |
 | F4.3 distance scoring | R | done #56, #57 | only active once a profile has a `home`; the shipped example has none (P3.1) |
-| F5.1 profile v2 + migration | R | merged #64 | Profile page still edits v1 fields (P3.1) |
+| F5.1 profile v2 + migration | R | merged #64 | Profile page edits v2 levels, education and home, and still v1 fields the hard filter reads (`filter.py:232,275`); finish in M3 with a plan |
 | F5.2 career stages | R | merged #65 | title-only conflicts go to review; keyword rejection off with targets |
 | F5.3 education levels | R | merged #66 | French/EQF 3–8 |
 | F5.4 wizard | R | ready | P3.4 |
@@ -147,17 +148,17 @@ next (2026-10-25). Order from the completion plan §P (approved 2026-10-30):
    100 blind labels, the v2-profile baseline (P3.1), the 7-day FT coverage figure.
 4. P3 (while labels are collected): profile v2 UI, AI setup UI, embedding download, wizard,
    Settings › Data/Language, CV import.
-5. **L0 done (2026-11-05)**, L1, L2, L3, L4 done (L4 with activation off); **now L5** (see the stages table), then L6 → L8 (L9 optional),
-   then the fresh-copy install and test, then P3, P5, P6, P7 (ADR 0027).
-6. ~~P4 ranking quality~~ replaced by L1–L4 (ADR 0027). P3 runs after L1–L8 and the fresh-copy
-   install; P5 AI analysis, P6 polish (Home sections per ADR 0026), P7 release qualification (owner
-   approval to release; gains the learning gates listed in ADR 0027).
+5. L0–L5 done (L3 and L4 SHADOW with activation off, L5 inert), fresh-copy install and test done
+   (2026-11-06). **Now, per ADR 0028:** M0 records → M1 upgrade safety → M2 scope cuts and G-MO-T →
+   M3 setup without a terminal → M4 UX → M5 qualification (readiness report §11). L6–L8 after 2.0.
+6. ~~P4 ranking quality~~ replaced by L1–L4 (ADR 0027). P5 AI analysis and the ADR 0026 Home
+   sections move to 2.1. Release needs owner approval and keeps the ADR 0027 learning gates, with
+   G-MO-T in place of the multi-occupation self-check for 2.0 (ADR 0028).
 
 Blocked on the owner: real-v3 labels (the real-v3 decision run happens once, only after the owner
-says labelling is finished; never pooled with real-v2); France Travail API credentials for the 7-day coverage figure; confirm the everyday database before
-any migration runs on it. The Desktop and Start-menu shortcuts open the v1.0.0 install, so it is most
-likely `%LOCALAPPDATA%\Programs\Find Your Job With AI V1\data\jobs.db` (27 MB, last written
-2026-10-23); real-v1/real-v2 come from the private `data/jobs.db` (3.5 GB). Usability testers and machines (P7).
+says labelling is finished; never pooled with real-v2); France Travail API credentials for the 7-day coverage figure (post-release; the API is closed to new users). Usability testers and machines (P7).
+
+Everyday database (R-A2, closed 2026-11-08): `<install folder>\data\jobs.db`, on the owner's machine `%LOCALAPPDATA%\Programs\Find Your Job With AI V1\data\jobs.db`. The path follows the code location; no setting changes it. The private development database is an archive and is not imported.
 
 Follow-ups recorded from reviews: the D12 items (dev origins, installer hashes, `install_startup.py`, EURES `Crawl-delay`, link schemes) are closed by #91; the 5678 lab relay probe stays (#74). Open, proposed as issues: per-scope expiry completeness (an offer from a query or board the user removed is still counted missing by a complete source); 463 legacy `status = 'inactive'` rows in the owner's large DB; pre-existing orphan rows in derived tables (3,624 embeddings, 3,722 personalization cache rows, 158 FTS, 60 AI analyses on the owner's DB copy); a startup catch-up run can be followed within the hour by the new period's run.
 
@@ -179,3 +180,4 @@ Follow-ups recorded from reviews: the D12 items (dev origins, installer hashes, 
 - 2026-11-03: the owner finished 100 blind real-v2 labels; the pre-registered H1/H2 run found neither supported (exploratory). Filter investigation: no code bug, rejections follow profile choices; the owner kept the profile. #109 pre-registered real-v3 before collection. Main 6207a7c.
 - 2026-11-05/06: L5 merged (#146–#150), shipped inert; exploratory evaluation: criterion 1 fails on real-v2 tuning (lane domain floor). L6–L8 blocked (ROME licence, `matches_salary`). Fresh-copy install of main fabc428 in a separate folder (own venv, `npm ci` + build, empty `data/`, example profile): dashboard, Settings › Learning (observing) and the Jobs page render with no console error; one pipeline run completed in 8 min (2,604 collected, 288 scored; FT API and Indeed skipped with reasons); `ranking_shadow` 288 rows, health `shadow`, Découverte drew 2, outside-criteria lane empty. Hide wrote `feedback_events`; exposures reached `exposure_log`. Delete all: first attempt BLOCKED (`file_locked` on `jobs.db`, held by the backend itself); after stop + start it completed (empty database, no pending state).
 - 2026-11-05: continuous-learning audit, then the learning-architecture proposal and four review passes; the owner approved **v5**. Recorded in `2026-11-05-learning-architecture-decisions.md` (with the v1 proposal and the audit it builds on); Phase 4 replaced by L1–L4; L0 started.
+- 2026-11-08: release audit and decision readiness; the owner accepted all approvals (D1–D8): ADR 0028, 2.0 before L6–L8, AI hidden, no France Travail credential field, Today card, V1 folder authoritative. New blocker: v1 `config/*.yaml` survive an upgrade (M1). L3 research reports committed.
