@@ -266,7 +266,6 @@ def run_pipeline(
     stats.use_ai = use_ai
 
     # Lazy imports keep startup fast and avoid circular dependency issues.
-    from src.collectors.registry import REMOVED_SOURCE_TYPES
     from src.collectors.registry import registry as collector_registry
     from src.decisions.recorder import DecisionRecorder
     from src.discovery.registry import SourceRegistry
@@ -296,11 +295,8 @@ def run_pipeline(
         integrate_semantic_into_ranking,
         load_semantic_config,
     )
-    from src.pipeline.circuit_breaker import BreakerState, is_network_outage, paused_reason
-    from src.pipeline.circuit_breaker import load_states as load_breaker_states
-    from src.pipeline.circuit_breaker import next_state as next_breaker_state
-    from src.pipeline.circuit_breaker import save_states as save_breaker_states
     from src.pipeline.source_health import annotate_yield_anomalies
+    from src.pipeline.source_selection import select_sources, settle_breakers
     from src.pipeline.validate import validate_jobs
     from src.storage.runs import RunStorage
     from src.storage.sqlite import Storage
@@ -441,46 +437,11 @@ def run_pipeline(
         _t_collect = time.perf_counter()
         sources_path = Path(config_dir) / "sources.yaml"
         source_registry = SourceRegistry(config_path=str(sources_path))
-        active_sources = [
-            s for s in source_registry.all_sources
-            if s.get("active", True) and s.get("type") not in skipped_source_types
-            and s.get("type") not in REMOVED_SOURCE_TYPES
-        ]
-        # A 1.x config may still list a source type removed in 2.0: skip it with
-        # one line per run saying so, rather than a failure on every run.
-        for s in source_registry.all_sources:
-            removed_reason = REMOVED_SOURCE_TYPES.get(s.get("type", ""))
-            if s.get("active", True) and removed_reason:
-                logger.warning("Skipping source %s: %s", s["name"], removed_reason)
-                stats.by_source[s["name"]] = {
-                    "collected": 0, "accepted": 0, "errors": 0,
-                    "status": "skipped", "reason": removed_reason,
-                }
-        # An active source left out by the preflight is listed as skipped, with what
-        # to set up, so a missing credential never looks like a source that ran.
-        for s in source_registry.all_sources:
-            if s.get("active", True) and s.get("type") in skipped_source_types:
-                stats.by_source[s["name"]] = {
-                    "collected": 0, "accepted": 0, "errors": 0,
-                    "status": "skipped", "reason": skip_reasons.get(s.get("type", ""), ""),
-                }
-
-        # Circuit breaker (plan F6.1): a source that failed FAILURE_THRESHOLD runs in a row
-        # is skipped until its pause is over, then tried again. Never blocks the run.
-        breakers = load_breaker_states(db_path)
-        breaker_now = datetime.now(UTC)
-        paused_names = {s["name"] for s in active_sources
-                        if s["name"] in breakers and breakers[s["name"]].is_paused(breaker_now)}
-        for name in sorted(paused_names):
-            state = breakers[name]
-            reason = paused_reason(state)
-            logger.warning("Skipping source %s: %s", name, reason)
-            stats.by_source[name] = {
-                "collected": 0, "accepted": 0, "errors": 0, "status": "paused", "reason": reason,
-                "paused_until": state.paused_until.isoformat() if state.paused_until else None,
-                "consecutive_failures": state.consecutive_failures,
-            }
-        active_sources = [s for s in active_sources if s["name"] not in paused_names]
+        selection = select_sources(
+            source_registry.all_sources, skipped_types=skipped_source_types,
+            skip_reasons=skip_reasons, db_path=db_path)
+        stats.by_source.update(selection.not_run_rows)
+        active_sources = selection.runnable
 
         all_jobs: list[Job] = []
 
@@ -570,32 +531,7 @@ def run_pipeline(
                 stats.collected = len(all_jobs)
                 _collect_reporter(_sources_done)
 
-        # Each source that ran moves its breaker: a success closes it, a failure counts,
-        # the third failure in a row pauses the source (its row says until when).
-        # A run where (nearly) every source got no HTTP answer at all is this machine's
-        # outage, not the sources' failure: no breaker moves.
-        ran_rows = [stats.by_source.get(cfg["name"], {}) for cfg in active_sources]
-        if is_network_outage(ran_rows):
-            for row in ran_rows:
-                row["network_outage"] = True
-            stats.errors.append("No source could be reached (network down?): failed sources are not counted "
-                                "towards their circuit breaker this run")
-            active_sources_for_breaker: list[dict[str, Any]] = []
-        else:
-            active_sources_for_breaker = active_sources
-        updated_breakers = []
-        for cfg in active_sources_for_breaker:
-            name = cfg["name"]
-            row = stats.by_source.get(name, {})
-            state = next_breaker_state(breakers.get(name) or BreakerState(source=name),
-                                       row.get("status"), row.get("reason"), breaker_now)
-            if state.consecutive_failures:
-                row["consecutive_failures"] = state.consecutive_failures
-            if state.paused_until is not None:
-                row["paused_until"] = state.paused_until.isoformat()
-            if name in breakers or state.consecutive_failures:
-                updated_breakers.append(state)
-        save_breaker_states(db_path, updated_breakers)
+        stats.errors.extend(settle_breakers(selection, stats.by_source, db_path))
 
         # Inject pre-collected LinkedIn jobs from the staging snapshot.
         # These arrive as proper Job objects, bypassing the collector executor,
