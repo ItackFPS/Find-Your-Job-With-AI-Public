@@ -7,7 +7,9 @@ import {
 } from '../api/client'
 import { Button, Card, ErrorState, LanguagePicker, LoadingState, Stepper } from '../components'
 import { BackgroundCard, ModelDownloadCard, ONBOARDING_QUERY_KEY, SourcesCard } from '../components/settings'
-import { CheckboxGroup, DomainPicker, HomePicker } from './Profile'
+import { CheckboxGroup } from './profile/Controls'
+import { DomainPicker } from './profile/DomainPicker'
+import { HomePicker } from './profile/LocationEditors'
 
 const STEPS = ['welcome', 'profile', 'sources', 'model', 'background', 'done'] as const
 const LEVELS: CareerLevel[] = ['internship', 'alternance', 'graduate', 'junior', 'mid', 'senior', 'lead', 'manager']
