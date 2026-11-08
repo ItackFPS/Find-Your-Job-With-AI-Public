@@ -94,10 +94,13 @@ function Invoke-Launcher([string]$Root, [string[]]$Arguments) {
         -WorkingDirectory $Root -WindowStyle Hidden -PassThru -Wait
     return $p.ExitCode
 }
-function Assert-NoScan([string]$When) {
-    # raw body: PowerShell turns an empty JSON array into $null, and @($null) has one element
-    $raw = (Invoke-WebRequest -Uri "$Base/api/pipeline/runs" -UseBasicParsing -TimeoutSec 10).Content.Trim()
-    Check ($raw -eq "[]") "$When : no pipeline run was started (runs: $($raw.Substring(0, [Math]::Min(80, $raw.Length))))"
+function Assert-NoScan([string]$When, [switch]$ProfileSaved) {
+    # Once a profile is saved the daily search is meant to run (when_profile_saved); before, nothing may.
+    if (-not $ProfileSaved) {
+        # raw body: PowerShell turns an empty JSON array into $null, and @($null) has one element
+        $raw = (Invoke-WebRequest -Uri "$Base/api/pipeline/runs" -UseBasicParsing -TimeoutSec 10).Content.Trim()
+        Check ($raw -eq "[]") "$When : no pipeline run was started (runs: $($raw.Substring(0, [Math]::Min(80, $raw.Length))))"
+    }
     foreach ($source in "linkedin", "hellowork") {
         $s = Get-Json "/api/$source/status"
         Check ($null -ne $s -and -not $s.is_scanning -and $null -eq $s.last_scan) "$When : no $source scan started (state $($s.state))"
@@ -270,7 +273,7 @@ print(json.dumps(out))
     Check ($code -eq 0) "second launch exits 0 (reuses the running app)"
     $h2 = Get-Json "/api/health"
     Check ($h2 -and $h2.pid -eq $h.pid) "same backend process (pid $($h.pid)), no duplicate"
-    $backends = @(Get-CimInstance Win32_Process -Filter "Name = 'python.exe'" |
+    $backends = @(Get-CimInstance Win32_Process -Filter "Name = 'python.exe' OR Name = 'pythonw.exe'" |
         Where-Object { $_.ExecutablePath -like "$App\*" -and $_.CommandLine -match "uvicorn" })
     Check ($backends.Count -eq 1) "exactly one backend process from this install ($($backends.Count))"
 
@@ -291,7 +294,7 @@ print(json.dumps(out))
     $h3 = Wait-Health
     Check ($null -ne $h3) "backend healthy again"
     Check ((Get-Json "/api/profile").target_skills -contains $Marker) "setting kept across the restart"
-    Assert-NoScan "restart"
+    Assert-NoScan "restart" -ProfileSaved
 
     if ($Installer) {
         # -- 6. upgrade while running -------------------------------------------------------------
@@ -307,7 +310,7 @@ print(json.dumps(out))
         $h4 = Wait-Health
         Check ($null -ne $h4) "upgraded app starts"
         Check ((Get-Json "/api/profile").target_skills -contains $Marker) "setting kept across the upgrade"
-        Assert-NoScan "after upgrade"
+        Assert-NoScan "after upgrade" -ProfileSaved
 
         # -- 7. uninstall ------------------------------------------------------------------------
         Step "Uninstall (silent)"
