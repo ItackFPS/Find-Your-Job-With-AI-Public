@@ -1118,6 +1118,16 @@ export interface SourceOverview {
   breaker: SourceBreaker | null
 }
 
+export interface EmbeddingModelStatus {
+  state: 'missing' | 'downloading' | 'ready' | 'failed'
+  total_bytes: number
+  downloaded_bytes: number
+  error: 'offline' | 'disk_full' | 'corrupt' | 'failed' | null
+}
+export const getEmbeddingModel = () =>
+  api.get<EmbeddingModelStatus>('/embedding-model').then(r => r.data)
+export const startEmbeddingModelDownload = () =>
+  api.post<EmbeddingModelStatus>('/embedding-model/download').then(r => r.data)
 export const getBackgroundSettings = () =>
   api.get<BackgroundSettings>('/settings/background').then(r => r.data)
 export const updateBackgroundSettings = (changes: Partial<BackgroundSettings>) =>

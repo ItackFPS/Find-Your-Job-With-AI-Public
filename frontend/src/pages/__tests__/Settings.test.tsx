@@ -82,6 +82,7 @@ function renderPage() {
 beforeEach(() => {
   calls.length = 0
   routes = {
+    'GET /embedding-model': { state: 'ready', total_bytes: 1, downloaded_bytes: 1, error: null },
     'GET /settings/background': { enabled: true, daily_time: '08:00' },
     'GET /scheduler/status': scheduler,
     'GET /sources/overview': { sources },

@@ -1197,6 +1197,23 @@
     "title": "Paramètres",
     "subtitle": "Sources et collecte en arrière-plan : ce que l'application collecte, quand, et comment ça s'est passé.",
     "loadFailed": "Impossible de charger cette section. L'application est-elle toujours lancée ?",
+    "model": {
+      "title": "Modèle local de rapprochement",
+      "subtitle": "Compare chaque offre à votre profil, sur cet ordinateur. Rien n’est envoyé à un service dans le cloud.",
+      "ready": "Le modèle est installé.",
+      "missing": "Le modèle n’est pas encore installé. Il pèse environ {size} Mo, téléchargés une seule fois depuis Hugging Face.",
+      "download": "Télécharger le modèle",
+      "retry": "Réessayer",
+      "downloading": "Téléchargement du modèle…",
+      "progress": "{done} / {total} Mo",
+      "optional": "Vous pouvez continuer à utiliser l’application. Les recherches fonctionnent sans le modèle : les offres sont alors classées par les règles seules.",
+      "error": {
+        "offline": "Le téléchargement n’a pas pu démarrer ou se terminer. Vérifiez votre connexion internet, puis réessayez.",
+        "disk_full": "L’espace disque libre est insuffisant. Libérez de la place, puis réessayez.",
+        "corrupt": "Le fichier téléchargé n’a pas passé le contrôle d’intégrité et a été supprimé. Réessayez.",
+        "failed": "Le téléchargement a échoué. Réessayez."
+      }
+    },
     "background": {
       "title": "Collecte en arrière-plan",
       "subtitle": "L'application cherche de nouvelles offres une fois par jour, même fenêtre fermée.",

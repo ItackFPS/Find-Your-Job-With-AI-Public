@@ -59,6 +59,7 @@ from src.api.routes import (
     dashboard,
     decisions,
     departments,
+    embedding_model,
     esco,
     feedback,
     geo,
@@ -466,6 +467,7 @@ app.include_router(calibration.router)
 app.include_router(ai.router)
 app.include_router(sources.router)
 app.include_router(privacy.router)
+app.include_router(embedding_model.router)
 
 # Must match src/launcher/core.py APP_ID: the launcher recognises this backend by it.
 APP_ID = "find-your-job-with-ai"
