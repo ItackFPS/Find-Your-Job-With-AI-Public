@@ -133,8 +133,7 @@ _FT_API_RESTRICTED = (
 
 _INDEED_OFF = (
     "Indeed is off. It is an unofficial source (Indeed has no public API), so it only "
-    "runs if you choose it; the other sources still run. To turn it on, set "
-    '"unofficial_sources": {"indeed": true} in data/settings.json (a Settings switch is coming).'
+    "runs if you choose it, in Settings › Sources; the other sources still run."
 )
 
 
