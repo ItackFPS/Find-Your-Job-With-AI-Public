@@ -89,6 +89,34 @@
       "metierPages": "{count, plural, one {# page métier traitée} other {# pages métier traitées}}"
     }
   },
+  "onboarding": {
+    "title": "Configurer Find Your Job With AI",
+    "progress": "Progression de la configuration",
+    "loadFailed": "Impossible de charger la configuration. L’application est-elle toujours lancée ?",
+    "next": "Suivant",
+    "back": "Retour",
+    "skip": "Ignorer la configuration",
+    "steps": { "welcome": "Bienvenue", "profile": "Votre recherche", "sources": "Sources", "model": "Rapprochement", "background": "Recherche quotidienne", "done": "Terminer" },
+    "welcome": {
+      "title": "Bienvenue",
+      "intro": "Quelques étapes, aucun fichier à modifier, aucune commande à saisir. Tout reste sur cet ordinateur et vous pourrez tout changer ensuite.",
+      "scope": "Cette version est conçue pour les métiers de l’informatique et du numérique. Les autres métiers passent par la recherche par mots-clés, avec moins d’offres France Travail."
+    },
+    "profile": {
+      "title": "Que recherchez-vous ?",
+      "subtitle": "La recherche en découle. Rien n’est collecté tant que vous n’avez pas enregistré.",
+      "later": "Vous pourrez ajouter vos compétences, postes et diplômes plus tard dans Profil.",
+      "needed": "Choisissez au moins un domaine et votre commune.",
+      "saveFailed": "Impossible d’enregistrer votre profil. Réessayez."
+    },
+    "done": {
+      "title": "Tout est prêt",
+      "body": "L’application cherche désormais d’elle-même une fois par jour. Vous pouvez lancer la première recherche maintenant ; elle peut durer plusieurs minutes.",
+      "search": "Lancer ma première recherche",
+      "later": "Pas maintenant",
+      "failed": "Impossible de lancer. Réessayez."
+    }
+  },
   "dashboard": {
     "title": "Tableau de bord",
     "jobsInDb": "{count, number} offres en base",

@@ -1128,6 +1128,15 @@ export const getEmbeddingModel = () =>
   api.get<EmbeddingModelStatus>('/embedding-model').then(r => r.data)
 export const startEmbeddingModelDownload = () =>
   api.post<EmbeddingModelStatus>('/embedding-model/download').then(r => r.data)
+export interface OnboardingState {
+  started: boolean
+  step: number
+  completed: boolean
+}
+export const getOnboarding = () =>
+  api.get<OnboardingState>('/settings/onboarding').then(r => r.data)
+export const updateOnboarding = (changes: Partial<Pick<OnboardingState, 'step' | 'completed'>>) =>
+  api.put<OnboardingState>('/settings/onboarding', changes).then(r => r.data)
 export const getBackgroundSettings = () =>
   api.get<BackgroundSettings>('/settings/background').then(r => r.data)
 export const updateBackgroundSettings = (changes: Partial<BackgroundSettings>) =>

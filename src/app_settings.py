@@ -54,6 +54,9 @@ NOTIFICATION_AVAILABLE: dict[str, bool] = {
     "saved_expiring": False,  # TODO(F6.6)
 }
 
+# The first-run setup's last step (frontend/src/pages/Onboarding.tsx).
+ONBOARDING_MAX_STEP = 5
+
 _lock = threading.Lock()
 
 
@@ -190,6 +193,45 @@ def parse_daily_time(value: Any) -> tuple[int, int] | None:
         return None
     hour, minute = int(parts[0]), int(parts[1])
     return (hour, minute) if 0 <= hour <= 23 and 0 <= minute <= 59 else None
+
+
+def onboarding_state(path: Path | None, profile_saved: bool) -> dict[str, Any]:
+    """The first-run setup: ``{"started", "step", "completed"}``. Once begun, its stored state
+    decides. Before that, an install with a saved profile counts as set up (an upgraded install
+    is not sent through a setup it does not need)."""
+    stored = _read(path).get("onboarding") if path is not None else None
+    if not isinstance(stored, dict):
+        return {"started": False, "step": 0, "completed": profile_saved}
+    step = stored.get("step")
+    return {
+        "started": True,
+        "step": step if isinstance(step, int) and not isinstance(step, bool) and 0 <= step <= ONBOARDING_MAX_STEP else 0,
+        "completed": stored.get("completed") is True,
+    }
+
+
+def update_onboarding(path: Path, changes: Mapping[str, Any]) -> dict[str, Any]:
+    """Apply ``changes`` (``step``: int, ``completed``: bool) and return the state. Raises
+    ValueError for an unknown key or an invalid value; nothing is written then."""
+    unknown = sorted(set(changes) - {"step", "completed"})
+    if unknown:
+        raise ValueError(f"unknown onboarding settings: {', '.join(unknown)}")
+    if "completed" in changes and not isinstance(changes["completed"], bool):
+        raise ValueError("completed takes true or false")
+    if "step" in changes:
+        step = changes["step"]
+        if not isinstance(step, int) or isinstance(step, bool) or not 0 <= step <= ONBOARDING_MAX_STEP:
+            raise ValueError(f"step takes a number from 0 to {ONBOARDING_MAX_STEP}")
+    with _lock:
+        data = _read(path)
+        stored = data.get("onboarding")
+        merged = {"step": 0, "completed": False, **(stored if isinstance(stored, dict) else {}), **changes}
+        data["onboarding"] = merged
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
+        os.replace(tmp, path)
+    return onboarding_state(path, False)
 
 
 def background_settings(path: Path | None) -> dict[str, Any]:
