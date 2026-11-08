@@ -120,6 +120,12 @@ The install folder holds both the application and your data:
   first starts, it copies the database to `data\backups\jobs-upgrade-<version>-<time>.db`
   and every configuration file it changes to `data\backups\config-<time>\`, then upgrades
   the database and the configuration in place.
+- **Restore the database from before an upgrade:** stop the app. In `data\`, delete
+  `jobs.db`, `jobs.db-wal` and `jobs.db-shm`, then copy
+  `data\backups\jobs-upgrade-<version>-<time>.db` to `data\jobs.db`. Start the app: it
+  makes a new backup and upgrades the restored database again. Anything found or changed
+  since that upgrade is lost. To undo configuration changes too, copy the files from
+  `data\backups\config-<time>\` back to `config\`.
 - **Uninstall:** Settings → Apps → **Find Your Job With AI** → Uninstall (or the Start
   Menu entry). The application files and shortcuts are removed; you are then asked whether
   to delete your data too (default **No**). A silent uninstall always keeps the data. To
