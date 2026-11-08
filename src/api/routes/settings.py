@@ -4,6 +4,8 @@ GET /api/settings/notifications  — the desktop notification categories, their 
 PUT /api/settings/notifications  — turn categories on or off: {"categories": {"source_paused": true}}
 GET /api/settings/background     — background collection: {"enabled": true, "daily_time": "08:00"}
 PUT /api/settings/background     — change either value (issue #80)
+GET /api/settings/autostart      — start with Windows: {"supported": true, "enabled": false}
+PUT /api/settings/autostart      — turn it on or off: {"enabled": true}
 GET /api/settings/data           — database size, offers by status, cleanup choices and state (issue #86)
 POST /api/settings/data/cleanup  — remove expired offers older than N days, then compact: {"older_than_days": 90}
 """
@@ -17,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, Field, StrictInt
+from pydantic import BaseModel, Field, StrictBool, StrictInt
 
 from src.app_settings import (
     NOTIFICATION_AVAILABLE,
@@ -27,7 +29,10 @@ from src.app_settings import (
     update_notification_settings,
 )
 
+from src.launcher.autostart import Autostart
+
 router = APIRouter(prefix="/api/settings", tags=["settings"])
+logger = logging.getLogger(__name__)
 
 
 class NotificationSettingsIn(BaseModel):
@@ -75,10 +80,47 @@ def put_background_settings(body: BackgroundSettingsIn, request: Request) -> dic
 
 
 # ---------------------------------------------------------------------------
-# Settings › Data (issue #86)
+# Start with Windows (M3): the same per-user Run value as the tray menu
 # ---------------------------------------------------------------------------
 
-logger = logging.getLogger(__name__)
+
+class AutostartIn(BaseModel):
+    enabled: StrictBool
+
+
+def _autostart(request: Request) -> Autostart:
+    # The install root: the folder holding config/ (and, once installed, runtime/).
+    return Autostart(Path(request.app.state.config_dir).resolve().parent)
+
+
+def _autostart_state(autostart: Autostart) -> dict[str, bool]:
+    return {"supported": autostart.supported, "enabled": autostart.supported and autostart.enabled()}
+
+
+@router.get("/autostart")
+def get_autostart(request: Request) -> dict[str, bool]:
+    return _autostart_state(_autostart(request))
+
+
+@router.put("/autostart")
+def put_autostart(body: AutostartIn, request: Request) -> dict[str, bool]:
+    autostart = _autostart(request)
+    if not autostart.supported:
+        raise HTTPException(status_code=409, detail="autostart_unsupported")
+    try:
+        if body.enabled:
+            autostart.enable()
+        else:
+            autostart.disable()
+    except OSError as exc:
+        logger.warning("Could not change Start with Windows: %s", exc)
+        raise HTTPException(status_code=500, detail="autostart_failed") from exc
+    return _autostart_state(autostart)
+
+
+# ---------------------------------------------------------------------------
+# Settings › Data (issue #86)
+# ---------------------------------------------------------------------------
 
 
 class CleanupIn(BaseModel):

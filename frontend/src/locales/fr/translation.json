@@ -1200,6 +1200,9 @@
       "time": "Heure quotidienne (heure locale)",
       "saveTime": "Enregistrer l'heure",
       "timeHelp": "Si l'ordinateur est éteint à cette heure-là, l'exécution démarre dès le lancement de l'application. Après plusieurs jours, elle ne s'exécute qu'une fois.",
+      "autostart": "Démarrer avec Windows",
+      "autostartHelp": "L’application démarre dans la zone de notification à l’ouverture de session, sans fenêtre, pour que la recherche quotidienne puisse se lancer.",
+      "autostartFailed": "Impossible de modifier le démarrage avec Windows. Réessayez.",
       "saved": "Collecte en arrière-plan mise à jour.",
       "saveFailed": "Enregistrement impossible. Réessayez."
     },

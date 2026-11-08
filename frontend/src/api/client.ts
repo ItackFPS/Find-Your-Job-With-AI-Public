@@ -1122,6 +1122,14 @@ export const getBackgroundSettings = () =>
   api.get<BackgroundSettings>('/settings/background').then(r => r.data)
 export const updateBackgroundSettings = (changes: Partial<BackgroundSettings>) =>
   api.put<BackgroundSettings>('/settings/background', changes).then(r => r.data)
+export interface AutostartSettings {
+  supported: boolean
+  enabled: boolean
+}
+export const getAutostart = () =>
+  api.get<AutostartSettings>('/settings/autostart').then(r => r.data)
+export const updateAutostart = (enabled: boolean) =>
+  api.put<AutostartSettings>('/settings/autostart', { enabled }).then(r => r.data)
 export const getSchedulerStatus = () =>
   api.get<SchedulerStatus>('/scheduler/status').then(r => r.data)
 export const runScheduleNow = (id: string) =>
