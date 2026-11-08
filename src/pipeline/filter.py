@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from src.geo.places import COMMUNE
 from src.models.job import Job
+from src.pipeline.domain_scope import groups_outside_profile
 from src.pipeline.location_distance import (
     assess,
     describe,
@@ -194,20 +195,17 @@ def build_filter_config(profile: "JobSearchProfile", engine_cfg: dict[str, Any])
         title_include = skill_title_include
         description_include = skill_description_include
 
-    # Non-IT exclusion groups (excluded_title_keywords / non_it_title_functions)
-    # are grouped by the domain that opts back into them — a group's keywords
-    # only apply when the user hasn't selected that domain. See the comments
-    # above those two config sections in filters.yaml.
+    # Other-lines-of-work exclusion groups (excluded_title_keywords /
+    # non_it_title_functions): a group applies unless it is the user's own line of
+    # work — its key is a selected domain, or one of its words is in what the user
+    # typed (a domain, occupation or skill). See src/pipeline/domain_scope.py and
+    # the comments above those two config sections in filters.yaml.
     def _flatten_ungrouped(groups: dict[str, list[str]] | list[str]) -> list[str]:
         # Backward-compatible: a flat list (the pre-grouping shape) is always
-        # applied, regardless of domain — only a dict gets the opt-out check.
+        # applied, regardless of domain — only a dict gets the ownership check.
         if isinstance(groups, list):
             return groups
-        flat: list[str] = []
-        for group_key, keywords in groups.items():
-            if group_key not in profile.target_domains:
-                flat.extend(keywords)
-        return flat
+        return groups_outside_profile(groups, profile)
 
     # Contract type keywords (e.g. "alternance", "apprenti", "stagiaire") are
     # intentionally NOT added to title_include here. A contract type describes
