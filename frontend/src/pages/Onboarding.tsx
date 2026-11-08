@@ -33,7 +33,12 @@ function ProfileStep({ draft, onChange }: { draft: Profile; onChange: (p: Profil
       <div style={{ ...stack, marginTop: 'var(--space-3)' }}>
         <div>
           <span style={fieldLabel}>{t('profile.fields.targetDomains')}</span>
-          <DomainPicker values={draft.target_domains} onChange={v => onChange({ ...draft, target_domains: v })} />
+          <DomainPicker
+            values={draft.target_domains}
+            onChange={v => onChange({ ...draft, target_domains: v })}
+            occupations={draft.target_occupations ?? []}
+            onOccupationsChange={v => onChange({ ...draft, target_occupations: v })}
+          />
         </div>
         <div>
           <span style={fieldLabel}>{t('profile.fields.home')}</span>

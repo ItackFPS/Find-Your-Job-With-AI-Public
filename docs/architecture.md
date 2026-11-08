@@ -104,7 +104,7 @@ not counted).
 | Stage | Module | Purpose |
 |---|---|---|
 | Discovery | `src/discovery/registry.py` | Loads and validates source configurations from `config/sources.yaml` |
-| Query expansion | `src/discovery/query_expansion.py` | Generates multilingual search terms per source: a hardcoded baseline plus optional profile-/LLM-derived additions, capped at `max_queries` (default 12) |
+| Query expansion | `src/discovery/query_expansion.py` | Generates multilingual search terms per source: the applicable preset's baseline (`config/presets/`) plus the profile's own terms and optional LLM-derived additions, capped at `max_queries` (default 12) |
 | Collection | `src/collectors/*.py` | Fetches raw jobs from each active source; never raises — returns a `CollectorResult` with `.errors` populated on failure |
 | Normalization | `src/pipeline/normalize.py` | Maps source-specific data to the unified `Job` Pydantic model |
 | Validation | `src/pipeline/validate.py` | Checks required fields and data integrity |
