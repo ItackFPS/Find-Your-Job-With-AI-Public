@@ -93,10 +93,6 @@
     "title": "Dashboard",
     "jobsInDb": "{count, number} jobs in DB",
     "pipelineRunning": "⟳ Pipeline running…",
-    "ai": {
-      "label": "AI Understanding",
-      "description": "Deeper matching · slower run"
-    },
     "run": {
       "start": "Run pipeline",
       "starting": "Starting…",
@@ -206,14 +202,12 @@
     },
     "gettingStarted": {
       "title": "Getting started",
-      "intro": "Nothing is collected until you ask: opening the app starts no scan and no run.",
+      "intro": "Once you have saved your profile, the app searches by itself once a day. Until then it collects nothing.",
       "profile": "Fill in your <profile>Profile</profile>: target roles, skills, locations and languages. Searches are built from it.",
-      "sources": "Sources that need no account: {noAccount} (collected by <b>Run pipeline</b>), and {scanners} (<b>Scan now</b> on their cards below).",
+      "sources": "Sources that need no account: {noAccount}. {scanners} are unofficial sources: they stay off unless you choose them or press <b>Scan now</b> on their cards below.",
       "and": " and ",
-      "optional": "Optional sources, skipped until you add their credentials:",
-      "envFile": "Copy <example/> to <env/> in the application folder, fill in only those lines, then restart the app.",
-      "run": "Press <b>Run pipeline</b>. The first run downloads the local embedding model (about 470 MB) once. Local AI is off; no job data is sent to a cloud AI service.",
-      "envVarsJoin": " and "
+      "scope": "This version is tuned for IT and digital roles. Other occupations work through keyword search, with fewer offers from France Travail.",
+      "run": "To search now, press <b>Run pipeline</b>. The first run downloads the local matching model (about 470 MB) once. No job data is sent to a cloud AI service."
     }
   },
   "tiers": {
@@ -1220,6 +1214,9 @@
       "time": "Daily time (your local time)",
       "saveTime": "Save time",
       "timeHelp": "If the computer is off at that time, the run starts as soon as the app does. After several days off, it runs once.",
+      "autostart": "Start with Windows",
+      "autostartHelp": "The app starts in the notification area when you sign in, with no window, so the daily search can run.",
+      "autostartFailed": "Could not change Start with Windows. Try again.",
       "saved": "Background collection updated.",
       "saveFailed": "Could not save. Try again."
     },

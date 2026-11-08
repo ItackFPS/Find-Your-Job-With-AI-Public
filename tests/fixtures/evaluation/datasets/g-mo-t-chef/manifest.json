@@ -1,0 +1,14 @@
+{
+  "as_of": "2026-11-08T00:00:00+00:00",
+  "created_at": "2026-11-08T00:00:00+00:00",
+  "dataset_id": "g-mo-t-chef",
+  "job_count": 72,
+  "jobs_sha256": "8deb4de979e34c24b9319c80fe87b578f48f3262f0f96a44acc1000e7c1140e8",
+  "kind": "synthetic",
+  "label_scheme_version": 1,
+  "labels_sha256": "de35f13fd13f8b4ec8094365c2ec37a04548687e2dd16931c287bb00e51592d0",
+  "notes": "G-MO-T temporary gate (ADR 0028): synthetic, not the ADR 0023 criterion.",
+  "profile_sha256": "f960685227cf3ef2de3c4c7f7d81f4996602bbf994ad2fac29b2af967b81cbad",
+  "schema_version": 1,
+  "version": "1"
+}

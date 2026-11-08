@@ -105,13 +105,13 @@ def run_preflight(config_dir: str = "config", settings_path: str | Path | None =
 
     skip_reasons: dict[str, str] = {}
     if ft_unconfigured:
-        skip_reasons["france_travail"] = ft.detail or "credentials are not set"
+        skip_reasons["france_travail"] = _FT_API_RESTRICTED
     if indeed_off:
         skip_reasons["indeed"] = _INDEED_OFF
 
+    # An unconfigured France Travail API is the normal state of a new install (D4, ADR 0028): it is
+    # listed as skipped with skip_reasons, and is not an error of the run.
     degraded_errors: list[str] = []
-    if ft_unconfigured:
-        degraded_errors.append(f"France Travail skipped for this run: {ft.detail}")
 
     result = PreflightResult(
         france_travail=ft, status=status, ready=ft_ok,
@@ -125,6 +125,11 @@ def run_preflight(config_dir: str = "config", settings_path: str | Path | None =
 # ---------------------------------------------------------------------------
 # Indeed
 # ---------------------------------------------------------------------------
+
+_FT_API_RESTRICTED = (
+    "Not required. The France Travail API is restricted and has no access set up here; "
+    "the France Travail website and the other sources still run."
+)
 
 _INDEED_OFF = (
     "Indeed is off. It is an unofficial source (Indeed has no public API), so it only "

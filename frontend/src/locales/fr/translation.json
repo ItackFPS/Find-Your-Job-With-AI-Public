@@ -93,10 +93,6 @@
     "title": "Tableau de bord",
     "jobsInDb": "{count, number} offres en base",
     "pipelineRunning": "⟳ Pipeline en cours…",
-    "ai": {
-      "label": "Compréhension IA",
-      "description": "Rapprochement plus fin · exécution plus lente"
-    },
     "run": {
       "start": "Lancer le pipeline",
       "starting": "Démarrage…",
@@ -206,14 +202,12 @@
     },
     "gettingStarted": {
       "title": "Bien démarrer",
-      "intro": "Rien n’est collecté sans votre demande : ouvrir l’application ne lance ni scan ni exécution.",
+      "intro": "Une fois votre profil enregistré, l’application cherche d’elle-même une fois par jour. D’ici là, elle ne collecte rien.",
       "profile": "Remplissez votre <profile>profil</profile> : postes visés, compétences, lieux et langues. Les recherches en découlent.",
-      "sources": "Sources sans compte : {noAccount} (collectées par <b>Lancer le pipeline</b>), et {scanners} (<b>Lancer le scan</b> sur leurs cartes ci-dessous).",
+      "sources": "Sources sans compte : {noAccount}. {scanners} sont des sources non officielles : elles restent désactivées sauf si vous les choisissez ou cliquez sur <b>Lancer le scan</b> sur leurs cartes ci-dessous.",
       "and": " et ",
-      "optional": "Sources facultatives, ignorées tant que leurs identifiants ne sont pas renseignés :",
-      "envFile": "Copiez <example/> en <env/> dans le dossier de l’application, remplissez seulement ces lignes, puis relancez l’application.",
-      "run": "Cliquez sur <b>Lancer le pipeline</b>. La première exécution télécharge une seule fois le modèle d’embeddings local (environ 470 Mo). L’IA locale est désactivée ; aucune donnée d’offre n’est envoyée à un service d’IA dans le cloud.",
-      "envVarsJoin": " et "
+      "scope": "Cette version est conçue pour les métiers de l’informatique et du numérique. Les autres métiers passent par la recherche par mots-clés, avec moins d’offres France Travail.",
+      "run": "Pour chercher tout de suite, cliquez sur <b>Lancer le pipeline</b>. La première exécution télécharge une seule fois le modèle local de rapprochement (environ 470 Mo). Aucune donnée d’offre n’est envoyée à un service d’IA dans le cloud."
     }
   },
   "tiers": {
@@ -1220,6 +1214,9 @@
       "time": "Heure quotidienne (heure locale)",
       "saveTime": "Enregistrer l'heure",
       "timeHelp": "Si l'ordinateur est éteint à cette heure-là, l'exécution démarre dès le lancement de l'application. Après plusieurs jours, elle ne s'exécute qu'une fois.",
+      "autostart": "Démarrer avec Windows",
+      "autostartHelp": "L’application démarre dans la zone de notification à l’ouverture de session, sans fenêtre, pour que la recherche quotidienne puisse se lancer.",
+      "autostartFailed": "Impossible de modifier le démarrage avec Windows. Réessayez.",
       "saved": "Collecte en arrière-plan mise à jour.",
       "saveFailed": "Enregistrement impossible. Réessayez."
     },
