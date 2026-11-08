@@ -456,3 +456,13 @@ def test_domains_matching_no_occupation_page_are_reported(monkeypatch) -> None:
     result = FranceTravailWebCollector({"target_domains": ["Finance"], "departments": ["83"],
                                         "rate_limit_delay": 0}).collect()
     assert result.jobs == [] and "target domain" in result.errors[0]
+
+
+@pytest.mark.parametrize(("keyword", "slug"), [
+    ("Exploitant agricole", "agriculteur"),            # ROME "Exploitant / Exploitante agricole"
+    ("Développeur web", "developpeur-web"),            # ROME "Développeur / Développeuse web"
+    ("Cuisinier de collectivité", "cuisinier"),        # ROME "Cuisinier / Cuisinière de collectivité"
+])
+def test_rome_keywords_name_sitemap_occupations(keyword: str, slug: str) -> None:
+    """The profile stores the ROME keyword (feminine form dropped); it must reach the sitemap names."""
+    assert label_names_occupation(keyword, slug)

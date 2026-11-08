@@ -264,6 +264,7 @@ the internet):
 | Hugging Face Hub | first use of the embedding model; each later model load checks for updates unless `HF_HUB_OFFLINE=1` | model file requests (Hub telemetry is turned off) |
 | `PHASE2_LLM_ENDPOINT` (default `http://localhost:1234`); `--llm-endpoint` of the evaluation/lab tools | only AI-enabled runs, or those tools when you pass the flag | job text and profile summary. It is whatever you configure — keep it local; the launcher warns if it is not (its `status` check sends only a `GET /v1/models`) |
 | ESCO API (European Commission) | only when you run `scripts/setup_esco.py` | skill search terms |
+| France Travail ROME open data (`api.francetravail.fr`) | only when you run `scripts/setup_rome.py` | nothing about you: one download of the public ROME zip (about 4 MB) |
 | PyPI, npm registry | only when you install or update | package downloads |
 
 Not present: no analytics, no telemetry of this project, no update checks, no account,
@@ -279,7 +280,7 @@ or fonts.
 the dashboard, job details and explanations, feedback, the review queue, the profile
 editor, evaluation replays, and AI stages against a local LLM. Collecting jobs needs the
 internet — a run without it finds no new jobs (each source fails on its own without
-stopping the run) — and so does `scripts/setup_esco.py`.
+stopping the run) — and so do `scripts/setup_esco.py` and `scripts/setup_rome.py`.
 
 **What stays local:** your profile (`config/profile.local.yaml`), feedback, decisions,
 embeddings and every collected job (`data/`), logs (`logs/`) and secrets (`.env`). All of
