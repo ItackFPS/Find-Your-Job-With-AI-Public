@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  getProfile, updateProfile, confirmProfileReview, searchEscoSkills, searchEscoOccupations,
+  getProfile, updateProfile, confirmProfileReview, searchEscoSkills, searchEscoOccupations, searchRomeOccupations,
   getAllDepartments, searchPlaces,
-  type Profile, type EscoEntry, type EscoSuggestion, type FrenchDepartment, type LocationPreference,
+  type Profile, type EscoEntry, type EscoSuggestion, type RomeSuggestion, type FrenchDepartment, type LocationPreference,
   type HomePlace, type PlaceSuggestion, type RemotePolicy, type CareerLevel,
 } from '../api/client'
 import { useTranslation } from 'react-i18next'
@@ -472,7 +472,7 @@ const domainLabel = (value: string): string | undefined =>
 interface DomainSuggestion {
   value: string
   label: string
-  badge: 'Curated' | 'ESCO' | null
+  badge: 'Curated' | 'ROME' | 'ESCO' | null
 }
 
 export function DomainPicker({ values, onChange }: { values: string[]; onChange: (v: string[]) => void }) {
@@ -480,6 +480,7 @@ export function DomainPicker({ values, onChange }: { values: string[]; onChange:
   const [query, setQuery] = useState('')
   const trimmedQuery = query.trim()
   const [escoResults, setEscoResults] = useState<EscoSuggestion[]>([])
+  const [romeResults, setRomeResults] = useState<RomeSuggestion[]>([])
   const [escoLoading, setEscoLoading] = useState(false)
   const [activeIndex, setActiveIndex] = useState(-1)
   const [focused, setFocused] = useState(false)
@@ -490,6 +491,7 @@ export function DomainPicker({ values, onChange }: { values: string[]; onChange:
     const handler = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setEscoResults([])
+        setRomeResults([])
         setActiveIndex(-1)
       }
     }
@@ -500,18 +502,20 @@ export function DomainPicker({ values, onChange }: { values: string[]; onChange:
   useEffect(() => {
     if (trimmedQuery.length < 2) {
       setEscoResults([])
+      setRomeResults([])
       return
     }
     if (debounceRef.current) clearTimeout(debounceRef.current)
     setEscoLoading(true)
     debounceRef.current = setTimeout(() => {
-      searchEscoOccupations(trimmedQuery, 'en', 8)
-        .then(results => {
-          setEscoResults(results.filter(r => !includesCaseInsensitive(values, r.keyword)))
-          setActiveIndex(-1)
-        })
+      // ESCO and ROME are independent local indexes: either may be missing or fail.
+      const esco = searchEscoOccupations(trimmedQuery, 'en', 8)
+        .then(results => setEscoResults(results.filter(r => !includesCaseInsensitive(values, r.keyword))))
         .catch(() => setEscoResults([]))
-        .finally(() => setEscoLoading(false))
+      const rome = searchRomeOccupations(trimmedQuery, 8)
+        .then(results => setRomeResults(results.filter(r => !includesCaseInsensitive(values, r.keyword))))
+        .catch(() => setRomeResults([]))
+      Promise.all([esco, rome]).finally(() => { setActiveIndex(-1); setEscoLoading(false) })
     }, 300)
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -528,16 +532,24 @@ export function DomainPicker({ values, onChange }: { values: string[]; onChange:
   // match already shown, to avoid near-duplicate rows (e.g. curated
   // "Software Development" next to ESCO "software development" verbatim).
   const curatedLabelsLower = new Set(curatedMatches.map(c => c.label.toLowerCase()))
+  // ROME (France Travail's own job directory, French labels) comes before ESCO. An ESCO row
+  // repeating a ROME keyword is dropped.
+  const romeMatches: DomainSuggestion[] = romeResults
+    .filter(r => !curatedLabelsLower.has(r.label.toLowerCase()) && !curatedLabelsLower.has(r.keyword.toLowerCase()))
+    .map(r => ({ value: r.keyword, label: r.label, badge: 'ROME' as const }))
+  const shownLower = new Set([...curatedLabelsLower, ...romeMatches.map(m => m.value.toLowerCase()),
+    ...romeMatches.map(m => m.label.toLowerCase())])
   const escoMatches: DomainSuggestion[] = escoResults
-    .filter(r => !curatedLabelsLower.has(r.label.toLowerCase()))
+    .filter(r => !shownLower.has(r.label.toLowerCase()) && !shownLower.has(r.keyword.toLowerCase()))
     .map(r => ({ value: r.keyword, label: r.label, badge: r.is_esco ? ('ESCO' as const) : null }))
 
-  const suggestions = [...curatedMatches, ...escoMatches].slice(0, 10)
+  const suggestions = [...curatedMatches, ...romeMatches, ...escoMatches].slice(0, 10)
 
   const addValue = (v: string) => {
     if (!includesCaseInsensitive(values, v)) onChange([...values, v])
     setQuery('')
     setEscoResults([])
+    setRomeResults([])
     setActiveIndex(-1)
   }
 
@@ -552,6 +564,7 @@ export function DomainPicker({ values, onChange }: { values: string[]; onChange:
       setActiveIndex(i => Math.max(i - 1, -1))
     } else if (e.key === 'Escape') {
       setEscoResults([])
+      setRomeResults([])
       setActiveIndex(-1)
     } else if (e.key === 'Enter') {
       e.preventDefault()

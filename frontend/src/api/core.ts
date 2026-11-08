@@ -1,5 +1,5 @@
 import { api } from './http'
-import type { Dashboard, EscoSuggestion, Job, PipelineRun, Profile, ProfileReview, RunStats, ScoreBreakdown } from './types'
+import type { Dashboard, EscoSuggestion, Job, PipelineRun, Profile, ProfileReview, RomeSuggestion, RunStats, ScoreBreakdown } from './types'
 
 // ---- Live pipeline progress (SSE) ------------------------------------------
 
@@ -59,6 +59,9 @@ export const searchEscoSkills = (q: string, lang: 'en' | 'fr' = 'en', limit = 8)
 
 export const searchEscoOccupations = (q: string, lang: 'en' | 'fr' = 'en', limit = 8): Promise<EscoSuggestion[]> =>
   api.get<EscoSuggestion[]>('/esco/occupations', { params: { q, lang, limit } }).then(r => r.data)
+
+export const searchRomeOccupations = (q: string, limit = 8): Promise<RomeSuggestion[]> =>
+  api.get<RomeSuggestion[]>('/rome/occupations', { params: { q, limit } }).then(r => r.data)
 
 export interface FrenchDepartment {
   code: string   // e.g. "83", "2A", "971"
