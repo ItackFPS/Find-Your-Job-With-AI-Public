@@ -104,6 +104,8 @@
       "noMatch": "Aucune correspondance forte lors de la dernière recherche."
     },
     "run": {
+      "alreadyRunning": "Une recherche est déjà en cours.",
+      "failed": "La recherche n’a pas pu démarrer. Réessayez.",
       "start": "Lancer le pipeline",
       "starting": "Démarrage…",
       "running": "En cours…"

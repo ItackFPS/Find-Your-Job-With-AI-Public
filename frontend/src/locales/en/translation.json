@@ -104,6 +104,8 @@
       "noMatch": "No strong match in the last search."
     },
     "run": {
+      "alreadyRunning": "A search is already running.",
+      "failed": "The search could not start. Try again.",
       "start": "Run pipeline",
       "starting": "Starting…",
       "running": "Running…"

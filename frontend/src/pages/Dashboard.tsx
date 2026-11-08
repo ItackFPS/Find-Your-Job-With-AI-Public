@@ -550,7 +550,8 @@ export default function Dashboard() {
           )}
           {runError && (
             <span style={{ color: 'var(--color-error)', fontSize: 'var(--font-size-sm)' }}>
-              {(runError as Error).message}
+              {t((runError as { response?: { status?: number } }).response?.status === 409
+                ? 'dashboard.run.alreadyRunning' : 'dashboard.run.failed')}
             </span>
           )}
           <button
