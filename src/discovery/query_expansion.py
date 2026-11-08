@@ -128,7 +128,8 @@ class DiscoveryQueryExpander:
         """Return discovery queries for all supported source types.
 
         Returns a dict mapping source_type → list[query_string].
-        Expands for france_travail (FR), jobicy (EN slugs), remoteok (EN tags).
+        Expands for france_travail, indeed and eures (FR keywords), jobicy (EN industry
+        slugs) and remoteok (EN tags).
 
         ``yield_history_by_source``, if given, maps source_type -> the
         per-query yield history for that source (see
@@ -151,7 +152,34 @@ class DiscoveryQueryExpander:
                 profile, source="remoteok", language="en",
                 yield_history=yield_history_by_source.get("remoteok"),
             ),
+            "indeed": self.expand(
+                profile, source="indeed", language="fr",
+                yield_history=yield_history_by_source.get("indeed"),
+            ),
+            "eures": self.expand(
+                profile, source="eures", language="fr",
+                yield_history=yield_history_by_source.get("eures"),
+            ),
         }
+
+    def collector_config(self, profile: "JobSearchProfile", source: str) -> dict[str, Any]:
+        """Collector config keys the applicable presets supply for *source*.
+
+        Lists are concatenated (duplicates dropped, order kept), mappings merged.
+        The caller applies them only for keys the user's own source config leaves
+        empty, so explicit configuration always wins.
+        """
+        merged: dict[str, Any] = {}
+        for preset in self._presets_for(profile):
+            for key, value in preset.collector_config.get(source, {}).items():
+                if isinstance(value, list):
+                    current = merged.setdefault(key, [])
+                    current.extend(v for v in value if v not in current)
+                elif isinstance(value, dict):
+                    merged.setdefault(key, {}).update(value)
+                else:
+                    merged.setdefault(key, value)
+        return merged
 
     def expand(
         self,
@@ -282,8 +310,10 @@ class DiscoveryQueryExpander:
             for d in profile.target_domains
             if d.strip() and not any(p.owns(d) for p in presets)
         ]
+        # Occupations the user picked (French label first: these are French sources).
+        custom.extend(_occupation_terms(profile))
 
-        if source in ("france_travail", "apec"):
+        if source in ("france_travail", "apec", "indeed", "eures"):
             fr_terms = load_neutral(self._config_dir).contract_terms.get("fr", {})
             extra.extend(custom)
             for contract in profile.contract_types:
@@ -421,6 +451,18 @@ class DiscoveryQueryExpander:
 # ---------------------------------------------------------------------------
 # Module-level helpers (public — imported by tests and callers)
 # ---------------------------------------------------------------------------
+
+def _occupation_terms(profile: "JobSearchProfile") -> list[str]:
+    """Search words for the profile's target occupations (French label, else keyword)."""
+    terms: list[str] = []
+    for entry in profile.target_occupations:
+        term = (entry.label_fr or entry.keyword or entry.label).strip()
+        if "(" in term:
+            term = term[: term.index("(")].strip()
+        if term:
+            terms.append(term)
+    return terms
+
 
 def _noisy_replacements(presets: list[DiscoveryPreset]) -> dict[str, str | None]:
     """Merged noisy-query rules of the presets that apply."""

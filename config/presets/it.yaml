@@ -12,6 +12,8 @@
 # discovery.jobicy_industries   Jobicy industry slugs per selected domain
 # discovery.partition_*         terms used to split a saturated France Travail query
 # discovery.noisy_replacements  query -> safer query (null rejects the query)
+# discovery.collector_config    per source type: collector config keys (queries, categories,
+#                               occupations...) used when config/sources.yaml leaves them out
 name: it
 description: Discovery vocabulary for information-technology profiles. Applied when the profile selects
   one of applies_to_domains.
@@ -128,3 +130,155 @@ discovery:
     numerique: null
     système: null
     systeme: null
+  collector_config:
+    indeed:
+      queries:
+      - keyword: développeur python
+        location: France
+      - keyword: data engineer
+        location: France
+      - keyword: data analyst
+        location: France
+      - keyword: développeur javascript
+        location: France
+      - keyword: développeur php
+        location: France
+      - keyword: développeur node.js
+        location: France
+      - keyword: développeur web
+        location: France
+      - keyword: développeur frontend
+        location: France
+      - keyword: développeur backend
+        location: France
+      - keyword: développeur fullstack
+        location: France
+      - keyword: software engineer
+        location: France
+      - keyword: ingénieur logiciel
+        location: France
+      - keyword: ingénieur test
+        location: France
+      - keyword: qa engineer
+        location: France
+      - keyword: automation engineer
+        location: France
+      - keyword: devops engineer
+        location: France
+      - keyword: cloud engineer
+        location: France
+      - keyword: cybersecurity engineer
+        location: France
+      - keyword: ingénieur sécurité
+        location: France
+      - keyword: support informatique
+        location: France
+      - keyword: administrateur système
+        location: France
+      - keyword: ingénieur réseau
+        location: France
+      - keyword: alternance développeur
+        location: France
+    eures:
+      queries:
+      - keyword: développeur logiciel
+        location_codes:
+        - fr
+      - keyword: ingénieur informatique
+        location_codes:
+        - fr
+      - keyword: développeur web
+        location_codes:
+        - fr
+      - keyword: cybersécurité
+        location_codes:
+        - fr
+      - keyword: data
+        location_codes:
+        - fr
+      - keyword: devops
+        location_codes:
+        - fr
+      - keyword: software engineer
+        location_codes:
+        - fr
+      - keyword: developer
+        location_codes:
+        - fr
+      - keyword: software engineer
+        location_codes:
+        - be
+        - lu
+        - ch
+    weworkremotely:
+      categories:
+      - remote-programming-jobs
+      - remote-full-stack-programming-jobs
+      - remote-back-end-programming-jobs
+      - remote-front-end-programming-jobs
+      - remote-devops-sysadmin-jobs
+      - remote-design-jobs
+    france_travail_web:
+      occupations:
+        software_development:
+        - s28m7
+        - s29m2
+        - s28m1
+        - s28m9
+        - s28m6
+        - s28m24
+        - s28m20
+        - s28m21
+        - s29m4
+        - s28m16
+        - s28m28
+        - s29m20
+        - s6m2
+        web_development:
+        - s28m7
+        - s29m2
+        - s28m8
+        - s29m3
+        - s28m24
+        - s28m6
+        qa_testing:
+        - s28m10
+        - s6m2
+        data:
+        - s28m18
+        - s28m15
+        - s29m7
+        - s28m22
+        - s6m12
+        it_support:
+        - s28m5
+        - s6m2
+        systems:
+        - s28m11
+        - s28m23
+        - s6m3
+        networking:
+        - s28m11
+        - s28m19
+        devops:
+        - s28m23
+        - s28m11
+        - s6m2
+        cloud:
+        - s28m11
+        - s28m21
+        - s6m2
+        cybersecurity:
+        - s28m25
+        - s6m3
+        automation:
+        - s28m1
+        - s28m10
+        - s6m2
+        informatique:
+        - s6m2
+        - s6m3
+        - s28m7
+        - s28m2
+        - s28m3
+        - s28m1

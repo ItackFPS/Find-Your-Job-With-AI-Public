@@ -14,14 +14,25 @@ import pytest
 from src.collectors import base as base_module
 from src.collectors import france_travail_web as ftw
 from src.collectors.france_travail_web import (
-    OCCUPATIONS,
     FranceTravailWebCollector,
+    _slug_matches,
     parse_listing,
     parse_robots,
     robots_allows,
 )
+from src.discovery.presets import load_presets
 from src.pipeline.filter import matches_title_keywords
 from src.pipeline.normalize import normalize_jobs
+
+# The occupation-code table lives in the IT discovery preset; the orchestrator passes it
+# to the collector as ``occupations``.
+OCCUPATIONS = next(p for p in load_presets() if p.name == "it").collector_config[
+    "france_travail_web"]["occupations"]
+
+
+def _collector(cfg: dict) -> FranceTravailWebCollector:
+    return FranceTravailWebCollector({"occupations": OCCUPATIONS, **cfg})
+
 
 ROBOTS = """User-agent: *
 Disallow: /offres/recherchesenregistrees
@@ -140,7 +151,7 @@ class _Client:
 
 def test_collect_reads_only_pages_published_in_the_sitemap(monkeypatch) -> None:
     monkeypatch.setattr(ftw.httpx, "Client", _Client)
-    collector = FranceTravailWebCollector({"target_domains": ["web_development", "unknown_domain"],
+    collector = _collector({"target_domains": ["web_development", "unknown_domain"],
                                            "departments": ["83", "2a", "99"], "rate_limit_delay": 0})
     result = collector.collect()
     urls = _Client.last.urls
@@ -163,7 +174,7 @@ def test_collect_reads_only_pages_published_in_the_sitemap(monkeypatch) -> None:
 
 def test_page_cap_is_shared_across_departements(monkeypatch) -> None:
     monkeypatch.setattr(ftw.httpx, "Client", _Client)
-    FranceTravailWebCollector({"target_domains": ["web_development"], "departments": ["83", "2A"],
+    _collector({"target_domains": ["web_development"], "departments": ["83", "2A"],
                                "max_pages": 2, "rate_limit_delay": 0}).collect()
     listing_urls = _Client.last.urls[2:]
     assert len(listing_urls) == 2 and "/var/" in listing_urls[0] and "/corse-du-sud/" in listing_urls[1]
@@ -187,7 +198,7 @@ class _PinnedToABrokenNode(_Client):
 
 def test_no_session_pins_every_page_to_a_broken_backend(monkeypatch) -> None:
     monkeypatch.setattr(ftw.httpx, "Client", _PinnedToABrokenNode)
-    result = FranceTravailWebCollector({"target_domains": ["web_development"], "departments": ["83"],
+    result = _collector({"target_domains": ["web_development"], "departments": ["83"],
                                         "rate_limit_delay": 0}).collect()
     assert result.errors == []
     assert result.jobs
@@ -207,7 +218,7 @@ class _FailsOnce(_Client):
 def test_a_server_error_is_tried_once_more(monkeypatch) -> None:
     _FailsOnce.seen = set()
     monkeypatch.setattr(ftw.httpx, "Client", _FailsOnce)
-    result = FranceTravailWebCollector({"target_domains": ["web_development"], "departments": ["83"],
+    result = _collector({"target_domains": ["web_development"], "departments": ["83"],
                                         "rate_limit_delay": 0}).collect()
     assert result.errors == [] and result.jobs
 
@@ -221,13 +232,13 @@ def test_a_lasting_server_error_is_reported_per_page(monkeypatch) -> None:
             return httpx.Response(500, request=response.request)
 
     monkeypatch.setattr(ftw.httpx, "Client", Down)
-    result = FranceTravailWebCollector({"target_domains": ["web_development"], "departments": ["83"],
+    result = _collector({"target_domains": ["web_development"], "departments": ["83"],
                                         "rate_limit_delay": 0}).collect()
     assert result.jobs == [] and all(e.endswith("HTTP 500") for e in result.errors) and result.errors
 
 
 @pytest.mark.parametrize("cfg,needle", [
-    ({"target_domains": ["sales"], "departments": ["83"]}, "target domain"),
+    ({"target_domains": [], "departments": ["83"]}, "target domain"),
     ({"target_domains": ["data"], "departments": []}, "département"),
 ])
 def test_nothing_to_search_is_reported_not_raised(cfg, needle) -> None:  # noqa: ANN001
@@ -241,7 +252,7 @@ def test_unreachable_site_is_one_clear_error(monkeypatch) -> None:
             raise httpx.ConnectError("refused")
 
     monkeypatch.setattr(ftw.httpx, "Client", _Down)
-    result = FranceTravailWebCollector({"target_domains": ["data"], "departments": ["83"]}).collect()
+    result = _collector({"target_domains": ["data"], "departments": ["83"]}).collect()
     assert result.jobs == [] and "unreachable" in result.errors[0]
 
 
@@ -283,7 +294,7 @@ def test_robots_txt_not_served_means_nothing_is_crawled(monkeypatch, status, tex
         robots_text = text
 
     monkeypatch.setattr(ftw.httpx, "Client", _NoRobots)
-    result = FranceTravailWebCollector({"target_domains": ["web_development"], "departments": ["83"]}).collect()
+    result = _collector({"target_domains": ["web_development"], "departments": ["83"]}).collect()
     assert _NoRobots.last.urls == [f"{ftw.BASE}/robots.txt"]
     assert result.jobs == [] and len(result.errors) == 1
     assert "robots.txt" in result.errors[0] and f"HTTP {status}" in result.errors[0]
@@ -332,7 +343,7 @@ def test_sitemap_urls_outside_the_site_are_not_followed(monkeypatch) -> None:
 </urlset>""")
 
     monkeypatch.setattr(ftw.httpx, "Client", _Offsite)
-    result = FranceTravailWebCollector({"target_domains": ["web_development"], "departments": ["83"]}).collect()
+    result = _collector({"target_domains": ["web_development"], "departments": ["83"]}).collect()
     listing_urls = _Offsite.last.urls[2:]
     assert listing_urls and all(u.startswith(ftw.BASE + "/") for u in listing_urls)
     assert result.metadata["sitemap_offsite_skipped"] == 3
@@ -340,13 +351,13 @@ def test_sitemap_urls_outside_the_site_are_not_followed(monkeypatch) -> None:
 
 @pytest.mark.parametrize("configured,expected", [(0, 1.0), (0.2, 1.0), (-5, 1.0), (1.0, 1.0), (2.5, 2.5)])
 def test_rate_limit_is_never_below_one_second(configured, expected) -> None:  # noqa: ANN001
-    assert FranceTravailWebCollector({"rate_limit_delay": configured}).rate_limit_delay == expected
-    assert FranceTravailWebCollector({}).rate_limit_delay == 1.0
+    assert _collector({"rate_limit_delay": configured}).rate_limit_delay == expected
+    assert _collector({}).rate_limit_delay == 1.0
 
 
 def test_requests_are_spaced_by_the_rate_limit(monkeypatch, _no_sleep) -> None:  # noqa: ANN001
     monkeypatch.setattr(ftw.httpx, "Client", _Client)
-    FranceTravailWebCollector({"target_domains": ["web_development"], "departments": ["83"],
+    _collector({"target_domains": ["web_development"], "departments": ["83"],
                                "rate_limit_delay": 0}).collect()
     # every request after the first waited (the fake answers instantly), close to 1 s
     assert len(_no_sleep) == len(_Client.last.urls) - 1
@@ -385,9 +396,51 @@ def test_malformed_profile_domains_are_ignored() -> None:
 
 @pytest.mark.network
 def test_live_listing_pages_still_parse() -> None:
-    result = FranceTravailWebCollector({"target_domains": ["web_development"], "departments": ["69"],
+    result = _collector({"target_domains": ["web_development"], "departments": ["69"],
                                         "max_pages": 1}).collect()
     assert result.metadata["pages_planned"] >= 1, "France Travail no longer publishes these pages"
     assert result.jobs, result.errors
     job = result.jobs[0]
     assert job["title"] and job["location"] and job["url"].startswith("https://candidat.francetravail.fr/")
+
+
+# -- every line of work: occupations read by name ------------------------------------------
+
+NURSE_SITEMAP = """<urlset>
+<url><loc>https://candidat.francetravail.fr/offres/emploi/infirmier-infirmiere/var/s13m1d83</loc></url>
+<url><loc>https://candidat.francetravail.fr/offres/emploi/developpeur-web/var/s28m7d83</loc></url>
+<url><loc>https://candidat.francetravail.fr/offres/emploi/aide-soignant/var/s13m2d83</loc></url>
+</urlset>"""
+
+
+@pytest.mark.parametrize("term,slug,expected", [
+    ("infirmier", "infirmier-infirmiere", True),
+    ("infirmière", "infirmier-infirmiere", True),
+    ("Aide soignant", "aide-soignant", True),
+    ("électricien", "electricien-electricienne-du-batiment", True),
+    ("infirmier", "developpeur-web", False),
+    ("web development", "developpeur-web", False),
+    ("", "developpeur-web", False),
+    ("infirmier", "", False),
+])
+def test_slug_matches_is_accent_and_gender_tolerant(term, slug, expected) -> None:  # noqa: ANN001
+    assert _slug_matches(term, slug) is expected
+
+
+def test_a_domain_without_a_code_table_is_read_by_occupation_name(monkeypatch) -> None:  # noqa: ANN001
+    monkeypatch.setattr(ftw.httpx, "Client", _Client)
+    monkeypatch.setattr(_Client, "sitemap_text", NURSE_SITEMAP)
+    result = FranceTravailWebCollector({
+        "target_domains": ["infirmier"], "departments": ["83"], "rate_limit_delay": 0}).collect()
+    listing_urls = _Client.last.urls[2:]
+    assert [u.rsplit("/", 2)[-2] for u in listing_urls] == ["var"]
+    assert listing_urls[0].endswith("infirmier-infirmiere/var/s13m1d83")
+    assert result.jobs[0]["occupation"]["target_domains"] == ["infirmier"]
+
+
+def test_target_terms_from_occupations_are_read_by_name(monkeypatch) -> None:  # noqa: ANN001
+    monkeypatch.setattr(ftw.httpx, "Client", _Client)
+    monkeypatch.setattr(_Client, "sitemap_text", NURSE_SITEMAP)
+    FranceTravailWebCollector({
+        "target_terms": ["aide soignant"], "departments": ["83"], "rate_limit_delay": 0}).collect()
+    assert [u.rsplit("/", 3)[-3] for u in _Client.last.urls[2:]] == ["aide-soignant"]
