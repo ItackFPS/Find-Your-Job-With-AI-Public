@@ -419,7 +419,13 @@ domain_keywords:
       - systèmes d'information
       - responsable si
       - dsi
-    description: []
+      - admin sys
+      - administratrice systèmes
+      - exploitation informatique
+    description:
+      - windows server
+      - active directory
+      - vmware
 
   réseaux:
     title:
