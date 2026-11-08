@@ -1,0 +1,130 @@
+# IT discovery preset.
+#
+# Search vocabulary for information-technology profiles, moved out of
+# src/discovery/query_expansion.py so the code carries no profession-specific
+# terms. It applies when the profile's target_domains contains one of
+# applies_to_domains (case-insensitive). Add your own preset for another line of
+# work as another file in this folder: same keys, your own applies_to_domains.
+#
+# discovery.baseline            queries always sent to a source while the preset applies
+# discovery.domain_queries      extra France Travail / APEC queries per selected domain
+# discovery.contract_queries    extra queries per contract type
+# discovery.jobicy_industries   Jobicy industry slugs per selected domain
+# discovery.partition_*         terms used to split a saturated France Travail query
+# discovery.noisy_replacements  query -> safer query (null rejects the query)
+name: it
+description: Discovery vocabulary for information-technology profiles. Applied when the profile selects
+  one of applies_to_domains.
+applies_to_domains:
+- software_development
+- web_development
+- qa_testing
+- automation
+- data
+- it_support
+- systems
+- networking
+- cybersecurity
+- devops
+- cloud
+- informatique
+- développement logiciel
+- cybersécurité
+- réseaux
+- systèmes
+discovery:
+  baseline:
+    france_travail:
+    - informatique
+    - développement logiciel
+    - data
+    - cybersécurité
+    - intelligence artificielle
+    - test logiciel
+    - alternance informatique
+    jobicy:
+    - engineering
+    - cybersecurity
+    - admin
+    remoteok:
+    - python
+    - javascript
+    - devops
+    - react
+  domain_queries:
+    france_travail:
+      web_development:
+      - développement web
+      it_support:
+      - support informatique
+      systems:
+      - administrateur systèmes
+      networking:
+      - réseau informatique
+      devops:
+      - devops
+      cloud:
+      - cloud computing
+  contract_queries:
+    france_travail:
+      internship:
+      - stage informatique
+  jobicy_industries:
+    web_development:
+    - web-app-design
+    qa_testing:
+    - qa-testing
+  partition_vocabulary:
+  - développeur
+  - logiciel
+  - ingénieur
+  - technicien
+  - data
+  - cybersécurité
+  - devops
+  - web
+  - test
+  - cloud
+  - réseaux
+  - systèmes
+  - support
+  partition_affinity:
+    software_development:
+    - développeur
+    - logiciel
+    - ingénieur
+    web_development:
+    - web
+    - développeur
+    qa_testing:
+    - test
+    - logiciel
+    automation:
+    - devops
+    - logiciel
+    data:
+    - data
+    - logiciel
+    it_support:
+    - support
+    - technicien
+    systems:
+    - systèmes
+    - ingénieur
+    networking:
+    - réseaux
+    cybersecurity:
+    - cybersécurité
+    devops:
+    - devops
+    - cloud
+    cloud:
+    - cloud
+    - devops
+  noisy_replacements:
+    réseau: réseau informatique
+    reseau: réseau informatique
+    numérique: null
+    numerique: null
+    système: null
+    systeme: null

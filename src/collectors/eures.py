@@ -94,7 +94,8 @@ _ISO2_TO_COUNTRY: dict[str, str] = {
 #
 # Phase LATER / I15: the original 5 queries covered only software/data
 # roles, leaving cybersecurity/devops/QA — domains this profile also
-# targets, and which france_travail's own _STATIC_BASELINE already covers
+# targets, and which the IT discovery preset (config/presets/it.yaml) already
+# covers for france_travail
 # (see src/discovery/query_expansion.py) — entirely unrepresented here.
 # Widened the VOCABULARY only, not the geographic scope: location_codes
 # stay within the already French-speaking-country set every existing entry

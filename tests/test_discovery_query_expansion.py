@@ -8,7 +8,8 @@ Covers:
   - Noisy query rejection/replacement (_NOISY_QUERY_REPLACEMENTS)
   - Max query cap is respected
   - Duplicate queries are removed
-  - Unknown source type falls back to minimal default
+  - Unknown source type yields no queries (nothing profession-specific is invented)
+  - A profile outside IT gets its own terms and no IT vocabulary
   - expand_all() returns queries keyed by source type
   - _parse_query_list() handles various LLM response formats
   - _deduplicate_preserve_order() removes case-insensitive duplicates
@@ -24,11 +25,11 @@ from src.discovery.query_expansion import (
     DiscoveryExpansionResult,
     DiscoveryQueryExpander,
     DiscoveryQuerySet,
-    _FT_PARTITION_VOCABULARY,
     _apply_quality_filter,
     _deduplicate_preserve_order,
     _parse_query_list,
 )
+from src.discovery.presets import load_neutral, load_presets
 from src.models.profile import JobSearchProfile
 
 
@@ -48,11 +49,23 @@ def _make_profile(
     )
 
 
+# The IT vocabulary lives in config/presets/it.yaml, not in code.
+_IT_PRESET = next(p for p in load_presets() if p.name == "it")
+_FT_PARTITION_VOCABULARY = _IT_PRESET.partition_vocabulary
+_NOISY = _IT_PRESET.noisy_replacements
+
 _FULL_PROFILE = _make_profile(
     domains=["software_development", "qa_testing", "automation", "data"],
     skills=["python", "javascript"],
 )
 
+# A profile that selects the IT domain: the IT preset's baseline applies.
+_IT_PROFILE = _make_profile(domains=["software_development"])
+
+# Profiles outside IT, and a profile with no preferences at all.
+_NURSE_PROFILE = _make_profile(domains=["infirmier"], skills=["soins infirmiers"])
+_ELECTRICIAN_PROFILE = _make_profile(domains=["électricien"], contract_types=["alternance"])
+_ACCOUNTANT_PROFILE = _make_profile(domains=["comptable"], contract_types=["internship"])
 _EMPTY_PROFILE = _make_profile()
 
 # The 7 baseline queries for france_travail — used in many assertions.
@@ -155,17 +168,17 @@ class TestDeduplicatePreserveOrder:
 
 class TestApplyQualityFilter:
     def test_noisy_term_reseau_replaced(self) -> None:
-        accepted, rejected = _apply_quality_filter(["réseau"])
+        accepted, rejected = _apply_quality_filter(["réseau"], _NOISY)
         assert accepted == ["réseau informatique"]
         assert rejected == []
 
     def test_noisy_term_numerique_rejected(self) -> None:
-        accepted, rejected = _apply_quality_filter(["numérique"])
+        accepted, rejected = _apply_quality_filter(["numérique"], _NOISY)
         assert accepted == []
         assert "numérique" in rejected
 
     def test_noisy_term_systeme_rejected(self) -> None:
-        accepted, rejected = _apply_quality_filter(["système"])
+        accepted, rejected = _apply_quality_filter(["système"], _NOISY)
         assert accepted == []
         assert "système" in rejected
 
@@ -187,7 +200,7 @@ class TestApplyQualityFilter:
 
     def test_mixed_queries(self) -> None:
         queries = ["informatique", "réseau", "numérique", "data"]
-        accepted, rejected = _apply_quality_filter(queries)
+        accepted, rejected = _apply_quality_filter(queries, _NOISY)
         assert "informatique" in accepted
         assert "réseau informatique" in accepted
         assert "data" in accepted
@@ -209,21 +222,19 @@ class TestDiscoveryQueryExpanderBaseline:
         for q in _FT_BASELINE:
             assert q in result, f"Expected baseline query '{q}' in result"
 
-    def test_empty_profile_still_returns_baseline(self) -> None:
+    def test_it_profile_returns_exact_baseline(self) -> None:
         expander = self._make_expander()
-        result = expander.expand(_EMPTY_PROFILE, source="france_travail", language="fr")
-        for q in _FT_BASELINE:
-            assert q in result
+        result = expander.expand(_IT_PROFILE, source="france_travail", language="fr")
+        assert result == _FT_BASELINE
 
-    def test_baseline_always_non_empty(self) -> None:
+    def test_empty_profile_gets_no_profession_vocabulary(self) -> None:
         expander = self._make_expander()
-        result = expander.expand(_EMPTY_PROFILE, source="france_travail", language="fr")
-        assert len(result) > 0
+        assert expander.expand(_EMPTY_PROFILE, source="france_travail", language="fr") == []
 
-    def test_unknown_source_returns_informatique_fallback(self) -> None:
+    def test_unknown_source_returns_no_queries(self) -> None:
         expander = self._make_expander()
-        result = expander.expand(_EMPTY_PROFILE, source="unknown_source", language="en")
-        assert "informatique" in result
+        result = expander.expand(_IT_PROFILE, source="unknown_source", language="en")
+        assert result == []
 
     def test_result_has_no_duplicates(self) -> None:
         expander = self._make_expander()
@@ -241,7 +252,7 @@ class TestDiscoveryQueryExpanderProfile:
         return DiscoveryQueryExpander(llm_endpoint=None, max_queries=20)
 
     def test_internship_contract_adds_stage_informatique(self) -> None:
-        profile = _make_profile(contract_types=["internship"])
+        profile = _make_profile(domains=["software_development"], contract_types=["internship"])
         expander = self._make_expander()
         result = expander.expand(profile, source="france_travail", language="fr")
         assert "stage informatique" in result
@@ -273,13 +284,13 @@ class TestDiscoveryQueryExpanderProfile:
         assert long_skill not in result
 
     def test_noisy_skill_not_added_if_rejected(self) -> None:
-        profile = _make_profile(skills=["numérique"])
+        profile = _make_profile(domains=["software_development"], skills=["numérique"])
         expander = self._make_expander()
         result = expander.expand(profile, source="france_travail", language="fr")
         assert "numérique" not in result
 
     def test_alternance_contract_already_in_baseline(self) -> None:
-        profile = _make_profile(contract_types=["alternance"])
+        profile = _make_profile(domains=["software_development"], contract_types=["alternance"])
         expander = self._make_expander()
         result = expander.expand(profile, source="france_travail", language="fr")
         # "alternance informatique" is already in baseline — no duplicate added
@@ -315,7 +326,7 @@ class TestDiscoveryQueryExpanderLLM:
         resp = _llm_response(llm_unique)
 
         with patch("requests.post", return_value=resp):
-            result = expander.expand(_EMPTY_PROFILE, source="france_travail", language="fr")
+            result = expander.expand(_IT_PROFILE, source="france_travail", language="fr")
 
         for q in llm_unique:
             assert q in result, f"Expected LLM query '{q}' in result"
@@ -325,7 +336,7 @@ class TestDiscoveryQueryExpanderLLM:
         resp = _llm_response(["devops"])
 
         with patch("requests.post", return_value=resp):
-            result = expander.expand(_EMPTY_PROFILE, source="france_travail", language="fr")
+            result = expander.expand(_IT_PROFILE, source="france_travail", language="fr")
 
         for q in _FT_BASELINE:
             assert q in result
@@ -336,7 +347,7 @@ class TestDiscoveryQueryExpanderLLM:
         resp = _llm_response(["informatique", "devops"])
 
         with patch("requests.post", return_value=resp):
-            result = expander.expand(_EMPTY_PROFILE, source="france_travail", language="fr")
+            result = expander.expand(_IT_PROFILE, source="france_travail", language="fr")
 
         assert result.count("informatique") == 1
         assert "devops" in result
@@ -346,7 +357,7 @@ class TestDiscoveryQueryExpanderLLM:
         resp = _llm_response(["numérique", "devops"])
 
         with patch("requests.post", return_value=resp):
-            result = expander.expand(_EMPTY_PROFILE, source="france_travail", language="fr")
+            result = expander.expand(_IT_PROFILE, source="france_travail", language="fr")
 
         assert "numérique" not in result
         assert "devops" in result
@@ -356,7 +367,7 @@ class TestDiscoveryQueryExpanderLLM:
         resp = _llm_response(["réseau", "devops"])
 
         with patch("requests.post", return_value=resp):
-            result = expander.expand(_EMPTY_PROFILE, source="france_travail", language="fr")
+            result = expander.expand(_IT_PROFILE, source="france_travail", language="fr")
 
         assert "réseau" not in result
         assert "réseau informatique" in result
@@ -366,7 +377,7 @@ class TestDiscoveryQueryExpanderLLM:
         resp = _llm_response(["devops", "cloud", "kubernetes", "docker"])
 
         with patch("requests.post", return_value=resp):
-            result = expander.expand(_EMPTY_PROFILE, source="france_travail", language="fr")
+            result = expander.expand(_IT_PROFILE, source="france_travail", language="fr")
 
         assert len(result) == 3
 
@@ -375,7 +386,7 @@ class TestDiscoveryQueryExpanderLLM:
         resp = _llm_response(["devops"])
 
         with patch("requests.post", return_value=resp):
-            result = expander.expand(_EMPTY_PROFILE, source="france_travail", language="fr")
+            result = expander.expand(_IT_PROFILE, source="france_travail", language="fr")
 
         # First 3 should all come from baseline
         assert len(result) == 3
@@ -458,7 +469,7 @@ class TestDiscoveryQueryExpanderLLM:
         resp = _llm_response(["informatique", "devops", "devops"])
 
         with patch("requests.post", return_value=resp):
-            result = expander.expand(_EMPTY_PROFILE, source="france_travail", language="fr")
+            result = expander.expand(_IT_PROFILE, source="france_travail", language="fr")
 
         lower_result = [q.lower() for q in result]
         assert len(lower_result) == len(set(lower_result))
@@ -471,19 +482,19 @@ class TestDiscoveryQueryExpanderLLM:
 class TestExpansionMetadata:
     def test_metadata_stored_after_expand(self) -> None:
         expander = DiscoveryQueryExpander(llm_endpoint=None)
-        expander.expand(_EMPTY_PROFILE, source="france_travail", language="fr")
+        expander.expand(_IT_PROFILE, source="france_travail", language="fr")
         assert "france_travail" in expander._last_expansion
 
     def test_metadata_baseline_queries(self) -> None:
         expander = DiscoveryQueryExpander(llm_endpoint=None)
-        expander.expand(_EMPTY_PROFILE, source="france_travail", language="fr")
+        expander.expand(_IT_PROFILE, source="france_travail", language="fr")
         meta = expander._last_expansion["france_travail"]
         assert isinstance(meta, DiscoveryExpansionResult)
         assert meta.baseline_queries == _FT_BASELINE
 
     def test_metadata_llm_not_available_when_no_endpoint(self) -> None:
         expander = DiscoveryQueryExpander(llm_endpoint=None)
-        expander.expand(_EMPTY_PROFILE, source="france_travail", language="fr")
+        expander.expand(_IT_PROFILE, source="france_travail", language="fr")
         meta = expander._last_expansion["france_travail"]
         assert meta.llm_available is False
         assert meta.llm_queries == []
@@ -495,7 +506,7 @@ class TestExpansionMetadata:
         resp = _llm_response(["devops"])
 
         with patch("requests.post", return_value=resp):
-            expander.expand(_EMPTY_PROFILE, source="france_travail", language="fr")
+            expander.expand(_IT_PROFILE, source="france_travail", language="fr")
 
         meta = expander._last_expansion["france_travail"]
         assert meta.llm_available is True
@@ -508,7 +519,7 @@ class TestExpansionMetadata:
         resp = _llm_response(["numérique", "devops"])
 
         with patch("requests.post", return_value=resp):
-            expander.expand(_EMPTY_PROFILE, source="france_travail", language="fr")
+            expander.expand(_IT_PROFILE, source="france_travail", language="fr")
 
         meta = expander._last_expansion["france_travail"]
         assert "numérique" in meta.rejected_queries
@@ -585,31 +596,31 @@ class TestExpandAll:
 
     def test_expand_all_jobicy_baseline_non_empty(self) -> None:
         expander = DiscoveryQueryExpander(llm_endpoint=None)
-        result = expander.expand_all(_EMPTY_PROFILE)
+        result = expander.expand_all(_IT_PROFILE)
         assert len(result["jobicy"]) > 0
 
     def test_expand_all_remoteok_baseline_non_empty(self) -> None:
         expander = DiscoveryQueryExpander(llm_endpoint=None)
-        result = expander.expand_all(_EMPTY_PROFILE)
+        result = expander.expand_all(_IT_PROFILE)
         assert len(result["remoteok"]) > 0
 
     def test_expand_all_jobicy_includes_baseline_slugs(self) -> None:
         _JOBICY_BASELINE = ["engineering", "cybersecurity", "admin"]  # data-science removed (returns 0 jobs)
         expander = DiscoveryQueryExpander(llm_endpoint=None)
-        result = expander.expand_all(_EMPTY_PROFILE)
+        result = expander.expand_all(_IT_PROFILE)
         for slug in _JOBICY_BASELINE:
             assert slug in result["jobicy"]
 
     def test_expand_all_remoteok_includes_baseline_tags(self) -> None:
         _REMOTEOK_BASELINE = ["python", "javascript", "devops", "react"]
         expander = DiscoveryQueryExpander(llm_endpoint=None)
-        result = expander.expand_all(_EMPTY_PROFILE)
+        result = expander.expand_all(_IT_PROFILE)
         for tag in _REMOTEOK_BASELINE:
             assert tag in result["remoteok"]
 
     def test_expand_all_returns_all_three_keys(self) -> None:
         expander = DiscoveryQueryExpander(llm_endpoint=None)
-        result = expander.expand_all(_EMPTY_PROFILE)
+        result = expander.expand_all(_IT_PROFILE)
         assert set(result.keys()) >= {"france_travail", "jobicy", "remoteok"}
 
     def test_expand_all_remoteok_adds_skill_tags_from_profile(self) -> None:
@@ -653,13 +664,13 @@ class TestGeneratePartitionVocabulary:
 
     def test_all_terms_come_from_vocabulary(self) -> None:
         expander = self._make_expander()
-        result = expander.generate_partition_vocabulary(_EMPTY_PROFILE, "france_travail")
+        result = expander.generate_partition_vocabulary(_IT_PROFILE, "france_travail")
         for term in result:
             assert term in _FT_PARTITION_VOCABULARY
 
     def test_all_vocabulary_terms_present_for_empty_profile(self) -> None:
         expander = self._make_expander()
-        result = expander.generate_partition_vocabulary(_EMPTY_PROFILE, "france_travail")
+        result = expander.generate_partition_vocabulary(_IT_PROFILE, "france_travail")
         for term in _FT_PARTITION_VOCABULARY:
             assert term in result
 
@@ -685,7 +696,7 @@ class TestGeneratePartitionVocabulary:
 
     def test_empty_profile_returns_full_vocabulary_in_order(self) -> None:
         expander = self._make_expander()
-        result = expander.generate_partition_vocabulary(_EMPTY_PROFILE, "france_travail")
+        result = expander.generate_partition_vocabulary(_IT_PROFILE, "france_travail")
         assert result == _FT_PARTITION_VOCABULARY
 
 
@@ -710,12 +721,12 @@ class TestAdaptiveReorderingWiring:
 
     def test_no_yield_history_reproduces_exact_pre_i15_order(self) -> None:
         expander = self._make_expander()
-        with_history_param = expander.expand(_EMPTY_PROFILE, source="france_travail", yield_history=None)
+        with_history_param = expander.expand(_IT_PROFILE, source="france_travail", yield_history=None)
         assert with_history_param == _FT_BASELINE
 
     def test_empty_yield_history_dict_reproduces_exact_pre_i15_order(self) -> None:
         expander = self._make_expander()
-        result = expander.expand(_EMPTY_PROFILE, source="france_travail", yield_history={})
+        result = expander.expand(_IT_PROFILE, source="france_travail", yield_history={})
         assert result == _FT_BASELINE
 
     def test_high_yield_baseline_query_is_promoted_first(self) -> None:
@@ -724,7 +735,7 @@ class TestAdaptiveReorderingWiring:
         expander = self._make_expander()
         # "data" is last in the FT baseline; give it a huge measured yield.
         history = {"data": QueryYieldStats("data", 500, 5)}
-        result = expander.expand(_EMPTY_PROFILE, source="france_travail", yield_history=history)
+        result = expander.expand(_IT_PROFILE, source="france_travail", yield_history=history)
         assert result[0] == "data"
         assert set(result) == set(_FT_BASELINE)  # bounded: same query set
 
@@ -735,17 +746,17 @@ class TestAdaptiveReorderingWiring:
         history_by_source = {
             "france_travail": {"data": QueryYieldStats("data", 500, 5)},
         }
-        result = expander.expand_all(_EMPTY_PROFILE, yield_history_by_source=history_by_source)
+        result = expander.expand_all(_IT_PROFILE, yield_history_by_source=history_by_source)
         assert result["france_travail"][0] == "data"
         # jobicy/remoteok had no history entry -> unaffected, original order.
-        assert result["jobicy"] == list(expander._static_fallback("jobicy"))
+        assert result["jobicy"] == _IT_PRESET.baseline["jobicy"]
 
     def test_adaptive_promoted_is_recorded_in_expansion_metadata(self) -> None:
         from src.discovery.adaptive import QueryYieldStats
 
         expander = self._make_expander()
         history = {"data": QueryYieldStats("data", 500, 5)}
-        expander.expand(_EMPTY_PROFILE, source="france_travail", yield_history=history)
+        expander.expand(_IT_PROFILE, source="france_travail", yield_history=history)
         meta = expander._last_expansion["france_travail"]
         assert "data" in meta.adaptive_promoted
 
@@ -758,3 +769,98 @@ class TestAdaptiveReorderingWiring:
         no_history_result = expander.expand(_FULL_PROFILE, source="france_travail")
         assert set(result) == set(no_history_result)
         assert len(result) == len(no_history_result)
+
+
+# ---------------------------------------------------------------------------
+# Tests: profiles outside IT (the app serves every line of work)
+# ---------------------------------------------------------------------------
+
+_IT_TERMS = (
+    "informatique", "logiciel", "développeur", "developer", "software", "devops",
+    "cyber", "data", "python", "javascript", "react", "engineering", "admin",
+    "cloud", "réseau", "test",
+)
+
+
+def _has_it_term(query: str) -> bool:
+    return any(term in query.lower() for term in _IT_TERMS)
+
+
+class TestProfessionNeutralDiscovery:
+    def _expander(self) -> DiscoveryQueryExpander:
+        return DiscoveryQueryExpander(llm_endpoint=None, max_queries=20)
+
+    def test_non_it_profiles_get_no_it_query_from_any_source(self) -> None:
+        for profile in (_NURSE_PROFILE, _ELECTRICIAN_PROFILE, _ACCOUNTANT_PROFILE):
+            result = self._expander().expand_all(profile)
+            for source, queries in result.items():
+                for query in queries:
+                    assert not _has_it_term(query), (source, query)
+
+    def test_domain_text_is_the_france_travail_query(self) -> None:
+        result = self._expander().expand(_NURSE_PROFILE, source="france_travail", language="fr")
+        assert result[0] == "infirmier"
+        assert "soins infirmiers" in result
+
+    def test_contract_term_is_combined_with_the_domain(self) -> None:
+        electrician = self._expander().expand(_ELECTRICIAN_PROFILE, source="france_travail")
+        assert "alternance électricien" in electrician
+        accountant = self._expander().expand(_ACCOUNTANT_PROFILE, source="france_travail")
+        assert "stage comptable" in accountant
+
+    def test_no_it_preset_means_no_jobicy_industry_and_no_it_tags(self) -> None:
+        result = self._expander().expand_all(_NURSE_PROFILE)
+        assert result["jobicy"] == []
+        assert result["remoteok"] == ["soins infirmiers"]
+
+    def test_mixed_profile_keeps_it_baseline_and_adds_custom_domain(self) -> None:
+        profile = _make_profile(domains=["software_development", "infirmier"])
+        result = self._expander().expand(profile, source="france_travail")
+        assert result[: len(_FT_BASELINE)] == _FT_BASELINE
+        assert "infirmier" in result
+
+    def test_custom_domain_is_not_dropped_by_the_cap(self) -> None:
+        profile = _make_profile(domains=["software_development", "infirmier"])
+        capped = DiscoveryQueryExpander(llm_endpoint=None, max_queries=8)
+        assert "infirmier" in capped.expand(profile, source="france_travail")
+
+    def test_domain_match_is_case_insensitive(self) -> None:
+        upper = _make_profile(domains=["Software_Development"])
+        assert self._expander().expand(upper, source="france_travail") == _FT_BASELINE
+
+    def test_llm_not_called_for_an_empty_profile(self) -> None:
+        expander = DiscoveryQueryExpander(llm_endpoint="http://localhost:1234")
+        with patch("requests.post") as mock_post:
+            expander.expand(_EMPTY_PROFILE, source="france_travail", language="fr")
+        mock_post.assert_not_called()
+
+    def test_llm_prompt_has_no_it_fallback_or_example(self) -> None:
+        expander = DiscoveryQueryExpander(llm_endpoint="http://localhost:1234")
+        with patch("requests.post", return_value=_llm_response(["soins"])) as mock_post:
+            expander.expand(_NURSE_PROFILE, source="france_travail", language="fr")
+        prompt = mock_post.call_args.kwargs["json"]["messages"][1]["content"]
+        assert not _has_it_term(prompt.split("Rules:")[0])
+        assert "informatique" not in prompt
+
+    def test_partition_vocabulary_is_neutral_without_a_preset(self) -> None:
+        result = self._expander().generate_partition_vocabulary(
+            _NURSE_PROFILE, "france_travail"
+        )
+        assert result == load_neutral().partition_vocabulary["france_travail"]
+        assert not any(_has_it_term(term) for term in result)
+
+    def test_partition_vocabulary_unchanged_for_it_profiles(self) -> None:
+        result = self._expander().generate_partition_vocabulary(
+            _IT_PROFILE, "france_travail"
+        )
+        assert result[0] == "développeur"
+        assert set(result) == set(_FT_PARTITION_VOCABULARY)
+
+    def test_missing_presets_folder_degrades_to_profile_terms(self, tmp_path) -> None:
+        expander = DiscoveryQueryExpander(llm_endpoint=None, config_dir=tmp_path)
+        # Without the preset an IT domain key is just the user's own word.
+        assert expander.expand(_IT_PROFILE, source="france_travail") == ["software development"]
+        assert expander.expand(_NURSE_PROFILE, source="france_travail") == [
+            "infirmier",
+            "soins infirmiers",
+        ]
