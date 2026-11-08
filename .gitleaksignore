@@ -1,2 +1,11 @@
-# False positive: the test-name string "LinkedInHandler" matches linkedin-client-secret (superseded in the next commit of the PR).
+# Gitleaks false positives, by fingerprint (commit:file:rule:line). Keep each one explained.
+
+# linkedin-client-id: the rule reads a TypeScript type annotation in the test API fixtures
+# (a variable named after LinkedIn followed by its 14-letter type name) as a client id. No
+# credential is involved; the fixtures now use `satisfies` so new commits do not match.
+d2e5b4272607ac77fbe9de0fb20a07a76778fcbf:frontend/src/test/apiFixtures.ts:linkedin-client-id:175
+36b5b80194f58d14ac334238f46ff442539b0faf:frontend/src/test/apiFixtures.ts:linkedin-client-id:171
+36b5b80194f58d14ac334238f46ff442539b0faf:.gitleaksignore:linkedin-client-id:3
+
+# linkedin-client-secret: the test-name string "LinkedInHandler" in an earlier commit of the scheduler-handlers refactor; the next commit removes it.
 1ebbd6be0add48f7b10e0a10d03def42caad595c:tests/test_scheduler_handlers_module.py:linkedin-client-secret:12
