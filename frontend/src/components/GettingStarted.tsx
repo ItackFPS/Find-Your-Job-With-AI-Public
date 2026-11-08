@@ -5,14 +5,10 @@ import { Card } from './Card'
 // First-run guide, shown on the Dashboard while the database has no job yet.
 // Mirrors docs/windows-installer.md ("First run") and config/sources.yaml: keep the
 // two source lists in step with the shipped configuration.
-const NO_ACCOUNT = ['RemoteOK', 'Jobicy', 'We Work Remotely', 'EURES']
+const NO_ACCOUNT = ['France Travail', 'EURES', 'RemoteOK', 'Jobicy', 'We Work Remotely']
 const SCANNERS = ['LinkedIn', 'HelloWork']
-const NEEDS_CREDENTIALS = [
-  { name: 'France Travail', vars: ['FRANCE_TRAVAIL_CLIENT_ID', 'FRANCE_TRAVAIL_CLIENT_SECRET'] },
-]
 
 const item = { marginBottom: 'var(--space-3)', lineHeight: 1.5 }
-const code = { fontFamily: 'var(--font-family-mono)', fontSize: 'var(--font-size-sm)' }
 
 export function GettingStarted() {
   const { t } = useTranslation()
@@ -34,21 +30,12 @@ export function GettingStarted() {
           />
         </li>
         <li style={item}>
-          {t('components.gettingStarted.optional')}
-          <ul style={{ paddingLeft: '1.25rem', margin: 'var(--space-1) 0 0' }}>
-            {NEEDS_CREDENTIALS.map(s => (
-              <li key={s.name}>{s.name}: {s.vars.map((v, i) => <span key={v}>{i > 0 && t('components.gettingStarted.envVarsJoin')}<code style={code}>{v}</code></span>)}</li>
-            ))}
-          </ul>
-          <Trans
-            i18nKey="components.gettingStarted.envFile"
-            components={{ example: <code style={code}>.env.example</code>, env: <code style={code}>.env</code> }}
-          />
-        </li>
-        <li style={item}>
           <Trans i18nKey="components.gettingStarted.run" components={{ b }} />
         </li>
       </ol>
+      <p style={{ marginBottom: 0, color: 'var(--color-muted)' }}>
+        {t('components.gettingStarted.scope')}
+      </p>
     </Card>
   )
 }
