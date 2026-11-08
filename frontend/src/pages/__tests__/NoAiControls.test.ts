@@ -6,6 +6,9 @@ const sources = import.meta.glob('../../**/*.{ts,tsx}', {
   query: '?raw', import: 'default', eager: true,
 }) as Record<string, string>
 
+// The API client is client.ts, which re-exports core.ts (where startRun lives).
+const API_CLIENT = /api\/(client|core)\.ts$/
+
 const app = Object.entries(sources).filter(([path]) => !/__tests__|\/test\//.test(path))
 
 describe('2.0 has no path that turns AI on', () => {
@@ -15,14 +18,14 @@ describe('2.0 has no path that turns AI on', () => {
 
   it('never calls startRun with an argument', () => {
     for (const [path, text] of app) {
-      if (path.endsWith('api/client.ts')) continue
+      if (API_CLIENT.test(path)) continue
       expect(`${path}: ${/\bstartRun\([^)]/.test(text)}`).toBe(`${path}: false`)
     }
   })
 
   it('never sends use_ai outside the API client, and never calls /ai/', () => {
     for (const [path, text] of app) {
-      if (path.endsWith('api/client.ts')) continue
+      if (API_CLIENT.test(path)) continue
       expect(`${path}: ${/use_ai\s*:/.test(text)}`).toBe(`${path}: false`)
       expect(`${path}: ${/['"`]\/ai\//.test(text)}`).toBe(`${path}: false`)
     }
