@@ -11,6 +11,7 @@ Missing data is UNKNOWN — not a rejection reason.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import unicodedata
@@ -803,20 +804,6 @@ def matches_remote_policy(job: Job, config: dict[str, Any]) -> bool:
     return not remote_policy_exclusion(job, assess(job, cfg))
 
 
-_FILTER_CHECKS: list[tuple[str, Callable[[Job, dict[str, Any]], bool]]] = [
-    ("location", matches_location),
-    ("distance", matches_distance),
-    ("remote_policy", matches_remote_policy),
-    ("remote", matches_remote),
-    ("work_mode", matches_work_mode),
-    ("seniority", matches_seniority),
-    ("published_age", matches_published_age),
-    ("salary", matches_salary),
-    ("title_keywords", matches_title_keywords),
-    ("contract_type", matches_contract_type),
-]
-
-
 Strength = Literal["strong", "weak"]
 
 
@@ -832,33 +819,231 @@ class FilterCheckOutcome:
     strength: Strength | None = None
 
 
-def violation_strength(code: str, job: Job, config: dict[str, Any]) -> Strength:
-    """How strong the evidence is behind a FAILED check (ADR 0019 v5 AD-2b).
+@dataclass(frozen=True)
+class HardCheck:
+    """Everything the pipeline knows about one hard-filter check, in one place.
 
-    STRONG: an explicit user choice compared with a value known with high confidence (a structured
-    field or an explicit statement). WEAK: a curated default, or a value inferred from title words or
-    from weak wording. Descriptive only: today every failed check rejects, whatever its strength.
+    ``matches`` is the verdict; the other fields only describe it (observability, ADR 0008) or say
+    how a failure may be treated (ADR 0019 v5 AD-2b):
+
+    * ``strength``: how strong the evidence behind a FAILED check is. STRONG: an explicit user choice
+      compared with a value known with high confidence (a structured field or an explicit statement).
+      WEAK: a curated default, or a value inferred from title words or from weak wording. Descriptive
+      only unless ``weak_evidence_mode`` switches the check to rank.
+    * ``observed`` / ``expected``: the job fields the check reads, and the config slice it compares
+      them with (``expected`` is constant per run: callers cache it).
+    * ``rankable``: a WEAK violation may rank instead of reject. ``salary`` is not rankable until
+      the matches_salary correction lands (decisions v5, AD-2b prerequisite); location, remote and
+      remote_policy are never weak.
+    * ``severity``: scales the per-flag penalty of a ranked WEAK violation, in [0, 1].
     """
-    if code == "location":
-        return "strong"            # a known foreign country against the user's countries
-    if code == "distance":
-        cfg = config.get("location_distance")
-        place = assess(job, cfg).place if cfg else None
-        return "strong" if place is not None and place.precision == COMMUNE else "weak"
-    if code in ("remote_policy", "remote"):
-        return "strong"            # an explicit residency restriction / the structured remote flag
-    if code == "work_mode":
-        return "strong" if job.work_mode in ("remote", "hybrid", "on_site") else "weak"
-    if code == "salary":
-        return "strong" if (config.get("salary_requirements") or {}).get("strict") else "weak"
-    # seniority, published_age, title_keywords (curated vocabulary), contract_type (title words)
-    return "weak"
+
+    code: str
+    matches: Callable[[Job, dict[str, Any]], bool]
+    observed: Callable[[Job, dict[str, Any]], str | None]
+    expected: Callable[[dict[str, Any]], str | None]
+    strength: Callable[[Job, dict[str, Any]], Strength] = lambda job, config: "weak"
+    rankable: bool = False
+    severity: Callable[[Job, dict[str, Any]], float] = lambda job, config: 1.0
 
 
-# Checks a WEAK violation of which may rank instead of reject. ``salary`` is not one of them until
-# the matches_salary correction lands (decisions v5, AD-2b prerequisite); location, remote and
-# remote_policy are never weak.
-RANKABLE_CHECKS = ("distance", "work_mode", "seniority", "published_age", "title_keywords", "contract_type")
+def _summarize(value: Any, max_items: int = 12) -> Any:
+    """Shorten long lists structurally (``[..12 items.., '+53 more']``) so the text stays valid and readable."""
+    if isinstance(value, list):
+        head = [_summarize(v, max_items) for v in value[:max_items]]
+        return head + [f"+{len(value) - max_items} more"] if len(value) > max_items else head
+    if isinstance(value, dict):
+        return {k: _summarize(v, max_items) for k, v in value.items()}
+    return value
+
+
+def _config_slice(*keys: str) -> Callable[[dict[str, Any]], str | None]:
+    """``expected`` of a check that compares the job with one slice of the filter config."""
+
+    def expected(config: dict[str, Any]) -> str | None:
+        part: Any = config
+        for k in keys:
+            part = part.get(k) if isinstance(part, dict) else None
+        return None if part in (None, {}, []) else json.dumps(_summarize(part), ensure_ascii=False, default=str)
+
+    return expected
+
+
+def _distance_expected(config: dict[str, Any]) -> str | None:
+    """Structured (JSON) like every other ``expected``: the profile settings the check compares to."""
+    cfg = config.get("location_distance")
+    if not cfg:
+        return None
+    return json.dumps({"home": cfg["home"]["name"], "max_distance_km": cfg["max_distance_km"],
+                       "strict_distance": bool(cfg.get("strict_distance"))}, ensure_ascii=False)
+
+
+def _remote_policy_expected(config: dict[str, Any]) -> str | None:
+    cfg = config.get("location_distance")
+    if not cfg:
+        return None
+    return json.dumps({"remote_accepted": [k for k, v in (cfg.get("remote_policy") or {}).items() if v],
+                       "excluded": "explicit restriction to another area"}, ensure_ascii=False)
+
+
+def _distance_place(job: Job, config: dict[str, Any]) -> tuple[dict[str, Any], str, str] | None:
+    """(description, where, km) of the resolved place and distance; None without a home."""
+    cfg = config.get("location_distance")
+    if not cfg:
+        return None
+    d = describe(assess(job, cfg), cfg)
+    place = d["place"]
+    where = "unknown place" if place is None else f"{place['name']} ({place['precision']})"
+    km = "distance unknown" if d["road_km"] is None else f"~{d['road_km']} km by road"
+    return d, where, km
+
+
+def _distance_observed(job: Job, config: dict[str, Any]) -> str | None:
+    found = _distance_place(job, config)
+    if found is None:
+        return None
+    d, where, km = found
+    return f"{where}, {km}, work mode {d['remote_kind']}"
+
+
+def _remote_policy_observed(job: Job, config: dict[str, Any]) -> str | None:
+    found = _distance_place(job, config)
+    if found is None:
+        return None
+    d, where, _km = found
+    area = f" {d['remote_area']}" if d["remote_area"] else ""
+    return f"remote {d['remote_kind']}{area} ({d['remote_strength']}: {d['remote_evidence']}); {where}"
+
+
+def _distance_strength(job: Job, config: dict[str, Any]) -> Strength:
+    cfg = config.get("location_distance")
+    place = assess(job, cfg).place if cfg else None
+    return "strong" if place is not None and place.precision == COMMUNE else "weak"
+
+
+def _work_mode_strength(job: Job, config: dict[str, Any]) -> Strength:
+    return "strong" if job.work_mode in ("remote", "hybrid", "on_site") else "weak"
+
+
+def _salary_strength(job: Job, config: dict[str, Any]) -> Strength:
+    return "strong" if (config.get("salary_requirements") or {}).get("strict") else "weak"
+
+
+def _always_strong(job: Job, config: dict[str, Any]) -> Strength:
+    return "strong"
+
+
+def _published_age_observed(job: Job, config: dict[str, Any]) -> str | None:
+    ref, basis = freshness_reference(job)
+    return (f"published_at={job.published_at} first_seen_at={getattr(job, 'first_seen_at', None)} "
+            f"discovered_at={job.discovered_at} reference={ref} basis={basis}")
+
+
+def _published_age_severity(job: Job, config: dict[str, Any]) -> float:
+    """0 at ``posted_within_days``, growing linearly to 1 at 3 x that, 1 beyond."""
+    days = float(config.get("posted_within_days") or 30)
+    ref, _basis = freshness_reference(job)
+    if ref is None:
+        return 1.0
+    age = (datetime.now(UTC) - ref).total_seconds() / 86400
+    return min(1.0, max(0.0, (age - days) / (2 * days)))
+
+
+def _title_observed(job: Job, config: dict[str, Any]) -> str | None:
+    return f"title={job.title!r}"
+
+
+# The order is the order ``filter_jobs`` evaluates them in (the first failure decides).
+HARD_CHECKS: tuple[HardCheck, ...] = (
+    HardCheck(
+        "location", matches_location, strength=_always_strong,   # a known foreign country vs the user's countries
+        observed=lambda j, c: (f"location={j.location!r} department={j.department!r} "
+                               f"countries={j.countries} remote={j.remote}"),
+        expected=_config_slice("locations")),
+    HardCheck(
+        "distance", matches_distance, strength=_distance_strength, rankable=True,
+        observed=_distance_observed, expected=_distance_expected),
+    HardCheck(
+        "remote_policy", matches_remote_policy, strength=_always_strong,   # an explicit residency restriction
+        observed=_remote_policy_observed, expected=_remote_policy_expected),
+    HardCheck(
+        "remote", matches_remote, strength=_always_strong,   # the structured remote flag
+        observed=lambda j, c: f"remote={j.remote}", expected=_config_slice("remote", "allowed")),
+    HardCheck(
+        "work_mode", matches_work_mode, strength=_work_mode_strength, rankable=True,
+        observed=lambda j, c: f"work_mode={j.work_mode!r} remote={j.remote}",
+        expected=_config_slice("work_modes", "allowed")),
+    HardCheck(
+        "seniority", matches_seniority, rankable=True,
+        observed=_title_observed, expected=_config_slice("seniority")),
+    HardCheck(
+        "published_age", matches_published_age, rankable=True, severity=_published_age_severity,
+        observed=_published_age_observed, expected=_config_slice("posted_within_days")),
+    HardCheck(
+        "salary", matches_salary, strength=_salary_strength,
+        observed=lambda j, c: f"salary_min={j.salary_min} salary_max={j.salary_max} {j.salary_currency}",
+        expected=_config_slice("salary_requirements")),
+    HardCheck(
+        "title_keywords", matches_title_keywords, rankable=True,   # curated vocabulary
+        observed=_title_observed, expected=_config_slice("title_keywords")),
+    HardCheck(
+        "contract_type", matches_contract_type, rankable=True,   # title words
+        observed=lambda j, c: f"title={j.title!r} employment_type={j.employment_type!r}",
+        expected=_config_slice("contract_type", "exclude_title_keywords")),
+)
+
+_CHECK_BY_CODE: dict[str, HardCheck] = {c.code: c for c in HARD_CHECKS}
+
+# (code, matches) in evaluation order: read by src/lab/agent.py.
+_FILTER_CHECKS: list[tuple[str, Callable[[Job, dict[str, Any]], bool]]] = [(c.code, c.matches) for c in HARD_CHECKS]
+
+RANKABLE_CHECKS = tuple(c.code for c in HARD_CHECKS if c.rankable)
+
+
+def violation_strength(code: str, job: Job, config: dict[str, Any]) -> Strength:
+    """How strong the evidence is behind a FAILED check (``HardCheck.strength``); an unknown code is WEAK."""
+    check = _CHECK_BY_CODE.get(code)
+    return check.strength(job, config) if check else "weak"
+
+
+def weak_severity(code: str, job: Job, config: dict[str, Any]) -> float:
+    """Penalty scale of a ranked WEAK violation (``HardCheck.severity``); 1.0 unless the check ramps."""
+    check = _CHECK_BY_CODE.get(code)
+    return check.severity(job, config) if check else 1.0
+
+
+def filter_expected(code: str, config: dict[str, Any]) -> str | None:
+    """The config slice a check compares the job against (constant per run: cache it)."""
+    check = _CHECK_BY_CODE.get(code)
+    return check.expected(config) if check else None
+
+
+def filter_observed(code: str, job: Job, config: dict[str, Any] | None = None) -> str | None:
+    """The job fields a check reads (descriptive only). ``config`` is needed only by the
+    distance-model checks (their observation is the resolved place and distance)."""
+    check = _CHECK_BY_CODE.get(code)
+    return check.observed(job, config or {}) if check else None
+
+
+def filter_facts(code: str, job: Job, config: dict[str, Any]) -> tuple[str | None, str | None]:
+    """(observed, expected) for a check. Descriptive only — the verdict always comes from the real
+    ``matches_*`` functions."""
+    return filter_observed(code, job, config), filter_expected(code, config)
+
+
+def check_outcome(
+    code: str, job: Job, config: dict[str, Any], *, passed: bool, expected: str | None = None
+) -> FilterCheckOutcome:
+    """The outcome of one check whose verdict (``passed``) the caller already has. ``expected`` may be
+    passed in when the caller caches it per run. The one place a ``FilterCheckOutcome`` is built, so
+    the journal and the explain view describe a check the same way."""
+    return FilterCheckOutcome(
+        code, passed, filter_observed(code, job, config),
+        filter_expected(code, config) if expected is None else expected,
+        None if passed else violation_strength(code, job, config))
+
+
+# Weak-evidence model (ADR 0019 v5 AD-2b, L5.2): the checks whose WEAK violations rank instead of rejecting.
 
 
 def weak_evidence_modes(engine_cfg: dict[str, Any]) -> dict[str, str]:
@@ -896,109 +1081,6 @@ class WeakFlag:
                 "severity": round(self.severity, 4)}
 
 
-def weak_severity(code: str, job: Job, config: dict[str, Any]) -> float:
-    """``published_age``: 0 at ``posted_within_days``, growing linearly to 1 at 3 x that, 1 beyond.
-    Every other check: 1.0."""
-    if code != "published_age":
-        return 1.0
-    days = float(config.get("posted_within_days") or 30)
-    ref, _basis = freshness_reference(job)
-    if ref is None:
-        return 1.0
-    age = (datetime.now(UTC) - ref).total_seconds() / 86400
-    return min(1.0, max(0.0, (age - days) / (2 * days)))
-
-
-def _summarize(value: Any, max_items: int = 12) -> Any:
-    """Shorten long lists structurally (``[..12 items.., '+53 more']``) so the text stays valid and readable."""
-    if isinstance(value, list):
-        head = [_summarize(v, max_items) for v in value[:max_items]]
-        return head + [f"+{len(value) - max_items} more"] if len(value) > max_items else head
-    if isinstance(value, dict):
-        return {k: _summarize(v, max_items) for k, v in value.items()}
-    return value
-
-
-def filter_expected(code: str, config: dict[str, Any]) -> str | None:
-    """The config slice a check compares the job against (constant per run: cache it)."""
-    import json as _json
-
-    def cfg(*keys: str) -> str | None:
-        part: Any = config
-        for k in keys:
-            part = part.get(k) if isinstance(part, dict) else None
-        return None if part in (None, {}, []) else _json.dumps(_summarize(part), ensure_ascii=False, default=str)
-
-    return {
-        "location": lambda: cfg("locations"),
-        "distance": lambda: _distance_expected(config, "distance"),
-        "remote_policy": lambda: _distance_expected(config, "remote_policy"),
-        "remote": lambda: cfg("remote", "allowed"),
-        "work_mode": lambda: cfg("work_modes", "allowed"),
-        "seniority": lambda: cfg("seniority"),
-        "published_age": lambda: cfg("posted_within_days"),
-        "salary": lambda: cfg("salary_requirements"),
-        "title_keywords": lambda: cfg("title_keywords"),
-        "contract_type": lambda: cfg("contract_type", "exclude_title_keywords"),
-    }.get(code, lambda: None)()
-
-
-def _distance_expected(config: dict[str, Any], code: str) -> str | None:
-    """Structured (JSON) like every other ``expected``: the profile settings the check compares to."""
-    import json as _json
-
-    cfg = config.get("location_distance")
-    if not cfg:
-        return None
-    if code == "distance":
-        part: dict[str, Any] = {"home": cfg["home"]["name"], "max_distance_km": cfg["max_distance_km"],
-                                "strict_distance": bool(cfg.get("strict_distance"))}
-    else:
-        part = {"remote_accepted": [k for k, v in (cfg.get("remote_policy") or {}).items() if v],
-                "excluded": "explicit restriction to another area"}
-    return _json.dumps(part, ensure_ascii=False)
-
-
-def filter_observed(code: str, job: Job, config: dict[str, Any] | None = None) -> str | None:
-    """The job fields a check reads (descriptive only). ``config`` is needed only by the
-    distance-model checks (their observation is the resolved place and distance)."""
-    if code in ("distance", "remote_policy"):
-        cfg = (config or {}).get("location_distance")
-        if not cfg:
-            return None
-        d = describe(assess(job, cfg), cfg)
-        place = d["place"]
-        where = "unknown place" if place is None else f"{place['name']} ({place['precision']})"
-        km = "distance unknown" if d["road_km"] is None else f"~{d['road_km']} km by road"
-        if code == "distance":
-            return f"{where}, {km}, work mode {d['remote_kind']}"
-        area = f" {d['remote_area']}" if d["remote_area"] else ""
-        return f"remote {d['remote_kind']}{area} ({d['remote_strength']}: {d['remote_evidence']}); {where}"
-    if code == "location":
-        return f"location={job.location!r} department={job.department!r} countries={job.countries} remote={job.remote}"
-    if code == "remote":
-        return f"remote={job.remote}"
-    if code == "work_mode":
-        return f"work_mode={job.work_mode!r} remote={job.remote}"
-    if code in ("seniority", "title_keywords"):
-        return f"title={job.title!r}"
-    if code == "published_age":
-        ref, basis = freshness_reference(job)
-        return (f"published_at={job.published_at} first_seen_at={getattr(job, 'first_seen_at', None)} "
-                f"discovered_at={job.discovered_at} reference={ref} basis={basis}")
-    if code == "salary":
-        return f"salary_min={job.salary_min} salary_max={job.salary_max} {job.salary_currency}"
-    if code == "contract_type":
-        return f"title={job.title!r} employment_type={job.employment_type!r}"
-    return None
-
-
-def filter_facts(code: str, job: Job, config: dict[str, Any]) -> tuple[str | None, str | None]:
-    """(observed, expected) for a check. Descriptive only — the verdict always comes from the real
-    ``matches_*`` functions."""
-    return filter_observed(code, job, config), filter_expected(code, config)
-
-
 def explain_filter_checks(
     job: Job, config: dict[str, Any], *, stop_at_first_failure: bool = False
 ) -> list[FilterCheckOutcome]:
@@ -1009,11 +1091,9 @@ def explain_filter_checks(
     observational: ``filter_jobs`` itself is unchanged.
     """
     out: list[FilterCheckOutcome] = []
-    for code, check in _FILTER_CHECKS:
-        passed = bool(check(job, config))
-        observed, expected = filter_facts(code, job, config)
-        out.append(FilterCheckOutcome(code, passed, observed, expected,
-                                      None if passed else violation_strength(code, job, config)))
+    for check in HARD_CHECKS:
+        passed = bool(check.matches(job, config))
+        out.append(check_outcome(check.code, job, config, passed=passed))
         if stop_at_first_failure and not passed:
             break
     return out
