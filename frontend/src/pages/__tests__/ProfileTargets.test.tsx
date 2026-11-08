@@ -91,3 +91,23 @@ describe('Profile education levels (migrated entry)', () => {
     expect(screen.queryByLabelText('Name of the degree')).not.toBeInTheDocument()
   })
 })
+
+describe('Profile work history', () => {
+  it('adds a job and saves it', async () => {
+    net.profile = v2
+    renderPage()
+    await userEvent.click(await screen.findByRole('button', { name: 'Add a job' }))
+    await userEvent.type(screen.getByRole('textbox', { name: 'Job title' }), 'Nurse')
+    await userEvent.click(screen.getByRole('button', { name: 'Save profile' }))
+    await screen.findByText(/saved/i)
+    const body = net.put.at(-1) as ProfileT
+    expect(body.experiences).toHaveLength(1)
+    expect(body.experiences?.[0]).toMatchObject({ id: 'exp-1', role: 'Nurse', end: null, relevant: true })
+  })
+
+  it('asks for a home town when none is set', async () => {
+    net.profile = { ...v2, geography: { ...v2.geography, home: null } }
+    renderPage()
+    expect(await screen.findByRole('note')).toHaveTextContent(/home town/)
+  })
+})

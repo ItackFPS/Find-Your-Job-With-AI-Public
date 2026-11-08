@@ -1070,6 +1070,7 @@
       "sameCountry": "Même pays uniquement",
       "europe": "Europe",
       "home": "Domicile",
+      "homePrompt": "Choisissez votre commune : les distances sont calculées à partir d’elle, et sans elle la plupart des offres sur site ne peuvent pas être situées.",
       "homeNotSet": "Non renseigné : le classement par lieu utilise vos priorités de lieu ci-dessous",
       "homeDepartmentCentre": "centre du département ; choisissez votre commune pour l’affiner",
       "homePlaceholder": "Tapez votre commune ou votre code postal…",
@@ -1134,6 +1135,19 @@
         "lead": "Lead",
         "manager": "Manager"
       }
+    },
+    "experiences": {
+      "title": "Parcours professionnel",
+      "empty": "Aucun poste ajouté pour le moment.",
+      "entry": "Poste {n}",
+      "role": "Intitulé du poste",
+      "employer": "Employeur",
+      "start": "De",
+      "end": "À",
+      "relevant": "Compte dans mon expérience",
+      "add": "Ajouter un poste",
+      "remove": "Retirer",
+      "hint": "Vos années d’expérience sont calculées à partir de ces dates. Laissez « À » vide pour votre poste actuel."
     },
     "education": {
       "empty": "Aucun diplôme pour l'instant.",

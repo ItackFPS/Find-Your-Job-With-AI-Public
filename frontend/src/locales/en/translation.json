@@ -1070,6 +1070,7 @@
       "sameCountry": "Same country only",
       "europe": "Europe",
       "home": "Home",
+      "homePrompt": "Choose your home town: offers are measured against it, and without it most on-site offers cannot be placed.",
       "homeNotSet": "Not set: location ranking uses your location priorities below",
       "homeDepartmentCentre": "centre of the département; pick your town to refine it",
       "homePlaceholder": "Type your town or postcode…",
@@ -1134,6 +1135,19 @@
         "lead": "Lead",
         "manager": "Manager"
       }
+    },
+    "experiences": {
+      "title": "Work history",
+      "empty": "No job added yet.",
+      "entry": "Job {n}",
+      "role": "Job title",
+      "employer": "Employer",
+      "start": "From",
+      "end": "To",
+      "relevant": "Counts towards my experience",
+      "add": "Add a job",
+      "remove": "Remove",
+      "hint": "Your years of experience are worked out from these dates. Leave “To” empty for your current job."
     },
     "education": {
       "empty": "No qualification yet.",

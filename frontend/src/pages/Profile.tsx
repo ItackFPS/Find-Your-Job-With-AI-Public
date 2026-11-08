@@ -11,6 +11,7 @@ import { Card, LoadingState, Switch } from '../components'
 import i18n from '../i18n'
 import { ProfileReviewCard } from './ProfileReviewCard'
 import { EducationEditor } from './EducationEditor'
+import { ExperienceEditor } from './ExperienceEditor'
 
 // Prevents "Docker" and "docker" (or "French"/"french") coexisting as two
 // separate entries — an exact-string check alone lets that through.
@@ -1169,6 +1170,9 @@ export default function ProfilePage() {
         <div style={fieldGroup}>
           <span style={label}>{t('profile.fields.home')}</span>
           <HomePicker value={profile.geography.home} onChange={v => setGeo('home', v)} />
+          {!profile.geography.home && (
+            <span role="note" style={{ fontSize: '0.8rem', color: 'var(--color-warning)' }}>{t('profile.fields.homePrompt')}</span>
+          )}
         </div>
 
         <div style={fieldGroup}>
@@ -1260,6 +1264,10 @@ export default function ProfilePage() {
             <div style={fieldGroup}>
               <Switch checked={targets.stretch} onChange={v => set('targets', { ...targets, stretch: v })}
                 label={t('profile.fields.stretch')} description={t('profile.fields.stretchHint')} />
+            </div>
+            <div style={fieldGroup}>
+              <span style={label}>{t('profile.experiences.title')}</span>
+              <ExperienceEditor entries={profile.experiences ?? []} onChange={v => set('experiences', v)} />
             </div>
           </>
         ) : (
