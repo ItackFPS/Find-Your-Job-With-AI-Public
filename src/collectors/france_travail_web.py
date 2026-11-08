@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import logging
 import re
+import unicodedata
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -80,6 +81,35 @@ OCCUPATIONS: dict[str, list[str]] = {
     "automation": ["s28m1", "s28m10", "s6m2"],
     "informatique": ["s6m2", "s6m3", "s28m7", "s28m2", "s28m3", "s28m1"],
 }
+
+# A profile saved from the app holds free-text domain labels ("Cybersécurité",
+# "Support informatique"), not the slugs above. A label resolves to every slug whose
+# word stem it contains (accents and case ignored), or to itself when it is a slug.
+_LABEL_STEMS: dict[str, tuple[str, ...]] = {
+    "software_development": ("logiciel", "software", "developpement", "developpeur"),
+    "web_development": ("web",),
+    "qa_testing": ("test", "qualite"),
+    "data": ("data", "donnee"),
+    "it_support": ("support", "maintenance", "helpdesk", "technicien"),
+    "systems": ("systeme",),
+    "networking": ("reseau", "network"),
+    "devops": ("devops",),
+    "cloud": ("cloud",),
+    "cybersecurity": ("cyber", "securite"),
+    "automation": ("automat",),
+}
+
+
+def resolve_occupation_domains(label: str) -> list[str]:
+    """The ``OCCUPATIONS`` keys a profile target domain stands for (none if unknown)."""
+    if label in OCCUPATIONS:
+        return [label]
+    folded = unicodedata.normalize("NFKD", label).encode("ascii", "ignore").decode().lower()
+    slugs = [slug for slug, stems in _LABEL_STEMS.items() if any(s in folded for s in stems)]
+    if not slugs and folded.strip() == "informatique":
+        slugs = ["informatique"]
+    return slugs
+
 
 _PAGE_IN_SITEMAP = re.compile(r"/offres/emploi/([^/]+)/([^/]+)/(s\d+m\d+)d(\d{2,3}|2[ab])$", re.I)
 _SUBTEXT_SPLIT = re.compile(r"\s+[-–]\s+(?=\d{2,3}\s*[-–]|\(?\d{2,3}\)?\s)")
@@ -176,7 +206,10 @@ class FranceTravailWebCollector(BaseCollector):
                          rate_limit_delay=max(MIN_RATE_LIMIT_DELAY,
                                               float(cfg.get("rate_limit_delay", MIN_RATE_LIMIT_DELAY))))
         self.max_pages = int(cfg.get("max_pages", 60))
-        self.target_domains = [d for d in cfg.get("target_domains") or [] if d in OCCUPATIONS]
+        # the profile's own entries that stand for an occupation: the title filter compares
+        # the occupation's target_domains with the profile's, so they stay unchanged
+        self.target_domains = [d for d in cfg.get("target_domains") or []
+                               if isinstance(d, str) and resolve_occupation_domains(d)]
         self.departments = [str(d).upper().zfill(2) for d in cfg.get("departments") or []]
         self._client: httpx.Client | None = None
 
@@ -284,8 +317,9 @@ class FranceTravailWebCollector(BaseCollector):
         """Pages to read, round-robin across départements so a page cap stays fair."""
         wanted: dict[str, list[str]] = {}
         for domain in self.target_domains:
-            for code in OCCUPATIONS[domain]:
-                wanted.setdefault(code, []).append(domain)
+            for slug in resolve_occupation_domains(domain):
+                for code in OCCUPATIONS[slug]:
+                    wanted.setdefault(code, []).append(domain)
         by_dept: dict[str, list[tuple[str, dict[str, Any]]]] = {d: [] for d in self.departments}
         for url, slug, code, dept in published:
             if code in wanted and dept in by_dept:

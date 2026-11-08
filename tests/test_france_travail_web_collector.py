@@ -18,6 +18,7 @@ from src.collectors.france_travail_web import (
     FranceTravailWebCollector,
     parse_listing,
     parse_robots,
+    resolve_occupation_domains,
     robots_allows,
 )
 from src.pipeline.filter import matches_title_keywords
@@ -391,3 +392,28 @@ def test_live_listing_pages_still_parse() -> None:
     assert result.jobs, result.errors
     job = result.jobs[0]
     assert job["title"] and job["location"] and job["url"].startswith("https://candidat.francetravail.fr/")
+
+
+@pytest.mark.parametrize(("label", "slugs"), [
+    ("Administration systèmes", ["systems"]),
+    ("Support informatique", ["it_support"]),
+    ("Maintenance informatique", ["it_support"]),
+    ("Réseaux informatiques", ["networking"]),
+    ("Cybersécurité", ["cybersecurity"]),
+    ("Informatique et support IT", ["it_support"]),
+    ("data", ["data"]),
+    ("Cuisine", []),
+])
+def test_profile_labels_resolve_to_occupation_domains(label: str, slugs: list[str]) -> None:
+    assert resolve_occupation_domains(label) == slugs
+
+
+def test_free_text_profile_domains_are_searched(monkeypatch) -> None:
+    """A profile saved from the app holds labels such as "Cybersécurité", not slugs."""
+    monkeypatch.setattr(ftw.httpx, "Client", _Client)
+    collector = FranceTravailWebCollector({"target_domains": ["Développement web", "Cuisine"],
+                                           "departments": ["83"], "rate_limit_delay": 0})
+    result = collector.collect()
+    assert not result.errors
+    # the occupation keeps the profile's own entry, which is what the title filter compares
+    assert result.jobs[0]["occupation"]["target_domains"] == ["Développement web"]
