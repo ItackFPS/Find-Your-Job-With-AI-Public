@@ -1,0 +1,62 @@
+# G-MO-T fixture profile: accountant (scripts/build_g_mo_t_datasets.py). Not a real person.
+target_domains:
+- accounting
+focus_domain: true
+target_skills:
+- comptabilité
+- fiscalité
+- Excel
+- Sage
+geography:
+  preferred_countries:
+  - France
+  allowed_regions:
+  - Europe
+  home:
+    name: Lyon
+    insee: '69123'
+    lat: 45.764
+    lon: 4.8357
+    department: '69'
+    precision: commune
+  max_distance_km: 50
+  strict_distance: false
+  remote_policy:
+    remote_france: true
+    remote_eu: false
+    remote_worldwide: false
+    hybrid: true
+work_modes:
+- remote
+- on-site
+- hybrid
+contract_types:
+- cdi
+- cdd
+- full-time
+- part-time
+experience:
+  preferred_levels:
+  - entry_level
+  - junior
+  - mid
+  - senior
+  max_years: null
+  excluded_seniority:
+  - director
+  - vp
+  - executive
+  - c_suite
+languages:
+- French
+- English
+freshness_days: 30
+max_education: bac+5
+matching:
+  education_hard_constraint: true
+  education_preferred_penalty: 0.2
+  principal_skill_gate: true
+  mandatory_central_skill_gate: true
+  llm_extraction_enabled: false
+  llm_eligibility_enabled: false
+  llm_eligibility_reject_confidence: 0.75

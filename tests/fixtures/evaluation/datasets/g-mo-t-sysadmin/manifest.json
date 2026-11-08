@@ -1,0 +1,14 @@
+{
+  "as_of": "2026-11-08T00:00:00+00:00",
+  "created_at": "2026-11-08T00:00:00+00:00",
+  "dataset_id": "g-mo-t-sysadmin",
+  "job_count": 72,
+  "jobs_sha256": "8deb4de979e34c24b9319c80fe87b578f48f3262f0f96a44acc1000e7c1140e8",
+  "kind": "synthetic",
+  "label_scheme_version": 1,
+  "labels_sha256": "c72a68cbc0a454dc0c5a04ee1b502cb988da8373d621f70dbc520ce16b727beb",
+  "notes": "G-MO-T temporary gate (ADR 0028): synthetic, not the ADR 0023 criterion.",
+  "profile_sha256": "33420fdf77d28aa385a950e47bb0b714ffb404d4abe1c7a35587570a95ee52cc",
+  "schema_version": 1,
+  "version": "1"
+}
