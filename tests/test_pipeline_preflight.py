@@ -323,7 +323,7 @@ class TestIndeedPreflight:
         assert result.skipped_source_types == ["indeed"]
         assert "unofficial source" in result.skip_reasons["indeed"]
         assert any("Indeed skipped" in line for line in result.report_lines)
-        assert result.degraded_errors == []  # normal state of a new install, not a run error
+        assert not result.errors and not result.degraded_errors
 
     def test_indeed_chosen_legacy_key_or_inactive_is_not_skipped(self, tmp_path, monkeypatch):
         monkeypatch.setenv("INDEED_API_KEY", SECRET)            # an older install's setup: chosen
@@ -384,7 +384,7 @@ class TestOverallPreflightStatus:
         assert result.errors == []
         assert result.france_travail.status == "CONFIG_MISSING"
         assert result.skipped_source_types == ["france_travail"]
-        assert any("France Travail skipped" in e for e in result.degraded_errors)
+        assert result.degraded_errors == []  # normal state of a new install, not a run error
         report = "\n".join(result.report_lines)
         assert "skipped for this run" in report
         assert "Pipeline aborted." not in report
