@@ -12,6 +12,7 @@ Temporary databases only.
 from __future__ import annotations
 
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 
 from src.storage.migrations import (
@@ -65,6 +66,7 @@ def _old_jobs_db(path: Path) -> None:
     for column in JOBS_COLUMNS:
         conn.execute(f"ALTER TABLE jobs DROP COLUMN {column}")
     conn.execute("DROP TABLE db_migrations")
+    conn.execute("DROP TABLE app_versions")
     for job_id, source, countries in (("j1", "linkedin", '["FR"]'), ("j2", "eures", '["FR"]')):
         conn.execute(
             "INSERT INTO jobs (id, source, title, countries, content_hash, discovered_at) VALUES (?, ?, 'Dev', ?, '', '2026-10-01')",
@@ -108,3 +110,87 @@ def test_recorded_migrations_do_not_run_again(tmp_path: Path) -> None:
     conn = _init(db)
     assert conn.execute("SELECT countries FROM jobs WHERE id = 'j3'").fetchone() == ('["FR"]',)
     conn.close()
+
+
+# ---- a copy on every version change, whatever the size (M1) ----------------------------------
+
+
+def _version(monkeypatch, value: str) -> None:
+    monkeypatch.setattr("src.storage.sqlite.APP_VERSION", value)
+
+
+def _upgrade_copies(db: Path) -> list[Path]:
+    return sorted((db.parent / "backups").glob("jobs-upgrade-*.db"))
+
+
+def test_a_small_existing_database_is_copied_before_it_is_changed(tmp_path: Path, monkeypatch) -> None:
+    db = tmp_path / "jobs.db"
+    _old_jobs_db(db)
+    _version(monkeypatch, "2.0.0")
+    _init(db).close()
+    (copy,) = _upgrade_copies(db)
+    assert copy.name.startswith("jobs-upgrade-2.0.0-")
+    conn = sqlite3.connect(str(copy))
+    # the copy predates every step: added columns absent, purged row present
+    assert "valid_through" not in _columns(conn, "jobs")
+    assert conn.execute("SELECT COUNT(*) FROM jobs").fetchone() == (2,)
+    conn.close()
+
+
+def test_a_new_database_needs_no_copy(tmp_path: Path, monkeypatch) -> None:
+    db = tmp_path / "jobs.db"
+    _version(monkeypatch, "2.0.0")
+    _init(db).close()
+    assert not (tmp_path / "backups").exists()
+
+
+def test_the_copy_is_made_once_per_version(tmp_path: Path, monkeypatch) -> None:
+    db = tmp_path / "jobs.db"
+    _old_jobs_db(db)
+    _version(monkeypatch, "2.0.0")
+    _init(db).close()
+    _init(db).close()
+    assert len(_upgrade_copies(db)) == 1
+    _version(monkeypatch, "2.1.0")
+    _init(db).close()
+    assert len(_upgrade_copies(db)) == 2
+
+
+def test_routine_backups_never_rotate_an_upgrade_copy_away(tmp_path: Path, monkeypatch) -> None:
+    from src.storage.migrations import backup_database
+
+    db = tmp_path / "jobs.db"
+    _old_jobs_db(db)
+    _version(monkeypatch, "2.0.0")
+    conn = _init(db)
+    for hour in (1, 2, 3, 4):
+        backup_database(conn, db, "cleanup", datetime(2026, 11, 8, hour, tzinfo=UTC))
+    conn.close()
+    assert len(_upgrade_copies(db)) == 1
+    assert len([p for p in (tmp_path / "backups").glob("jobs-2*.db")]) == 2
+
+
+def test_without_a_copy_nothing_is_migrated_and_it_is_tried_again(tmp_path: Path, monkeypatch) -> None:
+    db = tmp_path / "jobs.db"
+    _old_jobs_db(db)
+    _version(monkeypatch, "2.0.0")
+    monkeypatch.setattr("src.storage.migrations.backup_database", lambda *a, **k: None)
+    conn = _init(db)
+    assert conn.execute("SELECT COUNT(*) FROM jobs").fetchone() == (2,)  # the purge has not run
+    conn.close()
+
+    monkeypatch.undo()
+    _version(monkeypatch, "2.0.0")
+    conn = _init(db)
+    assert len(_upgrade_copies(db)) == 1
+    assert conn.execute("SELECT COUNT(*) FROM jobs").fetchone() == (1,)  # migrated now
+    conn.close()
+
+
+def test_a_large_database_is_copied_only_once_during_an_upgrade(tmp_path: Path, monkeypatch) -> None:
+    db = tmp_path / "jobs.db"
+    _old_jobs_db(db)
+    _version(monkeypatch, "2.0.0")
+    monkeypatch.setattr("src.storage.migrations.BACKUP_MIN_BYTES", 0)
+    _init(db).close()
+    assert len(list((tmp_path / "backups").iterdir())) == 1
