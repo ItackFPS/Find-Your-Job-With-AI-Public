@@ -30,6 +30,17 @@ class RomeEntry:
     group: str = ""  # the professional domain a job sheet belongs to
     aliases: list[str] = field(default_factory=list)  # other job titles (ROME appellations)
 
+    @property
+    def keyword(self) -> str:
+        """The label without its feminine form ("Chef / Cheffe de cuisine" -> "Chef de cuisine"):
+        what the profile stores, since the title filter reads a domain as a literal title word.
+        The feminine form repeats the masculine words one for one; words beyond them are shared."""
+        masculine, sep, feminine = self.label.partition(" / ")
+        if not sep or "/" in feminine:
+            return self.label
+        m_words, f_words = masculine.split(), feminine.split()
+        return " ".join(m_words + f_words[len(m_words):])
+
 
 class RomeDb:
     def __init__(self, db_path: str = _DEFAULT_DB_PATH) -> None:

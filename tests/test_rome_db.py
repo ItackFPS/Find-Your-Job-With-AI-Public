@@ -73,3 +73,18 @@ def test_replace_all_replaces_and_keeps_meta(db: RomeDb) -> None:
 def test_entry_round_trip(db: RomeDb) -> None:
     (e,) = db.search("aide-comptable")
     assert e == ENTRIES[3]
+
+
+@pytest.mark.parametrize(("label", "keyword"), [
+    ("Conducteur / Conductrice d'engins agricoles", "Conducteur d'engins agricoles"),
+    ("Chef / Cheffe de cuisine", "Chef de cuisine"),
+    ("Expert-comptable / Experte-comptable", "Expert-comptable"),
+    ("Infirmier / Infirmière en Pratique Avancée", "Infirmier en Pratique Avancée"),
+    ("Développeur / Développeuse web", "Développeur web"),
+    ("Soigneur animalier / Soigneuse animalière", "Soigneur animalier"),
+    ("Comptable", "Comptable"),
+    ("Agriculture et Pêche, Espaces naturels", "Agriculture et Pêche, Espaces naturels"),
+])
+def test_keyword_drops_the_feminine_form(label: str, keyword: str) -> None:
+    """The profile stores the keyword; the title filter reads it as a literal title word."""
+    assert RomeEntry("X", label, "occupation").keyword == keyword
