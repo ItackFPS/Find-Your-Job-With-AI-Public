@@ -19,7 +19,9 @@ export function TodayCard({ dashboard }: { dashboard: Dashboard }) {
   const scheduler = useQuery({ queryKey: ['scheduler-status'], queryFn: getSchedulerStatus, retry: false })
 
   const nextRun = scheduler.data?.schedules.find(s => s.id === 'pipeline_daily')?.next_run_at ?? null
-  const problems = Object.values(run?.stats.by_source ?? {}).filter(s => s.status === 'failed').length
+  const sources = Object.values(run?.stats.by_source ?? {})
+  const problems = sources.filter(s => s.status === 'failed').length
+  const offline = sources.some(s => s.network_outage)
 
   return (
     <Card title={t('dashboard.today.title')} style={{ marginBottom: 'var(--space-4)' }}>
@@ -30,7 +32,8 @@ export function TodayCard({ dashboard }: { dashboard: Dashboard }) {
             : t('dashboard.today.noRun')}
         </p>
         {nextRun && <p style={{ ...line, color: 'var(--color-muted)' }}>{t('dashboard.today.nextRun', { date: formatDateTime(nextRun) })}</p>}
-        {problems > 0 && (
+        {offline && <p style={{ ...line, color: 'var(--color-warning)' }}>{t('dashboard.today.offline')}</p>}
+        {problems > 0 && !offline && (
           <p style={line}>
             <Link to="/settings" style={{ color: 'var(--color-warning)' }}>{t('dashboard.today.problems', { count: problems })}</Link>
           </p>

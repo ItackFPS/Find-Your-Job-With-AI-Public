@@ -172,6 +172,8 @@ export interface SourceStats {
   status?: string | null
   // why a skipped source was left out and what to set up
   reason?: string | null
+  // no source answered at all in this run: the machine's connection, not the sources
+  network_outage?: boolean | null
 }
 
 export interface RunStats {

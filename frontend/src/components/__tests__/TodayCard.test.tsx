@@ -48,6 +48,14 @@ describe('TodayCard', () => {
     expect(await screen.findByRole('link', { name: /1 source/ })).toHaveAttribute('href', '/settings')
   })
 
+  it('names a lost connection instead of counting failed sources', async () => {
+    const down = { collected: 0, accepted: 0, errors: 1, status: 'failed', network_outage: true }
+    const stats = { ...dashboard.latest_run!.stats, by_source: { eures: down, jobicy: down } }
+    show({ ...dashboard, latest_run: { ...dashboard.latest_run!, stats } })
+    expect(await screen.findByText(/internet connection/)).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /2 sources/ })).not.toBeInTheDocument()
+  })
+
   it('says so before any search', async () => {
     show({ ...dashboard, latest_run: null })
     expect(await screen.findByText(/No search yet/)).toBeInTheDocument()

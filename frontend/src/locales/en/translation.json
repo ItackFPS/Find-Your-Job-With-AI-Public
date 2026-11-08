@@ -127,6 +127,7 @@
       "noRun": "No search yet.",
       "nextRun": "Next search: {date}.",
       "problems": "{count, plural, one {# source} other {# sources}} had a problem in the last search",
+      "offline": "No source could be reached in the last search. Check your internet connection; the next search will try again.",
       "top": "Best matches",
       "untitled": "Untitled offer",
       "noMatch": "No strong match in the last search."
