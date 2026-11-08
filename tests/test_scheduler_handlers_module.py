@@ -1,5 +1,5 @@
 """The source handlers live in scheduler/handlers.py; service.py re-exports them so existing
-imports (``from src.scheduler.service import LinkedInHandler``) keep working."""
+imports from the service module keep working."""
 
 from __future__ import annotations
 
@@ -8,10 +8,17 @@ import pytest
 from src.scheduler import handlers, service
 
 
-@pytest.mark.parametrize("name", [
-    "DispatchResult", "SourceHandler", "LinkedInHandler", "HelloWorkHandler", "PipelineHandler",
-    "PIPELINE_POLL_SECONDS", "_scanner_dispatch",
-])
+MOVED = [
+    *sorted(n for n in vars(handlers) if n.endswith("Handler")),
+    "DispatchResult", "PIPELINE_POLL_SECONDS", "_scanner_dispatch",
+]
+
+
+def test_the_three_scan_and_pipeline_handlers_moved() -> None:
+    assert sum(n != "SourceHandler" and n.endswith("Handler") for n in MOVED) == 3
+
+
+@pytest.mark.parametrize("name", MOVED)
 def test_service_reexports_the_handlers_module(name: str) -> None:
     assert getattr(service, name) is getattr(handlers, name)
 
