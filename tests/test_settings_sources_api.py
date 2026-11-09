@@ -26,11 +26,11 @@ SOURCES_YAML = """sources:
   - name: france-travail-web
     type: france_travail_web
     active: true
-  - name: remoteok
-    type: remoteok
+  - name: eures
+    type: eures
     active: true
-  - name: bundesagentur
-    type: bundesagentur
+  - name: arbetsformedlingen
+    type: arbetsformedlingen
     active: false
   - name: indeed
     type: indeed
@@ -59,12 +59,12 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     rs.complete_run(run_id, {"by_source": {
         "france-travail-web": {"collected": 40, "accepted": 12, "errors": 0, "status": "completed",
                                "access_class": "public_page"},
-        "remoteok": {"collected": 0, "accepted": 0, "errors": 1, "status": "failed",
+        "eures": {"collected": 0, "accepted": 0, "errors": 1, "status": "failed",
                      "reason": "The site did not answer"},
     }})
     rs.close()
     state = circuit_breaker.BreakerState(
-        source="remoteok", consecutive_failures=3, trips=1,
+        source="eures", consecutive_failures=3, trips=1,
         paused_until=datetime.now(UTC) + timedelta(hours=2),
         last_failure_reason="timeout", last_failure_at=datetime.now(UTC),
     )
@@ -90,16 +90,16 @@ def _rows(client: TestClient) -> dict[str, dict]:
 
 def test_overview_lists_each_source_with_its_kind_and_state(client: TestClient) -> None:
     rows = _rows(client)
-    assert set(rows) == {"france-travail-web", "remoteok", "indeed", "hellowork", "linkedin"}
+    assert set(rows) == {"france-travail-web", "eures", "indeed", "hellowork", "linkedin"}
 
     ftw = rows["france-travail-web"]
     assert (ftw["access_class"], ftw["collected"], ftw["choice"]) == ("public_page", True, None)
     assert ftw["last_run"]["accepted"] == 12 and ftw["last_run"]["status"] == "completed"
 
-    remoteok = rows["remoteok"]
-    assert remoteok["access_class"] == "official"
-    assert remoteok["last_run"]["reason"] == "The site did not answer"
-    assert remoteok["breaker"]["paused"] is True
+    official = rows["eures"]
+    assert official["access_class"] == "public_page"
+    assert official["last_run"]["reason"] == "The site did not answer"
+    assert official["breaker"]["paused"] is True
 
     assert rows["indeed"]["access_class"] == "unofficial"
     assert rows["indeed"]["choice"] == {"enabled": False, "chosen_at": None}
@@ -123,7 +123,7 @@ def test_a_choice_is_recorded_with_its_date(client: TestClient, tmp_path: Path) 
     stored = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
     assert stored["unofficial_sources"] == {"indeed": True}
 
-    assert client.put("/api/sources/remoteok/choice", json={"enabled": True}).status_code == 404
+    assert client.put("/api/sources/eures/choice", json={"enabled": True}).status_code == 404
     assert client.put("/api/sources/indeed/choice", json={"enabled": "yes"}).status_code == 422
 
 

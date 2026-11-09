@@ -29,10 +29,8 @@ import httpx
 from src.collectors.arbetsformedlingen import ArbetsformedlingenCollector
 from src.collectors.bundesagentur import BundesagenturCollector
 from src.collectors.greenhouse import GreenhouseCollector
-from src.collectors.jobicy import JobicyCollector
 from src.collectors.lever import LeverCollector
 from src.collectors.remote import RemoteCollector
-from src.collectors.remoteok import RemoteOKCollector
 from src.collectors.smartrecruiters import SmartRecruitersCollector
 from src.collectors.workingnomads import WorkingNomadsCollector
 
@@ -69,30 +67,6 @@ class TestWorkingNomadsJsonSafety:
         collector = WorkingNomadsCollector()
         with patch.object(
             WorkingNomadsCollector, "_fetch_with_retry", return_value=_malformed_json_response()
-        ):
-            result = collector.collect()
-        assert result.jobs == []
-        assert len(result.errors) == 1
-
-
-class TestRemoteOKJsonSafety:
-    @patch("src.collectors.remoteok.RemoteOKCollector._enforce_rate_limit")
-    def test_malformed_response_is_captured_not_raised(self, _rl: MagicMock) -> None:
-        collector = RemoteOKCollector()
-        with patch.object(
-            RemoteOKCollector, "_fetch_with_retry", return_value=_malformed_json_response()
-        ):
-            result = collector.collect()
-        assert result.jobs == []
-        assert len(result.errors) == 1
-
-
-class TestJobicyJsonSafety:
-    @patch("src.collectors.jobicy.JobicyCollector._enforce_rate_limit")
-    def test_malformed_response_is_captured_not_raised(self, _rl: MagicMock) -> None:
-        collector = JobicyCollector()
-        with patch.object(
-            JobicyCollector, "_fetch_with_retry", return_value=_malformed_json_response()
         ):
             result = collector.collect()
         assert result.jobs == []

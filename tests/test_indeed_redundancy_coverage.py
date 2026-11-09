@@ -115,8 +115,8 @@ class TestNoRedundantCollectorWasAdded:
         # since its API no longer accepts new subscribers. apec and wttj were
         # removed in 2.0 (plan F1.4): blocked by a CAPTCHA and a firewall.
         expected_types = {
-            "france_travail", "france_travail_web", "remoteok", "jobicy", "bundesagentur",
+            "france_travail", "france_travail_web", "bundesagentur",
             "arbetsformedlingen", "eures", "hellowork",
-            "indeed", "weworkremotely",
+            "indeed", 
         }
         assert source_types == expected_types

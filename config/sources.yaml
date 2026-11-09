@@ -39,33 +39,6 @@ sources:
       max_pages: 60
       rate_limit_delay: 1.0
 
-  - name: remoteok
-    type: remoteok
-    domain: "remoteok.com"
-    careers_url: "https://remoteok.com/api"
-    ats: null
-    board_identifier: null
-    active: true
-    # Free, unauthenticated. Remote-only board. ~100 jobs per run.
-    # Rate limit: 2 s between requests (single request per run).
-    config: {}
-
-  - name: jobicy
-    type: jobicy
-    domain: "jobicy.com"
-    careers_url: "https://jobicy.com/api/v2/remote-jobs"
-    ats: null
-    board_identifier: null
-    active: true
-    # Free, unauthenticated. Remote-only board.
-    # Multi-query: always runs unfiltered baseline, then discovery_queries as industry slugs
-    # (verified slugs: engineering, cybersecurity, admin; data-science removed — returns 0).
-    # geo=anywhere maximises recall; each slug issues one 200-job request.
-    # API verified params: count, industry, geo (slugs from ?get=industries / ?get=locations).
-    config:
-      count: 200    # max jobs per request (API hard cap)
-      geo: "anywhere"  # verified geoSlug; "europe" or "france" for narrower scope
-
   - name: bundesagentur
     type: bundesagentur
     domain: "arbeitsagentur.de"
@@ -91,41 +64,6 @@ sources:
     # no European remote scope). Expected filtering, not a bug. Disabled to
     # avoid wasting collection time per run.
     config: {}
-
-  - name: weworkremotely
-    type: weworkremotely
-    domain: "weworkremotely.com"
-    careers_url: "https://weworkremotely.com/remote-jobs.rss"
-    ats: null
-    board_identifier: null
-    active: true
-    # Upgraded 2026-08-28: replaced the RSS-only collector with a multi-feed
-    # collector that combines the global RSS (~89 recent jobs) with
-    # category-specific RSS feeds to discover well beyond the RSS window.
-    #
-    # Why RSS-only (no HTML scraping):
-    #   All WWR HTML pages (including /categories/* and /remote-jobs) are
-    #   protected by Cloudflare bot-challenge ("Just a moment...", HTTP 403
-    #   for plain httpx).  The /categories/{slug}.rss endpoints are publicly
-    #   accessible without JavaScript challenges and provide equivalent coverage.
-    #
-    # Measured improvement (2026-08-28, live run):
-    #   Global RSS alone:         89 jobs
-    #   + category feeds below:  +140 new unique jobs
-    #   Total unique:             229 jobs  (2.6× improvement)
-    #
-    # Note: some category feeds return HTTP 403 (e.g. remote-python-jobs.rss
-    # as of 2026-08-28 — likely different Cloudflare rule per slug).  The
-    # collector logs and skips those gracefully; others continue unaffected.
-    #
-    # rate_limit_delay of 1.5 s is conservative (WWR Crawl-delay: 2 s).
-    config:
-      category_rss: true
-      # categories: none by default. The collector searches what the profile asks for
-      # (discovery queries from src/discovery); a line of work with a preset
-      # (config/presets/) gets that preset's categories. List categories here to override.
-      rate_limit_delay: 1.5
-      timeout: 30
 
   - name: indeed
     type: indeed

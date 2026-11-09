@@ -409,7 +409,7 @@ def run_pipeline(
                         recent_runs = _hist_rs.list_runs(limit=10)
                     finally:
                         _hist_rs.close()
-                    for src_type in ("france_travail", "jobicy", "remoteok"):
+                    for src_type in ("france_travail",):
                         history = compute_query_yield_history(recent_runs, src_type)
                         if history:
                             yield_history_by_source[src_type] = history

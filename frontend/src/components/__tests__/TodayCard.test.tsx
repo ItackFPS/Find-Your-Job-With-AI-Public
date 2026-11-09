@@ -50,7 +50,7 @@ describe('TodayCard', () => {
 
   it('names a lost connection instead of counting failed sources', async () => {
     const down = { collected: 0, accepted: 0, errors: 1, status: 'failed', network_outage: true }
-    const stats = { ...dashboard.latest_run!.stats, by_source: { eures: down, jobicy: down } }
+    const stats = { ...dashboard.latest_run!.stats, by_source: { eures: down, indeed: down } }
     show({ ...dashboard, latest_run: { ...dashboard.latest_run!, stats } })
     expect(await screen.findByText(/internet connection/)).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /2 sources/ })).not.toBeInTheDocument()

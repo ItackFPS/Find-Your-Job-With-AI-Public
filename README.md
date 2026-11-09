@@ -24,8 +24,7 @@ is a single-user, single-machine app, not a hosted service, and it has no login.
 **Any line of work:** searches are built from your profile (target domains, occupations and
 skills), not from a fixed list, so any occupation can be searched. Vocabulary for one line of
 work lives in an editable preset (`config/presets/`; the IT preset ships, see
-[Lines of work and presets](#lines-of-work-and-presets)). The remote boards (RemoteOK, Jobicy,
-We Work Remotely) list mostly digital roles. Live results for non-IT occupations have not been
+[Lines of work and presets](#lines-of-work-and-presets)). Live results for non-IT occupations have not been
 measured yet; the [decision record](docs/adr/0029-profession-agnostic-discovery.md) says what is
 and is not verified.
 
@@ -264,7 +263,7 @@ the internet):
 
 | Outbound connection | When | What is sent |
 |---|---|---|
-| Job sources — France Travail (its public occupation pages, robots.txt respected; the API when you have credentials), RemoteOK, Jobicy, We Work Remotely, Indeed (its mobile app's API), EURES; LinkedIn (via `python-jobspy`) and HelloWork scanners | pipeline runs, scheduled scans | search queries built from your profile (keywords, locations); never your profile file, feedback or database |
+| Job sources — France Travail (its public occupation pages, robots.txt respected; the API when you have credentials), Indeed (its mobile app's API), EURES; LinkedIn (via `python-jobspy`) and HelloWork scanners | pipeline runs, scheduled scans | search queries built from your profile (keywords, locations); never your profile file, feedback or database |
 | Hugging Face Hub | first use of the embedding model; each later model load checks for updates unless `HF_HUB_OFFLINE=1` | model file requests (Hub telemetry is turned off) |
 | `PHASE2_LLM_ENDPOINT` (default `http://localhost:1234`); `--llm-endpoint` of the evaluation/lab tools | only AI-enabled runs, or those tools when you pass the flag | job text and profile summary. It is whatever you configure — keep it local; the launcher warns if it is not (its `status` check sends only a `GET /v1/models`) |
 | ESCO API (European Commission) | only when you run `scripts/setup_esco.py` | skill search terms |
@@ -347,7 +346,7 @@ Nothing in `src/` assumes a profession. Each run builds its searches from the pr
   matched by name against France Travail's published occupation pages. Contract types add
   words such as "stage" or "alternance" (`config/discovery.yaml`).
 - **A preset** (`config/presets/<name>.yaml`) holds the vocabulary of one line of work: baseline
-  queries, per-source settings (Indeed and EURES queries, We Work Remotely categories,
+  queries, per-source settings (Indeed and EURES queries,
   France Travail occupation codes, LinkedIn queries, HelloWork domains), a scoring hint and the
   Stats page groupings. It applies when the profile's `target_domains` contains one of its
   `applies_to_domains`. `it.yaml` ships; to add your own line of work, copy it, change

@@ -100,7 +100,7 @@
     "welcome": {
       "title": "Bienvenue",
       "intro": "Quelques étapes, aucun fichier à modifier, aucune commande à saisir. Tout reste sur cet ordinateur et vous pourrez tout changer ensuite.",
-      "scope": "La recherche part de votre profil : tous les métiers peuvent être cherchés. Les sites de télétravail (RemoteOK, Jobicy, We Work Remotely) proposent surtout des métiers du numérique."
+      "scope": "La recherche part de votre profil : tous les métiers peuvent être cherchés."
     },
     "profile": {
       "title": "Que recherchez-vous ?",
@@ -248,7 +248,7 @@
       "profile": "Remplissez votre <profile>profil</profile> : postes visés, compétences, lieux et langues. Les recherches en découlent.",
       "sources": "Sources sans compte : {noAccount}. {scanners} sont des sources non officielles : elles restent désactivées sauf si vous les choisissez ou cliquez sur <b>Lancer le scan</b> sur leurs cartes ci-dessous.",
       "and": " et ",
-      "scope": "La recherche part de votre profil : tous les métiers peuvent être cherchés. Les sites de télétravail (RemoteOK, Jobicy, We Work Remotely) proposent surtout des métiers du numérique.",
+      "scope": "La recherche part de votre profil : tous les métiers peuvent être cherchés.",
       "run": "Pour chercher tout de suite, cliquez sur <b>Lancer le pipeline</b>. La première exécution télécharge une seule fois le modèle local de rapprochement (environ 470 Mo). Aucune donnée d’offre n’est envoyée à un service d’IA dans le cloud."
     }
   },
@@ -1352,9 +1352,6 @@
         "france-travail": "France Travail (API officielle)",
         "france-travail-web": "France Travail (site web)",
         "eures": "EURES",
-        "remoteok": "Remote OK",
-        "jobicy": "Jobicy",
-        "weworkremotely": "We Work Remotely",
         "workingnomads": "Working Nomads",
         "bundesagentur": "Bundesagentur für Arbeit",
         "arbetsformedlingen": "Arbetsförmedlingen",

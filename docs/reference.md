@@ -123,9 +123,6 @@ class. A shared retry/backoff/rate-limit layer lives in `src/collectors/base.py`
 | Source | Type | Method | Auth | Status |
 |---|---|---|---|---|
 | France Travail | `france_travail` | Official REST API (OAuth2) | `FRANCE_TRAVAIL_CLIENT_ID`/`SECRET` | **Active** — exhaustive pagination, bounded concurrency (`max_workers`, default 4) |
-| RemoteOK | `remoteok` | REST API | None | **Active** |
-| Jobicy | `jobicy` | REST API | None | **Active** |
-| We Work Remotely | `weworkremotely` | RSS/Atom | None | **Active** |
 | Indeed | `indeed` | Unofficial (Indeed's mobile API, read through python-jobspy) | none; opt-in: `unofficial_sources.indeed` in `data/settings.json` (an older `INDEED_API_KEY` counts as opted in) | **Active when chosen** — jobspy pages each query |
 | EURES | `eures` | Public REST API | None | **Active** |
 | Bundesagentur für Arbeit | `bundesagentur` | REST API | None | Disabled — Germany-only; every result fails this project's location filter |
