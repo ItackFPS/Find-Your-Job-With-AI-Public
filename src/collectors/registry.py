@@ -40,13 +40,10 @@ class CollectorRegistry:
         from src.collectors.france_travail_web import FranceTravailWebCollector
         from src.collectors.greenhouse import GreenhouseCollector
         from src.collectors.hellowork import HelloWorkCollector
-        from src.collectors.jobicy import JobicyCollector
         from src.collectors.lever import LeverCollector
         from src.collectors.remote import RemoteCollector
-        from src.collectors.remoteok import RemoteOKCollector
         from src.collectors.smartrecruiters import SmartRecruitersCollector
         from src.collectors.workingnomads import WorkingNomadsCollector
-        from src.collectors.weworkremotely import WeWorkRemotelyCollector
 
         # greenhouse/lever/smartrecruiters/workingnomads below are real,
         # working, verified collectors kept registered even though no
@@ -64,16 +61,12 @@ class CollectorRegistry:
         self._collectors["rss"] = RemoteCollector
         self._collectors["france_travail"] = FranceTravailCollector
         self._collectors["france_travail_web"] = FranceTravailWebCollector
-        self._collectors["remoteok"] = RemoteOKCollector
-        self._collectors["jobicy"] = JobicyCollector
         self._collectors["workingnomads"] = WorkingNomadsCollector
         self._collectors["bundesagentur"] = BundesagenturCollector
         self._collectors["arbetsformedlingen"] = ArbetsformedlingenCollector
         self._collectors["smartrecruiters"] = SmartRecruitersCollector
         # EURES: httpx-based (no browser needed; uses the public POST search API).
         self._collectors["eures"] = EURESCollector
-        # We Work Remotely: RSS + HTML category-page discovery.
-        self._collectors["weworkremotely"] = WeWorkRemotelyCollector
         # Indeed: httpx-based GraphQL API (no browser needed).
         from src.collectors.indeed import IndeedCollector
         self._collectors["indeed"] = IndeedCollector

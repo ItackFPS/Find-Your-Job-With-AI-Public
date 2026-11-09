@@ -1,4 +1,4 @@
-"""Tests for collector audit fix: weworkremotely-rss.
+"""Tests for collector audit fix: example-rss.
 
 RemoteCollector (used for `type: rss` sources) previously called
 https://remotework.com/api/v1/jobs regardless of the configured
@@ -20,18 +20,18 @@ SAMPLE_RSS_FEED = """<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
 <channel>
 <title>We Work Remotely</title>
-<link>https://weworkremotely.com</link>
+<link>https://jobs.example.com</link>
 <item>
 <title>Acme Corp: Senior Backend Engineer</title>
-<link>https://weworkremotely.com/jobs/12345</link>
-<guid>https://weworkremotely.com/jobs/12345</guid>
+<link>https://jobs.example.com/jobs/12345</link>
+<guid>https://jobs.example.com/jobs/12345</guid>
 <description>&lt;p&gt;We are looking for a backend engineer.&lt;/p&gt;</description>
 <category>Programming</category>
 </item>
 <item>
 <title>Untitled Listing Without A Colon</title>
-<link>https://weworkremotely.com/jobs/67890</link>
-<guid>https://weworkremotely.com/jobs/67890</guid>
+<link>https://jobs.example.com/jobs/67890</link>
+<guid>https://jobs.example.com/jobs/67890</guid>
 <description>Some role.</description>
 </item>
 </channel>
@@ -47,14 +47,14 @@ def _mock_response(text: str = "", json_data: Any = None) -> MagicMock:
     return resp
 
 
-# -- Issue 2: weworkremotely-rss / RemoteCollector -----------------------------
+# -- Issue 2: example-rss / RemoteCollector -----------------------------
 
 
 class TestRemoteCollectorUsesConfiguredCareersUrl:
     def test_rss_type_fetches_configured_careers_url(self) -> None:
         config = {
             "type": "rss",
-            "careers_url": "https://www.weworkremotely.com/jobs/rss",
+            "careers_url": "https://jobs.example.com/jobs/rss",
         }
         collector = RemoteCollector(config=config)
 
@@ -65,7 +65,7 @@ class TestRemoteCollectorUsesConfiguredCareersUrl:
 
         mock_fetch.assert_called_once()
         called_url = mock_fetch.call_args.args[0]
-        assert called_url == "https://www.weworkremotely.com/jobs/rss"
+        assert called_url == "https://jobs.example.com/jobs/rss"
         assert "remotework.com" not in called_url
 
         assert result.errors == []
@@ -83,7 +83,7 @@ class TestRemoteCollectorUsesConfiguredCareersUrl:
         assert first["title"] == "Senior Backend Engineer"
         assert "backend engineer" in first["description"].lower()
         assert first["remote"] is True
-        assert first["url"] == "https://weworkremotely.com/jobs/12345"
+        assert first["url"] == "https://jobs.example.com/jobs/12345"
         assert first["categories"] == ["Programming"]
 
         # No "Company: Title" pattern -> whole string used as title, no crash
@@ -92,14 +92,14 @@ class TestRemoteCollectorUsesConfiguredCareersUrl:
         assert second["company"] == ""
 
     def test_rss_never_uses_the_old_hardcoded_remotework_url(self) -> None:
-        config = {"type": "rss", "careers_url": "https://www.weworkremotely.com/jobs/rss"}
+        config = {"type": "rss", "careers_url": "https://jobs.example.com/jobs/rss"}
         collector = RemoteCollector(config=config)
 
         with patch("httpx.get", return_value=_mock_response(text=SAMPLE_RSS_FEED)) as mock_get:
             collector.collect()
 
         called_url = mock_get.call_args.args[0]
-        assert called_url == "https://www.weworkremotely.com/jobs/rss"
+        assert called_url == "https://jobs.example.com/jobs/rss"
         assert called_url != "https://remotework.com/api/v1/jobs"
 
     def test_rss_without_careers_url_skips_gracefully_without_crashing(self) -> None:
@@ -110,7 +110,7 @@ class TestRemoteCollectorUsesConfiguredCareersUrl:
         assert any("careers_url" in e for e in result.errors)
 
     def test_ssl_verification_is_never_disabled(self) -> None:
-        config = {"type": "rss", "careers_url": "https://www.weworkremotely.com/jobs/rss"}
+        config = {"type": "rss", "careers_url": "https://jobs.example.com/jobs/rss"}
         collector = RemoteCollector(config=config)
 
         with patch("httpx.get", return_value=_mock_response(text=SAMPLE_RSS_FEED)) as mock_get:
@@ -147,15 +147,15 @@ class TestMainCollectorConfigWiring:
 
     def test_build_collector_config_includes_top_level_fields(self) -> None:
         source_config = {
-            "name": "weworkremotely-rss",
+            "name": "example-rss",
             "type": "rss",
-            "careers_url": "https://www.weworkremotely.com/jobs/rss",
+            "careers_url": "https://jobs.example.com/jobs/rss",
             "board_identifier": None,
             "config": {},
         }
         merged = _build_collector_config(source_config)
 
-        assert merged["careers_url"] == "https://www.weworkremotely.com/jobs/rss"
+        assert merged["careers_url"] == "https://jobs.example.com/jobs/rss"
         assert merged["type"] == "rss"
 
     def test_nested_config_overrides_top_level_on_collision(self) -> None:

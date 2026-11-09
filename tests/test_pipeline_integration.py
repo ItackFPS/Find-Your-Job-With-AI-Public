@@ -76,7 +76,7 @@ def sample_sources() -> list[Source]:
     return [
         Source(name="greenhouse-public", type="greenhouse", active=True),
         Source(name="ashby-public", type="ashby", active=True),
-        Source(name="weworkremotely-rss", type="rss", active=True),
+        Source(name="example-rss", type="rss", active=True),
     ]
 
 
