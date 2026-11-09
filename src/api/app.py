@@ -71,6 +71,7 @@ from src.api.routes import (
     privacy,
     profile,
     quality,
+    rome,
     scheduler as scheduler_routes,
     settings as settings_routes,
     skills,
@@ -470,6 +471,7 @@ app.include_router(feedback.router)
 app.include_router(decisions.router)
 app.include_router(dashboard.router)
 app.include_router(esco.router)
+app.include_router(rome.router)
 app.include_router(departments.router)
 app.include_router(geo.router)
 app.include_router(linkedin.router)

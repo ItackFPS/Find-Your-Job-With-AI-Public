@@ -265,6 +265,7 @@ grouped by route module in `src/api/routes/`:
   `GET /api/jobs/countries`
 - **dashboard** — `GET /api/dashboard`
 - **esco** — `GET /api/esco/skills`, `GET /api/esco/occupations`, `GET /api/esco/status`
+- **rome** — `GET /api/rome/occupations`, `GET /api/rome/status` (the domain field's ROME suggestions; empty until `python scripts/setup_rome.py` has built `data/rome.db`)
 - **departments** — `GET /api/departments`, `GET /api/departments/all`
 - **linkedin** / **hellowork** — `GET .../status`, `POST .../scan`, `GET .../scans`
 - **scheduler** — `GET /api/scheduler/status`, `GET /api/scheduler/executions`, `POST /api/scheduler/run/{id}`
@@ -293,6 +294,13 @@ checkpoints, embedding caches, personalization data, notification history (kept,
 LinkedIn/HelloWork staging tables. A separate **`data/esco.db`** holds the ESCO skill
 taxonomy. Both are created automatically on first run under `data/`, which is not
 tracked in git.
+
+**ROME.** `data/rome.db` (built by `python scripts/setup_rome.py`, never at app start) holds France
+Travail's ROME 4.0: 14 broad domains, 110 professional domains and 1,923 job sheets with their other job
+titles, in French. The Profile page's domain field suggests from it (`/api/rome/*`), for any sector; a picked
+entry is stored in `target_domains` as its keyword (the label without its feminine form). Data: France
+Travail, ROME, Licence Ouverte ROME (reuse, adaptation and redistribution allowed; the licence asks to name
+France Travail and the date of the last update, which `/api/rome/status` returns as `attribution`).
 
 There is no versioned migration framework — schema evolution is handled by idempotent
 `ALTER TABLE ... ADD COLUMN` checks at startup plus a small table of one-time named data

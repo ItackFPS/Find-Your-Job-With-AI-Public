@@ -112,6 +112,17 @@ export interface EscoSuggestion {
   is_esco: boolean
 }
 
+/** A ROME (France Travail) professional domain or job sheet from the local index. */
+export interface RomeSuggestion {
+  code: string
+  label: string
+  /** What the profile stores: the label without its feminine form. */
+  keyword: string
+  kind: 'domain' | 'occupation'
+  group: string
+  is_rome: boolean
+}
+
 export interface Matching {
   education_hard_constraint: boolean
   education_preferred_penalty: number
