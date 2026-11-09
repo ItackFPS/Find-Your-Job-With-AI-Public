@@ -20,6 +20,7 @@ from typing import Any
 
 from src.models.job import Job
 from src.models.profile import JobSearchProfile
+from src.pipeline.domain_vocabulary import resolve_domains, title_has_stem_set
 
 
 # ---------------------------------------------------------------------------
@@ -89,8 +90,10 @@ def _title_matched_domain(
     """Return the first domain whose title keywords match the job title, else None."""
     title_norm = _norm(title)
     for domain in target_domains:
-        kws = domain_keywords.get(domain, {})
-        for kw in kws.get("title", []):
+        vocabulary = resolve_domains([domain], domain_keywords)
+        if title_has_stem_set(title, vocabulary.title_stem_sets):
+            return domain
+        for kw in vocabulary.title_terms:
             if _norm(kw) in title_norm:
                 return domain
     return None

@@ -17,6 +17,12 @@ from typing import TYPE_CHECKING, Any, Callable
 from src.models.job import Job
 from src.pipeline.departments import PACA_NEIGHBOR_DEPARTMENTS, extract_department_code
 from src.pipeline.domain_scope import groups_outside_profile
+from src.pipeline.domain_vocabulary import (
+    effective_domains,
+    profile_labels,
+    resolve_domains,
+    title_has_stem_set,
+)
 from src.pipeline.location_distance import assess as assess_location
 from src.pipeline.location_distance import describe as describe_location
 from src.pipeline.location_distance import distance_config
@@ -648,7 +654,9 @@ def build_scoring_config(
     # _score_skills_match / _has_domain_vocabulary_hit in scoring.py
     # for why this must never be merged into target_skills itself.
     domain_vocab_terms: list[str] = []
-    for domain in profile.target_domains:
+    domain_keywords = engine_cfg.get("domain_keywords", {})
+    resolved_domains = effective_domains(profile, domain_keywords)
+    for domain in resolved_domains:
         domain_vocab_terms.extend(
             engine_cfg.get("domain_skill_vocabulary", {}).get(domain, [])
         )
@@ -668,22 +676,19 @@ def build_scoring_config(
         .setdefault("scoring", {})
         .setdefault("domain_relevance", {})
     )
-    domain_title_kws: list[str] = []
-    domain_desc_kws: list[str] = []
-    for domain in profile.target_domains:
-        kws = engine_cfg.get("domain_keywords", {}).get(domain, {})
-        domain_title_kws.extend(kws.get("title", []))
-        domain_desc_kws.extend(kws.get("description", []))
-    domain_rel_cfg["domain_title_keywords"] = list(dict.fromkeys(domain_title_kws))
+    vocabulary = resolve_domains(profile_labels(profile), domain_keywords)
+    domain_rel_cfg["domain_title_keywords"] = list(vocabulary.title_terms)
+    if vocabulary.title_stem_sets:
+        domain_rel_cfg["domain_title_stem_sets"] = [list(s) for s in vocabulary.title_stem_sets]
     # Mid-tier role indicators of the line-of-work presets that apply to this profile.
     from src.discovery.presets import load_presets, matching_presets
 
     domain_rel_cfg["broad_title_indicators"] = list(dict.fromkeys(
         ind
-        for preset in matching_presets(load_presets(), list(profile.target_domains))
+        for preset in matching_presets(load_presets(), resolved_domains)
         for ind in preset.broad_title_indicators
     ))
-    domain_rel_cfg["domain_description_keywords"] = list(dict.fromkeys(domain_desc_kws))
+    domain_rel_cfg["domain_description_keywords"] = list(vocabulary.description_terms)
     off_domain_kws: list[str] = []
     for section in ("excluded_title_keywords", "non_it_title_functions"):
         groups = engine_cfg.get(section, {})
@@ -1221,6 +1226,9 @@ def _score_domain_relevance(
     if domain_title_kws and any(
         _domain_keyword_matches(_norm_text(kw), title_norm) for kw in domain_title_kws
     ):
+        return 1.0
+    stem_sets = config.get("scoring", {}).get("domain_relevance", {}).get("domain_title_stem_sets")
+    if stem_sets and title_has_stem_set(title or "", stem_sets):
         return 1.0
 
     domain_desc_kws = _get_keywords(config, "scoring.domain_relevance.domain_description_keywords")
