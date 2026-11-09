@@ -757,6 +757,23 @@ def _get_keywords(
     return [item for item in current if isinstance(item, str)]
 
 
+# Same weight as a description naming the domain: the source itself files the offer under an
+# occupation the profile targets, which an extract is often too short to say.
+_OCCUPATION_EVIDENCE_SCORE = 0.7
+
+
+def _description_is_partial(job: Job) -> bool:
+    """True when the collector could only read an extract of the description."""
+    return isinstance(job.raw_payload, dict) and job.raw_payload.get("description_complete") is False
+
+
+def _source_names_target_occupation(job: Job) -> bool:
+    """True when the source lists this offer under an occupation chosen for the profile's domains."""
+    payload = job.raw_payload if isinstance(job.raw_payload, dict) else {}
+    occupation = payload.get("occupation")
+    return isinstance(occupation, dict) and bool(occupation.get("target_domains"))
+
+
 def _compute_factors(
     job: Job, config: dict[str, Any], gate_result: GateResult | None = None
 ) -> dict[str, float]:
@@ -780,6 +797,8 @@ def _compute_factors(
     )
 
     domain_relevance = _score_domain_relevance(job.title, job.description, config)
+    if _source_names_target_occupation(job) and domain_relevance > 0.05:
+        domain_relevance = max(domain_relevance, _OCCUPATION_EVIDENCE_SCORE)
     distance_cfg = _distance_cfg(config)
 
     return {
@@ -1718,6 +1737,9 @@ def _score_skills_match(
 
         if matched:
             matches += 1
+
+    if matches == 0 and _description_is_partial(job):
+        return 0.5  # Only an extract was readable: its silence says nothing about the skills.
 
     if matches == 0:
         if domain_relevance is not None:
