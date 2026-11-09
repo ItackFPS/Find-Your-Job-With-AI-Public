@@ -184,6 +184,17 @@ def load_neutral(config_dir: str | Path | None = None) -> NeutralDiscovery:
     return _load_neutral_cached(str(config_dir or DEFAULT_CONFIG_DIR))
 
 
+@lru_cache(maxsize=8)
+def _load_domain_keywords_cached(config_dir: str) -> dict[str, Any]:
+    keywords = _read_yaml(Path(config_dir) / "filters.yaml").get("domain_keywords")
+    return keywords if isinstance(keywords, dict) else {}
+
+
+def load_domain_keywords(config_dir: str | Path | None = None) -> dict[str, Any]:
+    """The ``domain_keywords`` vocabulary of ``filters.yaml`` ({} when unreadable)."""
+    return _load_domain_keywords_cached(str(config_dir or DEFAULT_CONFIG_DIR))
+
+
 def matching_presets(
     presets: tuple[DiscoveryPreset, ...], target_domains: list[str]
 ) -> list[DiscoveryPreset]:

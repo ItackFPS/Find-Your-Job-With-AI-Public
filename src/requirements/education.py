@@ -694,6 +694,35 @@ def _is_range_gap(text: str, lower: EducationRequirement, upper: EducationRequir
     )
 
 
+def _examples_of_range(
+    text: str,
+    upper: EducationRequirement,
+    found: list[EducationRequirement],
+    held: list[int],
+    dropped: set[int],
+) -> set[int]:
+    """Mentions in the parenthesis that illustrates a range: "Bac à Bac+2 (BTS, DUT)".
+
+    They name diplomas within the range, so they are not a separate, higher requirement.
+    Only mentions no higher than the range's top are taken; a parenthesis must open right
+    after it, within the same clause.
+    """
+    assert upper.span is not None
+    opening = re.match(r"[^().;\n]{0,40}\(", text[upper.span.end:])
+    if opening is None:
+        return set()
+    start = upper.span.end + opening.end()
+    close = text.find(")", start)
+    end = close if close != -1 else start + 80
+    return {
+        i for i in held
+        if i not in dropped
+        and (mention := found[i]).span is not None
+        and start <= mention.span.start < end
+        and mention.level_bac_plus <= upper.level_bac_plus
+    }
+
+
 def _merge_held_ranges(
     text: str, found: list[EducationRequirement], cues: list[re.Match[str] | None]
 ) -> None:
@@ -728,6 +757,7 @@ def _merge_held_ranges(
             lower.is_experience_alternative or upper.is_experience_alternative
         )
         dropped.add(b)
+        dropped.update(_examples_of_range(text, upper, found, held, set(dropped)))
     for i in sorted(dropped, reverse=True):
         del found[i]
         del cues[i]

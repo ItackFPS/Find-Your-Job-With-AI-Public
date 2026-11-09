@@ -26,6 +26,7 @@ from src.discovery.adaptive import QueryYieldStats, prioritize_queries
 from src.discovery.presets import (
     DiscoveryPreset,
     load_neutral,
+    load_domain_keywords,
     load_presets,
     matching_presets,
     normalize_domain,
@@ -288,7 +289,13 @@ class DiscoveryQueryExpander:
     # ------------------------------------------------------------------
 
     def _presets_for(self, profile: "JobSearchProfile") -> list[DiscoveryPreset]:
-        return matching_presets(load_presets(self._config_dir), list(profile.target_domains))
+        return matching_presets(load_presets(self._config_dir), self._domains(profile))
+
+    def _domains(self, profile: "JobSearchProfile") -> list[str]:
+        """The profile's domains plus the vocabulary keys typed labels resolve to."""
+        from src.pipeline.domain_vocabulary import effective_domains  # src.pipeline imports discovery
+
+        return effective_domains(profile, load_domain_keywords(self._config_dir))
 
     def _profile_queries(
         self,
@@ -322,7 +329,7 @@ class DiscoveryQueryExpander:
                     extra.extend(f"{term} {domain}" for domain in custom)
             for preset in presets:
                 by_domain = preset.domain_queries.get(source, {})
-                for domain in profile.target_domains:
+                for domain in self._domains(profile):
                     extra.extend(by_domain.get(normalize_domain(domain), []))
                 for contract in profile.contract_types:
                     extra.extend(preset.contract_queries.get(source, {}).get(contract, []))
