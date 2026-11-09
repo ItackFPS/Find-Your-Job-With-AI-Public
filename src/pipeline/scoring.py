@@ -771,7 +771,7 @@ def _source_names_target_occupation(job: Job) -> bool:
     """True when the source lists this offer under an occupation chosen for the profile's domains."""
     payload = job.raw_payload if isinstance(job.raw_payload, dict) else {}
     occupation = payload.get("occupation")
-    return isinstance(occupation, dict) and bool(occupation.get("target_domains"))
+    return isinstance(occupation, dict) and bool(occupation.get("named_domains"))
 
 
 def _compute_factors(

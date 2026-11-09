@@ -27,12 +27,17 @@ def test_a_skill_found_in_an_extract_still_counts() -> None:
 
 
 def test_source_occupation_counts_as_domain_evidence() -> None:
-    job = _job(description_complete=False, occupation={"code": "1", "target_domains": ["Soins"]})
+    job = _job(description_complete=False, occupation={"code": "1", "named_domains": ["Soins"]})
     assert _compute_factors(job, CONFIG)["domain_relevance"] == 0.7
 
 
+def test_an_occupation_sharing_one_word_with_the_domain_is_not_evidence() -> None:
+    job = _job(description_complete=False, occupation={"code": "1", "target_domains": ["Soins"], "named_domains": []})
+    assert _compute_factors(job, CONFIG)["domain_relevance"] == 0.45
+
+
 def test_source_occupation_never_rescues_a_confirmed_mismatch() -> None:
-    job = _job(title="Vendeur", description_complete=False, occupation={"code": "1", "target_domains": ["Soins"]})
+    job = _job(title="Vendeur", description_complete=False, occupation={"code": "1", "named_domains": ["Soins"]})
     assert _compute_factors(job, CONFIG)["domain_relevance"] == 0.05
 
 
