@@ -19,17 +19,44 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from collections.abc import Mapping, Sequence
+import re
+import unicodedata
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 
 from src.learning.config import PersonalModelConfig
-from src.learning.signals import EMBEDDING, STRUCTURED, OfferSignal
+from src.learning.signals import EMBEDDING, STRUCTURED, TERMS, OfferSignal
 
-ALGORITHM_VERSION = "pm1"
+ALGORITHM_VERSION = "pm2"
 
-Values = Mapping[str, str | None]
+Values = Mapping[str, Any]
+EMBEDDING_LABEL = "similar_content"   # how the embedding part is named in an explanation
+_TERM_TOP = 3                         # an offer's strongest known terms, averaged
+_REASONS_KEPT = 3
+
+_WORD = re.compile(r"[a-z0-9+#.]{2,}")
+_NOT_TERMS = frozenset({
+    "and", "alternance", "apprentissage", "au", "aux", "avec", "cdd", "cdi", "dans", "de", "des", "du", "emploi",
+    "en", "et", "fh", "for", "h.f", "hf", "interim", "job", "la", "le", "les", "mission", "nf", "offre", "of",
+    "ou", "par", "pour", "poste", "recrute", "recherche", "stage", "sur", "temps", "the", "to", "un", "une",
+})
+
+
+def offer_terms(title: str | None, skills: Sequence[str] | None) -> tuple[str, ...]:
+    """The words naming what an offer is about: its title and listed skills, one form per word."""
+    text = " ".join([title or "", *(skills or [])])
+    plain = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
+    seen: dict[str, None] = {}
+    for word in _WORD.findall(plain):
+        word = word.strip(".")
+        if len(word) > 4 and word[-1] in "sx":
+            word = word[:-1]
+        if len(word) >= 2 and word not in _NOT_TERMS and not word.isdigit():
+            seen.setdefault(word)
+    return tuple(seen)
 
 
 def _unit(vec: Sequence[float] | None) -> np.ndarray | None:
@@ -60,6 +87,7 @@ class PersonalModel:
     config_digest: str = ""
     content_signals: int = 0
     content_with_vector: int = 0
+    strong: int = 0
 
     @property
     def version(self) -> str:
@@ -76,9 +104,32 @@ class PersonalModel:
             total += float(x @ self.delta)
         for feature, table in self.tables.items():
             value = values.get(feature)
-            if value is not None:
+            if feature != TERMS and value is not None:
                 total += table.get(value, 0.0)
-        return total
+        return total + self._terms_part(values)
+
+    def _terms_part(self, values: Values) -> float:
+        table = self.tables.get(TERMS)
+        if not table:
+            return 0.0
+        known = [table[t] for t in values.get(TERMS) or () if t in table]
+        known = sorted(known, key=abs, reverse=True)[:_TERM_TOP]
+        return sum(known) / len(known) if known else 0.0
+
+    def reasons(self, vector: Sequence[float] | None, values: Values) -> list[dict[str, Any]]:
+        """What moved this offer, strongest first: the learned preferences it matches."""
+        parts: list[tuple[str, str, float]] = []
+        x = _unit(vector)
+        if self.delta is not None and x is not None and x.shape == self.delta.shape:
+            parts.append((EMBEDDING, EMBEDDING_LABEL, float(x @ self.delta)))
+        for feature, table in self.tables.items():
+            if feature == TERMS:
+                parts.extend((TERMS, t, table[t]) for t in values.get(TERMS) or () if t in table)
+            elif (value := values.get(feature)) is not None and value in table:
+                parts.append((feature, value, table[value]))
+        parts = [p for p in parts if abs(p[2]) > 1e-6]
+        parts.sort(key=lambda p: abs(p[2]), reverse=True)
+        return [{"feature": f, "value": v, "weight": round(w, 4)} for f, v, w in parts[:_REASONS_KEPT]]
 
     def adjustment(self, vector: Sequence[float] | None, values: Values) -> float:
         if self.n == 0 or self.cap == 0.0:
@@ -88,16 +139,18 @@ class PersonalModel:
     def summary(self) -> dict[str, object]:
         """Inspectable state, stored in ``personal_model_state`` (the embedding δ is not stored:
         it is rebuilt from the journal, INV-4)."""
-        return {"n": self.n, "cap": self.cap, "tables": self.tables, "content_signals": self.content_signals,
+        return {"n": self.n, "strong": self.strong, "cap": self.cap, "tables": self.tables,
+                "content_signals": self.content_signals,
                 "content_with_vector": self.content_with_vector,
                 "delta_norm": None if self.delta is None else float(np.linalg.norm(self.delta))}
 
 
 def fit(signals: Sequence[OfferSignal], vectors: Mapping[str, Sequence[float]],
         values: Mapping[str, Values], profile: Sequence[float] | None, cfg: PersonalModelConfig,
-        embedding_model: str = "") -> PersonalModel:
+        embedding_model: str = "", forgotten: Collection[tuple[str, str]] = ()) -> PersonalModel:
     """Fit the model on ``signals``. ``vectors`` and ``values`` are keyed by job id; missing entries
-    simply contribute nothing to the part that needs them."""
+    simply contribute nothing to the part that needs them. A ``(feature, value)`` in ``forgotten``
+    (the user corrected it, ADR 0030) is left out of the result."""
     signals = sorted(signals, key=lambda s: s.job_id)
     digest, ihash = cfg.digest(), input_hash(signals, profile, embedding_model)
     n = len(signals)
@@ -105,7 +158,7 @@ def fit(signals: Sequence[OfferSignal], vectors: Mapping[str, Sequence[float]],
     content = [s for s in signals if EMBEDDING in s.features]
     rows = [(s, x) for s in content if (x := _unit(vectors.get(s.job_id))) is not None]
     delta: np.ndarray | None = None
-    if rows:
+    if rows and (EMBEDDING, EMBEDDING_LABEL) not in forgotten:
         X = np.vstack([x for _, x in rows])
         w0 = _unit(profile)
         if w0 is None or w0.shape[0] != X.shape[1]:
@@ -128,8 +181,21 @@ def fit(signals: Sequence[OfferSignal], vectors: Mapping[str, Sequence[float]],
         if sums:
             tables[feature] = {v: wy / (w + cfg.shrinkage) for v, (wy, w) in sorted(sums.items())}
 
+    term_sums: dict[str, list[float]] = {}
+    for s in signals:
+        if TERMS in s.features:
+            for term in values.get(s.job_id, {}).get(TERMS) or ():
+                acc = term_sums.setdefault(term, [0.0, 0.0])
+                acc[0] += s.weight * s.y
+                acc[1] += s.weight
+    if term_sums:
+        tables[TERMS] = {t: wy / (w + cfg.shrinkage) for t, (wy, w) in sorted(term_sums.items())}
+    tables = {f: kept for f, table in tables.items()
+              if (kept := {v: a for v, a in table.items() if (f, v) not in forgotten})}
+
     return PersonalModel(n=n, cap=cfg.cap(n), clamp=cfg.clamp, delta=delta, tables=tables, input_hash=ihash,
-                         config_digest=digest, content_signals=len(content), content_with_vector=len(rows))
+                         config_digest=digest, content_signals=len(content), content_with_vector=len(rows),
+                         strong=sum(1 for s in signals if abs(s.y) >= 1.0))
 
 
 # -- structured values -----------------------------------------------------------------------------

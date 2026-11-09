@@ -106,6 +106,56 @@ def learning_status(request: Request) -> LearningStatusOut:
         strata=strata)
 
 
+class PreferenceIn(BaseModel):
+    feature: str
+    value: str
+
+
+def _personal_config(request: Request) -> Any:
+    from src.learning.config import load_personal_model_config
+
+    return load_personal_model_config(Path(request.app.state.config_dir) / "personalization.yaml")
+
+
+@router.get("/learning/preferences")
+def learned_preferences(request: Request) -> dict[str, Any]:
+    """What the app learned from the user's actions, and what that changed in the latest search."""
+    from src.learning import live
+
+    return {**live.preferences(request.app.state.db_path, _personal_config(request)),
+            "paused": learning.is_paused(request.app.state.db_path)}
+
+
+@router.post("/learning/preferences/forget")
+def forget_preference(body: PreferenceIn, request: Request) -> dict[str, Any]:
+    from src.learning import live
+
+    try:
+        live.forget(request.app.state.db_path, body.feature, body.value)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return learned_preferences(request)
+
+
+@router.post("/learning/preferences/restore")
+def restore_preference(body: PreferenceIn, request: Request) -> dict[str, Any]:
+    from src.learning import live
+
+    try:
+        live.restore(request.app.state.db_path, body.feature, body.value)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return learned_preferences(request)
+
+
+@router.get("/learning/why/{job_id}")
+def why_ranked(job_id: str, request: Request) -> dict[str, Any]:
+    """Why the personal order moved one offer; ``null`` fields when it has no personal position."""
+    from src.learning import live
+
+    return live.why(request.app.state.db_path, job_id) or {"applied": False, "reasons": []}
+
+
 @router.post("/learning/resume", response_model=LearningStatusOut)
 def resume_learning(request: Request) -> LearningStatusOut:
     """"Reprendre": a paused personal ranking goes back to observation; the full rule must pass

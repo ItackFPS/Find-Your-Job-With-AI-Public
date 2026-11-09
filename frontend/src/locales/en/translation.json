@@ -96,7 +96,14 @@
     "next": "Next",
     "back": "Back",
     "skip": "Skip setup",
-    "steps": { "welcome": "Welcome", "profile": "Your search", "sources": "Sources", "model": "Matching", "background": "Daily search", "done": "Finish" },
+    "steps": {
+      "welcome": "Welcome",
+      "profile": "Your search",
+      "sources": "Sources",
+      "model": "Matching",
+      "background": "Daily search",
+      "done": "Finish"
+    },
     "welcome": {
       "title": "Welcome",
       "intro": "A few steps, no file to edit, no command to type. Everything stays on this computer, and you can change it all later.",
@@ -1467,7 +1474,7 @@
   },
   "learning": {
     "status": {
-      "observing": "The app is watching your choices; personalization will turn on once it has proven itself.",
+      "observing": "Your ranking adapts once you have saved, applied to or dismissed a few offers.",
       "experimental": "A personal ranking is being tried on a small part of the list.",
       "active": "The ranking takes your choices into account, within a fixed limit.",
       "paused": "The personal ranking is paused: it no longer matched your recent choices. The list uses the usual ranking.",
@@ -1490,6 +1497,36 @@
         "PF": "lists sorted by relevance",
         "IM": "other"
       }
+    },
+    "learned": {
+      "title": "What the app has learned",
+      "paused": "Learning is paused: your ranking does not adapt to your actions.",
+      "applied": "Your ranking adapts to your {count} clear choices (saved offers, applications, dismissals).",
+      "needMore": "{count} of {needed} clear choices: your ranking adapts after that. Opening an offer is not enough.",
+      "likes": "Draws you:",
+      "avoids": "You avoid:",
+      "forget": "Forget",
+      "forgetItem": "Forget \"{item}\"",
+      "restore": "Restore",
+      "restoreItem": "Restore \"{item}\"",
+      "forgottenTitle": "Forgotten preferences",
+      "movedApplied": "Latest search: {moved} of {ranked} offers changed place, {top} entered your top 20.",
+      "movedPreview": "Latest search: your choices would move {moved} of {ranked} offers ({top} would enter your top 20).",
+      "mover": "{title}: place {from} → {to}"
+    },
+    "values": {
+      "embedding": "offers with similar content",
+      "remote": "work mode: {value}",
+      "contract": "contract: {value}",
+      "salary": "salary: {value}",
+      "distance": "distance: {value}",
+      "seniority": "level: {value}"
+    },
+    "why": {
+      "title": "Why this position",
+      "moved": "Without your choices this offer would be at position {from}; it is at position {to}.",
+      "preview": "Your choices would place it at position {to} instead of {from}.",
+      "reason": "Linked to: {items}"
     }
   }
 }

@@ -25,8 +25,8 @@ from pathlib import Path
 from typing import Any
 
 from src.learning.config import PersonalModelConfig, load_personal_model_config
-from src.learning.model import PersonalModel, fit, structured_values
-from src.learning.signals import offer_signals
+from src.learning.model import PersonalModel, fit, offer_terms, structured_values
+from src.learning.signals import TERMS, offer_signals
 from src.models.job import Job
 
 PROFILE_KEY = "__profile__"
@@ -66,6 +66,9 @@ GateCap = Callable[[Ranked, Ranked], Ranked]
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(DDL)
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(ranking_shadow)")}
+    if "explanation_json" not in columns:   # databases created before ADR 0030
+        conn.execute("ALTER TABLE ranking_shadow ADD COLUMN explanation_json TEXT")
 
 
 def _chunks(ids: Sequence[str], size: int = 500) -> Iterator[list[str]]:
@@ -88,13 +91,21 @@ def _vectors(conn: sqlite3.Connection, ids: Sequence[str], model: str) -> dict[s
     return out
 
 
+def _skills(raw: str | None) -> list[str]:
+    try:
+        skills = json.loads(raw or "[]")
+    except ValueError:
+        return []
+    return [str(s) for s in skills] if isinstance(skills, list) else []
+
+
 def _stored_values(conn: sqlite3.Connection, ids: Sequence[str]) -> dict[str, dict[str, str | None]]:
     """Structured values of offers outside this run: their jobs row and latest stored factors."""
     out: dict[str, dict[str, str | None]] = {}
     for chunk in _chunks(sorted(set(ids))):
         marks = ",".join("?" * len(chunk))
         try:
-            jobs = conn.execute(f"SELECT id, source, work_mode, remote, employment_type, salary_min FROM jobs "
+            jobs = conn.execute(f"SELECT id, source, work_mode, remote, employment_type, salary_min, title, skills FROM jobs "
                                 f"WHERE id IN ({marks})", chunk).fetchall()
             factors: dict[str, dict[str, float]] = {}
             for job_id, breakdown in conn.execute(
@@ -104,10 +115,13 @@ def _stored_values(conn: sqlite3.Connection, ids: Sequence[str]) -> dict[str, di
                 factors[job_id] = json.loads(breakdown or "{}")
         except sqlite3.OperationalError:
             continue
-        for job_id, source, work_mode, remote, employment_type, salary_min in jobs:
-            out[job_id] = structured_values(source=source, work_mode=work_mode, remote=bool(remote),
-                                            employment_type=employment_type, salary_min=salary_min,
-                                            factors=factors.get(job_id))
+        for job_id, source, work_mode, remote, employment_type, salary_min, title, skills in jobs:
+            out[job_id] = {
+                **structured_values(source=source, work_mode=work_mode, remote=bool(remote),
+                                    employment_type=employment_type, salary_min=salary_min,
+                                    factors=factors.get(job_id)),
+                TERMS: offer_terms(title, _skills(skills)),
+            }
     return out
 
 
@@ -129,7 +143,9 @@ def build_model(conn: sqlite3.Connection, cfg: PersonalModelConfig, *, embedding
     profile = vectors.pop(PROFILE_KEY, None)
     values = {**_stored_values(conn, [i for i in ids if i not in run_values]),
               **{i: dict(v) for i, v in run_values.items()}}
-    return fit(signals, vectors, values, profile, cfg, embedding_model)
+    from src.learning.live import forgotten
+
+    return fit(signals, vectors, values, profile, cfg, embedding_model, forgotten=forgotten(conn))
 
 
 def compute_shadow(db_path: str | Path, run_id: str, production: Ranked,
@@ -143,9 +159,12 @@ def compute_shadow(db_path: str | Path, run_id: str, production: Ranked,
     cfg = load_personal_model_config(config_path)
     now = now or datetime.now(UTC)
     run_values = {
-        job.id: structured_values(source=job.source, work_mode=job.work_mode, remote=job.remote,
-                                  employment_type=job.employment_type, salary_min=job.salary_min,
-                                  factors=factors_by_job_id.get(job.id))
+        job.id: {
+            **structured_values(source=job.source, work_mode=job.work_mode, remote=job.remote,
+                                employment_type=job.employment_type, salary_min=job.salary_min,
+                                factors=factors_by_job_id.get(job.id)),
+            TERMS: offer_terms(job.title, job.skills),
+        }
         for job, _ in production
     }
     conn = sqlite3.connect(str(db_path), timeout=30)
@@ -162,12 +181,15 @@ def compute_shadow(db_path: str | Path, run_id: str, production: Ranked,
         prod_pos = {job.id: i for i, (job, _) in enumerate(production, start=1)}
         chal_pos = {job.id: i for i, (job, _) in enumerate(challenger, start=1)}
         version = model.version
+        reasons = {job.id: json.dumps(model.reasons(vectors.get(job.id), run_values[job.id]), sort_keys=True)
+                   for job, _ in production}
         with conn:
             conn.execute("DELETE FROM ranking_shadow WHERE run_id = ?", (run_id,))
             conn.executemany(
                 "INSERT INTO ranking_shadow (run_id, job_id, production_position, challenger_position, "
-                "personal_adjustment, model_version) VALUES (?, ?, ?, ?, ?, ?)",
-                [(run_id, jid, prod_pos[jid], chal_pos[jid], adjustments[jid], version) for jid in prod_pos])
+                "personal_adjustment, model_version, explanation_json) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                [(run_id, jid, prod_pos[jid], chal_pos[jid], adjustments[jid], version, reasons[jid])
+                 for jid in prod_pos])
             conn.execute(
                 "INSERT OR REPLACE INTO personal_model_state (id, model_version, algorithm_version, config_digest, "
                 "input_hash, signals, coverage, reset_at, run_id, computed_at, summary_json) "

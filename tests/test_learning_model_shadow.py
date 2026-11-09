@@ -136,7 +136,7 @@ def test_shadow_without_signal_is_production(db):
     assert production == before
     assert set(adjustments.values()) == {0.0}
     assert all(p == c for p, c, _ in _rows(path).values())
-    assert current_state(path)["signals"] == 0 and version.startswith("pm1+")
+    assert current_state(path)["signals"] == 0 and version.startswith("pm2+")
 
 
 def test_shadow_journals_a_challenger_without_touching_production(db):
