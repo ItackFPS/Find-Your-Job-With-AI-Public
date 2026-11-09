@@ -9,7 +9,8 @@ listed in its own sitemaps), and nothing else:
 * **Only published pages**: the occupation x département pages France Travail lists in
   its sitemap (it answers 410 Gone for other combinations). The occupations read are the
   profile's: codes from a discovery preset where one exists, otherwise any sitemap
-  occupation whose name matches a target domain or occupation (see ``_slug_matches``).
+  occupation whose name matches a target domain or occupation (see ``_slug_matches`` and
+  ``label_names_occupation``).
 * **robots.txt is respected**: the rules are fetched at the start of every run and
   every URL is checked against them (``*`` wildcards included). The keyword search
   (``motsCles=``) and the pages that load an offer's full text (``t:ac=``) are
@@ -36,6 +37,7 @@ Offers that France Travail republishes from partner job boards (HelloWork, Meteo
 from __future__ import annotations
 
 import logging
+import os
 import re
 import unicodedata
 from datetime import UTC, datetime, timedelta
@@ -75,6 +77,33 @@ def _fold(text: str) -> list[str]:
     """Lowercase, accent-free words of ``text``."""
     plain = unicodedata.normalize("NFKD", text.replace("_", " ")).encode("ascii", "ignore").decode()
     return re.findall(r"[a-z0-9]+", plain.lower())
+
+
+_WORD_MIN = 5  # shorter shared prefixes ("info", "main") say nothing about an occupation
+
+
+def label_names_occupation(label: str, slug: str) -> bool:
+    """Whether a free-text profile domain shares a word with an occupation slug, so that
+    "Agriculture" finds ``agriculteur`` and "Comptabilité" finds ``comptable``. Only words of
+    at least ``_WORD_MIN`` letters count, and they must agree on all but their last 3."""
+    slug_words = [w for w in _fold(slug) if len(w) >= _WORD_MIN]
+    return any(_word_in_slug(word, slug_words) for word in (w for w in _fold(label) if len(w) >= _WORD_MIN))
+
+
+def label_states_occupation(label: str, slug: str) -> bool:
+    """Whether the occupation says all of what the label says: "Maintenance informatique" shares
+    a word with ``technicien-de-maintenance-industrielle`` but does not state it."""
+    slug_words = [w for w in _fold(slug) if len(w) >= _WORD_MIN]
+    words = [w for w in _fold(label) if len(w) >= _WORD_MIN]
+    return bool(words) and all(_word_in_slug(word, slug_words) for word in words)
+
+
+def _word_in_slug(word: str, slug_words: list[str]) -> bool:
+    for occ in slug_words:
+        shared = len(os.path.commonprefix([word, occ]))
+        if shared >= max(_WORD_MIN, min(len(word), len(occ)) - 3):
+            return True
+    return False
 
 
 def _slug_matches(term: str, slug: str) -> bool:
@@ -243,6 +272,12 @@ class FranceTravailWebCollector(BaseCollector):
             if offsite:
                 logger.warning("France Travail web: %d sitemap URLs outside %s skipped", offsite, BASE)
             pages = self._pages(published)
+            if not pages:
+                self._client = None
+                return CollectorResult(source_name="france-travail-web", jobs=[], errors=[
+                    "no target domain in the profile matches a France Travail occupation page; "
+                    "nothing to search"], metadata={"pages_planned": 0, "pages_read": 0,
+                                                   "sitemap_offsite_skipped": offsite})
             for url, occupation in pages[: self.max_pages]:
                 path = url[len(BASE):]
                 if not robots_allows(rules, path):
@@ -300,10 +335,16 @@ class FranceTravailWebCollector(BaseCollector):
         for url, slug, code, dept in published:
             if dept not in by_dept:
                 continue
-            hits = list(wanted.get(code, [])) + [t for t in by_name if _slug_matches(t, slug)]
+            listed = list(wanted.get(code, []))
+            hits = listed + [t for t in by_name if _slug_matches(t, slug) or label_names_occupation(t, slug)]
             if hits:
+                # Only an occupation that states the whole domain is evidence about its offers.
+                named = listed + [t for t in by_name if _slug_matches(t, slug) or label_states_occupation(t, slug)]
                 by_dept[dept].append((url, {"scheme": "france-travail", "slug": slug, "code": code,
-                                            "target_domains": sorted(set(hits))}))
+                                            "target_domains": sorted(set(hits)),
+                                            "named_domains": sorted(set(named))}))
+        for pages_of_dept in by_dept.values():
+            pages_of_dept.sort(key=lambda page: not page[1]["named_domains"])  # a page cap keeps these first
         lists = [by_dept[d] for d in self.departments]
         pages: list[tuple[str, dict[str, Any]]] = []
         for i in range(max((len(p) for p in lists), default=0)):
