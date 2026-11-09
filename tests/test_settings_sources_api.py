@@ -97,7 +97,7 @@ def test_overview_lists_each_source_with_its_kind_and_state(client: TestClient) 
     assert ftw["last_run"]["accepted"] == 12 and ftw["last_run"]["status"] == "completed"
 
     official = rows["eures"]
-    assert official["access_class"] == "official"
+    assert official["access_class"] == "public_page"
     assert official["last_run"]["reason"] == "The site did not answer"
     assert official["breaker"]["paused"] is True
 

@@ -866,8 +866,7 @@ class TestOccupationsAndCollectorConfig:
         for name, domain, slug in (("a", "alpha", "x"), ("b", "beta", "y")):
             (presets / f"{name}.yaml").write_text(
                 f"name: {name}\napplies_to_domains: [{domain}]\n"
-                f"discovery:\n  collector_config:
-    workingnomads:\n      categories: [{slug}, shared]\n",
+                f"discovery:\n  collector_config:\n    workingnomads:\n      categories: [{slug}, shared]\n",
                 encoding="utf-8",
             )
         expander = DiscoveryQueryExpander(llm_endpoint=None, config_dir=tmp_path)
