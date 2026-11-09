@@ -397,7 +397,7 @@ class TestFranceTravailMissingCredentials:
 class TestFranceTravailErrorHandling:
     def _make_collector(self) -> FranceTravailCollector:
         return FranceTravailCollector(
-            config={"client_id": "id", "client_secret": "secret"}
+            config={"client_id": "id", "client_secret": "secret", "keywords": "informatique"}
         )
 
     def test_token_http_error_is_captured_not_raised(self) -> None:
@@ -490,7 +490,7 @@ class TestFranceTravailErrorHandling:
 class TestFranceTravailCollect:
     def _make_collector(self, max_jobs: int = 20) -> FranceTravailCollector:
         return FranceTravailCollector(
-            config={"client_id": "id", "client_secret": "secret"},
+            config={"client_id": "id", "client_secret": "secret", "keywords": "informatique"},
             max_jobs=max_jobs,
         )
 
@@ -579,7 +579,7 @@ class TestFranceTravailCollect:
 class TestFranceTravailPipelineIntegration:
     def _run_pipeline(self) -> tuple[list, list, list]:
         collector = FranceTravailCollector(
-            config={"client_id": "id", "client_secret": "secret"}
+            config={"client_id": "id", "client_secret": "secret", "keywords": "informatique"}
         )
         token_resp = _mock_httpx_response(_SAMPLE_TOKEN_RESPONSE)
         jobs_resp = _mock_httpx_response(_SAMPLE_JOB_RESPONSE)
@@ -631,7 +631,7 @@ class TestFranceTravailPipelineIntegration:
 
     def test_duplicate_entry_is_removed(self) -> None:
         collector = FranceTravailCollector(
-            config={"client_id": "id", "client_secret": "secret"}
+            config={"client_id": "id", "client_secret": "secret", "keywords": "informatique"}
         )
         # Same job twice — the collector now deduplicates by source_job_id
         # within _search_all_queries, so the duplicate never reaches the
@@ -703,12 +703,12 @@ class TestParseContentRangeTotal:
 
 class TestFranceTravailKeywords:
     def _make_collector(self, config: dict | None = None) -> FranceTravailCollector:
-        cfg = {"client_id": "id", "client_secret": "secret"}
+        cfg = {"client_id": "id", "client_secret": "secret", "keywords": "informatique"}
         if config:
             cfg.update(config)
         return FranceTravailCollector(config=cfg)
 
-    def test_default_keywords_sent_in_motsCles(self) -> None:
+    def test_configured_keywords_sent_in_motsCles(self) -> None:
         collector = self._make_collector()
         token_resp = _mock_httpx_response(_SAMPLE_TOKEN_RESPONSE)
         jobs_resp = _mock_httpx_response({"resultats": []})
@@ -720,7 +720,7 @@ class TestFranceTravailKeywords:
             collector.collect()
 
         params = mock_get.call_args.kwargs.get("params", {})
-        assert params.get("motsCles") == _DEFAULT_SEARCH_KEYWORDS
+        assert params.get("motsCles") == "informatique"
 
     def test_custom_keywords_from_config_override_default(self) -> None:
         collector = self._make_collector(config={"keywords": "développeur logiciel"})
@@ -771,7 +771,7 @@ class TestFranceTravailPagination:
 
     def _make_collector(self, max_jobs: int = 150, page_size: int = 20) -> FranceTravailCollector:
         return FranceTravailCollector(
-            config={"client_id": "id", "client_secret": "secret"},
+            config={"client_id": "id", "client_secret": "secret", "keywords": "informatique"},
             max_jobs=max_jobs,
             _page_size=page_size,
         )
@@ -990,11 +990,19 @@ class TestFranceTravailMultiQuery:
         )
         assert collector.discovery_queries == ["custom-kw"]
 
-    def test_default_discovery_queries_is_informatique(self) -> None:
-        collector = FranceTravailCollector(
-            config={"client_id": "id", "client_secret": "secret"}
-        )
-        assert collector.discovery_queries == [_DEFAULT_SEARCH_KEYWORDS]
+    def test_no_default_search_term_assumes_a_profession(self) -> None:
+        collector = FranceTravailCollector(config={"client_id": "id", "client_secret": "secret"})
+        assert collector.discovery_queries == []
+        assert _DEFAULT_SEARCH_KEYWORDS == ""
+
+    def test_no_search_term_means_no_request(self) -> None:
+        collector = FranceTravailCollector(config={"client_id": "id", "client_secret": "secret"})
+        with patch.object(httpx.Client, "post") as post, patch.object(httpx.Client, "get") as get:
+            result = collector.collect()
+        post.assert_not_called()
+        get.assert_not_called()
+        assert result.jobs == []
+        assert "no search terms" in result.errors[0].lower()
 
     def test_multiple_queries_each_run_to_exhaustion(self) -> None:
         """Each query is fully paginated; no artificial per-query cap."""
@@ -1116,10 +1124,10 @@ class TestFranceTravailMultiQuery:
         assert stats["informatique"] == 3
         assert stats["développement"] == 4
 
-    def test_fallback_informatique_when_no_discovery_queries_provided(self) -> None:
-        """Without discovery_queries config, 'informatique' is the default query."""
+    def test_keywords_config_is_the_query_when_no_discovery_queries_provided(self) -> None:
+        """Without discovery_queries config, the configured keywords are the query."""
         collector = FranceTravailCollector(
-            config={"client_id": "id", "client_secret": "secret"}
+            config={"client_id": "id", "client_secret": "secret", "keywords": "informatique"}
         )
         token_resp = _mock_httpx_response(_SAMPLE_TOKEN_RESPONSE)
         jobs_resp = _mock_httpx_response({"resultats": []})
@@ -1131,7 +1139,7 @@ class TestFranceTravailMultiQuery:
             collector.collect()
 
         params = mock_get.call_args.kwargs.get("params", {})
-        assert params.get("motsCles") == _DEFAULT_SEARCH_KEYWORDS
+        assert params.get("motsCles") == "informatique"
 
 
 # ---------------------------------------------------------------------------

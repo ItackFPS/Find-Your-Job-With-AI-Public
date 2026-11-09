@@ -100,7 +100,7 @@
     "welcome": {
       "title": "Welcome",
       "intro": "A few steps, no file to edit, no command to type. Everything stays on this computer, and you can change it all later.",
-      "scope": "This version is tuned for IT and digital roles. Other occupations work through keyword search, with fewer offers from France Travail."
+      "scope": "Searches are built from your profile, so any line of work can be searched. The remote boards (RemoteOK, Jobicy, We Work Remotely) list mostly digital roles."
     },
     "profile": {
       "title": "What are you looking for?",
@@ -248,7 +248,7 @@
       "profile": "Fill in your <profile>Profile</profile>: target roles, skills, locations and languages. Searches are built from it.",
       "sources": "Sources that need no account: {noAccount}. {scanners} are unofficial sources: they stay off unless you choose them or press <b>Scan now</b> on their cards below.",
       "and": " and ",
-      "scope": "This version is tuned for IT and digital roles. Other occupations work through keyword search, with fewer offers from France Travail.",
+      "scope": "Searches are built from your profile, so any line of work can be searched. The remote boards (RemoteOK, Jobicy, We Work Remotely) list mostly digital roles.",
       "run": "To search now, press <b>Run pipeline</b>. The first run downloads the local matching model (about 470 MB) once. No job data is sent to a cloud AI service."
     }
   },

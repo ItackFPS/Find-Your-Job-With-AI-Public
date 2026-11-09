@@ -237,6 +237,8 @@ class EscoEntry(BaseModel):
                       Typically the label stripped of parenthetical annotations
                       (e.g. ``"Python"``).
         custom:       ``True`` when the user typed a value not found in ESCO.
+        label_fr:     French preferred label when known; used to search French job
+                      boards for an occupation. ``None`` falls back to ``keyword``.
     """
 
     model_config = _STRICT_PROFILE_CONFIG
@@ -245,6 +247,7 @@ class EscoEntry(BaseModel):
     label: str
     keyword: str = ""
     custom: bool = False
+    label_fr: str | None = None
 
     def __init__(self, **data: object) -> None:
         super().__init__(**data)
@@ -314,6 +317,11 @@ class JobSearchProfile(BaseModel):
     # target_skills and carries the canonical ESCO concept URI and label.
     # Absent on profiles saved before ESCO integration; treated as empty list.
     target_skills_esco: list[EscoEntry] = []
+    # Occupations the user is looking for (ESCO concepts or custom entries): the
+    # profession-neutral way to say what to search, whatever the line of work. They
+    # feed discovery queries (src/discovery). Absent on older profiles; empty means
+    # discovery uses ``target_domains`` and ``target_skills`` only.
+    target_occupations: list[EscoEntry] = []
     geography: GeographyPreferences = GeographyPreferences()
     work_modes: list[str] = []
     contract_types: list[str] = []

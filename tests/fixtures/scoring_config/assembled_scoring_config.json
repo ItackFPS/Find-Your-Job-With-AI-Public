@@ -1,6 +1,23 @@
 {
  "scoring": {
   "domain_relevance": {
+   "broad_title_indicators": [
+    "engineer",
+    "developer",
+    "programmer",
+    "scientist",
+    "analyst",
+    "administrator",
+    "architect",
+    "devops",
+    "ingenieur",
+    "developpeur",
+    "programmeur",
+    "analyste",
+    "administrateur",
+    "architecte",
+    "technicien"
+   ],
    "confirmed_wrong_score": 0.05,
    "domain_description_keywords": [
     "backend",

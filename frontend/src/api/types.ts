@@ -98,6 +98,7 @@ export interface EscoEntry {
   label: string
   keyword: string
   custom: boolean
+  label_fr?: string | null
 }
 
 export interface EscoSuggestion {
@@ -124,6 +125,8 @@ export interface Profile {
   focus_domain: boolean
   target_skills: string[]
   target_skills_esco?: EscoEntry[]
+  /** Occupations picked from ESCO; searched by name (French label first) on top of target_domains. */
+  target_occupations?: EscoEntry[]
   geography: Geography
   work_modes: string[]
   contract_types: string[]

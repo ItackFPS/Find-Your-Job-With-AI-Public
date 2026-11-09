@@ -114,6 +114,7 @@ class EscoEntryIn(BaseModel):
     label: str
     keyword: str = ""
     custom: bool = False
+    label_fr: str | None = None
 
 
 class MatchingIn(BaseModel):
@@ -131,6 +132,7 @@ class ProfileIn(BaseModel):
     focus_domain: bool = True
     target_skills: list[str] = []
     target_skills_esco: list[EscoEntryIn] = []
+    target_occupations: list[EscoEntryIn] = []
     geography: GeographyIn = GeographyIn()
     work_modes: list[str] = []
     contract_types: list[str] = []

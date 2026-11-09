@@ -235,7 +235,7 @@
    "assessment": null,
    "extraction_method": "heuristic",
    "factors": {
-    "domain_relevance": 0.05,
+    "domain_relevance": 1.0,
     "experience_fit": 0.5,
     "location_fit": 0.999902,
     "seniority_match": 0.5,
@@ -244,7 +244,7 @@
    "flags": [],
    "job_id": "chef-05",
    "reasons": [],
-   "score": 0.4,
+   "score": 0.9536330157293316,
    "stage": "passed",
    "verdict": "accept"
   },

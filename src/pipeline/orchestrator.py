@@ -499,12 +499,23 @@ def run_pipeline(
                 merged_cfg["discovery_queries"] = all_discovery_queries[src_type]
             if src_type in all_partition_vocabularies:
                 merged_cfg["partition_vocabulary"] = all_partition_vocabularies[src_type]
+            if early_profile is not None:
+                # What the profile's line of work (a discovery preset) supplies for this
+                # source; only for keys the source's own config leaves empty.
+                try:
+                    from src.discovery.query_expansion import apply_preset_collector_config
+
+                    merged_cfg = apply_preset_collector_config(merged_cfg, early_profile, src_type)
+                except Exception as exc:
+                    logger.warning("Preset collector config for %s skipped: %s", src_type, exc)
             if src_type == "france_travail_web" and early_profile is not None:
                 # What to read: the profile's domains and its départements — with a home,
                 # those within the maximum distance (plus home's); else the v1 list.
                 from src.pipeline.location_distance import distance_config, ft_departments
 
                 merged_cfg.setdefault("target_domains", list(early_profile.target_domains))
+                merged_cfg.setdefault("target_terms", [
+                    (o.label_fr or o.keyword or o.label) for o in early_profile.target_occupations])
                 distance_cfg = distance_config(early_profile)
                 merged_cfg.setdefault("departments", ft_departments(distance_cfg) if distance_cfg else [
                     p.value for p in early_profile.geography.location_preferences
