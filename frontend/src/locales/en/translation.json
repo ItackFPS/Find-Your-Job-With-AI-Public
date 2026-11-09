@@ -755,6 +755,8 @@
         "not_sure": "Not sure"
       },
       "skip": "Skip",
+      "undo": "Undo last answer",
+      "keys": "Keyboard: 1 relevant · 2 not relevant · 3 not sure · S skip · Z undo · a letter picks the reason",
       "finish": "Finish and save",
       "nothingLeft": "Every offer of this set is labelled.",
       "empty": "No offer set to label yet. Import an export folder below.",
@@ -770,6 +772,7 @@
         "already_imported": "This set is already imported.",
         "not_found": "This set no longer exists.",
         "already_labelled": "This offer is already labelled.",
+        "not_pending": "This answer is already saved and can no longer be undone.",
         "unexpected": "Something went wrong. Try again."
       },
       "start": "{count, plural, one {Label # offer} other {Label # offers}}",

@@ -65,6 +65,52 @@ describe('CalibrationCard', () => {
     expect(await screen.findByText('2 answers saved (version 2)')).toBeInTheDocument()
   })
 
+  it('labels from the keyboard: a letter picks the reason, a digit answers', async () => {
+    const user = userEvent.setup()
+    renderCard()
+    await user.click(await screen.findByRole('button', { name: 'Label 10 offers' }))
+    await screen.findByText('Data analyst a1')
+    await user.keyboard('a')
+    expect(screen.getByRole('button', { name: 'Location' })).toHaveAttribute('aria-pressed', 'true')
+    await user.keyboard('2')
+    expect(await screen.findByText('Data analyst b2')).toBeInTheDocument()
+    expect(posts[0].body).toEqual({ job_id: 'a1', answer: 'not_relevant', reason: 'location' })
+  })
+
+  it('skips with S without recording an answer', async () => {
+    const user = userEvent.setup()
+    renderCard()
+    await user.click(await screen.findByRole('button', { name: 'Label 10 offers' }))
+    await screen.findByText('Data analyst a1')
+    await user.keyboard('s')
+    expect(await screen.findByText('Data analyst b2')).toBeInTheDocument()
+    expect(posts).toEqual([])
+  })
+
+  it('ignores a held-down key, so one press labels one offer', async () => {
+    const user = userEvent.setup()
+    renderCard()
+    await user.click(await screen.findByRole('button', { name: 'Label 10 offers' }))
+    await screen.findByText('Data analyst a1')
+    await user.keyboard('{1>3/}')
+    expect(await screen.findByText('Data analyst b2')).toBeInTheDocument()
+    expect(posts).toHaveLength(1)
+  })
+
+  it('takes back the last answer and shows that offer again', async () => {
+    const user = userEvent.setup()
+    renderCard()
+    await user.click(await screen.findByRole('button', { name: 'Label 10 offers' }))
+    await screen.findByText('Data analyst a1')
+    expect(screen.queryByRole('button', { name: 'Undo last answer' })).toBeNull()
+    await user.keyboard('1')
+    await screen.findByText('Data analyst b2')
+    await user.click(screen.getByRole('button', { name: 'Undo last answer' }))
+    expect(await screen.findByText('Data analyst a1')).toBeInTheDocument()
+    expect(posts[1]).toEqual({ url: '/quality/calibration/real-v2/answers/undo', body: { job_id: 'a1' } })
+    expect(screen.queryByRole('button', { name: 'Undo last answer' })).toBeNull()
+  })
+
   it('offers exports found in the data folder', async () => {
     net.get = async () => ({ data: { ...overview, datasets: [], exports_found: [{ source: 'D:/x/real-v2', dataset_id: 'real-v2', total: 310 }] } })
     const user = userEvent.setup()
