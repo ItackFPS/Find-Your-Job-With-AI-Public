@@ -87,11 +87,22 @@ def label_names_occupation(label: str, slug: str) -> bool:
     "Agriculture" finds ``agriculteur`` and "Comptabilité" finds ``comptable``. Only words of
     at least ``_WORD_MIN`` letters count, and they must agree on all but their last 3."""
     slug_words = [w for w in _fold(slug) if len(w) >= _WORD_MIN]
-    for word in (w for w in _fold(label) if len(w) >= _WORD_MIN):
-        for occ in slug_words:
-            shared = len(os.path.commonprefix([word, occ]))
-            if shared >= max(_WORD_MIN, min(len(word), len(occ)) - 3):
-                return True
+    return any(_word_in_slug(word, slug_words) for word in (w for w in _fold(label) if len(w) >= _WORD_MIN))
+
+
+def label_states_occupation(label: str, slug: str) -> bool:
+    """Whether the occupation says all of what the label says: "Maintenance informatique" shares
+    a word with ``technicien-de-maintenance-industrielle`` but does not state it."""
+    slug_words = [w for w in _fold(slug) if len(w) >= _WORD_MIN]
+    words = [w for w in _fold(label) if len(w) >= _WORD_MIN]
+    return bool(words) and all(_word_in_slug(word, slug_words) for word in words)
+
+
+def _word_in_slug(word: str, slug_words: list[str]) -> bool:
+    for occ in slug_words:
+        shared = len(os.path.commonprefix([word, occ]))
+        if shared >= max(_WORD_MIN, min(len(word), len(occ)) - 3):
+            return True
     return False
 
 
@@ -324,12 +335,16 @@ class FranceTravailWebCollector(BaseCollector):
         for url, slug, code, dept in published:
             if dept not in by_dept:
                 continue
-            hits = list(wanted.get(code, [])) + [
-                t for t in by_name if _slug_matches(t, slug) or label_names_occupation(t, slug)
-            ]
+            listed = list(wanted.get(code, []))
+            hits = listed + [t for t in by_name if _slug_matches(t, slug) or label_names_occupation(t, slug)]
             if hits:
+                # Only an occupation that states the whole domain is evidence about its offers.
+                named = listed + [t for t in by_name if _slug_matches(t, slug) or label_states_occupation(t, slug)]
                 by_dept[dept].append((url, {"scheme": "france-travail", "slug": slug, "code": code,
-                                            "target_domains": sorted(set(hits))}))
+                                            "target_domains": sorted(set(hits)),
+                                            "named_domains": sorted(set(named))}))
+        for pages_of_dept in by_dept.values():
+            pages_of_dept.sort(key=lambda page: not page[1]["named_domains"])  # a page cap keeps these first
         lists = [by_dept[d] for d in self.departments]
         pages: list[tuple[str, dict[str, Any]]] = []
         for i in range(max((len(p) for p in lists), default=0)):
