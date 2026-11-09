@@ -1391,6 +1391,25 @@ def run_pipeline(
                         visible = None
                     if visible is not None:
                         visible_positions = {job.id: i for i, (job, _) in enumerate(visible, start=1)}
+                # The personal order under the user's control (ADR 0030): once there is enough strong
+                # evidence it applies, bounded and gate-capped; stored scores stay the production ones.
+                if not visible_positions:
+                    try:
+                        from src.learning.config import load_personal_model_config
+                        from src.learning.live import live_order
+                        from src.learning.shadow import current_state
+
+                        state = current_state(db_path) or {}
+                        visible = live_order(
+                            personalized_ranked, shadow_adjustments, int(state.get("summary", {}).get("strong") or 0),
+                            load_personal_model_config(Path(config_dir) / "personalization.yaml"),
+                            lambda prod, chal: cap_personalization_at_gates(prod, chal, factors_by_job_id,
+                                                                            scoring_config))
+                    except Exception:  # noqa: BLE001 - production is used
+                        logger.exception("Personal order failed; the run keeps the production order")
+                        visible = None
+                    if visible is not None:
+                        visible_positions = {job.id: i for i, (job, _) in enumerate(visible, start=1)}
         stats.stage_times["shadow"] = time.perf_counter() - _t_shadow
 
         stats.personalized = len(personalized_ranked)

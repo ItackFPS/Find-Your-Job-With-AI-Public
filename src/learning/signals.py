@@ -38,9 +38,11 @@ from src.learning.config import PersonalModelConfig
 
 EMBEDDING = "embedding"
 OCCUPATION = "occupation"
-STRUCTURED = ("distance", "remote", "contract", "seniority", "salary", "source")
-ALL_FEATURES: frozenset[str] = frozenset((EMBEDDING, OCCUPATION, *STRUCTURED))
-CONTENT: frozenset[str] = frozenset((EMBEDDING, OCCUPATION))
+TERMS = "terms"       # the words of an offer's title and skills: what the user is drawn to, by name
+# The source is not a preference: where offers come from only reflects where the user looks.
+STRUCTURED = ("distance", "remote", "contract", "seniority", "salary")
+ALL_FEATURES: frozenset[str] = frozenset((EMBEDDING, OCCUPATION, TERMS, *STRUCTURED))
+CONTENT: frozenset[str] = frozenset((EMBEDDING, OCCUPATION, TERMS))
 
 # Reason → the one feature it moves. Reasons with no feature yet are recorded and move nothing.
 REASON_FEATURE: dict[str, str | None] = {
@@ -95,7 +97,9 @@ def _effective(row: sqlite3.Row, cols: set[str]) -> str:
 
 
 def _route(reasons: tuple[str, ...]) -> frozenset[str]:
-    return frozenset(f for r in reasons if (f := REASON_FEATURE.get(r)) is not None)
+    routed = frozenset(f for r in reasons if (f := REASON_FEATURE.get(r)) is not None)
+    # Until occupation groups exist, the occupation is read through the offer's content.
+    return routed | CONTENT if OCCUPATION in routed else routed
 
 
 def default_canonical(metadata: dict[str, Any]) -> str | None:
