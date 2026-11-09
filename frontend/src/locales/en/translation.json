@@ -1524,9 +1524,9 @@
     },
     "why": {
       "title": "Why this position",
-      "moved": "Without your choices this offer would be #{{from}}; it is #{{to}}.",
-      "preview": "Your choices would place it #{{to}} instead of #{{from}}.",
-      "reason": "Linked to: {{items}}"
+      "moved": "Without your choices this offer would be at position {from}; it is at position {to}.",
+      "preview": "Your choices would place it at position {to} instead of {from}.",
+      "reason": "Linked to: {items}"
     }
   }
 }

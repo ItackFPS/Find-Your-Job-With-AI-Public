@@ -1524,9 +1524,9 @@
     },
     "why": {
       "title": "Pourquoi cette place",
-      "moved": "Sans vos choix, cette offre serait {{from}}e ; elle est {{to}}e.",
-      "preview": "Vos choix la placeraient {{to}}e au lieu de {{from}}e.",
-      "reason": "Lié à : {{items}}"
+      "moved": "Sans vos choix, cette offre serait en place {from} ; elle est en place {to}.",
+      "preview": "Vos choix la placeraient en place {to} au lieu de {from}.",
+      "reason": "Lié à : {items}"
     }
   }
 }
