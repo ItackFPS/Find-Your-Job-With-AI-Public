@@ -25,6 +25,11 @@ from src.storage.migrations import (
 from src.version import APP_VERSION
 
 
+def _payload_json(payload: dict[str, Any]) -> str:
+    """The raw offer as JSON; collectors may leave parsed dates in it."""
+    return json.dumps(payload, default=lambda value: value.isoformat() if hasattr(value, "isoformat") else str(value))
+
+
 # ---------------------------------------------------------------------------
 # FTS helpers
 # ---------------------------------------------------------------------------
@@ -280,7 +285,7 @@ class Storage:
                 job.updated_at.isoformat() if job.updated_at else None,
                 job.discovered_at.isoformat(),
                 json.dumps(job.skills),
-                json.dumps(job.raw_payload),
+                _payload_json(job.raw_payload),
                 job.content_hash or "",
                 job.first_seen_at.isoformat() if job.first_seen_at else None,
                 job.last_seen_at.isoformat() if job.last_seen_at else None,
@@ -585,7 +590,7 @@ class Storage:
                     job.updated_at.isoformat() if job.updated_at else None,
                     job.discovered_at.isoformat(),
                     json.dumps(job.skills),
-                    json.dumps(job.raw_payload),
+                    _payload_json(job.raw_payload),
                     new_hash,
                     first_seen,
                     now.isoformat(),

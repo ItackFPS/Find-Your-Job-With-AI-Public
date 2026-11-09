@@ -11,6 +11,8 @@ import httpx
 from src.collectors.ats_boards import AtsBoardsCollector, map_ashby, map_recruitee
 from src.collectors.registry import CollectorRegistry
 from src.discovery.ats_boards import boards_from_offers, boards_in_text
+from src.models.job import Job
+from src.storage.sqlite import Storage
 
 
 def test_links_name_the_board() -> None:
@@ -47,6 +49,22 @@ def test_ashby_mapping() -> None:
                      "descriptionPlain": "Texte", "publishedAt": "2026-11-01T10:00:00Z", "isRemote": False}, "acme")
     assert job["title"] == "Technicien" and job["countries"] == ["France"] and job["published_at"].year == 2026
     assert job["company"] == "Acme" and job["description"] == "Texte"
+
+
+def test_an_offer_whose_raw_data_holds_a_parsed_date_can_be_stored(tmp_path: Path) -> None:
+    raw = map_ashby({"id": "1", "title": "Technicien", "location": "Paris, France", "jobUrl": "https://a/1",
+                     "publishedAt": "2026-11-01T10:00:00Z"}, "acme")
+    job = Job(id="j", source="ats-boards", title="Technicien", description="d",
+              canonical_url="https://a/1", raw_payload=raw)
+    storage = Storage(db_path=tmp_path / "t.db")
+    storage.init_db()
+    try:
+        assert storage.upsert_jobs_batch([job])["inserted"] == 1
+    finally:
+        storage.close()
+    with sqlite3.connect(tmp_path / "t.db") as conn:
+        stored = conn.execute("SELECT raw_payload FROM jobs WHERE id = 'j'").fetchone()[0]
+    assert '"published_at": "2026-11-01T10:00:00' in stored
 
 
 def test_recruitee_mapping() -> None:
