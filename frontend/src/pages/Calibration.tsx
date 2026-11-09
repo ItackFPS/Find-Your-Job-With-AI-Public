@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
   answerCalibration, extendCalibration, getCalibration, importCalibration, listQualityJobs, nextCalibrationItems,
-  saveCalibration, startQualityJob,
+  saveCalibration, startQualityJob, undoCalibrationAnswer,
   type CalibrationAnswer, type CalibrationDataset, type CalibrationItem, type PersonalSummary, type QualityJob,
 } from '../api/client'
 import { Button, Card, Chip, EmptyState, ErrorState, LoadingState, ProgressBar, useToast } from '../components'
@@ -14,7 +14,8 @@ import { Button, Card, Chip, EmptyState, ErrorState, LoadingState, ProgressBar, 
 
 const ANSWERS: CalibrationAnswer[] = ['relevant', 'not_relevant', 'not_sure']
 const SESSION_SIZES = [10, 20, 30]
-const KNOWN_ERRORS = new Set(['invalid_dataset', 'not_real', 'already_imported', 'not_found', 'already_labelled'])
+const KNOWN_ERRORS = new Set(['invalid_dataset', 'not_real', 'already_imported', 'not_found', 'already_labelled', 'not_pending'])
+const REASON_KEYS = 'abcdefgh'    // one key per reason, in the order the reasons are shown
 
 function errorCode(err: unknown): string {
   const code = (err as { response?: { data?: { detail?: { code?: string } } } })?.response?.data?.detail?.code
@@ -22,14 +23,30 @@ function errorCode(err: unknown): string {
 }
 
 // Presentational: one offer to label, and the answer buttons.
-export function CalibrationItemView({ item, index, count, reasons, busy, onAnswer, onSkip, onFinish }: {
-  item: CalibrationItem; index: number; count: number; reasons: string[]; busy: boolean
-  onAnswer: (answer: CalibrationAnswer, reason: string | null) => void; onSkip: () => void; onFinish: () => void
+export function CalibrationItemView({ item, index, count, reasons, busy, canUndo, onAnswer, onSkip, onUndo, onFinish }: {
+  item: CalibrationItem; index: number; count: number; reasons: string[]; busy: boolean; canUndo: boolean
+  onAnswer: (answer: CalibrationAnswer, reason: string | null) => void; onSkip: () => void; onUndo: () => void; onFinish: () => void
 }) {
   const { t } = useTranslation()
   const [reason, setReason] = useState<string | null>(null)
   const meta = [item.company, item.location, item.remote ? t('quality.calibration.remote') : null].filter(Boolean).join(' · ')
   const answer = (a: CalibrationAnswer) => { onAnswer(a, reason); setReason(null) }
+  // Keyboard: 1/2/3 answer, S skips, Z undoes, a letter picks a reason. A held-down key counts once.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (busy || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return
+      if ((e.target as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable="true"]')) return
+      const key = e.key.toLowerCase()
+      const picked = ANSWERS[Number(key) - 1]
+      const r = reasons[REASON_KEYS.indexOf(key)]
+      if (picked) answer(picked)
+      else if (key === 's') { setReason(null); onSkip() }
+      else if (key === 'z' && canUndo) onUndo()
+      else if (r && key.length === 1) setReason(reason === r ? null : r)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
       <div style={{ color: 'var(--color-muted)', fontSize: 'var(--font-size-xs)' }}>
@@ -49,10 +66,13 @@ export function CalibrationItemView({ item, index, count, reasons, busy, onAnswe
       <div>
         <div style={{ fontSize: 'var(--font-size-sm)', marginBottom: 'var(--space-1)' }}>{t('quality.calibration.reasonPrompt')}</div>
         <div style={{ display: 'flex', gap: 'var(--space-1)', flexWrap: 'wrap' }}>
-          {reasons.map(r => (
+          {reasons.map((r, i) => (
             <button key={r} type="button" aria-pressed={reason === r} onClick={() => setReason(reason === r ? null : r)}
               style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer' }}>
-              <Chip tone={reason === r ? 'info' : 'default'}>{t(`quality.calibration.reasons.${r}`)}</Chip>
+              <Chip tone={reason === r ? 'info' : 'default'}>
+                {REASON_KEYS[i] && <span aria-hidden="true" style={{ opacity: 0.6 }}>{REASON_KEYS[i]} · </span>}
+                {t(`quality.calibration.reasons.${r}`)}
+              </Chip>
             </button>
           ))}
         </div>
@@ -64,8 +84,10 @@ export function CalibrationItemView({ item, index, count, reasons, busy, onAnswe
           </Button>
         ))}
         <Button variant="ghost" disabled={busy} onClick={() => { setReason(null); onSkip() }}>{t('quality.calibration.skip')}</Button>
+        {canUndo && <Button variant="ghost" disabled={busy} onClick={onUndo}>{t('quality.calibration.undo')}</Button>}
         <Button variant="ghost" disabled={busy} onClick={onFinish}>{t('quality.calibration.finish')}</Button>
       </div>
+      <div style={{ color: 'var(--color-muted)', fontSize: 'var(--font-size-xs)' }}>{t('quality.calibration.keys')}</div>
     </div>
   )
 }
@@ -141,7 +163,9 @@ export default function CalibrationCard() {
   const toast = useToast()
   const queryClient = useQueryClient()
   const [source, setSource] = useState('')
-  const [session, setSession] = useState<{ id: string; items: CalibrationItem[]; index: number } | null>(null)
+  // answered: the positions answered in this session, latest last (what "undo" walks back through)
+  const [session, setSession] = useState<{ id: string; items: CalibrationItem[]; index: number; answered: number[] } | null>(null)
+  const answering = useRef(false)   // a second key press before the page re-renders must not answer twice
   const overview = useQuery({ queryKey: ['calibration'], queryFn: getCalibration })
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ['calibration'] })
   const fail = (err: unknown) => toast.show({ message: t(`quality.calibration.errors.${errorCode(err)}`), tone: 'danger' })
@@ -158,7 +182,7 @@ export default function CalibrationCard() {
     mutationFn: ({ id, n }: { id: string; n: number }) => nextCalibrationItems(id, n).then(items => ({ id, items })),
     onSuccess: ({ id, items }) => {
       if (items.length === 0) toast.show({ message: t('quality.calibration.nothingLeft'), tone: 'info' })
-      else setSession({ id, items, index: 0 })
+      else setSession({ id, items, index: 0, answered: [] })
     },
     onError: fail,
   })
@@ -174,18 +198,31 @@ export default function CalibrationCard() {
   const answer = useMutation({
     mutationFn: ({ a, reason }: { a: CalibrationAnswer; reason: string | null }) =>
       answerCalibration(session!.id, session!.items[session!.index].job_id, a, reason),
-    onSuccess: () => advance(),
+    onSuccess: () => advance(true),
+    onError: fail,
+    onSettled: () => { answering.current = false },
+  })
+  const undo = useMutation({
+    mutationFn: (index: number) => undoCalibrationAnswer(session!.id, session!.items[index].job_id).then(() => index),
+    onSuccess: index => setSession(s => s && { ...s, index, answered: s.answered.slice(0, -1) }),
     onError: fail,
   })
   const extend = useMutation({ mutationFn: extendCalibration, onSuccess: refresh, onError: fail })
 
-  function advance() {
+  function advance(answered: boolean) {
     if (!session) return
-    if (session.index + 1 < session.items.length) setSession({ ...session, index: session.index + 1 })
-    else save.mutate(session.id)
+    if (session.index + 1 < session.items.length) {
+      setSession({ ...session, index: session.index + 1, answered: answered ? [...session.answered, session.index] : session.answered })
+    } else save.mutate(session.id)
   }
 
-  const busy = answer.isPending || save.isPending
+  function submitAnswer(a: CalibrationAnswer, reason: string | null) {
+    if (answering.current) return
+    answering.current = true
+    answer.mutate({ a, reason })
+  }
+
+  const busy = answer.isPending || save.isPending || undo.isPending
   const data = overview.data
   return (
     <Card title={t('quality.calibration.title')} subtitle={t('quality.calibration.subtitle')} style={{ marginBottom: 'var(--space-4)' }}>
@@ -194,7 +231,8 @@ export default function CalibrationCard() {
       {session && data && (
         <CalibrationItemView key={session.items[session.index].job_id} item={session.items[session.index]}
           index={session.index} count={session.items.length} reasons={data.reasons} busy={busy}
-          onAnswer={(a, reason) => answer.mutate({ a, reason })} onSkip={advance} onFinish={() => save.mutate(session.id)} />
+          canUndo={session.answered.length > 0} onAnswer={submitAnswer} onSkip={() => advance(false)}
+          onUndo={() => undo.mutate(session.answered[session.answered.length - 1])} onFinish={() => save.mutate(session.id)} />
       )}
       {!session && data && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', fontSize: 'var(--font-size-sm)' }}>

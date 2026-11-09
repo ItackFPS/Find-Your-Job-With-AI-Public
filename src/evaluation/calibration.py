@@ -230,6 +230,25 @@ def record_answer(root: str | Path, dataset_id: str, job_id: str, answer: str, r
     return summary(path)
 
 
+def undo_answer(root: str | Path, dataset_id: str, job_id: str) -> dict[str, Any]:
+    """Take back an answer not saved yet: the offer comes back to be answered. Saved labels never change."""
+    path = _dataset_dir(Path(root), dataset_id)
+    with _LOCK:
+        if job_id not in _pending(path):
+            raise CalibrationError("not_pending")
+        answers = path / ANSWERS
+        # split("\n")[:-1] leaves out a last line cut by a crash, as _pending does
+        kept = [line for line in answers.read_text(encoding="utf-8").split("\n")[:-1]
+                if line.strip() and json.loads(line)["job_id"] != job_id]
+        tmp = answers.with_name(answers.name + ".tmp")
+        with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+            f.write("".join(line + "\n" for line in kept))
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, answers)          # all or nothing: a crash leaves the old log or the new one
+    return summary(path)
+
+
 def save_session(root: str | Path, dataset_id: str) -> dict[str, Any]:
     """Write the pending answers as a new dataset version, then clear them."""
     from src.evaluation.annotation_assist import assisted_job_ids
@@ -277,6 +296,9 @@ def main(argv: list[str] | None = None) -> int:
     for a in ("dataset_id", "job_id", "answer"):
         an.add_argument(a)
     an.add_argument("--reason", default=None)
+    un = sub.add_parser("undo")
+    for a in ("dataset_id", "job_id"):
+        un.add_argument(a)
     for name in ("save", "extend"):
         sub.add_parser(name).add_argument("dataset_id")
     ns = ap.parse_args(argv)
@@ -291,6 +313,8 @@ def main(argv: list[str] | None = None) -> int:
             out = {"items": next_items(ns.root, ns.dataset_id, ns.n)}
         elif ns.action == "answer":
             out = record_answer(ns.root, ns.dataset_id, ns.job_id, ns.answer, ns.reason)
+        elif ns.action == "undo":
+            out = undo_answer(ns.root, ns.dataset_id, ns.job_id)
         elif ns.action == "save":
             out = save_session(ns.root, ns.dataset_id)
         else:

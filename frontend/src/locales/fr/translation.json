@@ -755,6 +755,8 @@
         "not_sure": "Je ne sais pas"
       },
       "skip": "Passer",
+      "undo": "Annuler la dernière réponse",
+      "keys": "Clavier : 1 pertinente · 2 non pertinente · 3 je ne sais pas · S passer · Z annuler · une lettre choisit la raison",
       "finish": "Terminer et enregistrer",
       "nothingLeft": "Toutes les offres de cet ensemble sont étiquetées.",
       "empty": "Aucun ensemble d'offres à étiqueter. Importez un dossier exporté ci-dessous.",
@@ -770,6 +772,7 @@
         "already_imported": "Cet ensemble est déjà importé.",
         "not_found": "Cet ensemble n'existe plus.",
         "already_labelled": "Cette offre est déjà étiquetée.",
+        "not_pending": "Cette réponse est déjà enregistrée et ne peut plus être annulée.",
         "unexpected": "Une erreur est survenue. Réessayez."
       },
       "start": "{count, plural, one {Étiqueter # offre} other {Étiqueter # offres}}",

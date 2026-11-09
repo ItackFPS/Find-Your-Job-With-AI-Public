@@ -133,6 +133,42 @@ def test_saving_again_after_a_crash_before_the_answers_were_cleared_writes_nothi
     assert not (root / "real-x" / "versions" / "2").exists()
 
 
+def test_undo_takes_back_only_that_pending_answer(root):
+    items = cal.next_items(root, "real-x", 2)
+    first, second = items[0]["job_id"], items[1]["job_id"]
+    cal.record_answer(root, "real-x", first, "not_relevant", "location")
+    cal.record_answer(root, "real-x", second, "relevant")
+    s = cal.undo_answer(root, "real-x", second)
+    assert s["pending"] == 1
+    assert cal.next_items(root, "real-x", 1)[0]["job_id"] == second      # it comes back to be answered again
+    cal.record_answer(root, "real-x", second, "not_sure")
+    assert cal.save_session(root, "real-x")["changed"] == 2
+    labels = load_dataset(root / "real-x", require_complete_labels=False).labels
+    assert labels[first].expected == "reject" and labels[first].category == "location"
+    assert labels[second].expected == "borderline"
+
+
+def test_undo_never_touches_a_saved_label(root):
+    job = cal.next_items(root, "real-x", 1)[0]["job_id"]
+    cal.record_answer(root, "real-x", job, "relevant")
+    cal.save_session(root, "real-x")
+    with pytest.raises(cal.CalibrationError) as exc:
+        cal.undo_answer(root, "real-x", job)
+    assert exc.value.code == "not_pending"
+    assert load_dataset(root / "real-x", require_complete_labels=False).labels[job].expected == "accept"
+
+
+def test_undo_tolerates_a_line_cut_by_a_crash(root):
+    items = cal.next_items(root, "real-x", 2)
+    cal.record_answer(root, "real-x", items[0]["job_id"], "relevant")
+    cal.record_answer(root, "real-x", items[1]["job_id"], "relevant")
+    answers = root / "real-x" / cal.ANSWERS
+    answers.write_bytes(answers.read_bytes() + b'{"job_id": "cut')
+    assert cal.undo_answer(root, "real-x", items[0]["job_id"])["pending"] == 1
+    remaining = answers.read_text(encoding="utf-8")
+    assert len(remaining.splitlines()) == 1 and "cut" not in remaining
+
+
 def test_saving_nothing_writes_no_version(root):
     assert cal.save_session(root, "real-x")["changed"] == 0
     assert not (root / "real-x" / "versions").exists()
@@ -199,6 +235,17 @@ def test_api_imports_labels_and_saves_a_session(api, export_dir):
     assert (saved["labelled"], saved["changed"], saved["version"]) == (1, 1, "2")
     assert (data / cal.CALIBRATION_DIR / "real-x" / "labels.jsonl").read_text(encoding="utf-8").count("\n") == 1
     assert c.get("/api/quality/calibration/nope/next").status_code == 404
+
+
+def test_api_undoes_a_pending_answer(api, export_dir):
+    c, _ = api
+    c.post("/api/quality/calibration/import", json={"source": str(export_dir)})
+    job = c.get("/api/quality/calibration/real-x/next", params={"n": 1}).json()["items"][0]["job_id"]
+    c.post("/api/quality/calibration/real-x/answers", json={"job_id": job, "answer": "relevant"})
+    r = c.post("/api/quality/calibration/real-x/answers/undo", json={"job_id": job})
+    assert r.status_code == 200 and r.json()["pending"] == 0
+    r = c.post("/api/quality/calibration/real-x/answers/undo", json={"job_id": job})
+    assert r.status_code == 409 and r.json() == {"detail": {"code": "not_pending"}}
 
 
 def test_api_offers_exports_found_in_the_data_folder(api, export_dir):
