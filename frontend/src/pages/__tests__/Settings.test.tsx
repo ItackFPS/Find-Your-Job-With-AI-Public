@@ -94,6 +94,10 @@ beforeEach(() => {
       removable_expired: { '30': 300, '90': 120, '180': 40 }, backups: [], cleanup: { state: 'idle' },
     },
     'POST /settings/data/cleanup': { state: 'running' },
+    'GET /privacy/learning/preferences': {
+      paused: false, signals: 5, strong_signals: 4, strong_needed: 3, enough_evidence: true, cap: 0.03,
+      preferences: [{ feature: 'terms', value: 'reseau', weight: 0.6 }], forgotten: [], comparison: null,
+    },
     'GET /privacy/learning': { paused: false, reset_at: null },
     'PUT /privacy/learning/pause': { paused: true, reset_at: null },
     'POST /privacy/learning/reset': { paused: false, reset_at: '2026-11-05T10:00:00+00:00', cleared: {} },
@@ -208,7 +212,7 @@ describe('Settings › Sources and background', () => {
   it('says the personal ranking is observing, with no counter', async () => {
     renderPage()
     const status = await screen.findByTestId('learning-status')
-    expect(status).toHaveTextContent(/watching your choices/i)
+    expect(status).toHaveTextContent(/adapts once/i)
     expect(status.textContent).not.toMatch(/\d/)
     expect(document.body.textContent).not.toMatch(/better|95 ?%/i)
   })

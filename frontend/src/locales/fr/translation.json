@@ -96,7 +96,14 @@
     "next": "Suivant",
     "back": "Retour",
     "skip": "Ignorer la configuration",
-    "steps": { "welcome": "Bienvenue", "profile": "Votre recherche", "sources": "Sources", "model": "Rapprochement", "background": "Recherche quotidienne", "done": "Terminer" },
+    "steps": {
+      "welcome": "Bienvenue",
+      "profile": "Votre recherche",
+      "sources": "Sources",
+      "model": "Rapprochement",
+      "background": "Recherche quotidienne",
+      "done": "Terminer"
+    },
     "welcome": {
       "title": "Bienvenue",
       "intro": "Quelques étapes, aucun fichier à modifier, aucune commande à saisir. Tout reste sur cet ordinateur et vous pourrez tout changer ensuite.",
@@ -1467,7 +1474,7 @@
   },
   "learning": {
     "status": {
-      "observing": "L’application observe vos choix ; la personnalisation s’activera quand elle aura fait ses preuves.",
+      "observing": "Votre classement s’adapte dès que vous avez sauvegardé, candidaté ou écarté quelques offres.",
       "experimental": "Un classement personnel est à l’essai sur une petite partie de la liste.",
       "active": "Le classement tient compte de vos choix, dans une limite fixe.",
       "paused": "Le classement personnel est en pause : il ne suivait plus vos choix récents. La liste suit le classement habituel.",
@@ -1490,6 +1497,36 @@
         "PF": "listes triées par pertinence",
         "IM": "autres"
       }
+    },
+    "learned": {
+      "title": "Ce que l’application a appris",
+      "paused": "L’apprentissage est en pause : votre classement ne s’adapte pas à vos actions.",
+      "applied": "Votre classement s’adapte à vos {count} choix marqués (offres sauvegardées, candidatures, refus).",
+      "needMore": "{count} choix marqué(s) sur {needed} : votre classement s’adaptera ensuite. Ouvrir une offre seule ne suffit pas.",
+      "likes": "Vous attire :",
+      "avoids": "Vous écartez :",
+      "forget": "Oublier",
+      "forgetItem": "Oublier « {item} »",
+      "restore": "Rétablir",
+      "restoreItem": "Rétablir « {item} »",
+      "forgottenTitle": "Préférences oubliées",
+      "movedApplied": "Dernière recherche : {moved} offres sur {ranked} ont changé de place, {top} sont entrées dans vos 20 premières.",
+      "movedPreview": "Dernière recherche : vos choix déplaceraient {moved} offres sur {ranked} ({top} entreraient dans vos 20 premières).",
+      "mover": "{title} : place {from} → {to}"
+    },
+    "values": {
+      "embedding": "des offres au contenu proche",
+      "remote": "travail : {value}",
+      "contract": "contrat : {value}",
+      "salary": "salaire : {value}",
+      "distance": "distance : {value}",
+      "seniority": "niveau : {value}"
+    },
+    "why": {
+      "title": "Pourquoi cette place",
+      "moved": "Sans vos choix, cette offre serait {{from}}e ; elle est {{to}}e.",
+      "preview": "Vos choix la placeraient {{to}}e au lieu de {{from}}e.",
+      "reason": "Lié à : {{items}}"
     }
   }
 }
