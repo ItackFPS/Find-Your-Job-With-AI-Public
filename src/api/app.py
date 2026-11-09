@@ -204,8 +204,19 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
         sources_path = Path(config_dir) / "sources.yaml"
         hw_source_cfg = SourceRegistry(config_path=str(sources_path)).get_source("hellowork")
         if hw_source_cfg is not None:
+            from src.discovery.query_expansion import apply_preset_collector_config
+            from src.pipeline.filter import load_profile
+            from src.config_files import resolve_config_path
+
+            hw_config = _build_collector_config(hw_source_cfg)
+            try:  # the profile's line-of-work preset fills in what sources.yaml leaves empty
+                hw_config = apply_preset_collector_config(
+                    hw_config, load_profile(str(resolve_config_path(config_dir, "profile.yaml"))),
+                    "hellowork")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("HelloWork: preset config skipped: %s", exc)
             hw_scanner = HelloWorkScanner(
-                config=_build_collector_config(hw_source_cfg), staging=hw_staging,
+                config=hw_config, staging=hw_staging,
                 shutdown_event=scanner_shutdown_event,
             )
             application.state.hellowork_scanner = hw_scanner

@@ -26,6 +26,9 @@ from src.storage.runs import RunStorage
 from src.storage.sqlite import Storage
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from src.discovery.presets import DiscoveryPreset
     from src.models.profile import JobSearchProfile
 
 
@@ -69,36 +72,18 @@ class JobStatsOut(BaseModel):
     title_categories: list[TitleCategoryFacet] = []
 
 
-# A display-only grouping of the frequency facet into "skills" (languages,
-# frameworks) vs. "tools" (platforms/infra) for the Stats page — does not
-# affect matching or scoring, just how the same tag data is labeled.
-_TOOL_KEYWORDS = frozenset({
-    "docker", "git", "aws", "kubernetes", "n8n", "jira", "linux", "bash",
-    "terraform", "jenkins", "azure", "gcp", "ansible", "nginx", "grafana",
-    "prometheus", "ci/cd", "github", "gitlab",
-})
-
-# Title-category buckets mirror config/sources.yaml's Indeed `queries` groups
-# (the pipeline's own configured search terms) — used only to label real,
-# already-collected job titles, never to invent new data.
-_TITLE_CATEGORIES: list[tuple[str, list[str]]] = [
-    ("Python / Data", ["python", "data engineer", "data analyst", "data scientist"]),
-    ("Web / Backend (JS, PHP, Node)", ["javascript", " php", "node.js", "développeur web", "developpeur web"]),
-    ("Frontend / Backend / Fullstack", [
-        "frontend", "front-end", "backend", "back-end", "fullstack", "full stack",
-        "software engineer", "ingénieur logiciel", "ingenieur logiciel",
-    ]),
-    ("QA / Test / Automation", ["qa engineer", "ingénieur test", "ingenieur test", "automation engineer"]),
-    ("DevOps / Cloud", ["devops", "cloud engineer"]),
-    ("Cybersecurity", ["cybersecurity", "cybersécurité", "cybersecurite", "ingénieur sécurité", "ingenieur securite"]),
-    ("IT Support / Network", [
-        "support informatique", "administrateur système", "administrateur systeme", "ingénieur réseau", "ingenieur reseau",
-    ]),
-]
+# Stats page groupings come from the line-of-work presets that apply to the profile
+# (config/presets/*.yaml, ``stats`` section): the "tools" split of the skills facet, the
+# title buckets, and whether skills are limited to known technology names. A profile
+# outside every preset gets neutral stats: skills as collected (minus sentence-like
+# source noise) and no title buckets. Display only: nothing here affects matching or scoring.
+_MAX_SKILL_WORDS = 5
+_MAX_SKILL_CHARS = 40
 
 
 def _aggregate_tech_facets(
     skill_rows: list,
+    presets: "Sequence[DiscoveryPreset]" = (),
 ) -> tuple[list[SkillFacet], list[SkillFacet]]:
     """Roll up raw ``jobs.skills`` values into skill/tool facets for the Stats page.
 
@@ -115,14 +100,23 @@ def _aggregate_tech_facets(
     "Docker" vs "docker") are merged into one facet, using whichever raw
     casing occurred most often in the source data as the display label —
     no manually maintained capitalization table.
+
+    With no applicable preset (a profile outside IT) there is no technology list: values
+    are kept as collected, except sentence-like ones (more than ``_MAX_SKILL_WORDS``
+    words or ``_MAX_SKILL_CHARS`` characters), which are the source noise described above.
     """
+    technologies_only = any(p.technologies_only for p in presets)
+    tool_keywords = frozenset().union(*(p.tool_keywords for p in presets)) if presets else frozenset()
     counts: dict[str, int] = {}
     display_votes: dict[str, dict[str, int]] = {}
     for r in skill_rows:
         raw_name = r["name"]
         count = r["count"]
         norm = raw_name.strip().lower()
-        if norm not in KNOWN_TECHNOLOGIES:
+        if technologies_only:
+            if norm not in KNOWN_TECHNOLOGIES:
+                continue
+        elif not norm or len(norm) > _MAX_SKILL_CHARS or len(norm.split()) > _MAX_SKILL_WORDS:
             continue
         counts[norm] = counts.get(norm, 0) + count
         votes = display_votes.setdefault(norm, {})
@@ -133,7 +127,7 @@ def _aggregate_tech_facets(
     for norm, count in counts.items():
         display_name = max(display_votes[norm].items(), key=lambda kv: kv[1])[0]
         facet = SkillFacet(name=display_name, count=count)
-        (tools if norm in _TOOL_KEYWORDS else skills).append(facet)
+        (tools if norm in tool_keywords else skills).append(facet)
 
     skills.sort(key=lambda f: f.count, reverse=True)
     tools.sort(key=lambda f: f.count, reverse=True)
@@ -588,21 +582,24 @@ def get_job_stats(request: Request) -> JobStatsOut:
     """Real, DB-derived stats for the Stats page. See compute_job_stats()."""
     s, rs = _get_storages(request)
     try:
-        return compute_job_stats(s, rs)
+        profile = _load_profile_safe(Path(getattr(request.app.state, "config_dir", "config")))
+        return compute_job_stats(s, rs, profile)
     finally:
         s.close()
         rs.close()
 
 
-def compute_job_stats(s: Storage, rs: RunStorage) -> JobStatsOut:
+def compute_job_stats(
+    s: Storage, rs: RunStorage, profile: "JobSearchProfile | None" = None
+) -> JobStatsOut:
     """Real, DB-derived stats for GET /api/jobs/stats, computed in exactly
     one place.
 
     Skills/tools frequency, score-tier distribution and rejection reasons are
     scoped to the latest completed run (same scoping as GET /countries).
-    Title categories bucket real job titles from that run against the
-    pipeline's own configured Indeed query groups (config/sources.yaml) —
-    no invented numbers. Skill/tool frequency is filtered through
+    Title categories bucket real job titles from that run against the title
+    buckets of the line-of-work presets that apply to ``profile`` (none without
+    one) — no invented numbers. Skill/tool frequency is filtered through
     ``_aggregate_tech_facets`` so source-specific noise in ``jobs.skills``
     (e.g. France Travail's ROME task/activity descriptions) never shows up
     as a "skill".
@@ -640,7 +637,12 @@ def compute_job_stats(s: Storage, rs: RunStorage) -> JobStatsOut:
         title_rows = conn.execute("SELECT title FROM jobs").fetchall()
         total_jobs = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
 
-    skills, tools = _aggregate_tech_facets(skill_rows)
+    from src.discovery.presets import load_presets, matching_presets
+
+    presets = matching_presets(
+        load_presets(), list(profile.target_domains) if profile is not None else []
+    )
+    skills, tools = _aggregate_tech_facets(skill_rows, presets)
 
     score_tiers: list[ScoreTierFacet] = []
     rejections: list[RejectionFacet] = []
@@ -675,10 +677,11 @@ def compute_job_stats(s: Storage, rs: RunStorage) -> JobStatsOut:
             reverse=True,
         )
 
-    category_counts: dict[str, int] = {name: 0 for name, _ in _TITLE_CATEGORIES}
+    categories = [c for p in presets for c in p.title_categories]
+    category_counts: dict[str, int] = {name: 0 for name, _ in categories}
     for row in title_rows:
         title = f" {(row['title'] or '').lower()} "
-        for name, keywords in _TITLE_CATEGORIES:
+        for name, keywords in categories:
             if any(kw in title for kw in keywords):
                 category_counts[name] += 1
                 break

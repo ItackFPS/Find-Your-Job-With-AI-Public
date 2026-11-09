@@ -121,13 +121,9 @@ sources:
     # rate_limit_delay of 1.5 s is conservative (WWR Crawl-delay: 2 s).
     config:
       category_rss: true
-      categories:
-        - remote-programming-jobs
-        - remote-full-stack-programming-jobs
-        - remote-back-end-programming-jobs
-        - remote-front-end-programming-jobs
-        - remote-devops-sysadmin-jobs
-        - remote-design-jobs
+      # categories: none by default. The collector searches what the profile asks for
+      # (discovery queries from src/discovery); a line of work with a preset
+      # (config/presets/) gets that preset's categories. List categories here to override.
       rate_limit_delay: 1.5
       timeout: 30
 
@@ -156,62 +152,9 @@ sources:
       rate_limit_delay: 2.0       # seconds between queries (jobspy pages a query itself)
       date_filter_hours: 720      # jobs posted in the last 30 days (set null to disable)
       default_location: "France"  # used when discovery_queries are injected by orchestrator
-      queries:
-        # Python / data
-        - keyword: "développeur python"
-          location: "France"
-        - keyword: "data engineer"
-          location: "France"
-        - keyword: "data analyst"
-          location: "France"
-        # JavaScript / web / PHP
-        - keyword: "développeur javascript"
-          location: "France"
-        - keyword: "développeur php"
-          location: "France"
-        - keyword: "développeur node.js"
-          location: "France"
-        - keyword: "développeur web"
-          location: "France"
-        # Frontend / Backend / Fullstack
-        - keyword: "développeur frontend"
-          location: "France"
-        - keyword: "développeur backend"
-          location: "France"
-        - keyword: "développeur fullstack"
-          location: "France"
-        # Generic software engineering
-        - keyword: "software engineer"
-          location: "France"
-        - keyword: "ingénieur logiciel"
-          location: "France"
-        # QA / Test / Automation
-        - keyword: "ingénieur test"
-          location: "France"
-        - keyword: "qa engineer"
-          location: "France"
-        - keyword: "automation engineer"
-          location: "France"
-        # DevOps / Cloud / SRE
-        - keyword: "devops engineer"
-          location: "France"
-        - keyword: "cloud engineer"
-          location: "France"
-        # Cybersecurity
-        - keyword: "cybersecurity engineer"
-          location: "France"
-        - keyword: "ingénieur sécurité"
-          location: "France"
-        # IT Support / Sysadmin / Network
-        - keyword: "support informatique"
-          location: "France"
-        - keyword: "administrateur système"
-          location: "France"
-        - keyword: "ingénieur réseau"
-          location: "France"
-        # Alternance / apprentissage
-        - keyword: "alternance développeur"
-          location: "France"
+      # queries: none by default. The collector searches what the profile asks for
+      # (discovery queries from src/discovery); a line of work with a preset
+      # (config/presets/) gets that preset's queries. List queries here to override.
 
   - name: eures
     type: eures
@@ -241,29 +184,10 @@ sources:
       results_per_page: 50        # API hard cap: >50 returns HTTP 400
       rate_limit_delay: 2.0
       timeout: 30
-      queries:
-        # France: French-language IT keywords
-        - keyword: "développeur logiciel"
-          location_codes: ["fr"]
-        - keyword: "ingénieur informatique"
-          location_codes: ["fr"]
-        - keyword: "développeur web"
-          location_codes: ["fr"]
-        - keyword: "cybersécurité"
-          location_codes: ["fr"]
-        - keyword: "data"
-          location_codes: ["fr"]
-        - keyword: "devops"
-          location_codes: ["fr"]
-        # France: English-language IT keywords (EURES indexes both)
-        - keyword: "software engineer"
-          location_codes: ["fr"]
-        - keyword: "developer"
-          location_codes: ["fr"]
-        # French-speaking neighbours (BE/LU/CH): often bilingual or
-        # remote-friendly roles compatible with French candidates.
-        - keyword: "software engineer"
-          location_codes: ["be", "lu", "ch"]
+      # queries: none by default. The collector searches what the profile asks for
+      # (discovery queries from src/discovery); a line of work with a preset
+      # (config/presets/) gets that preset's queries. List queries here to override.
+      default_location_codes: ["fr"]  # country codes for discovery queries
 
   - name: hellowork
     type: hellowork
@@ -337,9 +261,9 @@ sources:
     #   its own daily schedule via src/hellowork/scanner.py, not inside the
     #   main pipeline run.
     config:
-      domains:
-        - informatique
-        - data-et-ia
+      # domains: HelloWork's own domain slugs (e.g. "informatique", "sante"). None by
+      # default: a line of work with a preset (config/presets/) gets that preset's domains;
+      # otherwise list the HelloWork domains to read here.
       max_jobs_per_slug: 3
       rate_limit_delay: 1.0
       timeout: 20

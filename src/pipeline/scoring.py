@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from src.models.job import Job
 from src.pipeline.departments import PACA_NEIGHBOR_DEPARTMENTS, extract_department_code
+from src.pipeline.domain_scope import groups_outside_profile
 from src.pipeline.location_distance import assess as assess_location
 from src.pipeline.location_distance import describe as describe_location
 from src.pipeline.location_distance import distance_config
@@ -261,25 +262,17 @@ SENIORITY_FR_SYNONYMS: dict[str, list[str]] = {
     "graduate": [],
 }
 
-# Broad technical role indicators used as a mid tier in domain_relevance scoring.
-# A title containing one of these terms (after diacritic/case normalization) is
-# treated as a technical role even if it does not directly match a user-selected
-# domain keyword.  These are specific enough to exclude non-IT usage but broad
-# enough to capture data science, architecture, and similar adjacent roles.
-_BROAD_TECH_TITLE_INDICATORS: tuple[str, ...] = (
-    # English role terms
-    "engineer", "developer", "programmer", "scientist", "analyst",
-    "administrator", "architect", "devops",
-    # French equivalents (accent-stripped by _norm_text)
-    "ingenieur", "developpeur", "programmeur", "analyste",
-    "administrateur", "architecte", "technicien",
-)
+# Broad role indicators used as a mid tier in domain_relevance scoring come from the
+# line-of-work preset that applies to the profile (config/presets/*.yaml,
+# ``scoring.broad_title_indicators``), injected as
+# ``scoring.domain_relevance.broad_title_indicators``. A profile outside every preset
+# gets none: an unmatched title is simply undetermined.
 
 # ---------------------------------------------------------------------------
 # Domain-relevance keyword matching precision (2026-09-11 audit fix)
 #
 # `_score_domain_relevance` (below) matches ``domain_title_keywords``,
-# ``domain_description_keywords`` and ``_BROAD_TECH_TITLE_INDICATORS`` via
+# ``domain_description_keywords`` and ``broad_title_indicators`` via
 # plain substring containment (`kw in text`), unlike the rest of this module
 # (seniority indicators, off_domain_keywords, skills_match) which are all
 # word-boundary guarded. A live audit (2026-09-11, 7,194 real accepted jobs)
@@ -665,10 +658,11 @@ def build_scoring_config(
     # keywords, for domain_relevance scoring. Title/description
     # keywords are the per-domain vocabulary from filters.yaml for
     # each domain the user selected; off-domain keywords are the
-    # SAME non-IT/off-domain vocabulary the hard filter already
-    # uses (excluded_title_keywords + non_it_title_functions) —
-    # reused here as defense-in-depth evidence that a job is
-    # *confirmed* wrong-domain, not merely undetected.
+    # SAME other-lines-of-work vocabulary the hard filter already
+    # uses (excluded_title_keywords + non_it_title_functions, minus the
+    # groups that are the candidate's own line of work) — reused here as
+    # defense-in-depth evidence that a job is *confirmed* wrong-domain,
+    # not merely undetected.
     domain_rel_cfg = (
         scoring_config
         .setdefault("scoring", {})
@@ -681,12 +675,22 @@ def build_scoring_config(
         domain_title_kws.extend(kws.get("title", []))
         domain_desc_kws.extend(kws.get("description", []))
     domain_rel_cfg["domain_title_keywords"] = list(dict.fromkeys(domain_title_kws))
+    # Mid-tier role indicators of the line-of-work presets that apply to this profile.
+    from src.discovery.presets import load_presets, matching_presets
+
+    domain_rel_cfg["broad_title_indicators"] = list(dict.fromkeys(
+        ind
+        for preset in matching_presets(load_presets(), list(profile.target_domains))
+        for ind in preset.broad_title_indicators
+    ))
     domain_rel_cfg["domain_description_keywords"] = list(dict.fromkeys(domain_desc_kws))
     off_domain_kws: list[str] = []
-    for group in engine_cfg.get("excluded_title_keywords", {}).values():
-        off_domain_kws.extend(group)
-    for group in engine_cfg.get("non_it_title_functions", {}).values():
-        off_domain_kws.extend(group)
+    for section in ("excluded_title_keywords", "non_it_title_functions"):
+        groups = engine_cfg.get(section, {})
+        if isinstance(groups, dict):
+            off_domain_kws.extend(groups_outside_profile(groups, profile))
+        else:
+            off_domain_kws.extend(groups)
     domain_rel_cfg["off_domain_keywords"] = list(dict.fromkeys(off_domain_kws))
 
     # Inject profile languages for F3 language penalty detection.
@@ -1225,7 +1229,8 @@ def _score_domain_relevance(
         if any(_domain_keyword_matches(_norm_text(kw), desc_norm) for kw in domain_desc_kws):
             return 0.7
 
-    if any(_domain_keyword_matches(ind, title_norm) for ind in _BROAD_TECH_TITLE_INDICATORS):
+    broad_indicators = _get_keywords(config, "scoring.domain_relevance.broad_title_indicators")
+    if any(_domain_keyword_matches(_norm_text(ind), title_norm) for ind in broad_indicators):
         return 0.35
 
     return 0.45

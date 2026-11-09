@@ -435,6 +435,8 @@ function AutocompleteTagList({ state, onChange, lang = 'en' }: AutocompleteTagLi
 // so it gets that rich keyword list; picking an ESCO match or typing custom
 // text stores it verbatim and is used as a literal title keyword instead
 // (same fallback target_skills already get — see build_filter_config()).
+// An ESCO match is also recorded as a target occupation (with its French label), which
+// job-board discovery searches by name; removing the chip removes both.
 // Either way, this stays a pure search box: nothing is pinned/always-visible.
 // ---------------------------------------------------------------------------
 
@@ -473,9 +475,15 @@ interface DomainSuggestion {
   value: string
   label: string
   badge: 'Curated' | 'ROME' | 'ESCO' | null
+  occupation?: EscoEntry
 }
 
-export function DomainPicker({ values, onChange }: { values: string[]; onChange: (v: string[]) => void }) {
+export function DomainPicker({ values, onChange, occupations = [], onOccupationsChange }: {
+  values: string[]
+  onChange: (v: string[]) => void
+  occupations?: EscoEntry[]
+  onOccupationsChange?: (v: EscoEntry[]) => void
+}) {
   const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const trimmedQuery = query.trim()
@@ -541,19 +549,34 @@ export function DomainPicker({ values, onChange }: { values: string[]; onChange:
     ...romeMatches.map(m => m.label.toLowerCase())])
   const escoMatches: DomainSuggestion[] = escoResults
     .filter(r => !shownLower.has(r.label.toLowerCase()) && !shownLower.has(r.keyword.toLowerCase()))
-    .map(r => ({ value: r.keyword, label: r.label, badge: r.is_esco ? ('ESCO' as const) : null }))
+    .map(r => ({
+      value: r.keyword,
+      label: r.label,
+      badge: r.is_esco ? ('ESCO' as const) : null,
+      occupation: r.is_esco
+        ? { concept_uri: r.concept_uri, label: r.label, keyword: r.keyword, custom: false, label_fr: r.label_fr || null }
+        : undefined,
+    }))
 
   const suggestions = [...curatedMatches, ...romeMatches, ...escoMatches].slice(0, 10)
 
-  const addValue = (v: string) => {
+  const addValue = (v: string, occupation?: EscoEntry) => {
     if (!includesCaseInsensitive(values, v)) onChange([...values, v])
+    if (occupation && onOccupationsChange && !includesCaseInsensitive(occupations.map(o => o.keyword), occupation.keyword)) {
+      onOccupationsChange([...occupations, occupation])
+    }
     setQuery('')
     setEscoResults([])
     setRomeResults([])
     setActiveIndex(-1)
   }
 
-  const removeValue = (v: string) => onChange(values.filter(x => x !== v))
+  const removeValue = (v: string) => {
+    onChange(values.filter(x => x !== v))
+    if (onOccupationsChange && occupations.some(o => o.keyword.toLowerCase() === v.toLowerCase())) {
+      onOccupationsChange(occupations.filter(o => o.keyword.toLowerCase() !== v.toLowerCase()))
+    }
+  }
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
@@ -569,7 +592,7 @@ export function DomainPicker({ values, onChange }: { values: string[]; onChange:
     } else if (e.key === 'Enter') {
       e.preventDefault()
       if (activeIndex >= 0 && activeIndex < suggestions.length) {
-        addValue(suggestions[activeIndex].value)
+        addValue(suggestions[activeIndex].value, suggestions[activeIndex].occupation)
       } else if (trimmedQuery) {
         addValue(trimmedQuery)
       }
@@ -610,7 +633,7 @@ export function DomainPicker({ values, onChange }: { values: string[]; onChange:
             {suggestions.map((s, i) => (
               <div
                 key={`${s.badge ?? 'plain'}-${s.value}`}
-                onMouseDown={e => { e.preventDefault(); addValue(s.value) }}
+                onMouseDown={e => { e.preventDefault(); addValue(s.value, s.occupation) }}
                 onMouseEnter={() => setActiveIndex(i)}
                 style={{
                   padding: '0.6rem 0.85rem',
@@ -1142,7 +1165,12 @@ export default function ProfilePage() {
               label={profile.focus_domain ? t('profile.fields.focusDomain') : t('profile.fields.focusSkills')}
             />
           </div>
-          <DomainPicker values={profile.target_domains} onChange={v => set('target_domains', v)} />
+          <DomainPicker
+            values={profile.target_domains}
+            onChange={v => set('target_domains', v)}
+            occupations={profile.target_occupations ?? []}
+            onOccupationsChange={v => set('target_occupations', v)}
+          />
         </div>
 
         <hr style={sectionDivider} />

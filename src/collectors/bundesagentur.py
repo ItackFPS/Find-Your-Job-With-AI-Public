@@ -49,14 +49,10 @@ _HEADERS = {
 }
 _DETAIL_URL_TEMPLATE = "https://www.arbeitsagentur.de/jobsuche/jobdetail/{ref}"
 
-# Broad set of tech-adjacent German search terms. Kept small to bound the
-# number of requests per run (one request per term).
-_DEFAULT_SEARCH_TERMS = [
-    "Softwareentwickler",
-    "IT",
-    "DevOps",
-    "Data Engineer",
-]
+# No default search terms: no profession is assumed. Terms come from the source config
+# (search_terms) or from the profile's discovery queries. One request per term, so keep
+# the list small to bound the requests per run.
+_DEFAULT_SEARCH_TERMS: list[str] = []
 
 
 class BundesagenturCollector(BaseCollector):
@@ -76,7 +72,7 @@ class BundesagenturCollector(BaseCollector):
         super().__init__(timeout=30, retries=3, rate_limit_delay=1.0)
         cfg = config or {}
         self.max_jobs: int | None = cfg.get("max_jobs")
-        self.search_terms: list[str] = cfg.get("search_terms") or _DEFAULT_SEARCH_TERMS
+        self.search_terms: list[str] = cfg.get("search_terms") or cfg.get("discovery_queries") or _DEFAULT_SEARCH_TERMS
         self.size: int = min(int(cfg.get("size", 50)), 100)
 
     def collect(self) -> CollectorResult:

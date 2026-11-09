@@ -1,0 +1,419 @@
+# IT line-of-work preset.
+#
+# Vocabulary for information-technology profiles (search terms, scoring hints,
+# Stats page groupings), kept here so the code carries no profession-specific
+# terms. It applies when the profile's target_domains contains one of
+# applies_to_domains (case-insensitive). Add your own preset for another line of
+# work as another file in this folder: same keys, your own applies_to_domains.
+#
+# discovery.baseline            queries always sent to a source while the preset applies
+# discovery.domain_queries      extra France Travail / APEC queries per selected domain
+# discovery.contract_queries    extra queries per contract type
+# discovery.jobicy_industries   Jobicy industry slugs per selected domain
+# discovery.partition_*         terms used to split a saturated France Travail query
+# discovery.noisy_replacements  query -> safer query (null rejects the query)
+# discovery.collector_config    per source type: collector config keys (queries, categories,
+#                               occupations...) used when config/sources.yaml leaves them out
+# scoring.broad_title_indicators  title words that make an unmatched title a mid-tier role
+#                               guess in domain_relevance scoring (0.35 instead of 0.45)
+# stats.technologies_only       Stats page: keep only known technology names as skills
+# stats.tool_keywords           technologies the Stats page lists as tools, not skills
+# stats.title_categories        Stats page: title buckets (name + keywords)
+name: it
+description: Discovery vocabulary for information-technology profiles. Applied when the profile selects
+  one of applies_to_domains.
+applies_to_domains:
+- software_development
+- web_development
+- qa_testing
+- automation
+- data
+- it_support
+- systems
+- networking
+- cybersecurity
+- devops
+- cloud
+- informatique
+- développement logiciel
+- cybersécurité
+- réseaux
+- systèmes
+discovery:
+  baseline:
+    france_travail:
+    - informatique
+    - développement logiciel
+    - data
+    - cybersécurité
+    - intelligence artificielle
+    - test logiciel
+    - alternance informatique
+    jobicy:
+    - engineering
+    - cybersecurity
+    - admin
+    remoteok:
+    - python
+    - javascript
+    - devops
+    - react
+  domain_queries:
+    france_travail:
+      web_development:
+      - développement web
+      it_support:
+      - support informatique
+      systems:
+      - administrateur systèmes
+      networking:
+      - réseau informatique
+      devops:
+      - devops
+      cloud:
+      - cloud computing
+  contract_queries:
+    france_travail:
+      internship:
+      - stage informatique
+  jobicy_industries:
+    web_development:
+    - web-app-design
+    qa_testing:
+    - qa-testing
+  partition_vocabulary:
+  - développeur
+  - logiciel
+  - ingénieur
+  - technicien
+  - data
+  - cybersécurité
+  - devops
+  - web
+  - test
+  - cloud
+  - réseaux
+  - systèmes
+  - support
+  partition_affinity:
+    software_development:
+    - développeur
+    - logiciel
+    - ingénieur
+    web_development:
+    - web
+    - développeur
+    qa_testing:
+    - test
+    - logiciel
+    automation:
+    - devops
+    - logiciel
+    data:
+    - data
+    - logiciel
+    it_support:
+    - support
+    - technicien
+    systems:
+    - systèmes
+    - ingénieur
+    networking:
+    - réseaux
+    cybersecurity:
+    - cybersécurité
+    devops:
+    - devops
+    - cloud
+    cloud:
+    - cloud
+    - devops
+  noisy_replacements:
+    réseau: réseau informatique
+    reseau: réseau informatique
+    numérique: null
+    numerique: null
+    système: null
+    systeme: null
+  collector_config:
+    indeed:
+      queries:
+      - keyword: développeur python
+        location: France
+      - keyword: data engineer
+        location: France
+      - keyword: data analyst
+        location: France
+      - keyword: développeur javascript
+        location: France
+      - keyword: développeur php
+        location: France
+      - keyword: développeur node.js
+        location: France
+      - keyword: développeur web
+        location: France
+      - keyword: développeur frontend
+        location: France
+      - keyword: développeur backend
+        location: France
+      - keyword: développeur fullstack
+        location: France
+      - keyword: software engineer
+        location: France
+      - keyword: ingénieur logiciel
+        location: France
+      - keyword: ingénieur test
+        location: France
+      - keyword: qa engineer
+        location: France
+      - keyword: automation engineer
+        location: France
+      - keyword: devops engineer
+        location: France
+      - keyword: cloud engineer
+        location: France
+      - keyword: cybersecurity engineer
+        location: France
+      - keyword: ingénieur sécurité
+        location: France
+      - keyword: support informatique
+        location: France
+      - keyword: administrateur système
+        location: France
+      - keyword: ingénieur réseau
+        location: France
+      - keyword: alternance développeur
+        location: France
+    eures:
+      queries:
+      - keyword: développeur logiciel
+        location_codes:
+        - fr
+      - keyword: ingénieur informatique
+        location_codes:
+        - fr
+      - keyword: développeur web
+        location_codes:
+        - fr
+      - keyword: cybersécurité
+        location_codes:
+        - fr
+      - keyword: data
+        location_codes:
+        - fr
+      - keyword: devops
+        location_codes:
+        - fr
+      - keyword: software engineer
+        location_codes:
+        - fr
+      - keyword: developer
+        location_codes:
+        - fr
+      - keyword: software engineer
+        location_codes:
+        - be
+        - lu
+        - ch
+    weworkremotely:
+      categories:
+      - remote-programming-jobs
+      - remote-full-stack-programming-jobs
+      - remote-back-end-programming-jobs
+      - remote-front-end-programming-jobs
+      - remote-devops-sysadmin-jobs
+      - remote-design-jobs
+    france_travail_web:
+      occupations:
+        software_development:
+        - s28m7
+        - s29m2
+        - s28m1
+        - s28m9
+        - s28m6
+        - s28m24
+        - s28m20
+        - s28m21
+        - s29m4
+        - s28m16
+        - s28m28
+        - s29m20
+        - s6m2
+        web_development:
+        - s28m7
+        - s29m2
+        - s28m8
+        - s29m3
+        - s28m24
+        - s28m6
+        qa_testing:
+        - s28m10
+        - s6m2
+        data:
+        - s28m18
+        - s28m15
+        - s29m7
+        - s28m22
+        - s6m12
+        it_support:
+        - s28m5
+        - s6m2
+        systems:
+        - s28m11
+        - s28m23
+        - s6m3
+        networking:
+        - s28m11
+        - s28m19
+        devops:
+        - s28m23
+        - s28m11
+        - s6m2
+        cloud:
+        - s28m11
+        - s28m21
+        - s6m2
+        cybersecurity:
+        - s28m25
+        - s6m3
+        automation:
+        - s28m1
+        - s28m10
+        - s6m2
+        informatique:
+        - s6m2
+        - s6m3
+        - s28m7
+        - s28m2
+        - s28m3
+        - s28m1
+    linkedin:
+      queries:
+      - search_term: cloud engineer
+        location: France
+        results_wanted: 50
+      - search_term: devops engineer
+        location: France
+        results_wanted: 50
+      - search_term: backend developer
+        location: France
+        results_wanted: 50
+      - search_term: software engineer
+        location: France
+        results_wanted: 50
+      - search_term: cybersecurity engineer
+        location: France
+        results_wanted: 50
+      - search_term: network engineer
+        location: France
+        results_wanted: 50
+      - search_term: systems administrator
+        location: France
+        results_wanted: 50
+      - search_term: support informatique
+        location: France
+        results_wanted: 50
+      - search_term: automation engineer
+        location: France
+        results_wanted: 50
+      - search_term: développeur backend
+        location: France
+        results_wanted: 50
+      - search_term: ingénieur devops
+        location: France
+        results_wanted: 50
+      - search_term: ingénieur cybersécurité
+        location: France
+        results_wanted: 50
+    hellowork:
+      domains:
+      - informatique
+      - data-et-ia
+scoring:
+  broad_title_indicators:
+  - engineer
+  - developer
+  - programmer
+  - scientist
+  - analyst
+  - administrator
+  - architect
+  - devops
+  - ingenieur
+  - developpeur
+  - programmeur
+  - analyste
+  - administrateur
+  - architecte
+  - technicien
+stats:
+  technologies_only: true
+  tool_keywords:
+  - ansible
+  - aws
+  - azure
+  - bash
+  - ci/cd
+  - docker
+  - gcp
+  - git
+  - github
+  - gitlab
+  - grafana
+  - jenkins
+  - jira
+  - kubernetes
+  - linux
+  - n8n
+  - nginx
+  - prometheus
+  - terraform
+  title_categories:
+  - name: Python / Data
+    keywords:
+    - python
+    - data engineer
+    - data analyst
+    - data scientist
+  - name: Web / Backend (JS, PHP, Node)
+    keywords:
+    - javascript
+    - ' php'
+    - node.js
+    - développeur web
+    - developpeur web
+  - name: Frontend / Backend / Fullstack
+    keywords:
+    - frontend
+    - front-end
+    - backend
+    - back-end
+    - fullstack
+    - full stack
+    - software engineer
+    - ingénieur logiciel
+    - ingenieur logiciel
+  - name: QA / Test / Automation
+    keywords:
+    - qa engineer
+    - ingénieur test
+    - ingenieur test
+    - automation engineer
+  - name: DevOps / Cloud
+    keywords:
+    - devops
+    - cloud engineer
+  - name: Cybersecurity
+    keywords:
+    - cybersecurity
+    - cybersécurité
+    - cybersecurite
+    - ingénieur sécurité
+    - ingenieur securite
+  - name: IT Support / Network
+    keywords:
+    - support informatique
+    - administrateur système
+    - administrateur systeme
+    - ingénieur réseau
+    - ingenieur reseau

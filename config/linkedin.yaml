@@ -46,63 +46,12 @@ schedule:
 # Remote-only roles appear across all queries because LinkedIn search is
 # location-filtered server-side — France narrows on-site results but remote
 # roles from the wider EU / worldwide still appear.
-queries:
-  - search_term: "cloud engineer"
-    location: "France"
-    results_wanted: 50
-
-  - search_term: "devops engineer"
-    location: "France"
-    results_wanted: 50
-
-  - search_term: "backend developer"
-    location: "France"
-    results_wanted: 50
-
-  - search_term: "software engineer"
-    location: "France"
-    results_wanted: 50
-
-  - search_term: "cybersecurity engineer"
-    location: "France"
-    results_wanted: 50
-
-  - search_term: "network engineer"
-    location: "France"
-    results_wanted: 50
-
-  - search_term: "systems administrator"
-    location: "France"
-    results_wanted: 50
-
-  # Profile target domains with no prior LinkedIn coverage:
-  - search_term: "support informatique"
-    location: "France"
-    results_wanted: 50
-
-  - search_term: "automation engineer"
-    location: "France"
-    results_wanted: 50
-
-  # French-language queries for domains with significant French-language postings.
-  # Cross-query dedup (scan_seen_ids) handles any overlap — English queries may
-  # already cover many of these, but French queries surface postings from French
-  # companies that use French-only titles (e.g. "développeur" instead of "developer").
-  #
-  # ROI analysis: English "network engineer" has 71% pass rate (most efficient query).
-  # French equivalents likely capture different postings from francophone companies.
-  - search_term: "développeur backend"
-    location: "France"
-    results_wanted: 50
-
-  - search_term: "ingénieur devops"
-    location: "France"
-    results_wanted: 50
-
-  - search_term: "ingénieur cybersécurité"
-    location: "France"
-    results_wanted: 50
-
+# queries: none by default. With none listed, the scanner searches the profile's own
+# target domains and occupations; a line of work with a preset (config/presets/) uses
+# that preset's list. List queries here to override. Each entry is a separate search:
+#   - search_term: "nurse"
+#     location: "France"
+#     results_wanted: 50
 # Seconds to wait between each query AND between pages within a query.
 # Conservative values reduce the risk of rate limiting.
 # LinkedIn can rate-limit aggressively — minimum recommended: 15.

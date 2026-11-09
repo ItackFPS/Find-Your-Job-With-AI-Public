@@ -35,3 +35,4 @@ is the source of truth and the ADR must be updated or superseded.
 | [0026](0026-home-lanes.md) | Home shows three labelled lanes; exploration and outside-criteria offers are capped and explained |
 | [0027](0027-roadmap-rescope.md) | The learning stages L1–L9 replace Phase 4 and run before the remaining P3, P5–P7 work; P7 gains learning gates |
 | [0028](0028-release-2.0-before-occupation-layers.md) | 2.0 ships after P3, minimum P6 and P7; L6–L8 move to 2.x; a temporary multi-profile gate covers 2.0 |
+| [0029](0029-profession-agnostic-discovery.md) | Discovery, filtering and scoring assume no profession; line-of-work vocabulary lives in presets (amends 0028's IT scope) |
