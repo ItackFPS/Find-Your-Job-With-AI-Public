@@ -708,8 +708,7 @@ def _examples_of_range(
     after it, within the same clause.
     """
     assert upper.span is not None
-    opening = re.match(r"[^().;
-]{0,40}\(", text[upper.span.end:])
+    opening = re.match(r"[^().;\n]{0,40}\(", text[upper.span.end:])
     if opening is None:
         return set()
     start = upper.span.end + opening.end()
