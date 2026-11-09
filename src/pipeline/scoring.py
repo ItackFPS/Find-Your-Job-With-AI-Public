@@ -365,6 +365,13 @@ def _domain_keyword_matches(kw_norm: str, text_norm: str) -> bool:
     return kw_norm in text_norm
 
 
+# How much of a description the factors read. Postings open with the employer's pitch and
+# name the role's tools after it: 776 of 1,923 offers of a real run cited a profile skill only
+# past the former 2,000-character window. Large enough for every source (France Travail stops
+# at 5,000), bounded so one pathological page cannot slow a run.
+_DESCRIPTION_WINDOW = 12_000
+
+
 def _norm_text(text: str) -> str:
     """Lowercase and strip diacritical marks."""
     nfd = unicodedata.normalize("NFD", text)
@@ -1233,7 +1240,7 @@ def _score_domain_relevance(
 
     domain_desc_kws = _get_keywords(config, "scoring.domain_relevance.domain_description_keywords")
     if domain_desc_kws:
-        desc_norm = _norm_text((description or "")[:2000])
+        desc_norm = _norm_text((description or "")[:_DESCRIPTION_WINDOW])
         if any(_domain_keyword_matches(_norm_text(kw), desc_norm) for kw in domain_desc_kws):
             return 0.7
 
@@ -1683,7 +1690,7 @@ def _score_skills_match(
     if job.skills:
         desc_parts.append(_norm_text(" ".join(job.skills)))
     if job.description:
-        desc_parts.append(_norm_text(job.description[:2000]))
+        desc_parts.append(_norm_text(job.description[:_DESCRIPTION_WINDOW]))
     desc_norm = " ".join(desc_parts)
 
     if not title_norm and not desc_norm:
