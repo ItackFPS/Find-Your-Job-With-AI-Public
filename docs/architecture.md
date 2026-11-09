@@ -137,7 +137,8 @@ orchestrator loads collectors dynamically based on the `type` field in
 | `bundesagentur` | `bundesagentur.py` | Disabled — Germany-only, fails this project's location filter |
 | `arbetsformedlingen` | `arbetsformedlingen.py` | Disabled — Sweden-only, same reason |
 | `hellowork` | `hellowork.py` | Disabled in the registry — production HelloWork collection uses the separate scanner below |
-| `greenhouse` | `greenhouse.py` | Registered, working, not configured — needs a `board_identifier` |
+| `ats_boards` | `ats_boards.py` | Active — public ATS read APIs, boards found from stored offers (`src/discovery/ats_boards.py`) |
+| `greenhouse` | `greenhouse.py` | Used by `ats_boards`; not configured on its own |
 | `lever` | `lever.py` | Registered, working, not configured — needs a company slug |
 | `smartrecruiters` | `smartrecruiters.py` | Registered, working, not configured |
 | `workingnomads` | `workingnomads.py` | Registered, working, not configured |
