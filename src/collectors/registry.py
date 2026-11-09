@@ -35,6 +35,7 @@ class CollectorRegistry:
         """Register built-in collector implementations."""
         from src.collectors.arbetsformedlingen import ArbetsformedlingenCollector
         from src.collectors.bundesagentur import BundesagenturCollector
+        from src.collectors.ats_boards import AtsBoardsCollector
         from src.collectors.eures import EURESCollector
         from src.collectors.france_travail import FranceTravailCollector
         from src.collectors.france_travail_web import FranceTravailWebCollector
@@ -55,6 +56,7 @@ class CollectorRegistry:
         # written yet), not broken. See src/collectors/experimental/ for
         # code that IS broken and was deliberately removed from this
         # registry instead (Phase NOW / I4 audit, 2026-09-13).
+        self._collectors["ats_boards"] = AtsBoardsCollector
         self._collectors["greenhouse"] = GreenhouseCollector
         self._collectors["lever"] = LeverCollector
         self._collectors["remote"] = RemoteCollector
