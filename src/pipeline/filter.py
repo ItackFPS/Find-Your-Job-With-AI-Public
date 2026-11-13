@@ -252,6 +252,26 @@ def build_filter_config(profile: "JobSearchProfile", engine_cfg: dict[str, Any])
             engine_cfg.get("contract_keywords", {}).get("freelance", {}).get("title", [])
         )
 
+    # Internship and apprenticeship: the same title-only rule, by whole word ("interne"
+    # and "multi-stage" are not the contract). A contract is wanted when it is among the
+    # contract types or the career levels asked for; the profile page asks for an
+    # apprenticeship through the level, it has no contract box for it.
+    contract_words: list[str] = []
+    contract_not_phrases: list[str] = []
+    if profile.contract_types:
+        wanted = contract_types_lower | {
+            str(level).lower() for level in (
+                *getattr(getattr(profile, "targets", None), "levels", ()),
+                *getattr(profile.experience, "preferred_levels", ()),
+            )
+        }
+        for kind in ("internship", "alternance"):
+            if kind in wanted:
+                continue
+            group = engine_cfg.get("contract_keywords", {}).get(kind, {}) or {}
+            contract_words.extend(group.get("reject_title_words", []) or [])
+            contract_not_phrases.extend(group.get("not_a_contract_phrases", []) or [])
+
     return {
         "locations": {"include": locations_include},
         "remote_scope": engine_cfg.get("remote_scope", {}),
@@ -260,7 +280,11 @@ def build_filter_config(profile: "JobSearchProfile", engine_cfg: dict[str, Any])
         "seniority": {"exclude": seniority_exclude},
         # Read by the requirements gate (None: v1 profile, the keyword rejection above applies).
         "career_level": career_level,
-        "contract_type": {"exclude_title_keywords": freelance_exclude_keywords},
+        "contract_type": {
+            "exclude_title_keywords": freelance_exclude_keywords,
+            "exclude_title_words": _dedup(contract_words),
+            "not_a_contract_phrases": _dedup(contract_not_phrases),
+        },
         "title_keywords": {
             "include": _dedup(title_include),
             "description_include": _dedup(description_include),
@@ -772,19 +796,29 @@ def matches_title_keywords(job: Job, config: dict[str, Any]) -> bool:
 
 def matches_contract_type(job: Job, config: dict[str, Any]) -> bool:
     """Reject a job whose TITLE explicitly signals an unwanted contract
-    arrangement (currently: freelance) that the profile's contract_types has
-    excluded.
+    arrangement (freelance, internship, apprenticeship) that the profile does
+    not ask for.
 
     Title-only by design — see build_filter_config()'s contract_type section
     for why the structured employment_type field is not used here.
     """
-    excluded = config.get("contract_type", {}).get("exclude_title_keywords", [])
-    if not excluded:
+    section = config.get("contract_type", {})
+    excluded = section.get("exclude_title_keywords", [])
+    words = section.get("exclude_title_words", [])
+    if not excluded and not words:
         return True
     title_norm = _normalize(job.title or "")
     for kw in excluded:
         if _normalize(kw) in title_norm:
             return False
+    if words:
+        # "early stage" names a company's phase and "1er stage" a past experience.
+        for phrase in section.get("not_a_contract_phrases", []):
+            title_norm = title_norm.replace(_normalize(phrase), " ")
+        for word in words:
+            # A hyphen joins a compound ("multi-stage"), so it is not a word boundary.
+            if re.search(r"(?<![a-z0-9-])" + re.escape(_normalize(word)) + r"(?![a-z0-9-])", title_norm):
+                return False
     return True
 
 
