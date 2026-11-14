@@ -1053,19 +1053,6 @@ def run_pipeline(
             storage.record_provenance([job for job, _, _ in scored_with_breakdown], datetime.now(UTC))
         except Exception as exc:  # noqa: BLE001
             logger.warning("Provenance not recorded: %s", exc)
-        # Expiry (issue #86): every offer collected this run stays active (an offer that
-        # failed validation or was merged as a duplicate was still seen); only a source
-        # that read its whole listing counts a miss for the offers it no longer lists.
-        # Never fails the run.
-        try:
-            expiry = storage.apply_expiry(
-                {job.id for job in all_jobs}, sources_counting_misses(stats.by_source),
-                datetime.now(UTC), expire_after_missed_runs(config_dir),
-            )
-            logger.info("Expiry: %s", expiry)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Expiry not applied: %s", exc)
-
         # Phase NEXT / I11: incremental-collection INFRASTRUCTURE only — record
         # that a source's collection completed cleanly, and how many of its
         # jobs were new vs. already known. Deliberately does NOT change what
@@ -1489,6 +1476,20 @@ def run_pipeline(
         recorder.finalize(scored_job_records)
         stats.decisions = recorder.summary()
         stats.stage_times["journal"] = time.perf_counter() - _t_journal
+
+        # Expiry (issue #86): every offer collected this run stays active (an offer that
+        # failed validation or was merged as a duplicate was still seen); only a source
+        # that read its whole listing counts a miss for the offers it no longer lists.
+        # Applied only once the run completed (P-002): a run that fails after storage must not
+        # count misses or expire offers. Never fails the run.
+        try:
+            expiry = storage.apply_expiry(
+                {job.id for job in all_jobs}, sources_counting_misses(stats.by_source),
+                datetime.now(UTC), expire_after_missed_runs(config_dir),
+            )
+            logger.info("Expiry: %s", expiry)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Expiry not applied: %s", exc)
 
         pers_storage.close()
         storage.close()
