@@ -18,6 +18,15 @@ from typing import Any
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _source_chosen(tmp_path: Path) -> None:
+    """The user turned HelloWork on: the settings file next to each test database
+    (src/source_enablement.py: a staged source is on only when its config provides it AND the
+    user chose it)."""
+    (tmp_path / "settings.json").write_text(json.dumps({"unofficial_sources": {"hellowork": True}}),
+                                            encoding="utf-8")
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

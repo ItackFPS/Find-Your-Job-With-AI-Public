@@ -331,7 +331,8 @@ def list_jobs(
             in_run = [j for j in (run_job_ids or []) if j in saved]
             run_job_ids = in_run + sorted(saved - set(in_run))
         exclude_hashes = set() if include_hidden else s.get_content_hashes(sorted(hidden_ids))
-        exclude_ids = set() if include_hidden else hidden_ids
+        exclude_ids = set() if include_hidden else set(hidden_ids)
+        exclude_ids |= _switched_off_ids(request, s, list_state)
 
         if q:
             # FTS prefix search: fetch up to 2000 matches then apply all
@@ -460,7 +461,8 @@ def list_decouverte(request: Request) -> list[JobDetailOut]:
             return []
         ids = [d["job_id"] for d in drawn_for_run(request.app.state.db_path, latest_run["id"])]
         list_state = _list_state(request)
-        ids = [j for j in ids if not list_state.get(j, {}).get("hidden")]
+        off = _switched_off_ids(request, s, list_state)
+        ids = [j for j in ids if not list_state.get(j, {}).get("hidden") and j not in off]
         scores_by_id = rs.get_latest_scores_for_jobs(ids) if ids else {}
         jobs_by_id = s.get_jobs_by_ids(ids) if ids else {}
         result: list[JobDetailOut] = []
@@ -499,9 +501,11 @@ def list_outside_criteria(request: Request) -> list[JobDetailOut]:
         lanes = assign_lanes(((r["job_id"], float(r.get("final_score") or 0.0), r.get("score_breakdown"))
                               for r in rows), load_lane_params(config_dir / "scoring.yaml"))
         list_state = _list_state(request)
+        off = _switched_off_ids(request, s, list_state)
         score = {r["job_id"]: float(r.get("final_score") or 0.0) for r in rows}
         ids = sorted((j for j, lane in lanes.items() if lane == OUTSIDE
-                      and not list_state.get(j, {}).get("hidden")), key=lambda j: (-score[j], j))
+                      and not list_state.get(j, {}).get("hidden") and j not in off),
+                     key=lambda j: (-score[j], j))
         scores_by_id = rs.get_latest_scores_for_jobs(ids) if ids else {}
         jobs_by_id = s.get_jobs_by_ids(ids) if ids else {}
         result: list[JobDetailOut] = []
@@ -1030,6 +1034,27 @@ def _list_state(request: Request, job_ids: list[str] | None = None) -> dict[str,
         return {}
     finally:
         store.close()
+
+
+def _switched_off_ids(request: Request, storage: Storage, list_state: dict[str, dict[str, bool]]) -> set[str]:
+    """Offers of a source the user turned off, hidden from every list while it is off (owner
+    decision D1, Phase B B4-A). Never deleted; an offer the user saved or tracks
+    (``application_status``) stays listed."""
+    from src.source_enablement import settings_path_for, switched_off_sources
+
+    state = request.app.state
+    settings = getattr(state, "settings_path", None) or settings_path_for(state.db_path)
+    try:
+        off = switched_off_sources(getattr(state, "config_dir", "config"), settings)
+    except Exception as exc:  # noqa: BLE001 — listing offers never fails on the settings
+        logger.warning("Source switches unavailable: %s", exc)
+        return set()
+    if not off:
+        return set()
+    rows = storage._get_conn().execute(  # noqa: SLF001
+        f"SELECT id FROM jobs WHERE source IN ({','.join('?' * len(off))}) "
+        "AND (application_status IS NULL OR application_status = '')", sorted(off)).fetchall()
+    return {r[0] for r in rows if not list_state.get(r[0], {}).get("saved")}
 
 
 def _get_jobs_filtered(

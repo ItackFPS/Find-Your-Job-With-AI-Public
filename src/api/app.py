@@ -241,7 +241,8 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
     # LinkedIn/HelloWork scan daily only once chosen (plan rule I1, F6.4): the stored choice.
     # An install that scanned them before 2.0 has that observed choice stored once, now; a
     # scan started by hand later never turns daily scans on.
-    from src.app_settings import background_settings, record_observed_choices, unofficial_source_enabled
+    from src.app_settings import background_settings, record_observed_choices
+    from src.source_enablement import source_enabled
 
     try:
         observed = record_observed_choices(Path(application.state.settings_path), {
@@ -254,10 +255,10 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
         logger.warning("Could not record the sources this install already scanned: %s", exc)
 
     def _opted_in(source_id: str) -> bool:
-        return unofficial_source_enabled(Path(application.state.settings_path), source_id)
+        # The single rule of src/source_enablement.py (Phase B B4-A): the choice AND the config.
+        return source_enabled(source_id, application.state.config_dir, application.state.settings_path)
 
-    # Settings › Sources shows the same choice the scheduler acts on (issue #82).
-    application.state.source_opted_in = _opted_in
+    # Settings › Sources reads the same rule (src/source_enablement.py) for "collected" (issue #82).
 
     # Collection freeze (owner decision D7, ADR 0032): recorded once; never lifted by an update.
     from src.collectors import freeze
