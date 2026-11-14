@@ -17,7 +17,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Literal
 
-FRANCE_TRAVAIL = "france_travail"
+FRANCE_TRAVAIL = "france-travail"   # the stored source name (sources.yaml), not the collector type (P-019)
 _FT_RAW_KEY = "_france_travail_raw"     # the collector keeps the whole API offer under this key
 
 Exigence = Literal["required", "preferred"]

@@ -42,7 +42,7 @@ def test_salary_label():
 
 
 def test_france_travail_payload_to_typed_evidence():
-    ev = structured_evidence("france_travail", _ft(
+    ev = structured_evidence("france-travail", _ft(
         romeCode="m1805", romeLibelle="Études et développement informatique", appellationlibelle="Développeur",
         experienceExige="E", experienceLibelle="3 An(s)",
         formations=[{"niveauLibelle": "Bac+5 et plus ou équivalents", "exigence": "E"}, {"niveauLibelle": ""}, "x"],
@@ -51,15 +51,15 @@ def test_france_travail_payload_to_typed_evidence():
     assert (ev.experience.required, ev.experience.min_years) == (True, 3.0)
     assert len(ev.education) == 1 and ev.education[0].exigence == "required" and ev.education[0].level_min == 5
     assert (ev.salary.period, ev.salary.minimum) == ("monthly", 2500.0)
-    beginner = structured_evidence("france_travail", _ft(experienceExige="D"))
+    beginner = structured_evidence("france-travail", _ft(experienceExige="D"))
     assert (beginner.experience.required, beginner.experience.min_years) == (False, 0.0)
-    empty = structured_evidence("france_travail", _ft(romeCode="bogus"))
+    empty = structured_evidence("france-travail", _ft(romeCode="bogus"))
     assert empty.occupation is None and empty.experience is None and empty.education == () and empty.salary is None
 
 
 def test_other_sources_have_no_structured_evidence():
     assert structured_evidence("linkedin", {"romeCode": "M1805"}) is None
-    assert structured_evidence("france_travail", None) is None
+    assert structured_evidence("france-travail", None) is None
 
 
 def _db(tmp_path, jobs):
@@ -72,7 +72,7 @@ def _db(tmp_path, jobs):
 
 
 def _job(i, desc, **ft):
-    return Job(id=f"j{i}", source="france_travail", source_job_id=str(i), title="Développeur", description=desc,
+    return Job(id=f"j{i}", source="france-travail", source_job_id=str(i), title="Développeur", description=desc,
                raw_payload=_ft(**ft))
 
 
@@ -113,3 +113,18 @@ def test_api_reports_extractor_agreement(tmp_path):
     finally:
         app.state.db_path = saved
     assert r["status"] == "measured" and r["rome_coverage"]["value"] == 1.0
+
+
+def test_the_constants_name_the_stored_france_travail_source():
+    """P-019: offers are stored under the source NAME of sources.yaml ("france-travail"), not the
+    collector type ("france_travail"); with the type, structured evidence and the API/web coverage
+    found no offer at all."""
+    import yaml
+
+    from src.evaluation.coverage import API_SOURCE
+    from src.requirements.structured import FRANCE_TRAVAIL
+
+    sources = yaml.safe_load(open("config/sources.yaml", encoding="utf-8"))["sources"]
+    api = next(s for s in sources if s["type"] == "france_travail")
+    assert FRANCE_TRAVAIL == API_SOURCE == api["name"] == "france-travail"
+    assert structured_evidence("france-travail", _ft(experienceExige="E", experienceLibelle="3 An(s)")) is not None
