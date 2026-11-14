@@ -226,6 +226,38 @@ class TestEURESCollector:
         assert mock_post.call_count == 2
         assert len(result.jobs) == 10  # 2 pages × 5 jobs
         assert result.listing_complete is False  # stopped by the page cap, more remain
+        status = next(iter(result.metadata["per_query_status"].values()))
+        assert status == {"pages": 2, "fetched": 10, "api_total": 1000, "stop_reason": "page_cap"}
+
+    @patch("src.collectors.eures.httpx.post")
+    def test_page_cap_with_every_counted_offer_fetched_is_complete(self, mock_post):
+        # Phase B B4-D: the cap is reached, but the API counted exactly the offers fetched.
+        page1 = [_make_jv(id_=str(i)) for i in range(5)]
+        page2 = [_make_jv(id_=str(i)) for i in range(100, 105)]
+        mock_post.side_effect = [
+            _mock_post_response(_make_api_response(page1, total=10)),
+            _mock_post_response(_make_api_response(page2, total=10)),
+        ]
+
+        col = self._collector(max_pages_per_query=2)
+        result = col.collect()
+
+        assert mock_post.call_count == 2              # no extra request (D7: same request budget)
+        assert result.listing_complete is True
+        status = next(iter(result.metadata["per_query_status"].values()))
+        assert status["stop_reason"] == "total_reached"
+
+    @patch("src.collectors.eures.httpx.post")
+    def test_per_query_status_reports_why_each_query_stopped(self, mock_post):
+        page1 = [_make_jv(id_=str(i)) for i in range(5)]
+        page2 = [_make_jv(id_=str(i)) for i in range(10, 12)]
+        mock_post.side_effect = [
+            _mock_post_response(_make_api_response(page1, total=7)),
+            _mock_post_response(_make_api_response(page2, total=7)),
+        ]
+        result = self._collector().collect()
+        status = next(iter(result.metadata["per_query_status"].values()))
+        assert status == {"pages": 2, "fetched": 7, "api_total": 7, "stop_reason": "exhausted"}
 
     @patch("src.collectors.eures.httpx.post")
     def test_duplicate_ids_skipped(self, mock_post):
@@ -347,6 +379,7 @@ class TestEURESCollector:
         assert "HTTP 307" in result.errors[0]
         assert mock_post.call_count == len(col.queries) * 2
         assert result.listing_complete is False
+        assert {s["stop_reason"] for s in result.metadata["per_query_status"].values()} == {"error"}
 
     @patch("src.collectors.eures.httpx.post")
     def test_malformed_response_missing_jvs_key(self, mock_post):
