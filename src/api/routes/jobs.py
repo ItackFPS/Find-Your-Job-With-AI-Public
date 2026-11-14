@@ -637,11 +637,11 @@ def compute_job_stats(
         title_rows = conn.execute("SELECT title FROM jobs").fetchall()
         total_jobs = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
 
-    from src.discovery.presets import load_presets, matching_presets
+    from src.discovery.presets import load_domain_keywords, load_presets, matching_presets
+    from src.pipeline.domain_vocabulary import effective_domains
 
-    presets = matching_presets(
-        load_presets(), list(profile.target_domains) if profile is not None else []
-    )
+    presets = matching_presets(load_presets(), effective_domains(profile, load_domain_keywords())
+                               if profile is not None else [])
     skills, tools = _aggregate_tech_facets(skill_rows, presets)
 
     score_tiers: list[ScoreTierFacet] = []

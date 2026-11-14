@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from src.geo.places import COMMUNE
 from src.models.job import Job
 from src.pipeline.domain_scope import groups_outside_profile
+from src.pipeline.domain_vocabulary import profile_labels, resolve_domains, title_has_stem_set
 from src.pipeline.location_distance import (
     assess,
     describe,
@@ -158,15 +159,11 @@ def build_filter_config(profile: "JobSearchProfile", engine_cfg: dict[str, Any])
     # picked from the ESCO occupation search) has no pre-built keyword set —
     # fall back to using the domain text itself as a literal title keyword,
     # the same treatment target_skills get below.
-    domain_title_include: list[str] = []
-    domain_description_include: list[str] = []
-    for domain in profile.target_domains:
-        kws = domain_kws.get(domain, {})
-        if kws:
-            domain_title_include.extend(kws.get("title", []))
-            domain_description_include.extend(kws.get("description", []))
-        else:
-            domain_title_include.append(domain)
+    # Free text is resolved in one place (src/pipeline/domain_vocabulary.py), shared with
+    # the scorer, so a typed label reads the same in both.
+    vocabulary = resolve_domains(profile_labels(profile), domain_kws)
+    domain_title_include: list[str] = list(vocabulary.title_terms)
+    domain_description_include: list[str] = list(vocabulary.description_terms)
 
     # Skill keywords — added to title matching verbatim; for description
     # matching, known abbreviations (AI, ML, …) are expanded to their
@@ -266,6 +263,7 @@ def build_filter_config(profile: "JobSearchProfile", engine_cfg: dict[str, Any])
         "title_keywords": {
             "include": _dedup(title_include),
             "description_include": _dedup(description_include),
+            "title_stem_sets": [list(s) for s in vocabulary.title_stem_sets],
             "exclude": _flatten_ungrouped(engine_cfg.get("excluded_title_keywords", {})),
             "non_it_functions": _flatten_ungrouped(engine_cfg.get("non_it_title_functions", {})),
         },
@@ -746,6 +744,9 @@ def matches_title_keywords(job: Job, config: dict[str, Any]) -> bool:
     # "intern" matches at word boundaries without matching "internship".
     title_pattern = _build_description_pattern([kw.strip() for kw in include_norm])
     if title_pattern and title_pattern.search(title_norm):
+        return True
+    # 4b. Every word of a label the user typed, in any order and inflection.
+    if title_has_stem_set(job.title or "", title_cfg.get("title_stem_sets") or []):
         return True
 
     # 5. Description fallback (first 2000 chars, uses stricter list).
