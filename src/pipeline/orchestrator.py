@@ -1461,8 +1461,11 @@ def run_pipeline(
                                   for r in scored_job_records), load_lane_params(scoring_path))
             for r in scored_job_records:
                 r.lane = lanes.get(r.job_id, "main")
+        # Journal write time (B1-B, measurement only): runs after duration_seconds is taken.
+        _t_journal = time.perf_counter()
         recorder.finalize(scored_job_records)
         stats.decisions = recorder.summary()
+        stats.stage_times["journal"] = time.perf_counter() - _t_journal
 
         pers_storage.close()
         storage.close()
