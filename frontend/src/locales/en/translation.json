@@ -1401,7 +1401,36 @@
       "confirmYes": "Reset",
       "resetDone": "Learning was reset.",
       "lastReset": "Last reset: {date}",
-      "failed": "The change could not be saved."
+      "failed": "The change could not be saved.",
+      "recorded": {
+        "title": "What was recorded",
+        "intro": "Everything below is stored on this computer only. This view changes nothing; Erase my activity removes it.",
+        "loading": "Loading…",
+        "unavailable": "What was recorded cannot be shown right now.",
+        "none": "Nothing recorded yet.",
+        "colType": "Action",
+        "colCount": "Recorded",
+        "colCounted": "Learning may count",
+        "colLast": "Last time",
+        "eventSurfaces": "Where your actions were taken",
+        "exposuresBySurface": "{count, plural, one {# offer shown, per list} other {# offers shown, per list}}",
+        "exposuresBySource": "Offers shown, per source",
+        "retention": "Offers shown are summarised after {compact} days and deleted after {keep} days.",
+        "repeatedViews": "Opening the same offer again is recorded, but learning counts an offer's views only once. Actions before the last reset are kept but no longer counted.",
+        "types": {
+          "interested": "Interested",
+          "not_interested": "Not for me",
+          "ranking_feedback": "Ranked badly",
+          "unsure": "Not sure",
+          "viewed": "Offer opened",
+          "apply_link_opened": "Apply link opened",
+          "application_status_changed": "Application status changed",
+          "saved": "Saved",
+          "unsaved": "Unsaved",
+          "hidden": "Hidden",
+          "unhidden": "Shown again"
+        }
+      }
     },
     "deleteAll": {
       "title": "Delete all application data",

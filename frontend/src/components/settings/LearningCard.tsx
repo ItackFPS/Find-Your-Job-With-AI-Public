@@ -9,6 +9,7 @@ import { LoadingState } from '../LoadingState'
 import { Switch } from '../Switch'
 import { useToast } from '../toastContext'
 import { LEARNING_QUERY_KEY } from './queryKeys'
+import { RecordedActivity } from './RecordedActivity'
 
 /**
  * Settings › Learning (ADR 0015): pause learning (reversible) and reset learning (a marker:
@@ -31,6 +32,7 @@ export function LearningCard() {
   const toast = useToast()
   const queryClient = useQueryClient()
   const [confirming, setConfirming] = useState(false)
+  const [showRecorded, setShowRecorded] = useState(false)
   const { data, isLoading, isError, refetch } = useQuery({ queryKey: LEARNING_QUERY_KEY, queryFn: getLearningState })
   const refresh = () => queryClient.invalidateQueries({ queryKey: LEARNING_QUERY_KEY })
   const pause = useMutation({
@@ -103,6 +105,10 @@ export function LearningCard() {
               <Button variant="ghost" onClick={() => setConfirming(false)}>{t('settings.data.cancel')}</Button>
             </div>
           )}
+          <details onToggle={e => setShowRecorded((e.currentTarget as HTMLDetailsElement).open)}>
+            <summary style={{ cursor: 'pointer' }}>{t('settings.learning.recorded.title')}</summary>
+            <div style={{ marginTop: 'var(--space-2)' }}><RecordedActivity open={showRecorded} /></div>
+          </details>
         </div>
       )}
     </Card>
