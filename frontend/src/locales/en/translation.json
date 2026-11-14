@@ -388,7 +388,12 @@
       "against": "AGAINST ({count, number})",
       "unknown": "UNKNOWN ({count, number})",
       "conflicts": "CONFLICTS ({count, number})",
-      "ids": "Decision {decision} · run {run}"
+      "ids": "Decision {decision} · run {run}",
+      "provenance": {
+        "structured": "from a field of the source",
+        "text": "read in the offer text",
+        "unknown": "not stated in the offer"
+      }
     },
     "header": {
       "noTitle": "(no title)",

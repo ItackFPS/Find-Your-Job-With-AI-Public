@@ -388,7 +388,12 @@
       "against": "EN DÉFAVEUR ({count, number})",
       "unknown": "INCONNU ({count, number})",
       "conflicts": "CONFLITS ({count, number})",
-      "ids": "Décision {decision} · exécution {run}"
+      "ids": "Décision {decision} · exécution {run}",
+      "provenance": {
+        "structured": "d’après un champ de la source",
+        "text": "lu dans le texte de l’offre",
+        "unknown": "non indiqué dans l’offre"
+      }
     },
     "header": {
       "noTitle": "(sans titre)",
