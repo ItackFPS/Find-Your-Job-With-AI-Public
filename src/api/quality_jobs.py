@@ -353,15 +353,20 @@ CALIBRATION_DIR = "calibration"        # the owner's imported sets, beside jobs.
 
 
 def run_personal_job(ctx: QualityJobContext) -> dict[str, Any]:
-    """The owner's own labels (an imported calibration set), on its held-out part by default (P2.4/P2.5)."""
+    """The owner's own labels (an imported calibration set), on its tuning part by default (owner decision D4);
+    the held-out part only for a named pre-registered candidate, logged (src/evaluation/heldout_guard.py)."""
     dataset_id = str(ctx.options.get("dataset_id") or "")
     path = ctx.db_path.parent / CALIBRATION_DIR / dataset_id
     if not dataset_id or "/" in dataset_id or "\\" in dataset_id or not (path / "manifest.json").is_file():
         raise QualityJobError("not_found")
-    split = "all" if ctx.options.get("split") == "all" else "heldout"
+    split = str(ctx.options.get("split") or "tuning")
+    if split not in ("tuning", "heldout", "all"):
+        split = "tuning"
     out_root = ctx.runs_dir.parent / "personal-runs"
     cmd = [sys.executable, "-m", "src.evaluation", "run", str(path), "--split", split, "--sampling",
-           "--out", str(out_root / dataset_id), "--config-dir", str(ctx.config_dir)]
+           "--out", str(out_root / dataset_id), "--config-dir", str(ctx.config_dir), "--caller", "ui"]
+    if split != "tuning" and ctx.options.get("candidate"):
+        cmd += ["--candidate", str(ctx.options["candidate"])]
     ctx.set_phase("running")
     code, _out, err = ctx.run_process(cmd)
     if code != 0:
