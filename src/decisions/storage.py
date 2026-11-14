@@ -249,8 +249,10 @@ class DecisionStorage:
 
     # A decision of job ``d`` in the same *episode* as ``d`` (no decision with another outcome after it)
     # was marked by the rejection audit sample (src/decisions/audit.py).
+    # ``+p.outcome`` keeps SQLite on the job_id index: on the outcome index this scans every rejection
+    # once per job, which took a run past 18 minutes on 36,000 decisions.
     _EPISODE_AUDITED = """EXISTS (SELECT 1 FROM job_decisions p
-                   WHERE p.job_id = d.job_id AND p.outcome = d.outcome
+                   WHERE p.job_id = d.job_id AND +p.outcome = d.outcome
                      AND json_extract(p.signals_json, '$.audit.sampled') = 1
                      AND NOT EXISTS (SELECT 1 FROM job_decisions q
                                      WHERE q.job_id = d.job_id AND q.outcome <> d.outcome
@@ -272,7 +274,7 @@ class DecisionStorage:
                          AND ((f.decision_id IS NULL AND f.occurred_at > d.decided_at)
                               OR f.decision_id IN (
                                   SELECT p.decision_id FROM job_decisions p
-                                  WHERE p.job_id = d.job_id AND p.outcome = d.outcome
+                                  WHERE p.job_id = d.job_id AND +p.outcome = d.outcome
                                     AND NOT EXISTS (SELECT 1 FROM job_decisions q
                                                     WHERE q.job_id = d.job_id AND q.outcome <> d.outcome
                                                       AND (q.decided_at > p.decided_at
