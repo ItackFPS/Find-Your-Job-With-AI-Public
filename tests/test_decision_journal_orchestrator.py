@@ -101,6 +101,15 @@ def test_journal_changes_nothing_observable(off, on):
     assert len(on[0].scored_jobs) > 10 and len(on[0].rejection_records) > 10   # non-trivial run
 
 
+def test_journal_write_time_is_recorded_as_its_own_stage(off, on):
+    """B1-B: the journal write is timed as stage ``journal``, whether or not the journal is enabled,
+    and is persisted with the run's stats."""
+    for result in (off[0], on[0]):
+        t = result.stats.stage_times.get("journal")
+        assert isinstance(t, float) and t >= 0.0
+        assert "journal" in result.stats.to_dict()["stage_times"]
+
+
 def test_disabled_journal_writes_no_rows(off):
     import sqlite3
 

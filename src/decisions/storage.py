@@ -12,7 +12,10 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import time
 import zlib
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -249,8 +252,10 @@ class DecisionStorage:
 
     # A decision of job ``d`` in the same *episode* as ``d`` (no decision with another outcome after it)
     # was marked by the rejection audit sample (src/decisions/audit.py).
+    # ``+p.outcome`` keeps SQLite on the job_id index: on the outcome index this scans every rejection
+    # once per job, which took a run past 18 minutes on 36,000 decisions.
     _EPISODE_AUDITED = """EXISTS (SELECT 1 FROM job_decisions p
-                   WHERE p.job_id = d.job_id AND p.outcome = d.outcome
+                   WHERE p.job_id = d.job_id AND +p.outcome = d.outcome
                      AND json_extract(p.signals_json, '$.audit.sampled') = 1
                      AND NOT EXISTS (SELECT 1 FROM job_decisions q
                                      WHERE q.job_id = d.job_id AND q.outcome <> d.outcome
@@ -258,6 +263,27 @@ class DecisionStorage:
                                             OR (q.decided_at = p.decided_at AND q.rowid > p.rowid))))"""
     _LATEST = """(SELECT *, ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY decided_at DESC, rowid DESC) AS rn
                   FROM job_decisions) d"""
+
+    @contextmanager
+    def time_limit(self, seconds: float | None) -> Iterator[None]:
+        """Interrupt any statement of this connection still running after ``seconds``: SQLite raises
+        ``sqlite3.OperationalError("interrupted")``. For request paths (P-013): a journal query on a
+        large database must never hold an API request for minutes. ``None`` or ``0``: no limit."""
+        if not seconds:
+            yield
+            return
+        conn = self._get_conn()
+        deadline = time.monotonic() + seconds
+        conn.set_progress_handler(lambda: 1 if time.monotonic() > deadline else 0, 10_000)
+        try:
+            yield
+        finally:
+            conn.set_progress_handler(None, 0)
+
+    @staticmethod
+    def is_interrupted(exc: BaseException) -> bool:
+        """Whether ``exc`` is the error :meth:`time_limit` makes SQLite raise."""
+        return isinstance(exc, sqlite3.OperationalError) and "interrupted" in str(exc).lower()
 
     def _has_feedback_table(self) -> bool:
         return self._get_conn().execute(
@@ -272,7 +298,7 @@ class DecisionStorage:
                          AND ((f.decision_id IS NULL AND f.occurred_at > d.decided_at)
                               OR f.decision_id IN (
                                   SELECT p.decision_id FROM job_decisions p
-                                  WHERE p.job_id = d.job_id AND p.outcome = d.outcome
+                                  WHERE p.job_id = d.job_id AND +p.outcome = d.outcome
                                     AND NOT EXISTS (SELECT 1 FROM job_decisions q
                                                     WHERE q.job_id = d.job_id AND q.outcome <> d.outcome
                                                       AND (q.decided_at > p.decided_at
