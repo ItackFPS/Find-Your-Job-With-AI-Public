@@ -12,7 +12,10 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import time
 import zlib
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -260,6 +263,27 @@ class DecisionStorage:
                                             OR (q.decided_at = p.decided_at AND q.rowid > p.rowid))))"""
     _LATEST = """(SELECT *, ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY decided_at DESC, rowid DESC) AS rn
                   FROM job_decisions) d"""
+
+    @contextmanager
+    def time_limit(self, seconds: float | None) -> Iterator[None]:
+        """Interrupt any statement of this connection still running after ``seconds``: SQLite raises
+        ``sqlite3.OperationalError("interrupted")``. For request paths (P-013): a journal query on a
+        large database must never hold an API request for minutes. ``None`` or ``0``: no limit."""
+        if not seconds:
+            yield
+            return
+        conn = self._get_conn()
+        deadline = time.monotonic() + seconds
+        conn.set_progress_handler(lambda: 1 if time.monotonic() > deadline else 0, 10_000)
+        try:
+            yield
+        finally:
+            conn.set_progress_handler(None, 0)
+
+    @staticmethod
+    def is_interrupted(exc: BaseException) -> bool:
+        """Whether ``exc`` is the error :meth:`time_limit` makes SQLite raise."""
+        return isinstance(exc, sqlite3.OperationalError) and "interrupted" in str(exc).lower()
 
     def _has_feedback_table(self) -> bool:
         return self._get_conn().execute(

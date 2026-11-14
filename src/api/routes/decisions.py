@@ -9,6 +9,7 @@ GET /api/pipeline/runs/{run_id}/decisions     — a run's decisions (filter by o
 
 from __future__ import annotations
 
+import sqlite3
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -68,6 +69,19 @@ def _out(r: DecisionRecord) -> DecisionOut:
     return DecisionOut(**r.model_dump(), unknown_evidence=r.unknowns, summary=_summary(r))
 
 
+# Longest a journal query may hold an API request (P-013). The Review page's target is a few
+# seconds; past this the request answers 503 instead of waiting for minutes.
+REQUEST_QUERY_SECONDS = 15.0
+
+
+def _too_slow(what: str) -> HTTPException:
+    return HTTPException(
+        status_code=503,
+        detail=(f"Reading {what} took longer than {REQUEST_QUERY_SECONDS:.0f} s and was stopped, so the "
+                "application stays responsive. Try again in a moment; if it keeps happening, the decision "
+                "journal is too large for this query."))
+
+
 def _store(request: Request) -> DecisionStorage:
     store = DecisionStorage(request.app.state.db_path)
     store.init_db()
@@ -110,7 +124,12 @@ def review_queue(
     including rejected jobs, so a doubtful rejection is never silent."""
     store = _store(request)
     try:
-        total, page = store.review_queue(outcome=outcome, limit=limit, offset=offset)
+        with store.time_limit(REQUEST_QUERY_SECONDS):
+            total, page = store.review_queue(outcome=outcome, limit=limit, offset=offset)
+    except sqlite3.OperationalError as exc:
+        if store.is_interrupted(exc):
+            raise _too_slow("the review queue") from exc
+        raise
     finally:
         store.close()
     stored: set[str] = set()
@@ -170,8 +189,13 @@ def list_run_decisions(
 ) -> DecisionPage:
     store = _store(request)
     try:
-        total, page = store.list_for_run(
-            run_id, outcome=outcome, stage=stage, limit=limit, offset=offset, needs_review=needs_review)
+        with store.time_limit(REQUEST_QUERY_SECONDS):
+            total, page = store.list_for_run(
+                run_id, outcome=outcome, stage=stage, limit=limit, offset=offset, needs_review=needs_review)
+    except sqlite3.OperationalError as exc:
+        if store.is_interrupted(exc):
+            raise _too_slow("this run's decisions") from exc
+        raise
     finally:
         store.close()
     return DecisionPage(total=total, limit=limit, offset=offset, decisions=[_out(r) for r in page])
