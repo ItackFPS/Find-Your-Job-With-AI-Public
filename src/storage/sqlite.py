@@ -311,6 +311,51 @@ class Storage:
     # while still committing far less often than one-commit-per-job.
     _UPSERT_CHUNK_SIZE = 200
 
+    def align_stored_ids(self, jobs: list[Job]) -> dict[str, str]:
+        """Give a collected offer the id of the row that already stores it (P-031).
+
+        ``upsert_jobs_batch`` keeps an existing row when an offer arrives under a new id with the same
+        source and content hash (a location variant collected in another run) and stores nothing for
+        the new id. The decision journal and the run's scores used the new id, so they pointed at no
+        row ("orphans"): an accepted offer the list could never show, and a stored offer counted as
+        missed by expiry. Called on the collected offers before any stage sees them, this sets such an
+        offer's ``id`` to the stored row's id, so row, score, decision and expiry share one id. The
+        oldest stored row wins when several match. Returns ``{collected id: stored id}``; nothing is
+        written."""
+        if not jobs:
+            return {}
+        conn = self._get_conn()
+        ids = list({j.id for j in jobs})
+        known: set[str] = set()
+        for i in range(0, len(ids), 500):
+            chunk = ids[i:i + 500]
+            known.update(r[0] for r in conn.execute(
+                f"SELECT id FROM jobs WHERE id IN ({','.join('?' * len(chunk))})", chunk))
+        hashes_by_source: dict[str, set[str]] = defaultdict(set)
+        for job in jobs:
+            if job.id not in known and job.content_hash:
+                hashes_by_source[job.source].add(job.content_hash)
+        stored: dict[tuple[str, str], str] = {}
+        for source, hashes in hashes_by_source.items():
+            hs = sorted(hashes)
+            for i in range(0, len(hs), 500):
+                chunk = hs[i:i + 500]
+                for row in conn.execute(
+                    f"SELECT id, content_hash FROM jobs WHERE source = ? AND content_hash IN "
+                    f"({','.join('?' * len(chunk))}) ORDER BY first_seen_at IS NULL, first_seen_at, id",
+                    [source, *chunk],
+                ):
+                    stored.setdefault((source, row[1]), row[0])
+        aliases: dict[str, str] = {}
+        for job in jobs:
+            if job.id in known or not job.content_hash:
+                continue
+            target = stored.get((job.source, job.content_hash))
+            if target is not None and target != job.id:
+                aliases[job.id] = target
+                job.id = target
+        return aliases
+
     def record_provenance(self, jobs: list[Job], seen_at: datetime) -> int:
         """Record where each stored offer was seen (issue #86): one ``job_provenance`` row
         per (offer, source in ``Job.sources``, its own source included), its first and
