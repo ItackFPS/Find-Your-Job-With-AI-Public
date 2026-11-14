@@ -196,8 +196,13 @@ class EURESCollector(BaseCollector):
             # completion order — this is what makes the merge below
             # deterministic and identical to the old single-threaded run.
             per_query_results = [f.result() for f in futures]
-        # complete only if every query ended on a short page, before the page cap
-        listing_complete = all(done for _, _, done in per_query_results)
+        # complete only if every query read its whole result list (Phase B B4-D): a short page, or
+        # the page cap reached with every offer the API counted already fetched
+        listing_complete = all(done for _, _, done, _ in per_query_results)
+        per_query_status = {
+            f"{q.get('keyword')} [{','.join(q.get('location_codes') or [])}]": status
+            for q, (_, _, _, status) in zip(self.queries, per_query_results)
+        }
 
         # Merge in original query-list order, first-occurrence-wins — the
         # exact same semantics as the previous single shared `seen_ids` set
@@ -210,7 +215,7 @@ class EURESCollector(BaseCollector):
         errors: list[str] = []
         seen_ids: set[str] = set()
         total_raw = 0
-        for raw_jobs_for_query, errors_for_query, _ in per_query_results:
+        for raw_jobs_for_query, errors_for_query, _, _ in per_query_results:
             errors.extend(errors_for_query)
             total_raw += len(raw_jobs_for_query)
             for raw in raw_jobs_for_query:
@@ -235,12 +240,13 @@ class EURESCollector(BaseCollector):
             jobs=jobs,
             errors=errors,
             duration_seconds=duration,
+            metadata={"per_query_status": per_query_status},
             listing_complete=listing_complete and not errors,
         )
 
     def _run_query(
         self, query: dict[str, Any]
-    ) -> tuple[list[dict[str, Any]], list[str], bool]:
+    ) -> tuple[list[dict[str, Any]], list[str], bool, dict[str, Any]]:
         """Fetch all pages for one query — unchanged sequential logic.
 
         Identical to the per-query body of the previous single-threaded
@@ -250,12 +256,23 @@ class EURESCollector(BaseCollector):
         already made thread-safe via ``self._rate_lock``.
 
         Returns (raw jv dicts collected across this query's pages, error
-        strings for this query, whether its last page was reached).
+        strings for this query, whether its whole result list was read, and
+        its status for the run report: pages read, offers fetched, the API's
+        ``numberRecords`` and why the loop stopped — ``exhausted`` (short
+        page), ``total_reached`` (page cap, but every counted offer fetched),
+        ``page_cap`` (more remain) or ``error``). The stopping rule and the
+        number of requests are unchanged (owner decision D7: no change to the
+        EURES request budget); only what the run records is new (B4-D).
         """
         keyword: str = str(query.get("keyword") or "").strip()
         location_codes: list[str] = query.get("location_codes") or []
         raw_jobs_collected: list[dict[str, Any]] = []
         errors: list[str] = []
+        status: dict[str, Any] = {"pages": 0, "fetched": 0, "api_total": None, "stop_reason": "page_cap"}
+
+        def _done(reason: str) -> dict[str, Any]:
+            status.update(fetched=len(raw_jobs_collected), stop_reason=reason)
+            return status
 
         for page in range(1, self.max_pages_per_query + 1):
             with self._rate_lock:
@@ -266,9 +283,10 @@ class EURESCollector(BaseCollector):
                 errors.append(
                     f"EURES: query='{keyword}' loc={location_codes} page={page}: {exc}"
                 )
-                return raw_jobs_collected, errors, False
+                return raw_jobs_collected, errors, False, _done("error")
 
             raw_jobs_collected.extend(raw_jobs)
+            status.update(pages=page, api_total=total)
             logger.info(
                 "EURES: query='%s' loc=%s page=%d/%d fetched=%d total=%s",
                 keyword, location_codes, page, self.max_pages_per_query,
@@ -276,9 +294,13 @@ class EURESCollector(BaseCollector):
             )
 
             if len(raw_jobs) < self.results_per_page:
-                return raw_jobs_collected, errors, True  # reached last page for this query
+                return raw_jobs_collected, errors, True, _done("exhausted")  # reached last page
 
-        return raw_jobs_collected, errors, False  # max_pages_per_query reached
+        # max_pages_per_query reached: complete only when the API counted no more offers than fetched
+        total = status["api_total"]
+        if isinstance(total, int) and 0 < total <= len(raw_jobs_collected):
+            return raw_jobs_collected, errors, True, _done("total_reached")
+        return raw_jobs_collected, errors, False, _done("page_cap")
 
     # ------------------------------------------------------------------
     # Internal helpers
