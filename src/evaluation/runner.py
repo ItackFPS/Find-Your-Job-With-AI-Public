@@ -272,6 +272,26 @@ def _dataset_warnings(dataset: Dataset) -> list[str]:
             "(`export --rejected N` adds a sample from the decision journal)"]
 
 
+def _coverage_by_domain(decisions: list[Decision], dataset: Dataset, profile_path: Any) -> dict[str, Any]:
+    """Coverage per target domain of the replayed profile (Phase B B3-M). An offer belongs to a domain when
+    the domain's words appear in its title (case-insensitive): a diagnostic until the single domain resolver
+    of B5 exists, and stated as such in the report."""
+    import yaml
+
+    from src.evaluation.metrics import coverage_by_domain
+
+    try:
+        profile = yaml.safe_load(Path(profile_path).read_text(encoding="utf-8")) or {}
+    except (OSError, ValueError, TypeError):
+        profile = {}
+    domains = [str(d) for d in (profile.get("target_domains") or []) if str(d).strip()]
+    titles = {j["id"]: str(j.get("title") or "").casefold() for j in dataset.job_dicts}
+    domains_of = {jid: [d for d in domains if d.casefold() in t] for jid, t in titles.items()}
+    expected = {jid: lab.expected for jid, lab in dataset.labels.items()}
+    return {"method": "domain words in the title (diagnostic until the B5 resolver)",
+            "domains": coverage_by_domain(decisions, expected, domains_of, domains)}
+
+
 def run_evaluation(dataset: Dataset, strategy: StrategyRef, *, assess: bool = False,
                    sampling: bool = False) -> RunResult:
     """Run the dataset under ``strategy`` and return an immutable ``RunResult``.
@@ -328,6 +348,7 @@ def run_evaluation(dataset: Dataset, strategy: StrategyRef, *, assess: bool = Fa
     metrics["false_positives_by_source"] = dict(sorted(fp_by_source.items()))
     pairs = [(labels[d.job_id].expected, d.verdict) for d in decisions if d.job_id in labels]
     metrics["bootstrap_ci_95"] = bootstrap_ci(pairs)
+    metrics["coverage_by_domain"] = _coverage_by_domain(decisions, dataset, extras["profile_path"])
     if assess:
         from src.evaluation.metrics import review_metrics
 
