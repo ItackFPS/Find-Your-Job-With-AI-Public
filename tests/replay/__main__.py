@@ -15,6 +15,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from tests.replay.harness import ReplayCorpus, copy_database, replay_run
+from tests.replay.inventory import inventory, new_orphans
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -33,13 +34,19 @@ def main(argv: list[str] | None = None) -> int:
     runs = []
     ctx = patch("src.embeddings.embedding.EmbeddingService", _fake_embedding_class()) if args.fake_embeddings \
         else _null()
+    initial = inventory(work_db)
     with ctx:
         for _ in range(args.runs):
-            runs.append(replay_run(work_db, args.config, corpus).as_dict())
+            before = inventory(work_db)
+            run = replay_run(work_db, args.config, corpus).as_dict()
+            after = inventory(work_db)
+            run["orphans_after"] = after
+            run["new_orphans"] = new_orphans(before, after)
+            runs.append(run)
     report = {
         "source_db": str(args.source_db), "work_db": str(work_db),
         "corpus": {k: len(v) for k, v in sorted(corpus.by_source.items())},
-        "fake_embeddings": args.fake_embeddings, "runs": runs,
+        "fake_embeddings": args.fake_embeddings, "orphans_before": initial, "runs": runs,
         "limits": ["corpus = stored offers only (offers only ever rejected are absent)",
                    "no job source contacted: non-loopback sockets refused during each run"],
     }
