@@ -124,6 +124,8 @@ class PipelineStats:
     # stats.phase2 happens to be non-empty.
     use_ai: bool = False
     stage_times: dict[str, float] = field(default_factory=dict)
+    # P-031: collected offers that took their stored row's id ({aligned, same_offer_twice}); empty if none.
+    stored_id_alignment: dict[str, int] = field(default_factory=dict)
     embedding_cache_hits: int = 0
     embedding_cache_misses: int = 0
     personalization_cache_hits: int = 0
@@ -201,6 +203,7 @@ class PipelineStats:
             "phase2": self.phase2,
             "use_ai": self.use_ai,
             "stage_times": self.stage_times,
+            "stored_id_alignment": self.stored_id_alignment,
             "embedding_cache_hits": self.embedding_cache_hits,
             "embedding_cache_misses": self.embedding_cache_misses,
             "personalization_cache_hits": self.personalization_cache_hits,
@@ -460,12 +463,23 @@ def run_pipeline(
                 merged_cfg["discovery_queries"] = all_discovery_queries[src_type]
             if src_type in all_partition_vocabularies:
                 merged_cfg["partition_vocabulary"] = all_partition_vocabularies[src_type]
+            if early_profile is not None:
+                # What the profile's line of work (a discovery preset) supplies for this
+                # source; only for keys the source's own config leaves empty.
+                try:
+                    from src.discovery.query_expansion import apply_preset_collector_config
+
+                    merged_cfg = apply_preset_collector_config(merged_cfg, early_profile, src_type)
+                except Exception as exc:
+                    logger.warning("Preset collector config for %s skipped: %s", src_type, exc)
             if src_type == "france_travail_web" and early_profile is not None:
                 # What to read: the profile's domains and its départements — with a home,
                 # those within the maximum distance (plus home's); else the v1 list.
                 from src.pipeline.location_distance import distance_config, ft_departments
 
                 merged_cfg.setdefault("target_domains", list(early_profile.target_domains))
+                merged_cfg.setdefault("target_terms", [
+                    (o.label_fr or o.keyword or o.label) for o in early_profile.target_occupations])
                 distance_cfg = distance_config(early_profile)
                 merged_cfg.setdefault("departments", ft_departments(distance_cfg) if distance_cfg else [
                     p.value for p in early_profile.geography.location_preferences
@@ -580,6 +594,26 @@ def run_pipeline(
             annotate_yield_anomalies(stats.by_source, _history)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Source yield check failed (non-fatal): %s", exc)
+
+        # P-031 (Phase B B2-A): an offer collected under a new id but already stored under another
+        # (same source and content) takes the stored id before any stage sees it, so its row, score,
+        # decision and expiry share one id. A second copy of an id in this run is the same offer
+        # twice: the first is kept. Fail-open: a failure leaves the ids as collected.
+        try:
+            aliases = storage.align_stored_ids(all_jobs)
+            if aliases:
+                seen_ids: set[str] = set()
+                unique_jobs: list[Job] = []
+                for job in all_jobs:
+                    if job.id not in seen_ids:
+                        seen_ids.add(job.id)
+                        unique_jobs.append(job)
+                stats.stored_id_alignment = {"aligned": len(aliases),
+                                             "same_offer_twice": len(all_jobs) - len(unique_jobs)}
+                all_jobs = unique_jobs
+                logger.info("Stored ids: %d collected offer(s) took the id of their stored row", len(aliases))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Stored-id alignment skipped (non-fatal): %s", exc)
 
         stats.collected = len(all_jobs)
         stats.stage_times["collect"] = time.perf_counter() - _t_collect
@@ -955,19 +989,6 @@ def run_pipeline(
             storage.record_provenance([job for job, _, _ in scored_with_breakdown], datetime.now(UTC))
         except Exception as exc:  # noqa: BLE001
             logger.warning("Provenance not recorded: %s", exc)
-        # Expiry (issue #86): every offer collected this run stays active (an offer that
-        # failed validation or was merged as a duplicate was still seen); only a source
-        # that read its whole listing counts a miss for the offers it no longer lists.
-        # Never fails the run.
-        try:
-            expiry = storage.apply_expiry(
-                {job.id for job in all_jobs}, sources_counting_misses(stats.by_source),
-                datetime.now(UTC), expire_after_missed_runs(config_dir),
-            )
-            logger.info("Expiry: %s", expiry)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Expiry not applied: %s", exc)
-
         # Phase NEXT / I11: incremental-collection INFRASTRUCTURE only — record
         # that a source's collection completed cleanly, and how many of its
         # jobs were new vs. already known. Deliberately does NOT change what
@@ -1386,8 +1407,25 @@ def run_pipeline(
                                   for r in scored_job_records), load_lane_params(scoring_path))
             for r in scored_job_records:
                 r.lane = lanes.get(r.job_id, "main")
+        # Journal write time (B1-B, measurement only): runs after duration_seconds is taken.
+        _t_journal = time.perf_counter()
         recorder.finalize(scored_job_records)
         stats.decisions = recorder.summary()
+        stats.stage_times["journal"] = time.perf_counter() - _t_journal
+
+        # Expiry (issue #86): every offer collected this run stays active (an offer that
+        # failed validation or was merged as a duplicate was still seen); only a source
+        # that read its whole listing counts a miss for the offers it no longer lists.
+        # Applied only once the run completed (P-002): a run that fails after storage must not
+        # count misses or expire offers. Never fails the run.
+        try:
+            expiry = storage.apply_expiry(
+                {job.id for job in all_jobs}, sources_counting_misses(stats.by_source),
+                datetime.now(UTC), expire_after_missed_runs(config_dir),
+            )
+            logger.info("Expiry: %s", expiry)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Expiry not applied: %s", exc)
 
         pers_storage.close()
         storage.close()

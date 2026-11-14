@@ -64,9 +64,9 @@ beforeEach(() => {
 })
 
 describe('Onboarding', () => {
-  it('states the IT focus and marks the setup as begun at once', async () => {
+  it('states that any line of work can be searched and marks the setup as begun at once', async () => {
     show()
-    expect(await screen.findByText(/tuned for IT and digital roles/)).toBeInTheDocument()
+    expect(await screen.findByText(/any line of work can be searched/)).toBeInTheDocument()
     await waitFor(() => expect(onboardingPuts()).toContainEqual({ step: 0 }))
   })
 

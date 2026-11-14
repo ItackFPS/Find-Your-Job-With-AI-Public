@@ -56,6 +56,7 @@ from src.api.peer_guard import (
 from src.api.routes import (
     ai,
     calibration,
+    collection,
     dashboard,
     decisions,
     departments,
@@ -203,8 +204,19 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
         sources_path = Path(config_dir) / "sources.yaml"
         hw_source_cfg = SourceRegistry(config_path=str(sources_path)).get_source("hellowork")
         if hw_source_cfg is not None:
+            from src.discovery.query_expansion import apply_preset_collector_config
+            from src.pipeline.filter import load_profile
+            from src.config_files import resolve_config_path
+
+            hw_config = _build_collector_config(hw_source_cfg)
+            try:  # the profile's line-of-work preset fills in what sources.yaml leaves empty
+                hw_config = apply_preset_collector_config(
+                    hw_config, load_profile(str(resolve_config_path(config_dir, "profile.yaml"))),
+                    "hellowork")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("HelloWork: preset config skipped: %s", exc)
             hw_scanner = HelloWorkScanner(
-                config=_build_collector_config(hw_source_cfg), staging=hw_staging,
+                config=hw_config, staging=hw_staging,
                 shutdown_event=scanner_shutdown_event,
             )
             application.state.hellowork_scanner = hw_scanner
@@ -246,6 +258,24 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
 
     # Settings › Sources shows the same choice the scheduler acts on (issue #82).
     application.state.source_opted_in = _opted_in
+
+    # Collection freeze (owner decision D7, ADR 0032): recorded once; never lifted by an update.
+    from src.collectors import freeze
+
+    try:
+        if freeze.record_freeze(Path(application.state.settings_path)):
+            logger.info("Collection freeze recorded: no source is contacted until it is validated "
+                        "and turned back on.")
+    except Exception as exc:  # noqa: BLE001 — the freeze holds even when the date cannot be written
+        logger.warning("Could not record the collection freeze date: %s", exc)
+
+    def _frozen(source_id: str) -> bool:
+        settings = Path(application.state.settings_path)
+        if source_id == PIPELINE_SOURCE_ID:
+            return not freeze.pipeline_allowed(settings, config_dir)
+        return not freeze.collector_allowed(settings, source_id)
+
+    application.state.collection_frozen = _frozen
     scheduler = SchedulerService(
         db_path=db_path,
         config_dir=config_dir,
@@ -254,6 +284,7 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
         opted_in=_opted_in,
         # Daily runs at the user's local time, switchable (issue #80).
         background=lambda: background_settings(Path(application.state.settings_path)),
+        frozen=_frozen,
     )
     scheduler.start()
     application.state.scheduler = scheduler
@@ -471,6 +502,7 @@ app.include_router(quality.router)
 app.include_router(calibration.router)
 app.include_router(ai.router)
 app.include_router(sources.router)
+app.include_router(collection.router)
 app.include_router(privacy.router)
 app.include_router(embedding_model.router)
 

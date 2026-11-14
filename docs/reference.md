@@ -10,7 +10,7 @@ Source code is the source of truth: when this page and the code disagree, the co
 
 | # | Stage | Module | Purpose |
 |---|---|---|---|
-| 1 | Discovery / query expansion | `src/discovery/registry.py`, `src/discovery/query_expansion.py` | Loads `config/sources.yaml`; generates per-source, per-profile multilingual search queries (a hardcoded baseline plus optional LLM-generated additions, capped at 12 per source) |
+| 1 | Discovery / query expansion | `src/discovery/registry.py`, `src/discovery/query_expansion.py` | Loads `config/sources.yaml`; generates per-source, per-profile multilingual search queries (the baseline of the line-of-work preset that applies, from `config/presets/`, plus the profile's own domains, occupations and skills and optional LLM-generated additions, capped at 12 per source; no profession-specific term lives in code) |
 | 2 | Collection | `src/collectors/*.py` | Fetches raw jobs from each active source; every collector returns a `CollectorResult` and never raises — network/HTTP/timeout errors are caught and logged, never crash the run |
 | 3 | Normalization | `src/pipeline/normalize.py` | Maps source-specific payloads to the shared `Job` Pydantic model |
 | 4 | Validation | `src/pipeline/validate.py` | Rejects jobs missing required fields or with invalid data |

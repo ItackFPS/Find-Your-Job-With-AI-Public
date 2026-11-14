@@ -9,8 +9,10 @@ job id (nothing about the job's content, label or score):
 * ``tuning`` — the rest: investigation, the lab agent, trying variants.
 
 The split is fixed before any label exists (it depends on ids only), so labelling more jobs later never
-moves a job from one part to the other. ``all`` keeps every label (the default outside the lab), and
-every report states which split it was computed on.
+moves a job from one part to the other. ``all`` keeps every label; every report states which split it
+was computed on. Since owner decision D4 (2026-11-14) every tool reads a real dataset's ``tuning`` part
+by default, and the held-out labels only for a named pre-registered candidate, logged
+(``src/evaluation/heldout_guard.py``).
 """
 
 from __future__ import annotations

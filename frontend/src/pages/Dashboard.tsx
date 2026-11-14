@@ -10,7 +10,8 @@ import {
 import { Link } from 'react-router-dom'
 import { Trans, useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
-import { Card, StatTile, StatusBadge, SourceStatus, Chip, ProgressBar, EmptyState, LoadingState, DataTable, GettingStarted, TodayCard, type DataTableColumn } from '../components'
+import { Card, StatTile, StatusBadge, SourceStatus, Chip, ProgressBar, EmptyState, LoadingState, DataTable, GettingStarted, TodayCard, CollectionFreezeNotice, type DataTableColumn } from '../components'
+import { useCollectionFrozen } from '../hooks/useCollectionFrozen'
 import { PIPELINE_STAGES, type PipelineStageDef } from '../config/pipelineStages'
 import { usePipelineEvents, stageLabel, type ConnectionState, type ActivityEntry } from '../hooks/usePipelineEvents'
 import {
@@ -493,6 +494,7 @@ function ActivityLog({ entries }: { entries: ActivityEntry[] }) {
 
 export default function Dashboard() {
   const { t } = useTranslation()
+  const collectionFrozen = useCollectionFrozen()
   const queryClient = useQueryClient()
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard'],
@@ -556,22 +558,25 @@ export default function Dashboard() {
           )}
           <button
             onClick={() => triggerRun()}
-            disabled={runPending || isAlreadyRunning}
+            disabled={runPending || isAlreadyRunning || collectionFrozen === true}
             style={{
-              background: (runPending || isAlreadyRunning) ? 'var(--color-border)' : 'var(--color-accent)',
+              background: (runPending || isAlreadyRunning || collectionFrozen === true) ? 'var(--color-border)' : 'var(--color-accent)',
               color: 'var(--color-on-accent)',
               border: 'none',
               borderRadius: 'var(--radius-md)',
               padding: '0.45rem 1rem',
               fontSize: 'var(--font-size-base)',
               fontWeight: 'var(--font-weight-semibold)',
-              cursor: (runPending || isAlreadyRunning) ? 'not-allowed' : 'pointer',
+              cursor: (runPending || isAlreadyRunning || collectionFrozen === true) ? 'not-allowed' : 'pointer',
             }}
           >
-            {runPending ? t('dashboard.run.starting') : isAlreadyRunning ? t('dashboard.run.running') : t('dashboard.run.start')}
+            {runPending ? t('dashboard.run.starting') : isAlreadyRunning ? t('dashboard.run.running')
+              : collectionFrozen === true ? t('dashboard.run.paused') : t('dashboard.run.start')}
           </button>
         </div>
       </div>
+
+      <CollectionFreezeNotice />
 
       {!currentRun && d.total_jobs_in_db === 0 ? <GettingStarted /> : <TodayCard dashboard={d} />}
 

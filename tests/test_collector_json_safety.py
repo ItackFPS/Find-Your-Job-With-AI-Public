@@ -170,7 +170,9 @@ class TestFranceTravailTokenJsonSafety:
     def test_malformed_token_response_is_captured_not_raised(self) -> None:
         from src.collectors.france_travail import FranceTravailCollector
 
-        collector = FranceTravailCollector(config={"client_id": "id", "client_secret": "secret"})
+        collector = FranceTravailCollector(
+            config={"client_id": "id", "client_secret": "secret", "keywords": "informatique"}
+        )
         with patch.object(httpx.Client, "post", return_value=_malformed_json_response()):
             result = collector.collect()
         assert result.jobs == []

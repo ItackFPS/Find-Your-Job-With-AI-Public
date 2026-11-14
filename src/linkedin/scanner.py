@@ -451,6 +451,26 @@ def _safe_date_str(val: Any) -> str | None:
 # Config
 # ---------------------------------------------------------------------------
 
+def _queries_from_profile(config_dir: str) -> list[dict[str, Any]]:
+    """Searches for a linkedin.yaml that lists none: the line-of-work preset's list when the
+    profile has one, otherwise one search per target domain and occupation (in France, the
+    scanner's usual location). Empty when there is no readable profile or nothing to search."""
+    try:
+        from src.config_files import resolve_config_path
+        from src.discovery.query_expansion import DiscoveryQueryExpander, apply_preset_collector_config
+        from src.pipeline.filter import load_profile
+
+        profile = load_profile(str(resolve_config_path(config_dir, "profile.yaml")))
+        preset = apply_preset_collector_config({}, profile, "linkedin").get("queries")
+        if preset:
+            return list(preset)
+        terms = DiscoveryQueryExpander(max_queries=10).expand(profile, source="indeed")
+        return [{"search_term": t, "location": "France", "results_wanted": 50} for t in terms]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("LinkedIn: could not derive searches from the profile: %s", exc)
+        return []
+
+
 @dataclass
 class LinkedInQueryConfig:
     search_term: str
@@ -488,13 +508,14 @@ class LinkedInConfig:
         with path.open() as f:
             raw = yaml.safe_load(f) or {}
         schedule = raw.get("schedule") or {}
+        raw_queries = raw.get("queries") or _queries_from_profile(config_dir)
         queries = [
             LinkedInQueryConfig(
                 search_term=q.get("search_term", ""),
                 location=q.get("location", ""),
                 results_wanted=int(q.get("results_wanted", 50)),
             )
-            for q in (raw.get("queries") or [])
+            for q in raw_queries
             if q.get("search_term")
         ]
         return cls(

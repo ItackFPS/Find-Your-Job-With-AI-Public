@@ -221,6 +221,7 @@ export function resolveFixture(path: string): unknown {
   const p = path.replace(/^\/api/, '').split('?')[0]
   const routes: [RegExp, unknown][] = [
     [/^\/health$/, { status: 'ok' }],
+    [/^\/collection\/status$/, { frozen: false, since: null, reason: '', collectors: [] }],
     [/^\/dashboard$/, dashboard],
     [/^\/pipeline\/runs$/, [pipelineRun]],
     [/^\/pipeline\/runs\/[^/]+\/jobs$/, jobs],

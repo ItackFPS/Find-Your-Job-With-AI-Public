@@ -90,33 +90,6 @@ _ISO2_TO_COUNTRY: dict[str, str] = {
     "UK": "United Kingdom",
 }
 
-# Sensible defaults used when sources.yaml omits the 'queries' key.
-#
-# Phase LATER / I15: the original 5 queries covered only software/data
-# roles, leaving cybersecurity/devops/QA — domains this profile also
-# targets, and which france_travail's own _STATIC_BASELINE already covers
-# (see src/discovery/query_expansion.py) — entirely unrepresented here.
-# Widened the VOCABULARY only, not the geographic scope: location_codes
-# stay within the already French-speaking-country set every existing entry
-# uses (fr/be/lu/ch). Broadening to non-French-speaking EU countries was
-# deliberately NOT done — bundesagentur/arbetsformedlingen (Germany/Sweden)
-# were disabled after being audited as 100% location-filter rejections for
-# this profile (see their own config/sources.yaml comments); repeating
-# that pattern here without live measurement would trade collection effort
-# for no real gain, not fix a language bias.
-_DEFAULT_QUERIES: list[dict[str, Any]] = [
-    {"keyword": "développeur logiciel", "location_codes": ["fr"]},
-    {"keyword": "ingénieur informatique", "location_codes": ["fr"]},
-    {"keyword": "software engineer", "location_codes": ["fr", "be", "lu", "ch"]},
-    {"keyword": "data engineer", "location_codes": ["fr", "be", "lu"]},
-    {"keyword": "data scientist", "location_codes": ["fr", "be", "lu"]},
-    {"keyword": "cybersécurité", "location_codes": ["fr"]},
-    {"keyword": "cybersecurity", "location_codes": ["fr", "be", "lu", "ch"]},
-    {"keyword": "devops", "location_codes": ["fr", "be", "lu", "ch"]},
-    {"keyword": "test logiciel", "location_codes": ["fr"]},
-]
-
-
 class EURESCollector(BaseCollector):
     """httpx-based collector for the EURES European job search API.
 
@@ -130,7 +103,11 @@ class EURESCollector(BaseCollector):
         rate_limit_delay     Seconds between any two requests (default: 2.0).
         timeout              Per-request timeout in seconds (default: 30).
         queries              List of {keyword, location_codes} dicts.
-                             Defaults to _DEFAULT_QUERIES when absent.
+        discovery_queries    Keyword strings injected by the orchestrator from the
+                             profile; each runs against default_location_codes.
+        default_location_codes  Country codes for discovery_queries (default: ["fr"]).
+                             With neither queries nor discovery_queries nothing is
+                             searched: no profession-specific default exists.
         concurrent_queries   How many independent queries to run in parallel
                              (default: 2). Each query's own pages are still
                              fetched strictly sequentially — only different
@@ -178,7 +155,15 @@ class EURESCollector(BaseCollector):
         )
         self.max_pages_per_query: int = int(cfg.get("max_pages_per_query", 3))
         self.results_per_page: int = min(int(cfg.get("results_per_page", 50)), 50)
-        self.queries: list[dict[str, Any]] = cfg.get("queries") or _DEFAULT_QUERIES
+        self.queries: list[dict[str, Any]] = list(cfg.get("queries") or [])
+        self.default_location_codes: list[str] = [
+            str(c) for c in cfg.get("default_location_codes") or ["fr"]
+        ]
+        for keyword in cfg.get("discovery_queries") or []:
+            if str(keyword).strip():
+                self.queries.append(
+                    {"keyword": str(keyword).strip(), "location_codes": self.default_location_codes}
+                )
         self.concurrent_queries: int = max(1, int(cfg.get("concurrent_queries", 2)))
         self._rate_lock = threading.Lock()
 
@@ -192,6 +177,11 @@ class EURESCollector(BaseCollector):
 
     def collect(self) -> CollectorResult:
         start_time = time.time()
+
+        if not self.queries:
+            logger.warning("EURESCollector: no queries configured — nothing to collect")
+            return CollectorResult(source_name="eures", jobs=[], errors=["No queries configured"],
+                                   duration_seconds=0.0)
 
         # Queries are independent (no shared pagination state — see class
         # docstring), so bounded concurrency runs them in parallel. Each

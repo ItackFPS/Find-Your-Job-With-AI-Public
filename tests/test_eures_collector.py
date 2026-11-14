@@ -414,10 +414,33 @@ class TestEURESCollector:
         assert isinstance(result.errors, list)
         assert result.duration_seconds >= 0
 
-    def test_default_queries_used_when_config_omits_queries(self):
+    def test_no_default_queries_assume_a_profession(self):
         col = EURESCollector(config={})
-        from src.collectors.eures import _DEFAULT_QUERIES
-        assert col.queries is _DEFAULT_QUERIES
+        assert col.queries == []
+        result = col.collect()
+        assert result.jobs == []
+        assert result.errors == ["No queries configured"]
+
+    def test_discovery_queries_run_against_the_default_location_codes(self):
+        col = EURESCollector(config={
+            "discovery_queries": ["infirmier", " ", "aide soignant"],
+            "default_location_codes": ["fr", "be"],
+        })
+        assert col.queries == [
+            {"keyword": "infirmier", "location_codes": ["fr", "be"]},
+            {"keyword": "aide soignant", "location_codes": ["fr", "be"]},
+        ]
+
+    def test_discovery_queries_default_to_france(self):
+        col = EURESCollector(config={"discovery_queries": ["comptable"]})
+        assert col.queries == [{"keyword": "comptable", "location_codes": ["fr"]}]
+
+    def test_explicit_queries_and_discovery_queries_are_both_run(self):
+        col = EURESCollector(config={
+            "queries": [{"keyword": "chef de cuisine", "location_codes": ["fr"]}],
+            "discovery_queries": ["cuisinier"],
+        })
+        assert [q["keyword"] for q in col.queries] == ["chef de cuisine", "cuisinier"]
 
     def test_results_per_page_capped_at_50(self):
         col = EURESCollector(config={"results_per_page": 999})

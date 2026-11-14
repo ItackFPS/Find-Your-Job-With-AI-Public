@@ -57,9 +57,13 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--markdown", action="store_true")
     r.add_argument("--assess", action="store_true",
                    help="also run the disagreement engine on deterministic evidence (shadow review metrics)")
-    r.add_argument("--split", choices=("all", "heldout", "tuning"), default="all",
-                   help="labels to measure on: the held-out part (tests of pre-registered changes), the tuning "
-                        "part, or all (src/evaluation/heldout.py)")
+    r.add_argument("--split", choices=("all", "heldout", "tuning"), default=None,
+                   help="labels to measure on (default: tuning for a real dataset, all for a synthetic one). "
+                        "heldout / all read a real dataset's held-out labels and need --candidate "
+                        "(src/evaluation/heldout_guard.py)")
+    r.add_argument("--candidate", default=None,
+                   help="the pre-registered candidate this held-out run tests (docs/lab/preregistered/<id>.json)")
+    r.add_argument("--caller", choices=("cli", "ui", "lab"), default="cli", help=argparse.SUPPRESS)
     r.add_argument("--sampling", action="store_true",
                    help="read the export's strata (private sidecar; aggregates only) and report the uniform "
                         "cohorts beside the pooled, enriched metrics")
@@ -68,6 +72,9 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("baseline")
     c.add_argument("candidate")
     c.add_argument("--dataset", default=None, help="dataset dir to classify flips as fixed/broken")
+    c.add_argument("--split", choices=("all", "heldout", "tuning"), default="tuning",
+                   help="labels used to classify flips (default tuning; heldout / all need --candidate)")
+    c.add_argument("--candidate", default=None, help="pre-registered candidate (docs/lab/preregistered/<id>.json)")
 
     g = sub.add_parser("golden", help="check or update golden decisions")
     g.add_argument("dataset")
@@ -209,8 +216,18 @@ def main(argv: list[str] | None = None) -> int:
         if ns.cmd == "run":
             from src.evaluation.heldout import load_split
 
-            ds = load_split(ns.dataset, ns.split)
+            from src.evaluation import heldout_guard
+
+            split = ns.split or ("tuning" if load_dataset(ns.dataset, require_complete_labels=False).manifest.kind
+                                 == "real" else "all")
+            ds = load_split(ns.dataset, split)
+            heldout_guard.authorise(ds.manifest.kind, split, ns.candidate)
+            reads_heldout = heldout_guard.reads_heldout(ds.manifest.kind, split)
+            if reads_heldout:          # logged before the run: a crash still counts as a use
+                heldout_guard.log_use(ns.dataset, ds, split, ns.candidate, ns.caller, "evaluation run")
             result = run_evaluation(ds, _strategy(ns), assess=ns.assess, sampling=ns.sampling)
+            if reads_heldout:
+                result = heldout_guard.aggregates_only(result, ds)
             print(render_markdown(result) if ns.markdown else json.dumps(result.metrics["overall"], indent=2))
             if not ns.no_write:
                 out = ns.out or f"{DEFAULT_RUNS_DIR}/{ds.manifest.dataset_id}"
@@ -227,11 +244,19 @@ def main(argv: list[str] | None = None) -> int:
             labels: dict[str, str] | None = None
             provenance: dict[str, str] | None = None
             if ns.dataset:
+                from src.evaluation import heldout_guard
+                from src.evaluation.heldout import restrict
+
                 ds = load_dataset(ns.dataset, require_complete_labels=False)
+                heldout_guard.authorise(ds.manifest.kind, ns.split, ns.candidate)
+                if heldout_guard.reads_heldout(ds.manifest.kind, ns.split):
+                    heldout_guard.log_use(ns.dataset, ds, ns.split, ns.candidate, "cli", "compare")
                 for key, mine in (("jobs_sha256", ds.manifest.jobs_sha256), ("labels_sha256", ds.manifest.labels_sha256)):
                     if mine != base.dataset[key]:     # flips must be judged against the labels the runs were scored on
                         raise ValueError(f"--dataset {key} {mine[:12]} differs from the runs' {base.dataset[key][:12]}: "
                                          "pass the dataset version the runs were made on (see its versions/ archive)")
+                if ds.manifest.kind == "real":
+                    ds = restrict(ds, ns.split)      # type: ignore[arg-type]
                 labels = {k: v.expected for k, v in ds.labels.items()}
                 from src.evaluation.annotation_assist import assisted_job_ids
                 from src.evaluation.metrics import effective_sources

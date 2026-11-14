@@ -304,8 +304,12 @@ class SchedulerService:
         opted_in: Callable[[str], bool] | None = None,
         background: Callable[[], Mapping[str, Any]] | None = None,
         tz: tzinfo | None = None,
+        frozen: Callable[[str], bool] | None = None,
     ) -> None:
         self._db_path = db_path
+        # Collection freeze (owner decision D7, src/collectors/freeze.py): a source whose collection
+        # is frozen is never dispatched, by schedule, resume or manual trigger. None: nothing frozen.
+        self._frozen: Callable[[str], bool] = frozen or (lambda _source: False)
         # The background settings (issue #80): ``enabled`` and the local ``daily_time`` that
         # starts each day's period. None: always enabled, UTC days. ``tz`` None: the system's
         # local time.
@@ -471,13 +475,26 @@ class SchedulerService:
             return None
         return self.trigger_manual(defn.id, trigger="resume")
 
+    def _is_frozen(self, source_id: str) -> bool:
+        try:
+            return bool(self._frozen(source_id))
+        except Exception as exc:  # noqa: BLE001 — unreadable state: stay frozen, never contact
+            logger.warning("Scheduler: could not read the collection freeze (%s); not dispatching.", exc)
+            return True
+
     def trigger_manual(self, definition_id: str, trigger: str = "manual") -> str | None:
-        """Trigger an immediate run for a definition, bypassing the startup policy."""
+        """Trigger an immediate run for a definition, bypassing the startup policy.
+
+        Raises CollectionFrozen (a RuntimeError) when the definition's source is frozen (D7)."""
         storage = self._open_storage()
         try:
             defn = storage.get_definition(definition_id)
             if defn is None:
                 raise ValueError(f"No schedule definition with id={definition_id!r}")
+            if self._is_frozen(defn.source_id):
+                from src.collectors.freeze import CollectionFrozen
+
+                raise CollectionFrozen()
             if not defn.enabled:
                 raise ValueError(f"Schedule {definition_id!r} is disabled")
             handler = self._handlers.get(defn.source_id)
@@ -557,6 +574,9 @@ class SchedulerService:
         # explicitly resumed (issue #81). Checked first: no execution row, no
         # retry bookkeeping, no log line every tick.
         if _flag(handler, "is_paused") or self._paused.is_set():
+            return False
+        # Frozen collection (D7): no execution row, no retry bookkeeping, like a pause.
+        if self._is_frozen(defn.source_id):
             return False
         # Background collection switched off by the user (issue #80): nothing automatic.
         if not self._background_enabled():
