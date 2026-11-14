@@ -137,3 +137,27 @@ def test_fifty_thousand_decisions_keep_the_job_index(tmp_path: Path) -> None:
         print("journal query seconds on 50k+ decisions:", timings)
     finally:
         store.close()
+
+
+def test_review_queue_page_and_total_match_separate_queries(tmp_path: Path) -> None:
+    """The page carries the queue's total (one evaluation); it equals a separate COUNT, and a page
+    past the end still reports the total."""
+    db = tmp_path / "d.db"
+    _store(db, feedback=True).close()
+    _fill(db, n_jobs=400, runs=6, seed=3)
+    store = DecisionStorage(str(db))
+    try:
+        base = f"""FROM {store._LATEST} WHERE d.rn = 1
+                   AND (json_extract(d.signals_json, '$.assessment.state') = 'review'
+                        OR {store._EPISODE_AUDITED}) {store._unanswered_clause()}"""
+        expected = store._get_conn().execute(f"SELECT COUNT(*) {base}").fetchone()[0]
+        ids = [r[0] for r in store._get_conn().execute(
+            f"SELECT d.decision_id {base} ORDER BY d.decided_at DESC, d.job_id")]
+        assert expected > 60
+        total, page = store.review_queue(limit=50, offset=10)
+        assert total == expected
+        assert [r.decision_id for r in page] == ids[10:60]
+        total, page = store.review_queue(limit=50, offset=expected + 5)
+        assert (total, page) == (expected, [])
+    finally:
+        store.close()
