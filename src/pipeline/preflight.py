@@ -85,8 +85,22 @@ def run_preflight(config_dir: str = "config", settings_path: str | Path | None =
 
     ``settings_path``: the app settings file (``data/settings.json``) holding the user's
     choice of unofficial sources; None reads no file (the legacy setup alone decides).
+
+    Collection freeze (owner decision D7, ADR 0032, ``src/collectors/freeze.py``): every active
+    source whose collector is frozen is listed as skipped with the freeze's reason, and a frozen
+    France Travail API is not contacted, not even to authenticate.
     """
-    ft = _check_france_travail(config_dir)
+    from src.collectors import freeze
+
+    freeze_path = Path(settings_path) if settings_path else None
+    frozen = sorted(t for t in freeze.configured_collector_types(config_dir)
+                    if not freeze.collector_allowed(freeze_path, t))
+    if "france_travail" in frozen:
+        ft = FranceTravailPreflight(
+            enabled=True, credentials="SKIPPED", authentication="SKIPPED", status="SKIPPED",
+            detail="collection paused (temporary freeze): the France Travail API is not contacted")
+    else:
+        ft = _check_france_travail(config_dir)
     indeed_off = _indeed_not_chosen(config_dir, settings_path)
 
     ft_unconfigured = ft.status == "CONFIG_MISSING"
@@ -108,6 +122,8 @@ def run_preflight(config_dir: str = "config", settings_path: str | Path | None =
         skip_reasons["france_travail"] = _FT_API_RESTRICTED
     if indeed_off:
         skip_reasons["indeed"] = _INDEED_OFF
+    for source_type in frozen:
+        skip_reasons[source_type] = freeze.FROZEN_REASON
 
     # An unconfigured France Travail API is the normal state of a new install (D4, ADR 0028): it is
     # listed as skipped with skip_reasons, and is not an error of the run.

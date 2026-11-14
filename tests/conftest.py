@@ -227,3 +227,13 @@ def isolated_app(tmp_path, monkeypatch):
         progress_bus=app.state.progress_bus,
     ))
     return app
+
+
+@pytest.fixture(autouse=True)
+def _collection_freeze_off_unless_marked(request, monkeypatch):
+    """The collection freeze (owner decision D7) is on in the product. Tests that run collection with
+    mocked collectors predate it and test collection itself, so it is off for them; a test marked
+    ``collection_freeze`` runs with it enforced."""
+    from src.collectors import freeze
+
+    monkeypatch.setattr(freeze, "ENFORCED", request.node.get_closest_marker("collection_freeze") is not None)
