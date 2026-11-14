@@ -1401,7 +1401,36 @@
       "confirmYes": "Réinitialiser",
       "resetDone": "L’apprentissage a été réinitialisé.",
       "lastReset": "Dernière réinitialisation : {date}",
-      "failed": "La modification n’a pas pu être enregistrée."
+      "failed": "La modification n’a pas pu être enregistrée.",
+      "recorded": {
+        "title": "Ce qui a été enregistré",
+        "intro": "Tout ce qui suit est stocké sur cet ordinateur uniquement. Cette vue ne modifie rien ; « Effacer mon activité » le supprime.",
+        "loading": "Chargement…",
+        "unavailable": "Ce qui a été enregistré ne peut pas être affiché pour le moment.",
+        "none": "Rien n’a encore été enregistré.",
+        "colType": "Action",
+        "colCount": "Enregistrées",
+        "colCounted": "Comptables par l’apprentissage",
+        "colLast": "Dernière fois",
+        "eventSurfaces": "Où vos actions ont été faites",
+        "exposuresBySurface": "{count, plural, one {# offre affichée, par liste} other {# offres affichées, par liste}}",
+        "exposuresBySource": "Offres affichées, par source",
+        "retention": "Les offres affichées sont résumées après {compact} jours et supprimées après {keep} jours.",
+        "repeatedViews": "Rouvrir la même offre est enregistré, mais l’apprentissage ne compte qu’une fois les ouvertures d’une offre. Les actions antérieures à la dernière réinitialisation sont conservées mais ne comptent plus.",
+        "types": {
+          "interested": "Intéressé",
+          "not_interested": "Pas pour moi",
+          "ranking_feedback": "Mal classée",
+          "unsure": "Je ne sais pas",
+          "viewed": "Offre ouverte",
+          "apply_link_opened": "Lien de candidature ouvert",
+          "application_status_changed": "Statut de candidature modifié",
+          "saved": "Enregistrée",
+          "unsaved": "Retirée des enregistrées",
+          "hidden": "Masquée",
+          "unhidden": "Réaffichée"
+        }
+      }
     },
     "deleteAll": {
       "title": "Supprimer toutes les données de l’application",

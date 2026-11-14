@@ -137,6 +137,19 @@ export interface LearningStatus {
 }
 export const getLearningStatus = () => api.get<LearningStatus>('/privacy/learning/status').then(r => r.data)
 export const resumeLearning = () => api.post<LearningStatus>('/privacy/learning/resume').then(r => r.data)
+// What was recorded (Phase B B9-A): read only.
+export interface RecordedEventRow { type: string; signal_class: string; count: number; counted: number; last_at: string | null }
+export interface RecordedActivity {
+  learning: { paused: boolean; reset_at: string | null }
+  events: RecordedEventRow[]
+  event_surfaces: Record<string, number>
+  exposures: {
+    total: number; by_surface: Record<string, number>; by_source: Record<string, number>
+    oldest_at: string | null; compact_after_days: number; keep_days: number
+  }
+  repeated_views: string
+}
+export const getRecordedActivity = () => api.get<RecordedActivity>('/privacy/recorded').then(r => r.data)
 // Offline learning curve (v5 L3.5): counts only. Runs in a child process, so it is fetched on demand.
 export interface LearningCurve {
   status: 'no_positives' | 'no_anchored_positives' | 'measured'
