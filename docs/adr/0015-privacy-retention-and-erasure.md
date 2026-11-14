@@ -17,8 +17,9 @@ a checkpoint.
     state is cleared; hidden offers stay hidden; stored `job_scores.personal_*` are kept as history
     and never read for ranking again.
   - *Erase my activity*: deletes personal activity, its derived state, flow-4 metrics and **all
-    pre-erasure application backups**. The application tracker is deleted unless the user ticks
-    "Conserver mon suivi de candidatures"; calibration labels go with it (option ticked by default).
+    pre-erasure application backups**. Since owner decision D6 (2026-11-14) the application tracker
+    ("Conserver mon suivi de candidatures", ticked by default) and the calibration labels ("Also erase
+    my calibration answers", unticked by default) are kept unless the user chooses otherwise.
     Offers, market and non-personal ops data stay. **No backup is taken before an erasure** (owner
     decision).
   - *Delete all application data*: everything, back to the setup wizard.
