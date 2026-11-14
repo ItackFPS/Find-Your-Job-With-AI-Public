@@ -63,7 +63,8 @@ feedback, evaluation, lab) · [ADRs](docs/adr/README.md) · [Windows app](docs/w
 | Local-LLM enrichment and LLM eligibility gate | ⚙️ backend only, **off**, no control in the 2.0 interface; setup comes in 2.1 ([ADR 0028](docs/adr/0028-release-2.0-before-occupation-layers.md)) |
 | Evaluation harness (labelled datasets, metrics, comparisons; [ADR 0007](docs/adr/0007-evaluation-harness-outside-production-path.md)) | 🧪 developer tooling, outside the production path |
 | Experiment lab with human-approved promotion ([ADR 0011](docs/adr/0011-experiment-lab.md)) | 🧪 experimental; the lab agent is OS-isolated only when you run it in its sandbox (`python -m src.lab sandbox`, Windows AppContainer) |
-| Greenhouse, Lever, SmartRecruiters, WorkingNomads collectors | ⚙️ implemented, no source configured |
+| Employers' boards (Greenhouse, Lever, SmartRecruiters, Ashby, Recruitee) | ✅ found from links in collected offers, read through their public APIs |
+| WorkingNomads collector | ⚙️ implemented, no source configured |
 | macOS / Linux | ⚠️ backend, CLI and tests run (CI is Linux); the launcher and startup scripts are Windows-only |
 | Docker | ⚠️ the image runs the CLI pipeline only, not the web UI |
 | Windows installer: per-user, bundled Python, desktop + Start Menu shortcuts ([docs](docs/windows-installer.md)) | ✅ 1.0.0 released, 2.0 in qualification; not code-signed |

@@ -28,6 +28,18 @@ sources:
   # the full text (France Travail's robots.txt disallows the pages that load it). The
   # occupations come from the profile's target domains, the departements from its
   # department locations (src/collectors/france_travail_web.py).
+  - name: ats-boards
+    type: ats_boards
+    domain: null
+    careers_url: null
+    ats: null
+    board_identifier: null
+    active: true
+    # Employers' own boards on Greenhouse, Lever, SmartRecruiters, Ashby and Recruitee: their
+    # documented public read APIs, one request per employer. The list comes from links found
+    # in offers already stored (src/discovery/ats_boards.py); set config.boards to add your own.
+    config: {}
+
   - name: france-travail-web
     type: france_travail_web
     domain: "candidat.francetravail.fr"

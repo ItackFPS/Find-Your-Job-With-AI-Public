@@ -508,6 +508,10 @@ def run_pipeline(
                     merged_cfg = apply_preset_collector_config(merged_cfg, early_profile, src_type)
                 except Exception as exc:
                     logger.warning("Preset collector config for %s skipped: %s", src_type, exc)
+            if src_type == "ats_boards":
+                from src.discovery.ats_boards import boards_from_offers
+
+                merged_cfg.setdefault("boards", boards_from_offers(db_path))
             if src_type == "france_travail_web" and early_profile is not None:
                 # What to read: the profile's domains and its départements — with a home,
                 # those within the maximum distance (plus home's); else the v1 list.
