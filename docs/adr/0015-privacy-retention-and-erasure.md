@@ -12,7 +12,9 @@ a checkpoint.
 
 ## Decision
 - **Four actions**, each with an exact keep/delete table (§4.12):
-  - *Pause learning*: a reversible switch.
+  - *Pause learning*: a reversible switch. Since owner decision D2 part 2 (2026-11-14) it stops
+    the personal reordering and the shadow comparisons; behaviour evidence (answers, Save / Hide,
+    views, visible exposures, the Découverte draw) keeps being recorded locally and stays erasable.
   - *Reset learning*: a non-destructive marker; learning ignores earlier signals; derived learned
     state is cleared; hidden offers stay hidden; stored `job_scores.personal_*` are kept as history
     and never read for ranking again.

@@ -46,6 +46,66 @@ def test_pause_skips_personalization_and_resume_restores_it(tmp_path):
     assert any(s.personalization_adjustment > 0 for s in resumed.scored_jobs)
 
 
+def _rows(db: Path, sql: str, *args) -> int:
+    conn = sqlite3.connect(db)
+    try:
+        return conn.execute(sql, args).fetchone()[0]
+    except sqlite3.OperationalError:          # table not created yet
+        return 0
+    finally:
+        conn.close()
+
+
+def test_pause_stops_exactly_what_the_settings_text_says(tmp_path):
+    """Owner decision D2 part 2 (Phase B B9-A), one assertion per component of the Settings text:
+    stopped = personal reordering, shadow comparison; not stopped = recording of answers, Save /
+    Hide, exposures and the Découverte draw."""
+    from src.feedback.exposure import ExposureItem, ExposureStorage
+    from src.storage import app_state
+
+    before, _after, db = _around_one_answer(tmp_path, True)
+    cfg = tmp_path / "config"
+    learning.set_paused(str(db), True)
+    paused = _pipeline(db, cfg)
+    # stopped: personal reordering
+    assert all(s.personalization_adjustment == 0 for s in paused.scored_jobs)
+    # stopped: shadow comparison
+    assert _rows(db, "SELECT COUNT(*) FROM ranking_shadow WHERE run_id = ?", paused.run_id) == 0
+    # not stopped: the Découverte draw (evidence gathering)
+    assert _rows(db, "SELECT COUNT(*) FROM s4_draw WHERE run_id = ?", paused.run_id) > 0
+    # not stopped: answers and list actions
+    n = _count(db, "feedback_events")
+    service = FeedbackService(str(db), config_dir=str(cfg))
+    service.record_explicit(before.scored_jobs[1].job_id, "not_interested", source="ui")
+    service.record_list(before.scored_jobs[2].job_id, "saved")
+    assert _count(db, "feedback_events") == n + 2
+    # not stopped: visible exposures
+    store = ExposureStorage(str(db))
+    store.init_db()
+    try:
+        assert store.record_batch(app_state.current(str(db)).token, "s1",
+                                  [ExposureItem(before.scored_jobs[0].job_id, "jobs", position=0)]) == 1
+    finally:
+        store.close()
+    # resumed: the shadow comparison runs again
+    learning.set_paused(str(db), False)
+    resumed = _pipeline(db, cfg)
+    assert _rows(db, "SELECT COUNT(*) FROM ranking_shadow WHERE run_id = ?", resumed.run_id) > 0
+
+
+def test_the_settings_text_names_what_pause_stops_and_keeps():
+    import json
+
+    root = Path(__file__).resolve().parents[1] / "frontend" / "src" / "locales"
+    en = json.loads((root / "en" / "translation.json").read_text(encoding="utf-8"))["settings"]["learning"]["pauseHelp"]
+    fr = json.loads((root / "fr" / "translation.json").read_text(encoding="utf-8"))["settings"]["learning"]["pauseHelp"]
+    for word in ("ranking stops adapting", "comparison with a personal ranking", "still recorded", "Découverte", "Erase"):
+        assert word in en, word
+    for word in ("cesse de s’adapter", "comparaison avec un classement personnel", "restent enregistrés", "Découverte",
+                 "effacement"):
+        assert word in fr, word
+
+
 def test_reset_clears_derived_state_keeps_signals_and_hidden(tmp_path):
     before, after, db = _around_one_answer(tmp_path, True)
     cfg = tmp_path / "config"
