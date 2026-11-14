@@ -124,6 +124,8 @@ class PipelineStats:
     # stats.phase2 happens to be non-empty.
     use_ai: bool = False
     stage_times: dict[str, float] = field(default_factory=dict)
+    # P-031: collected offers that took their stored row's id ({aligned, same_offer_twice}); empty if none.
+    stored_id_alignment: dict[str, int] = field(default_factory=dict)
     embedding_cache_hits: int = 0
     embedding_cache_misses: int = 0
     personalization_cache_hits: int = 0
@@ -201,6 +203,7 @@ class PipelineStats:
             "phase2": self.phase2,
             "use_ai": self.use_ai,
             "stage_times": self.stage_times,
+            "stored_id_alignment": self.stored_id_alignment,
             "embedding_cache_hits": self.embedding_cache_hits,
             "embedding_cache_misses": self.embedding_cache_misses,
             "personalization_cache_hits": self.personalization_cache_hits,
@@ -655,6 +658,26 @@ def run_pipeline(
             annotate_yield_anomalies(stats.by_source, _history)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Source yield check failed (non-fatal): %s", exc)
+
+        # P-031 (Phase B B2-A): an offer collected under a new id but already stored under another
+        # (same source and content) takes the stored id before any stage sees it, so its row, score,
+        # decision and expiry share one id. A second copy of an id in this run is the same offer
+        # twice: the first is kept. Fail-open: a failure leaves the ids as collected.
+        try:
+            aliases = storage.align_stored_ids(all_jobs)
+            if aliases:
+                seen_ids: set[str] = set()
+                unique_jobs: list[Job] = []
+                for job in all_jobs:
+                    if job.id not in seen_ids:
+                        seen_ids.add(job.id)
+                        unique_jobs.append(job)
+                stats.stored_id_alignment = {"aligned": len(aliases),
+                                             "same_offer_twice": len(all_jobs) - len(unique_jobs)}
+                all_jobs = unique_jobs
+                logger.info("Stored ids: %d collected offer(s) took the id of their stored row", len(aliases))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Stored-id alignment skipped (non-fatal): %s", exc)
 
         stats.collected = len(all_jobs)
         stats.stage_times["collect"] = time.perf_counter() - _t_collect
