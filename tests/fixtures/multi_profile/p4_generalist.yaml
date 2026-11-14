@@ -1,0 +1,65 @@
+# Phase B multi-profile fixture P4 (09 §4): a generalist looking across several lines of work, to
+# expose over-matching and coverage gaps. Synthetic, not a real person.
+target_domains:
+- sales
+- logistics
+- administration
+- customer_service
+- retail
+focus_domain: false
+target_skills:
+- relation client
+- Excel
+- gestion de stock
+- accueil
+geography:
+  preferred_countries:
+  - France
+  allowed_regions:
+  - Europe
+  home:
+    name: Lille
+    insee: '59350'
+    lat: 50.6292
+    lon: 3.0573
+    department: '59'
+    precision: commune
+  max_distance_km: 50
+  strict_distance: false
+  remote_policy:
+    remote_france: true
+    remote_eu: false
+    remote_worldwide: false
+    hybrid: true
+work_modes:
+- on-site
+- hybrid
+contract_types:
+- cdi
+- cdd
+- full-time
+- part-time
+experience:
+  preferred_levels:
+  - entry_level
+  - junior
+  - mid
+  max_years: null
+  excluded_seniority:
+  - director
+  - vp
+  - executive
+  - c_suite
+max_education: bac
+languages:
+- French
+- English
+freshness_days: 30
+matching:
+  education_hard_constraint: true
+  education_preferred_penalty: 0.2
+  principal_skill_gate: true
+  mandatory_central_skill_gate: false
+  llm_extraction_enabled: false
+  llm_eligibility_enabled: false
+  llm_eligibility_reject_confidence: 0.75
