@@ -145,6 +145,9 @@ async def resume_scan_route(request: Request) -> ScanResumedOut:
 
     Returns 409 if a scan is already running or the backend is shutting down.
     """
+    from src.api.routes.collection import refuse_frozen
+
+    refuse_frozen(request, "hellowork")
     from src.api.routes.settings import refuse_while_cleaning
 
     refuse_while_cleaning()
@@ -171,6 +174,9 @@ async def trigger_scan(request: Request) -> ScanStartedOut:
     this endpoint returns immediately with a scan_id to poll via /status or
     /scans, it does not wait for the scan to finish.
     """
+    from src.api.routes.collection import refuse_frozen
+
+    refuse_frozen(request, "hellowork")
     from src.api.routes.settings import refuse_while_cleaning
 
     refuse_while_cleaning()

@@ -181,8 +181,12 @@ def replay_run(work_db: str | Path, config_dir: str | Path, corpus: ReplayCorpus
     rs.create_run(run_id)
     rs.close()
     replay_class = _replay_collector_class(corpus)
-    with no_network(), patch("src.collectors.registry.registry.get_collector_class",
-                             lambda _type: replay_class):
+    # The collection freeze (ADR 0032) stops real collectors from contacting their sources. Here no
+    # real collector runs (every one is replaced) and no socket can leave the machine, so the replay
+    # lifts the freeze for its own run only.
+    from src.collectors import freeze
+
+    with no_network(), patch.object(freeze, "ENFORCED", False),             patch("src.collectors.registry.registry.get_collector_class", lambda _type: replay_class):
         t0 = time.perf_counter()
         runner._execute(run_id)
         wall = time.perf_counter() - t0

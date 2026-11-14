@@ -137,7 +137,8 @@
       "failed": "La recherche n’a pas pu démarrer. Réessayez.",
       "start": "Lancer le pipeline",
       "starting": "Démarrage…",
-      "running": "En cours…"
+      "running": "En cours…",
+      "paused": "Collecte en pause"
     },
     "noRuns": "Aucune exécution du pipeline pour l’instant. <run>Lancez le pipeline</run> pour voir les résultats ici.",
     "browseMatched": "Parcourir les {count, number} offres retenues →",
@@ -1490,6 +1491,12 @@
         "PF": "listes triées par pertinence",
         "IM": "autres"
       }
+    }
+  },
+  "collection": {
+    "frozen": {
+      "title": "Collecte en pause",
+      "body": "Aucun site d’offres n’est consulté pour l’instant, le temps de vérifier chaque source. Vos offres enregistrées, vos offres sauvegardées et vos candidatures sont conservées. Une source ne revient qu’après avoir passé ses vérifications et que vous l’avez réactivée."
     }
   }
 }

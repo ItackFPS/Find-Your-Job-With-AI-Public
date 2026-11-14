@@ -267,3 +267,20 @@ export interface DataSettings {
 export const getDataSettings = () => api.get<DataSettings>('/settings/data').then(r => r.data)
 export const startDataCleanup = (olderThanDays: number) =>
   api.post<DataSettings['cleanup']>('/settings/data/cleanup', { older_than_days: olderThanDays }).then(r => r.data)
+
+// ---- Collection freeze (owner decision D7, ADR 0032) ---------------------
+
+export interface CollectionCollector {
+  type: string
+  validated: boolean
+  reactivated_at: string | null
+  allowed: boolean
+}
+export interface CollectionStatus {
+  frozen: boolean
+  since: string | null
+  reason: string
+  collectors: CollectionCollector[]
+}
+export const getCollectionStatus = () =>
+  api.get<CollectionStatus>('/collection/status').then(r => r.data)

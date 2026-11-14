@@ -187,3 +187,18 @@ def test_command_line_writes_a_report(tmp_path: Path) -> None:
     assert report["corpus"] == {"replay-src": 50}
     assert report["runs"][0]["status"] == "completed"
     assert "wall_minus_internal_seconds" in report["runs"][0]
+
+
+@pytest.mark.collection_freeze
+def test_replay_runs_while_collection_is_frozen(tmp_path: Path) -> None:
+    """With the freeze enforced (the product's state), a replay still collects from its corpus:
+    nothing real runs and nothing leaves the machine."""
+    from src.collectors import freeze
+
+    assert freeze.ENFORCED is True
+    seed = _seed_db(tmp_path)
+    work = copy_database(seed, tmp_path / "work")
+    with patch("src.embeddings.embedding.EmbeddingService", _FakeEmbeddingService):
+        r = replay_run(work, _config(tmp_path), ReplayCorpus.from_database(seed))
+    assert r.status == "completed" and r.collected == 50
+    assert freeze.ENFORCED is True                      # restored after the run

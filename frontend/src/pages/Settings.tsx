@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { CollectionFreezeNotice } from '../components'
 import { BackgroundCard, DailyRunsCard, DataCard, DeleteAllCard, EraseCard, LearningCard, ModelDownloadCard, SourcesCard } from '../components/settings'
 
 // Settings › Sources and background (issue #82, owner decisions R-Q3, R-C2, R-C5):
@@ -11,6 +12,7 @@ export default function Settings() {
         <h1 style={{ marginBottom: 'var(--space-1)' }}>{t('settings.title')}</h1>
         <p style={{ margin: 0, color: 'var(--color-muted)' }}>{t('settings.subtitle')}</p>
       </div>
+      <CollectionFreezeNotice />
       <BackgroundCard />
       <DailyRunsCard />
       <SourcesCard />
