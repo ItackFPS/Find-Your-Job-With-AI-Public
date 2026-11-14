@@ -121,8 +121,9 @@ def resume_learning(request: Request) -> LearningStatusOut:
 
 class EraseIn(BaseModel):
     confirm: bool = False
-    keep_tracker: bool = False
-    erase_calibration: bool = True
+    # Owner decision D6: a default erase keeps the tracker and the calibration answers.
+    keep_tracker: bool = True
+    erase_calibration: bool = False
     purge_lab: bool = False
     confirm_lab: bool = False         # the lab purge is confirmed separately (ADR 0015)
 
