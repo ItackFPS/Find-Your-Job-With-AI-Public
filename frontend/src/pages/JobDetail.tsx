@@ -338,7 +338,7 @@ function FeedbackSection({ jobId, decisionId }: { jobId: string; decisionId?: st
   const { mutateAsync, isPending } = useMutation({
     // pin the decision the user is looking at, so the feedback is attributed to it even if a newer run lands meanwhile
     mutationFn: (body: { type: string; reasons: string[]; note?: string }) =>
-      postJobFeedback(jobId, { ...body, decision_id: decisionId }),
+      postJobFeedback(jobId, { ...body, decision_id: decisionId, context: { surface: 'job_detail' } }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['job-feedback', jobId] }),
   })
   if (isError) return <Card title={t('jobDetail.feedback.title')} style={{ marginBottom: 'var(--space-4)' }}><div style={{ fontSize: '0.85rem', color: 'var(--color-muted)' }}>{t('jobDetail.feedback.unavailable')}</div></Card>

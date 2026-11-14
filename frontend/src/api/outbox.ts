@@ -17,7 +17,7 @@ export interface OutboxBody {
   reasons?: string[]
   note?: string
   decision_id?: string
-  context?: Record<string, string | number>
+  context?: Record<string, string | number | boolean>
 }
 
 export interface OutboxEntry {
