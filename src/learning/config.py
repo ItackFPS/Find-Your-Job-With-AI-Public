@@ -43,6 +43,8 @@ class PersonalModelConfig:
     shrinkage: float = 3.0                # pseudo-count for per-value structured adjustments
     cap_max: float = 0.15                 # ceiling of the evidence-scaled cap on the final score
     cap_half_n: float = 20.0              # offers with a signal at which cap(n) reaches cap_max / 2
+    live_ranking: float = 1.0             # 0 keeps the production order (ADR 0030)
+    live_min_strong: float = 3.0          # strong signals (|y| >= 1) before the personal order applies
 
     def cap(self, n: int) -> float:
         """Evidence-scaled cap: 0 at n = 0, grows smoothly towards ``cap_max``; no threshold."""

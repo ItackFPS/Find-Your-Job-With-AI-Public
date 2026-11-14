@@ -3,13 +3,32 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
-  getJob, getJobExplanation, setJobAvailability, updateJobApplicationStatus, recordJobEvent, getFeedbackVocabulary, getJobFeedback,
+  getJob, getJobExplanation, getRankingWhy, setJobAvailability, updateJobApplicationStatus, recordJobEvent, getFeedbackVocabulary, getJobFeedback,
   postJobFeedback, getJobDecision,
   type Job, type JobExplanation, type ExplanationReason, type FeedbackEvent, type FeedbackVocabulary, type DecisionRecord, type DecisionEvidence,
 } from '../api/client'
 import { Button, Card, Chip, LoadingState, useToast } from '../components'
 import { SaveHideButtons } from '../components/SaveHideButtons'
 import { daysAgo, formatDateTime, httpUrl } from '../utils'
+
+/** Why the user's own actions moved this offer (ADR 0030). Nothing is shown when they did not. */
+function PersonalRankingNote({ jobId }: { jobId: string }) {
+  const { t } = useTranslation()
+  const { data } = useQuery({ queryKey: ['ranking-why', jobId], queryFn: () => getRankingWhy(jobId) })
+  if (!data || data.production_position == null || data.production_position === data.personal_position) return null
+  const positions = { from: data.production_position, to: data.personal_position }
+  const items = data.reasons
+    .map(r => (r.feature === 'terms' ? r.value : t(`learning.values.${r.feature}`, { value: r.value, defaultValue: r.value })))
+    .join(', ')
+  return (
+    <Card title={t('learning.why.title')} style={{ marginBottom: 'var(--space-4)' }}>
+      <p data-testid="personal-ranking-note" style={{ margin: 0 }}>
+        {t(data.applied ? 'learning.why.moved' : 'learning.why.preview', positions)}
+      </p>
+      {items && <p style={{ margin: 'var(--space-1) 0 0', fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>{t('learning.why.reason', { items })}</p>}
+    </Card>
+  )
+}
 
 function OverallScore({ score }: { score: number }) {
   const { t } = useTranslation()
@@ -614,6 +633,7 @@ export default function JobDetail() {
 
       <ApplicationStatusSection job={job} />
 
+      <PersonalRankingNote jobId={job.id} />
       <FeedbackSection jobId={job.id} decisionId={decision?.decision_id} />
 
       {decision && <DecisionPanel decision={decision} />}

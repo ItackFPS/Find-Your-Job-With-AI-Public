@@ -133,6 +133,41 @@ export interface LearningStatus {
 }
 export const getLearningStatus = () => api.get<LearningStatus>('/privacy/learning/status').then(r => r.data)
 export const resumeLearning = () => api.post<LearningStatus>('/privacy/learning/resume').then(r => r.data)
+// What the app learned, and what it changed in the latest search (ADR 0030).
+export interface LearnedPreference { feature: string; value: string; weight: number }
+export interface RankingMover {
+  job_id: string
+  title: string | null
+  company: string | null
+  production_position: number
+  personal_position: number
+  adjustment: number
+  reasons: { feature: string; value: string; weight: number }[]
+}
+export interface LearnedPreferences {
+  paused: boolean
+  signals: number
+  strong_signals: number
+  strong_needed: number
+  enough_evidence: boolean
+  cap: number
+  preferences: LearnedPreference[]
+  forgotten: { feature: string; value: string }[]
+  comparison: { run_id: string; applied: boolean; ranked: number; moved: number; entered_top_20: number; movers: RankingMover[] } | null
+}
+export const getLearnedPreferences = () => api.get<LearnedPreferences>('/privacy/learning/preferences').then(r => r.data)
+export const forgetPreference = (p: { feature: string; value: string }) =>
+  api.post<LearnedPreferences>('/privacy/learning/preferences/forget', { feature: p.feature, value: p.value }).then(r => r.data)
+export const restorePreference = (p: { feature: string; value: string }) =>
+  api.post<LearnedPreferences>('/privacy/learning/preferences/restore', { feature: p.feature, value: p.value }).then(r => r.data)
+export interface RankingWhy {
+  applied: boolean
+  production_position?: number
+  personal_position?: number
+  adjustment?: number
+  reasons: { feature: string; value: string; weight: number }[]
+}
+export const getRankingWhy = (jobId: string) => api.get<RankingWhy>(`/privacy/learning/why/${jobId}`).then(r => r.data)
 // Offline learning curve (v5 L3.5): counts only. Runs in a child process, so it is fetched on demand.
 export interface LearningCurve {
   status: 'no_positives' | 'no_anchored_positives' | 'measured'

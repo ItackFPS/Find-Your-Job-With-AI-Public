@@ -8,6 +8,7 @@ import { ErrorState } from '../ErrorState'
 import { LoadingState } from '../LoadingState'
 import { Switch } from '../Switch'
 import { useToast } from '../toastContext'
+import { LearnedPreferences } from './LearnedPreferences'
 import { LEARNING_QUERY_KEY } from './queryKeys'
 
 /**
@@ -79,6 +80,7 @@ export function LearningCard() {
               </div>
             </div>
           )}
+          <LearnedPreferences />
           <Switch
             checked={data.paused}
             disabled={pause.isPending}
