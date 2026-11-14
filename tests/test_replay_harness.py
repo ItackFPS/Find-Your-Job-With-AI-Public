@@ -187,6 +187,9 @@ def test_command_line_writes_a_report(tmp_path: Path) -> None:
     assert report["corpus"] == {"replay-src": 50}
     assert report["runs"][0]["status"] == "completed"
     assert "wall_minus_internal_seconds" in report["runs"][0]
+    assert report["orphans_before"]["accepted_decisions"] == 0
+    assert report["runs"][0]["new_orphans"]["accepted_decisions"] == 0
+    assert report["runs"][0]["new_orphans"]["scores"] == 0
 
 
 @pytest.mark.collection_freeze
@@ -202,3 +205,38 @@ def test_replay_runs_while_collection_is_frozen(tmp_path: Path) -> None:
         r = replay_run(work, _config(tmp_path), ReplayCorpus.from_database(seed))
     assert r.status == "completed" and r.collected == 50
     assert freeze.ENFORCED is True                      # restored after the run
+
+
+def test_inventory_counts_only_references_without_a_row(tmp_path: Path) -> None:
+    from src.decisions.models import DecisionRecord, JobMeta
+    from src.decisions.storage import DecisionStorage
+    from src.storage.runs import RunStorage
+    from tests.replay.inventory import inventory, new_orphans
+
+    db = _seed_db(tmp_path)
+    stored = ReplayCorpus.from_database(db)            # 50 stored offers
+    assert len(stored) == 50
+    st = Storage(db_path=str(db))
+    known = st._get_conn().execute("SELECT id FROM jobs LIMIT 1").fetchone()[0]
+    st.close()
+    before = inventory(db)
+    ds = DecisionStorage(str(db))
+    ds.init_db()
+    ds.write_run([
+        DecisionRecord(decision_id=f"d{i}", run_id="r", job_id=jid, decided_at="2026-11-14T00:00:00+00:00",
+                       outcome=outcome, deciding_stage="ranking", strategy_version="s", job=JobMeta(title="t"))
+        for i, (jid, outcome) in enumerate([(known, "accepted"), ("ghost", "accepted"), ("gone", "rejected")])
+    ], {})
+    ds.close()
+    rs = RunStorage(db_path=str(db))
+    rs.init_db()
+    rs.store_job_scores("r", [{"job_id": "ghost", "deterministic_score": 0.5, "semantic_score": 0.5,
+                               "final_score": 0.5, "score_breakdown": {}},
+                              {"job_id": known, "deterministic_score": 0.5, "semantic_score": 0.5,
+                               "final_score": 0.5, "score_breakdown": {}}])
+    rs.close()
+    after = inventory(db)
+    assert before["accepted_decisions"] == 0 and before["feedback_events"] == 0
+    assert after["accepted_decisions"] == 1                 # "gone" is rejected: not an orphan
+    assert after["scores"] == 1
+    assert new_orphans(before, after)["accepted_decisions"] == 1
