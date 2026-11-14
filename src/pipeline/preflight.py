@@ -154,9 +154,10 @@ _INDEED_OFF = (
 
 
 def _indeed_not_chosen(config_dir: str, settings_path: str | Path | None) -> bool:
-    """An active Indeed source the user has not chosen (plan rule I1)."""
-    from src.app_settings import unofficial_source_enabled
+    """An active Indeed source the user has not chosen (plan rule I1): configured, but off by the
+    single rule of src/source_enablement.py (Phase B B4-A)."""
     from src.discovery.registry import SourceRegistry
+    from src.source_enablement import source_enabled
 
     try:
         registry = SourceRegistry(config_path=str(Path(config_dir) / "sources.yaml"))
@@ -164,7 +165,7 @@ def _indeed_not_chosen(config_dir: str, settings_path: str | Path | None) -> boo
         logger.warning("Preflight: could not read sources.yaml: %s", exc)
         return False
     active = any(s.get("type") == "indeed" and s.get("active", True) for s in registry.all_sources)
-    return active and not unofficial_source_enabled(Path(settings_path) if settings_path else None, "indeed")
+    return active and not source_enabled("indeed", config_dir, settings_path)
 
 
 # ---------------------------------------------------------------------------

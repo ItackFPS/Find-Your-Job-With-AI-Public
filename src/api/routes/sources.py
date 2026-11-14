@@ -77,13 +77,10 @@ def _access_class(source_type: str | None) -> str | None:
 
 
 def _chosen(request: Request, name: str) -> bool:
-    """The choice in effect for an unofficial source, as the scheduler reads it (the stored
-    choice, else an observed one: plan rule I1)."""
+    """The user's choice for an unofficial source (the stored choice, else an observed one: plan
+    rule I1): what the switch shows."""
     from src.app_settings import unofficial_source_enabled
 
-    opted_in = getattr(request.app.state, "source_opted_in", None)
-    if callable(opted_in) and name in ("linkedin", "hellowork"):
-        return bool(opted_in(name))
     return unofficial_source_enabled(Path(request.app.state.settings_path), name)
 
 
@@ -112,6 +109,7 @@ def sources_overview(request: Request) -> dict[str, Any]:
     one, its result in the latest search, and its circuit breaker."""
     from src.app_settings import UNOFFICIAL_CHOICE_SOURCES, unofficial_source_chosen_at
     from src.discovery.registry import SourceRegistry
+    from src.source_enablement import source_enabled
 
     state = request.app.state
     settings_path = Path(state.settings_path)
@@ -142,7 +140,9 @@ def sources_overview(request: Request) -> dict[str, Any]:
             "name": name,
             "access_class": access,
             "available": entry["configured"],
-            "collected": entry["configured"] and (choice is None or choice["enabled"]),
+            # The single rule every consumer reads (src/source_enablement.py, Phase B B4-A).
+            "collected": source_enabled(name, state.config_dir, settings_path) if unofficial
+            else entry["configured"],
             "choice": choice,
             "last_run": None if stats is None else {
                 "started_at": run_started_at,
