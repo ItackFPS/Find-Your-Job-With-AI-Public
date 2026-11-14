@@ -68,7 +68,11 @@ CREATE TABLE IF NOT EXISTS personal_health (
 );
 """
 
-SURFACE_CODES = {"jobs": "S1", "decouverte": "S4", "search": "S2", "lanes": "S3", "external": "S5"}
+# App surface name -> ADR 0016 code. The outside-criteria lane is sent as "outside_criteria" by the Jobs
+# page (Phase B B9-A: it used to fall through to S0). "saved", "review" and "job_detail" are recorded
+# with their surface but stay S0: none of them is a ranked list whose order the evaluation can read.
+SURFACE_CODES = {"jobs": "S1", "decouverte": "S4", "search": "S2", "lanes": "S3", "outside_criteria": "S3",
+                 "external": "S5"}
 MONITOR_DAYS = 30
 
 

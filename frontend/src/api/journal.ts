@@ -103,7 +103,11 @@ export const getJobFeedback = (id: string) =>
   api.get<FeedbackEvent[]>(`/jobs/${id}/feedback`).then(r => r.data)
 export const postJobFeedback = (
   id: string,
-  body: { type: string; reasons: string[]; note?: string; decision_id?: string },
+  body: {
+    type: string; reasons: string[]; note?: string; decision_id?: string
+    /** Where the answer was given (ADR 0016 event context): surface, position. */
+    context?: Record<string, string | number | boolean>
+  },
 ) => api.post<FeedbackEvent>(`/jobs/${id}/feedback`, { ...body, source: 'ui' }).then(r => r.data)
 
 // ---- Ordered delivery and visible exposure (ADR 0015, ADR 0016) ----
