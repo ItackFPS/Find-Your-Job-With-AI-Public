@@ -330,9 +330,16 @@ class DecisionStorage:
                      AND (json_extract(d.signals_json, '$.assessment.state') = 'review'
                           OR {self._EPISODE_AUDITED})
                    {self._unanswered_clause()} {where}"""
-        total = int(conn.execute(f"SELECT COUNT(*) {base}", params).fetchone()[0])
-        rows = conn.execute(f"SELECT d.* {base} ORDER BY d.decided_at DESC, d.job_id LIMIT ? OFFSET ?",
-                            [*params, limit, offset]).fetchall()
+        # One evaluation of the queue gives the page and the total (COUNT(*) OVER () is computed over
+        # every matching row before LIMIT): the queue condition is the expensive part on a large
+        # journal. A page past the end has no row to carry the total: then it is counted.
+        rows = conn.execute(
+            f"SELECT d.*, COUNT(*) OVER () AS queue_total {base} ORDER BY d.decided_at DESC, d.job_id "
+            "LIMIT ? OFFSET ?", [*params, limit, offset]).fetchall()
+        if rows:
+            total = int(rows[0]["queue_total"])
+        else:
+            total = int(conn.execute(f"SELECT COUNT(*) {base}", params).fetchone()[0])
         return total, [self._row_to_record(r) for r in rows]
 
     def open_audit_count(self) -> int:
