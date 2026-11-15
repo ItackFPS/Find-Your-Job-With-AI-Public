@@ -49,11 +49,13 @@ def test_snapshot_evidence_matches_the_gate_module():
 
 
 def test_a_strong_challenger_activates_and_a_contradicted_one_does_not():
+    # ADR 0033: the 5 % false-activation bound forces c_het = 0.3, so even a strong challenger
+    # activates only in some histories (12 of these 20); never before G1's 14 days.
     params = G.GateParams()
     strong = [sim.first_activation(sim.snapshots(
         sim.generate(sim.Scenario("s", 0.9, 0.9, 0.9), HIGH, WIDE, np.random.default_rng(s))), params)
-        for s in range(10)]
-    assert all(d is not None and d < 90 for d in strong)
+        for s in range(20)]
+    assert sum(d is not None for d in strong) >= 10 and all(d is None or d >= 14 for d in strong)
     lb_against = [sim.first_activation(sim.snapshots(
         sim.generate(sim.Scenario("c", 0.1, 0.9, 0.9), HIGH, WIDE, np.random.default_rng(s))), params)
         for s in range(10)]

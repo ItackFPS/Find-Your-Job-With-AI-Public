@@ -107,12 +107,12 @@ def ev(pooled: tuple[int, int], lb: tuple[int, int] = (0, 0), pf: tuple[int, int
 
 
 def test_activation_needs_every_gate_and_lb():
-    strong = ev((20, 16), lb=(8, 6))
+    strong = ev((24, 20), lb=(10, 9))
     assert decide(SHADOW, OPEN, strong).state == ACTIVE
     assert decide(SHADOW, Window(10, 20), strong).state == SHADOW           # G1 days
     assert decide(SHADOW, Window(30, 5), strong).state == SHADOW            # G1 sessions
-    assert decide(SHADOW, OPEN, ev((20, 16), lb=(8, 6), positives=15)).state == SHADOW   # G2
-    assert decide(SHADOW, OPEN, ev((20, 12), lb=(8, 6))).state == SHADOW     # G3 (12/20 → 0.81)
+    assert decide(SHADOW, OPEN, ev((24, 20), lb=(10, 9), positives=15)).state == SHADOW   # G2
+    assert decide(SHADOW, OPEN, ev((24, 14), lb=(10, 9))).state == SHADOW     # G3 (14/24: e-value below 1/alpha)
     assert decide(SHADOW, Window(30, 20, guardrails_green=False), strong).state == SHADOW
     assert decide(SHADOW, Window(30, 20, pause_condition=True), strong).state == SHADOW
 
@@ -134,14 +134,14 @@ def test_g3b_blocks_contradiction_and_stratum_disagreement():
 
 def test_experimental_promotion_and_timeout():
     params = GateParams(experimental_enabled=True)
-    assert decide(EXPERIMENTAL, OPEN, ev((20, 16), lb=(8, 6)), params).state == ACTIVE
+    assert decide(EXPERIMENTAL, OPEN, ev((24, 20), lb=(10, 9)), params).state == ACTIVE
     assert decide(EXPERIMENTAL, OPEN, ev((20, 16), lb=(2, 2)), params, days_in_state=10).state == EXPERIMENTAL
     assert decide(EXPERIMENTAL, OPEN, ev((20, 16), lb=(2, 2)), params, days_in_state=60).state == SHADOW
 
 
 def test_paused_resumes_only_on_a_full_fresh_window():
-    assert decide(PAUSED, OPEN, ev((20, 16), lb=(8, 6))).state == ACTIVE
-    assert decide(PAUSED, OPEN, ev((20, 12), lb=(8, 6))).state == SHADOW
+    assert decide(PAUSED, OPEN, ev((24, 20), lb=(10, 9))).state == ACTIVE
+    assert decide(PAUSED, OPEN, ev((24, 14), lb=(10, 9))).state == SHADOW
 
 
 def test_monitor_halves_then_pauses():

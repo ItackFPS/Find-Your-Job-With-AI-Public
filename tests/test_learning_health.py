@@ -23,7 +23,7 @@ BASE_CONFIG = Path("config/personalization.yaml").read_text(encoding="utf-8")
 
 def _config(tmp_path: Path, *, activation: bool = False, extra: str = "") -> Path:
     p = tmp_path / f"personalization-{activation}-{len(extra)}.yaml"
-    text = BASE_CONFIG.replace("activation_enabled: false", f"activation_enabled: {str(activation).lower()}")
+    text = BASE_CONFIG.replace("activation_enabled: true", f"activation_enabled: {str(activation).lower()}")
     p.write_text(text + extra, encoding="utf-8")
     return p
 
@@ -70,9 +70,10 @@ def offer(path: str, fb: FeedbackStorage, job: str, at: datetime, *, surface: st
 
 
 def strong_history(path: str, fb: FeedbackStorage, start: datetime = T0, n: int = 24) -> None:
-    """24 positives over 24 half-days in distinct sessions: 20 challenger wins, 8 of them on Découverte."""
+    """24 positives over 24 half-days in distinct sessions: 20 challenger wins, 10 of them on Découverte
+    (n_LB,min = 10, ADR 0033)."""
     for i in range(n):
-        offer(path, fb, f"j{i}", start + timedelta(hours=12 * i), surface="decouverte" if i < 8 else "jobs",
+        offer(path, fb, f"j{i}", start + timedelta(hours=12 * i), surface="decouverte" if i < 10 else "jobs",
               win=i < 20)
 
 
@@ -90,8 +91,10 @@ def test_surface_mapping():
     assert H.surface_code("job_detail") == "S0" and H.surface_code("whatever") == "S0" and H.surface_code(None) == "S0"
 
 
-def test_release_flags_default_off(tmp_path):
-    assert H.load_release_flags(Path("config/personalization.yaml")) == H.ReleaseFlags()
+def test_release_flags_default_off_and_shipped_activation_on(tmp_path):
+    # Owner decision D2 (Phase B): automatic activation ships on; EXPERIMENTAL stays off. The code
+    # default stays off, so a missing file or key never activates anything.
+    assert H.load_release_flags(Path("config/personalization.yaml")) == H.ReleaseFlags(activation_enabled=True)
     assert H.load_release_flags(tmp_path / "missing.yaml") == H.ReleaseFlags()
     assert H.load_release_flags(_config(tmp_path, activation=True)).activation_enabled is True
 

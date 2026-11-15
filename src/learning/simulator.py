@@ -193,11 +193,22 @@ def _p_better(wins: int, n: int) -> float:
     return G.p_better(wins, n)
 
 
+@lru_cache(maxsize=100_000)
+def _e_value(wins: int, n: int) -> float:
+    return G.e_value(wins, n)
+
+
+def _g3(wins: int, n: int, params: G.GateParams) -> bool:
+    if params.g3_rule == "posterior":
+        return _p_better(wins, n) >= params.g3_threshold
+    return _e_value(wins, n) >= 1.0 / params.g3_alpha
+
+
 def _base_ok(s: Snapshot, params: G.GateParams) -> bool:
     ev = s.evidence
     return (s.day + 1 >= params.min_days and s.sessions >= params.min_sessions
             and ev.positives >= params.min_positives and ev.pooled.discordant >= params.min_discordant
-            and _p_better(ev.pooled.wins, ev.pooled.discordant) >= params.g3_threshold)
+            and _g3(ev.pooled.wins, ev.pooled.discordant, params))
 
 
 def candidates(snaps: Sequence[Snapshot], params: G.GateParams) -> list[Snapshot]:
@@ -368,7 +379,8 @@ def choose_params(histories: int, seed: int, base: G.GateParams = G.GateParams()
     criterion at the worst grid point and has the highest worst-case true activation within 90 days."""
     # G2's discordant minimum may be raised (ADR 0019: revise G2 or the cap, never G3). A c_contra
     # below 0.5 means LB must lean towards the challenger, not merely fail to contradict it.
-    grid = grid or {"n_lb_min": (4, 6, 10), "c_contra": (0.2, 0.5, 0.8), "c_het": (0.5, 0.8),
+    # Widened with the e-value G3 (ADR 0033): c_contra 0.1, c_het 0.3 and n_LB,min 15 added.
+    grid = grid or {"n_lb_min": (4, 6, 10, 15), "c_contra": (0.1, 0.2, 0.5, 0.8), "c_het": (0.3, 0.5, 0.8),
                     "margin": (0.0, 0.1), "min_discordant": (12, 30), "per_session_cap": (1, 3)}
     seeds = [seed + i for i in range(histories)]
     by_cap: dict[int, dict[tuple[str, str, str], list[tuple[list[Snapshot], int]]]] = {}
@@ -479,16 +491,17 @@ def evaluate(params: G.GateParams, histories: int, seed: int, days: int = 180) -
 
 
 def g3_sensitivity(params: G.GateParams, seeds: Sequence[int], days: int = 180,
-                   thresholds: Sequence[float] = (0.95, 0.99, 0.995)) -> list[tuple[float, float, str, dict[str, float]]]:
-    """Diagnostic only: ADR 0019 fixes G3 at 0.95, so a different threshold is the owner's decision.
-    → per threshold: worst false activation (baseline, SR-1, SR-2), where, and true activation within
-    90 days at typical activity per click model."""
+                   thresholds: Sequence[float] = (0.95, 0.99, 0.995)) -> list[tuple[str, float, str, dict[str, float]]]:
+    """Diagnostic: the G3 in use (ADR 0033: anytime-valid e-value) against the former fixed posterior
+    at several thresholds. → per rule: worst false activation (baseline, SR-1, SR-2), where, and true
+    activation within 90 days at typical activity per click model."""
     false_scs = [s for s in _scenarios() if s.name not in ("true-0.70", "SR-3")]
     snaps = {(sc.name, a.name, c.name): _snaps_for(sc, a, c, seeds, days, params.per_session_cap)
              for sc in [*false_scs, Scenario("true-0.70", 0.7, 0.7, 0.7)] for a in ACTIVITIES for c in CLICK_GRID}
     out = []
-    for t in thresholds:
-        p = replace(params, g3_threshold=t)
+    rules = [(f"e-value ≥ {1 / params.g3_alpha:g} (α = {params.g3_alpha})", replace(params, g3_rule="e_process"))]
+    rules += [(f"posterior ≥ {t}", replace(params, g3_rule="posterior", g3_threshold=t)) for t in thresholds]
+    for label, p in rules:
         worst, where = 0.0, ""
         true90: dict[str, float] = {}
         for (name, act, click), runs in snaps.items():
@@ -500,7 +513,7 @@ def g3_sensitivity(params: G.GateParams, seeds: Sequence[int], days: int = 180,
             rate = sum(d is not None for d in first) / len(runs)
             if rate > worst:
                 worst, where = rate, f"{name}, {act}, {click}"
-        out.append((t, worst, where, true90))
+        out.append((label, worst, where, true90))
     return out
 
 
@@ -537,7 +550,8 @@ def render(rep: Report, search: dict | None = None) -> str:
                          "its placeholders and activation must stay off (see the verdict)."),
         f"- Fixed gates: G1 ≥ {p.min_days} days and ≥ {p.min_sessions} sessions; G2 ≥ {p.min_positives} "
         f"positives and ≥ {p.min_discordant} discordant (≤ {p.per_session_cap} per session, searched); "
-        f"G3 ≥ {p.g3_threshold}. EXPERIMENTAL ships disabled.",
+        + (f"G3 e-value ≥ {1 / p.g3_alpha:g} (anytime-valid, α = {p.g3_alpha}, ADR 0033)" if p.g3_rule == "e_process"
+           else f"G3 posterior ≥ {p.g3_threshold}") + ". EXPERIMENTAL ships disabled.",
     ]
     if search:
         lines.append(f"- Search: worst false activation {search['false']:.1%}, worst SR-3 block "
@@ -551,15 +565,27 @@ def render(rep: Report, search: dict | None = None) -> str:
     if not failed:
         lines.append("Every criterion is met on the synthetic grid.")
     else:
-        lines += [f"Not met: {'; '.join(failed)}. Activation (ACTIVE) must not be enabled on these results.", "",
-                  "- **False activation.** The rule is evaluated after every session, so a fixed 0.95 posterior is "
-                  "tested repeatedly over 180 days (optional stopping). At high activity the joint gates are crossed "
-                  "by chance more than 5 % of the time even with independent outcomes, and more under SR-1/SR-2. "
-                  "G3b, G2 and the per-session cap (the levers ADR 0019 allows) reduce it but do not reach 5 %; the "
-                  "G3 diagnostic below shows a stricter threshold alone does not either. A side experiment that "
-                  "evaluated the rule only every 14 or 30 days still exceeded 5 % (16 % at 30 days). Remaining "
-                  "options, untested here and each an ADR 0019 change: a sequential test (an error budget spent "
-                  "across looks), or keeping activation off.",
+        power = "true activation ≥ 80 % within 90 days (0.70, typical)"
+        if p.g3_rule == "e_process" and failed == [power]:
+            lines += [f"Not met: {power}. Every safety criterion is met, so activation may be enabled (ADR 0033, "
+                      "owner decision D2); few users will reach ACTIVE within 90 days, and production stays the "
+                      "default for everyone else.", ""]
+        else:
+            lines += [f"Not met: {'; '.join(failed)}. Activation (ACTIVE) must not be enabled on these results.", ""]
+        if p.g3_rule == "e_process":
+            lines += ["- G3 is the anytime-valid e-value (ADR 0033): with independent outcomes its false activation "
+                      "is at most α whatever the number of looks; a failure above comes from correlated outcomes or "
+                      "self-reinforcement, or from too little evidence for true activation."]
+        if p.g3_rule == "posterior":
+            lines += ["- **False activation.** The rule is evaluated after every session, so a fixed 0.95 posterior is "
+                      "tested repeatedly over 180 days (optional stopping). At high activity the joint gates are crossed "
+                      "by chance more than 5 % of the time even with independent outcomes, and more under SR-1/SR-2. "
+                      "G3b, G2 and the per-session cap (the levers ADR 0019 allows) reduce it but do not reach 5 %; the "
+                      "G3 diagnostic below shows a stricter threshold alone does not either. A side experiment that "
+                      "evaluated the rule only every 14 or 30 days still exceeded 5 % (16 % at 30 days). Remaining "
+                      "options, untested here and each an ADR 0019 change: a sequential test (an error budget spent "
+                      "across looks), or keeping activation off."]
+        lines += [
                   "- **True activation.** ACTIVE needs n_LB,min discordant LB positives. At typical activity the LB "
                   "share of positives (Découverte and date/distance-sorted search) yields only a few within 90 "
                   "days, so the 0.70 challenger rarely reaches ACTIVE in time. This depends on real LB volumes "
@@ -577,8 +603,8 @@ def render(rep: Report, search: dict | None = None) -> str:
               "| Activity | Halved within 120 d | Paused within 120 d |", "|---|---|---|"]
     lines += [f"| {k} | {h:.1%} | {p_:.1%} |" for k, (h, p_) in rep.adversarial.items()]
     if rep.sensitivity:
-        lines += ["", "## Diagnostic: G3 threshold (owner decision; ADR 0019 fixes 0.95)", "",
-                  "| G3 threshold | Worst false activation | Where | True activation within 90 d (typical) |",
+        lines += ["", "## Diagnostic: G3 rule (ADR 0033 e-value; the former posterior for comparison)", "",
+                  "| G3 rule | Worst false activation | Where | True activation within 90 d (typical) |",
                   "|---|---|---|---|"]
         lines += [f"| {t} | {w:.1%} | {where} | " + "; ".join(f"{k} {v:.1%}" for k, v in tr.items()) + " |"
                   for t, w, where, tr in rep.sensitivity]

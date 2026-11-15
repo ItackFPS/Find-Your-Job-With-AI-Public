@@ -12,10 +12,11 @@ After the shadow block of each run, :func:`update_health`:
 3. stores the result in ``personal_health`` (one row).
 
 **Release flags.** ``activation_enabled`` and ``experimental_enabled`` (``personal_model.activation``
-in ``config/personalization.yaml``) are both off. With activation off the decision is recorded
-(``decision.state`` shows what the rule would allow) but the stored state never leaves SHADOW: the
-L3 simulator found the rule misses its criteria (``docs/reports/2026-11-05-l3-simulator.md``), and
-enabling it is the owner's decision.
+in ``config/personalization.yaml``). Activation ships on (owner decision D2, ADR 0033: the rule's G3
+is anytime-valid and the simulator met every false-activation criterion,
+``docs/reports/2026-11-15-sequential-activation.md``); EXPERIMENTAL ships off. With activation off
+(an older configuration file) the decision is recorded (``decision.state`` shows what the rule would
+allow) but the stored state never leaves SHADOW.
 
 Both tables are derived personal data (ADR 0015): Reset learning clears them. A change of the
 model's algorithm or configuration returns an ACTIVE or EXPERIMENTAL state to SHADOW (ADR 0019:
