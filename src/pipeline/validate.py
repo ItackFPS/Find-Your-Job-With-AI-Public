@@ -6,10 +6,9 @@ none of a description, a location or a salary.
 
 It rarely rejects anything in practice (Phase B B10, P-006: ``validated == collected`` in the audited
 runs), and that is expected: some collectors already skip entries without a title (EURES, for
-example) and normalisation turns an
-empty company into ``None`` (an anonymous posting), so malformed offers seldom reach this stage. It
-stays as the last guard for a collector that does not; ``tests/test_validation_stage.py`` pins the
-rules.
+example) and normalisation turns an empty company into ``None`` (an anonymous posting), so
+malformed offers seldom reach this stage. It stays as the last guard for a collector that does not;
+``tests/test_validation_stage.py`` pins the rules.
 """
 
 from __future__ import annotations
