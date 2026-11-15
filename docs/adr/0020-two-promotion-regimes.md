@@ -1,6 +1,7 @@
 # 0020 — Personal learning updates itself within bounds; global strategy changes still need the lab
 
-Status: accepted (2026-11-05). Amends ADR 0011. Not implemented yet (stage L4).
+Status: accepted (2026-11-05). Amends ADR 0011. Implemented with ADR 0018/0019: the personal model
+runs outside the lab, bounded by `cap(n)`.
 Source: `docs/design/learning-architecture-decisions.md` §4.4 (AD-4), with the v1
 proposal's AD-4.
 

@@ -7,7 +7,7 @@ import type { TFunction } from 'i18next'
 import i18n from '../i18n'
 import { Card, StatusBadge, SourceStatus, FunnelChart, DataTable, EmptyState, LoadingState, type DataTableColumn, type FunnelRow } from '../components'
 import { findPipelineStage } from '../config/pipelineStages'
-import { formatDuration, formatElapsedBetween, formatDateTime } from '../utils'
+import { formatDuration, formatElapsedBetween, formatDateTime, runWallSeconds } from '../utils'
 
 // Percentage drop from one funnel stage to the next, rendered as a small
 // callout under the row it dropped INTO. Display-only — recomputes nothing,
@@ -196,7 +196,11 @@ function RunDetailPanel({ run }: { run: PipelineRun }) {
       <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)', marginBottom: 'var(--space-4)', display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap', alignItems: 'center' }}>
         <span>{t('pipeline.started', { date: started })}</span>
         {ended && <span>{t('pipeline.ended', { date: ended })}</span>}
-        {s.duration_seconds > 0 && <span>{t('pipeline.duration', { duration: formatDuration(s.duration_seconds) })}</span>}
+        {(runWallSeconds(run) ?? 0) > 0 && <span>{t('pipeline.duration', { duration: formatDuration(runWallSeconds(run)) })}</span>}
+        {s.duration_seconds > 0 && (s.post_seconds ?? 0) > 0 && (
+          <span data-testid="duration-detail">{t('pipeline.durationDetail', {
+            pipeline: formatDuration(s.duration_seconds), post: formatDuration(s.post_seconds) })}</span>
+        )}
         {s.use_ai && <span style={{ color: 'var(--color-accent)' }}>{t('pipeline.aiBadge')}</span>}
       </div>
 
@@ -285,7 +289,7 @@ function RunHistoryRow({ run, selected, onToggle }: { run: PipelineRun; selected
       onToggle={onToggle}
       right={
         <>
-          <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>{formatDuration(run.stats.duration_seconds)}</span>
+          <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>{formatDuration(runWallSeconds(run))}</span>
           <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>{t('pipeline.ranked', { count: run.stats.personalized })}</span>
         </>
       }

@@ -78,12 +78,20 @@ def _confirm(summary: str) -> bool:
     return typed.strip() == code
 
 
-def _split(dataset: Dataset, split: str | None) -> Dataset:
+def _split(dataset: Dataset, split: str | None, *, candidate: str | None = None, what: str = "lab") -> Dataset:
     """``dataset`` restricted to ``split``; by default a real dataset's tuning part, so exploring and trying
-    variants never touch the held-out labels that judge pre-registered changes (P2.4)."""
+    variants never touch the held-out labels that judge pre-registered changes (P2.4).
+
+    Reading a real dataset's held-out labels (split heldout or all) needs a named pre-registered candidate
+    and is logged in the dataset's usage log (owner decision D4, src/evaluation/heldout_guard.py)."""
+    from src.evaluation import heldout_guard
     from src.evaluation.heldout import restrict
 
-    return restrict(dataset, split or ("tuning" if dataset.manifest.kind == "real" else "all"))  # type: ignore[arg-type]
+    chosen = split or ("tuning" if dataset.manifest.kind == "real" else "all")
+    heldout_guard.authorise(dataset.manifest.kind, chosen, candidate)
+    if heldout_guard.reads_heldout(dataset.manifest.kind, chosen):
+        heldout_guard.log_use(dataset.path, dataset, chosen, str(candidate), "lab", what)
+    return restrict(dataset, chosen)  # type: ignore[arg-type]
 
 
 def _approval_summary(evidence: dict[str, Any]) -> str:
@@ -176,11 +184,15 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--base-config", default=ACTIVE)
     r.add_argument("--profile", default=None, help="profile to replay with when the dataset pins none")
     r.add_argument("--split", choices=("all", "heldout", "tuning"), default=None, help="labels to use (src/evaluation/heldout.py); default: tuning for a real dataset, all otherwise")
+    r.add_argument("--preregistered", default=None,
+                   help="held-out runs of a real dataset: the pre-registered candidate tested (docs/lab/preregistered/<id>.json)")
     a = sub.add_parser("approve", help="HUMAN approval of an eligible experiment")
     a.add_argument("experiment_id")
     a.add_argument("--dataset", required=True, help="the experiment's dataset: its evidence is recomputed from it")
     a.add_argument("--profile", default=None, help="profile the experiment was replayed with, if the dataset pins none")
     a.add_argument("--split", choices=("all", "heldout", "tuning"), default=None, help="labels to use (src/evaluation/heldout.py); default: tuning for a real dataset, all otherwise")
+    a.add_argument("--preregistered", default=None,
+                   help="held-out approval of a real dataset: the pre-registered candidate (docs/lab/preregistered/<id>.json)")
     a.add_argument("--accept-exploratory-evidence", action="store_true",
                    help="approve although the evidence is not independently validated (recorded)")
     a.add_argument("--by", required=True)
@@ -313,7 +325,8 @@ def main(argv: list[str] | None = None) -> int:
                 print(lab.add_candidate(ns.hypothesis_id, digest, str(path), ov))
             elif ns.cmd == "run":
                 cand = lab.get_candidate(ns.candidate_id)
-                ds = _split(load_dataset(ns.dataset, require_complete_labels=False), ns.split)
+                ds = _split(load_dataset(ns.dataset, require_complete_labels=False), ns.split,
+                            candidate=ns.preregistered, what=f"lab run {ns.candidate_id}")
                 res = run_experiment(ds, StrategyRef(config_dir=_base_config(ns), profile_path=ns.profile),
                                      cand["bundle_path"], name=ns.candidate_id)
                 eid = lab.add_experiment(ns.candidate_id, ds.manifest.model_dump(), res)
@@ -350,7 +363,8 @@ def main(argv: list[str] | None = None) -> int:
                     stale = "" if item["stale"] is None else (" STALE" if item["stale"] else "")
                     print(f"{item['item_id']}  {item['kind']:<11} {item['status']:<10}{stale}  {item['statement'][:160]}")
             elif ns.cmd == "approve":
-                ds = _split(load_dataset(ns.dataset, require_complete_labels=False), ns.split)
+                ds = _split(load_dataset(ns.dataset, require_complete_labels=False), ns.split,
+                            candidate=ns.preregistered, what=f"lab approve {ns.experiment_id}")
                 print(f"re-running experiment {ns.experiment_id} on {ds.path} (the lab's stored verdict is not trusted)...",
                       file=sys.stderr)
 

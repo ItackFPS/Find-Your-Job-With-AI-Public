@@ -22,7 +22,7 @@ from src.collectors.base import (
 )
 from src.collectors.canary import PARSER_CHANGED, has_canary, parse_fixture, parser_canary
 from src.collectors.registry import CollectorRegistry
-from src.collectors.weworkremotely import WeWorkRemotelyCollector
+from src.discovery.presets import load_presets
 from src.pipeline.normalize import normalize_jobs
 
 REGISTRY = CollectorRegistry()
@@ -226,14 +226,18 @@ def test_france_travail_web_reuses_the_shared_parser() -> None:
     assert france_travail_web.robots_allows is robots.robots_allows
 
 
+# The occupation codes and feed categories these collectors need come from the IT preset: the
+# orchestrator passes them in as config (src/discovery/presets.py), no collector has a default.
+_IT = next(p for p in load_presets() if p.name == "it").collector_config
+_FT_OCCUPATIONS = _IT["france_travail_web"]["occupations"]
+
 # -- no public_page collector requests a disallowed URL (fake transport) -----------------
 
 _FEED_URL = "https://jobs.example.org/feed.rss"
 PUBLIC_PAGE_CONFIGS: dict[str, dict[str, Any]] = {
-    "france_travail_web": {"target_domains": ["web_development"], "departments": ["83"]},
+    "france_travail_web": {"occupations": _FT_OCCUPATIONS, "target_domains": ["web_development"], "departments": ["83"]},
     "hellowork": {"metier_slugs": ["developpeur"]},
     "eures": {"queries": [{"keyword": "python", "location_codes": ["fr"]}], "max_pages_per_query": 1},
-    "weworkremotely": {"category_rss": False},
     "remote": {"type": "rss", "careers_url": _FEED_URL},
     "rss": {"type": "rss", "careers_url": _FEED_URL},
     "workingnomads": {},
@@ -330,7 +334,7 @@ def test_unreadable_robots_txt_means_nothing_is_requested(monkeypatch) -> None: 
     web = _FakeWeb("", lambda url: "")
     web.install(monkeypatch)
     monkeypatch.setattr(robots, "fetch_robots_txt", fetch)
-    result = _make("weworkremotely", {"category_rss": False}).collect()
+    result = _make("rss", PUBLIC_PAGE_CONFIGS["rss"]).collect()
     assert web.urls == []
     assert result.jobs == [] and "robots.txt unavailable (HTTP 503)" in result.errors[0]
 
@@ -347,7 +351,7 @@ def test_robots_and_sitemap_answers_are_not_pages_served(monkeypatch) -> None:  
     profile's département) is not a parser change, however large the sitemap."""
     web = _FakeWeb("User-agent: *\nAllow: /\n" + "# padding\n" * 400, lambda url: _BIG_SITEMAP)
     web.install(monkeypatch)
-    collector = _make("france_travail_web", {"target_domains": ["web_development"], "departments": ["13"]})
+    collector = _make("france_travail_web", {"occupations": _FT_OCCUPATIONS, "target_domains": ["web_development"], "departments": ["13"]})
     result = collector.collect()
     assert result.jobs == [] and len(_BIG_SITEMAP) > 4 * collector.canary_min_bytes
     assert parser_canary(collector, 0) is None
@@ -359,7 +363,7 @@ def test_a_served_listing_page_without_offers_is_still_flagged(monkeypatch) -> N
     web = _FakeWeb("User-agent: *\nAllow: /\n",
                    lambda url: _FT_SITEMAP if url.endswith(".xml") else redesigned)
     web.install(monkeypatch)
-    collector = _make("france_travail_web", {"target_domains": ["web_development"], "departments": ["83"]})
+    collector = _make("france_travail_web", {"occupations": _FT_OCCUPATIONS, "target_domains": ["web_development"], "departments": ["83"]})
     assert collector.collect().jobs == []
     assert parser_canary(collector, 0) == PARSER_CHANGED
 
@@ -378,8 +382,6 @@ def test_a_listing_that_genuinely_lists_no_offer_is_not_flagged(monkeypatch) -> 
 @pytest.mark.parametrize("name,body", [
     ("eures", json.dumps({"numberRecords": 0, "jvs": [], "facets": {"pad": "x" * 5000}})),
     ("workingnomads", "[]" + " " * 5000),
-    ("weworkremotely", '<?xml version="1.0"?><rss version="2.0"><channel><title>WWR</title>'
-                       + "<!-- pad -->" * 500 + "</channel></rss>"),
 ])
 def test_well_formed_empty_answers_are_not_parser_changes(name: str, body: str, monkeypatch) -> None:  # noqa: ANN001
     web = _FakeWeb("User-agent: *\nAllow: /\n", lambda url: body)
@@ -396,7 +398,7 @@ def test_no_http_answer_at_all_is_reported_as_unreachable(monkeypatch) -> None: 
     web = _FakeWeb("", lambda url: "")
     web.handler = refuse  # type: ignore[method-assign]
     web.install(monkeypatch)
-    collector = _make("weworkremotely", {"category_rss": False})
+    collector = _make("rss", PUBLIC_PAGE_CONFIGS["rss"])
     assert collector.collect().jobs == []
     health = collector.health()
     assert health["network_errors"] >= 1 and health["responses"] == 0
@@ -450,19 +452,6 @@ def test_robots_refusal_is_not_counted_as_a_request(monkeypatch) -> None:  # noq
     with pytest.raises(RobotsDisallowed):
         collector._before_request("https://site.example/a")
     assert collector.health()["requests"] == 0 and collector.health()["robots_refused"] == 1
-
-
-def test_a_collector_reaching_its_cap_still_returns_what_it_read(monkeypatch) -> None:  # noqa: ANN001
-    monkeypatch.setattr(WeWorkRemotelyCollector, "rate_policy", RatePolicy(min_delay_seconds=1.0,
-                                                                          max_requests_per_run=2))
-    web = _FakeWeb("User-agent: *\nAllow: /\n", _fixture_page("weworkremotely"))
-    web.install(monkeypatch)
-    collector = WeWorkRemotelyCollector({})  # global feed + 6 category feeds
-    result = collector.collect()
-    assert len([u for u in web.urls if not u.endswith("/robots.txt")]) == 2
-    assert result.jobs
-    assert sum("request cap of 2 per run reached" in e for e in result.errors) == 5
-    assert collector.health()["request_cap_reached"] is True
 
 
 # -- robots.txt Crawl-delay (audit D12: EURES asks for 10 s) --------------------------------------

@@ -46,7 +46,10 @@ class QualityJobOptions(BaseModel):
     include_feedback: bool = True
     # personal only: which imported calibration set, and which of its labels (P2.4/P2.5)
     dataset_id: str | None = Field(default=None, min_length=1, max_length=64, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
-    split: Literal["heldout", "all"] = "heldout"
+    # D4 (2026-11-14): the tuning part by default; heldout / all read held-out labels and need the
+    # pre-registered candidate under test (src/evaluation/heldout_guard.py).
+    split: Literal["tuning", "heldout", "all"] = "tuning"
+    candidate: str | None = Field(default=None, min_length=1, max_length=96, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 class StartQualityJobIn(BaseModel):
@@ -83,10 +86,21 @@ def health(request: Request) -> dict[str, Any]:
 def start_job(request: Request, body: StartQualityJobIn = Body(...)) -> dict[str, Any]:
     if body.kind == "personal" and not body.options.dataset_id:
         raise HTTPException(status_code=400, detail={"code": "dataset_required"})
+    if body.kind == "personal" and body.options.split != "tuning":
+        # A calibration set is real labels: held-out reads need a pre-registered candidate (D4). Checked
+        # here without importing src.evaluation (production never imports it); the evaluation run checks
+        # again and logs the use (src/evaluation/heldout_guard.py).
+        prereg = PROJECT_ROOT / "docs" / "lab" / "preregistered"
+        known = {p.stem for p in prereg.glob("*.json")} if prereg.is_dir() else set()
+        if body.options.candidate not in known:
+            raise HTTPException(status_code=409, detail={
+                "code": "heldout_refused",
+                "message": "held-out labels are read only for a named pre-registered candidate"})
     manager = _manager(request)
     try:
         job_id = manager.start(
-            body.kind, body.options.model_dump(exclude=None if body.kind == "personal" else {"dataset_id", "split"}),
+            body.kind, body.options.model_dump(
+                exclude=None if body.kind == "personal" else {"dataset_id", "split", "candidate"}),
             db_path=request.app.state.db_path,
             config_dir=getattr(request.app.state, "config_dir", None) or "config",
             self_check_dir=_self_check_dir(request), runs_dir=_runs_dir(request))

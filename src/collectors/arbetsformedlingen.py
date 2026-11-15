@@ -32,14 +32,9 @@ logger = logging.getLogger(__name__)
 _API_URL = "https://jobsearch.api.jobtechdev.se/search"
 _HEADERS = {"Accept": "application/json"}
 
-# Broad set of tech-adjacent search terms (English terms match well since
-# many Swedish tech job ads are written in English). One request per term.
-_DEFAULT_SEARCH_TERMS = [
-    "developer",
-    "software engineer",
-    "devops",
-    "data engineer",
-]
+# No default search terms: no profession is assumed. Terms come from the source config
+# (search_terms) or from the profile's discovery queries. One request per term.
+_DEFAULT_SEARCH_TERMS: list[str] = []
 
 
 class ArbetsformedlingenCollector(BaseCollector):
@@ -53,7 +48,7 @@ class ArbetsformedlingenCollector(BaseCollector):
         super().__init__(timeout=30, retries=3, rate_limit_delay=1.0)
         cfg = config or {}
         self.max_jobs: int | None = cfg.get("max_jobs")
-        self.search_terms: list[str] = cfg.get("search_terms") or _DEFAULT_SEARCH_TERMS
+        self.search_terms: list[str] = cfg.get("search_terms") or cfg.get("discovery_queries") or _DEFAULT_SEARCH_TERMS
         self.limit: int = min(int(cfg.get("limit", 50)), 100)
 
     def collect(self) -> CollectorResult:

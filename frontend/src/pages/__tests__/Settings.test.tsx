@@ -60,9 +60,9 @@ const sources: SourceOverview[] = [
     breaker: null,
   },
   {
-    name: 'remoteok', access_class: 'official', available: true, collected: true, choice: null,
+    name: 'bundesagentur', access_class: 'official', available: true, collected: true, choice: null,
     last_run: { started_at: '2026-10-30T07:00:00+00:00', status: 'failed', reason: 'The site did not answer', collected: 0, accepted: 0, errors: 1 },
-    breaker: { source: 'remoteok', consecutive_failures: 3, paused: true, paused_until: '2026-10-30T12:00:00+00:00', last_failure_reason: 'timeout' },
+    breaker: { source: 'bundesagentur', consecutive_failures: 3, paused: true, paused_until: '2026-10-30T12:00:00+00:00', last_failure_reason: 'timeout' },
   },
   {
     name: 'indeed', access_class: 'unofficial', available: true, collected: false,
@@ -110,7 +110,7 @@ beforeEach(() => {
     'POST /privacy/erase/retry': { state: 'COMPLETE', pending: false, running: false, completed_at: '2026-11-05T11:00:00+00:00' },
     'GET /privacy/delete-all': { state: null, pending: false, running: false, restart_required: false },
     'POST /privacy/delete-all': { state: 'COMPLETE', pending: false, running: false, restart_required: true },
-    'POST /sources/remoteok/breaker/reset': { source: 'remoteok', consecutive_failures: 0, paused: false, paused_until: null, last_failure_reason: null },
+    'POST /sources/bundesagentur/breaker/reset': { source: 'bundesagentur', consecutive_failures: 0, paused: false, paused_until: null, last_failure_reason: null },
   }
 })
 
@@ -180,10 +180,10 @@ describe('Settings › Sources and background', () => {
 
   it('lets the user retry a paused source', async () => {
     renderPage()
-    const remoteok = await screen.findByRole('listitem', { name: 'Remote OK' })
-    expect(within(remoteok).getByText(/paused after 3 failures in a row/i)).toBeInTheDocument()
-    await userEvent.click(within(remoteok).getByRole('button', { name: /try again now/i }))
-    expect(calls).toContainEqual({ method: 'POST', url: '/sources/remoteok/breaker/reset', body: undefined })
+    const official = await screen.findByRole('listitem', { name: 'Bundesagentur für Arbeit' })
+    expect(within(official).getByText(/paused after 3 failures in a row/i)).toBeInTheDocument()
+    await userEvent.click(within(official).getByRole('button', { name: /try again now/i }))
+    expect(calls).toContainEqual({ method: 'POST', url: '/sources/bundesagentur/breaker/reset', body: undefined })
   })
 
   it('removes old expired offers only after a confirmation', async () => {
@@ -236,16 +236,30 @@ describe('Settings › Sources and background', () => {
     expect(calls).toContainEqual({ method: 'POST', url: '/privacy/learning/reset', body: { confirm: true } })
   })
 
+  it('keeps the tracker and the calibration answers by default (owner decision D6)', async () => {
+    renderPage()
+    expect(await screen.findByRole('checkbox', { name: 'Keep my application tracker' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Also erase my calibration answers' })).not.toBeChecked()
+    await userEvent.click(screen.getByRole('button', { name: 'Erase my activity' }))
+    const dialog = screen.getByRole('alertdialog', { name: 'Erase my activity' })
+    routes['GET /privacy/erase'] = routes['POST /privacy/erase']
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Erase' }))
+    expect(calls).toContainEqual({
+      method: 'POST', url: '/privacy/erase', body: { confirm: true, keep_tracker: true, erase_calibration: false },
+    })
+  })
+
   it('erases activity only after a confirmation, with the chosen options', async () => {
     renderPage()
     await userEvent.click(await screen.findByRole('checkbox', { name: 'Keep my application tracker' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Also erase my calibration answers' }))
     await userEvent.click(screen.getByRole('button', { name: 'Erase my activity' }))
     expect(calls.some(c => c.method === 'POST' && c.url === '/privacy/erase')).toBe(false)
     const dialog = screen.getByRole('alertdialog', { name: 'Erase my activity' })
     routes['GET /privacy/erase'] = routes['POST /privacy/erase']
     await userEvent.click(within(dialog).getByRole('button', { name: 'Erase' }))
     expect(calls).toContainEqual({
-      method: 'POST', url: '/privacy/erase', body: { confirm: true, keep_tracker: true, erase_calibration: true },
+      method: 'POST', url: '/privacy/erase', body: { confirm: true, keep_tracker: false, erase_calibration: true },
     })
     expect(await screen.findByText(/Erasure complete/)).toBeInTheDocument()
   })
@@ -271,7 +285,7 @@ describe('Settings › Sources and background', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Erase' }))
     expect(calls).toContainEqual({
       method: 'POST', url: '/privacy/erase',
-      body: { confirm: true, keep_tracker: false, erase_calibration: true, purge_lab: true, confirm_lab: true },
+      body: { confirm: true, keep_tracker: true, erase_calibration: false, purge_lab: true, confirm_lab: true },
     })
   })
 

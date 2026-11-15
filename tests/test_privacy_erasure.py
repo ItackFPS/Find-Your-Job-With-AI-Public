@@ -68,9 +68,24 @@ def test_erasure_job_table_is_control():
     assert "feedback_events" in erasure.scope_tables() and "jobs" not in erasure.scope_tables()
 
 
+def test_the_default_scope_keeps_the_tracker_and_the_calibration_answers(db):
+    """Owner decision D6 (2026-11-14): a default erase deletes neither; the user ticks them."""
+    assert erasure.Scope() == erasure.Scope(keep_tracker=True, erase_calibration=False, purge_lab=False)
+    from src.api.routes.privacy import EraseIn
+
+    body = EraseIn(confirm=True)
+    assert (body.keep_tracker, body.erase_calibration) == (True, False)
+    erasure.request(db, erasure.Scope())
+    st = erasure.run(db)
+    assert st["state"] == "COMPLETE", st
+    assert _count(db, "SELECT COUNT(*) FROM jobs WHERE application_status = 'applied'") == 1
+    assert (Path(db).parent / "calibration" / "real-v2" / "calibration_answers.jsonl").exists()
+    assert _count(db, "SELECT COUNT(*) FROM feedback_events") == 0
+
+
 def test_full_erasure_reaches_complete_and_verifies(db):
     old = app_state.current(db)
-    erasure.request(db, erasure.Scope())
+    erasure.request(db, erasure.Scope(keep_tracker=False, erase_calibration=True))
     assert erasure.pending(db)
     st = erasure.run(db)
     assert st["state"] == "COMPLETE", st

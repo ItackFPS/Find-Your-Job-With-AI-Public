@@ -105,6 +105,11 @@ _RESTRICTION_RES = [
     re.compile(rf"\b(?:work|overlap)\s+(?:\w+\s+){{0,3}}{_US_TZ}\s+(?:business\s+)?hours\b", re.I),
 ]
 _STATE_RE = re.compile(r"\ba (?:us )?state\b", re.I)
+# A word each pattern above cannot match without, searched with the same case rules (Phase B B10,
+# P-032): a pattern whose word is absent is skipped. The patterns that start with the ~150-name area
+# alternation are otherwise tried at every word of a long description; skipping never changes a result.
+_RESTRICTION_NEEDS = [re.compile(w, re.I) for w in
+                      ("must", "work", "only", "only|open", "only", "remote", "time", "hours")]
 
 _OPEN_RES = [
     re.compile(r"\b(?:work|working)\s+from\s+anywhere\b", re.I),
@@ -132,6 +137,9 @@ _HYBRID_RES = [
     # "Work From Home (WFH) option available one day per week" counts home days.
     re.compile(r"\b(?:wfh|work from home|remote|t[ée]l[ée]travail)\W+(?:\w+\W+){0,4}?(\d|one|two|three)\s+days?\s+(?:a|per)\s+week\b", re.I),
 ]
+# The same for the hybrid patterns, in order.
+_HYBRID_NEEDS = [re.compile(w, re.I) for w in
+                 ("hybrid", "hybrid", "hybrid", "hybrid", "hybrid", "hybrid", "travail", "travail", "office", "week")]
 _NUM = {"un": 1, "one": 1, "deux": 2, "two": 2, "trois": 3, "three": 3, "quatre": 4, "four": 4}
 
 _ANYWHERE_LOC = {"anywhere", "worldwide", "global", "remote worldwide", "remote anywhere", "world"}
@@ -153,7 +161,9 @@ def _snippet(text: str, m: re.Match[str], width: int = 60) -> str:
 
 
 def _restriction(text: str) -> RemoteEligibility | None:
-    for regex in _RESTRICTION_RES:
+    for regex, need in zip(_RESTRICTION_RES, _RESTRICTION_NEEDS, strict=True):
+        if not need.search(text):
+            continue
         for m in regex.finditer(text):
             group = m.group(1) if m.groups() else None
             area = _area(group) if group else "US"  # the time-zone patterns are US ones
@@ -221,7 +231,9 @@ def explicit_restriction_areas(
 def _hybrid(text: str) -> RemoteEligibility | None:
     """Hybrid wording, preferring a match that states the number of days."""
     first: RemoteEligibility | None = None
-    for regex in _HYBRID_RES:
+    for regex, need in zip(_HYBRID_RES, _HYBRID_NEEDS, strict=True):
+        if not need.search(text):
+            continue
         m = regex.search(text)
         if not m:
             continue

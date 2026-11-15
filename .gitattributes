@@ -18,3 +18,5 @@ tests/fixtures/ai_filter_benchmark/** text eol=lf
 
 # Pre-registered lab candidates are identified by the sha256 of their bytes (docs/lab/preregistered/README.md).
 docs/lab/preregistered/**/*.json -text
+config/discovery.yaml text eol=lf
+config/presets/*.yaml text eol=lf

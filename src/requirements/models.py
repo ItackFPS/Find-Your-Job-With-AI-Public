@@ -41,6 +41,8 @@ class EvidenceSource(str, Enum):
                           claim was independently confirmed to appear in the
                           actual job title/description (a real span was found).
                           This is "LLM interpretation of evidence that exists".
+    STRUCTURED_FIELD    — a typed field of the source (France Travail's experience
+                          requirement). Attributable to that field, not to a text span.
     LLM_UNCORROBORATED  — produced by the LLM with NO matching text found in
                           the job posting. Retained for observability/audit
                           only; per the evidence-authority rule, it can never
@@ -51,6 +53,9 @@ class EvidenceSource(str, Enum):
     HEURISTIC = "heuristic"
     LLM_CORROBORATED = "llm_corroborated"
     LLM_UNCORROBORATED = "llm_uncorroborated"
+    # A typed field of the source itself (France Travail experienceExige / experienceLibelle,
+    # src/requirements/structured.py). As trustworthy as HEURISTIC; it has no text span.
+    STRUCTURED_FIELD = "structured_field"
 
 
 class ConstraintState(str, Enum):

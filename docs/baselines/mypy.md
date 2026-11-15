@@ -6,10 +6,29 @@ untyped third-party packages).
 CI: the `mypy (advisory)` step of [`tests.yml`](../../.github/workflows/tests.yml) (reports,
 never fails) until a decision is made to make it blocking.
 
-**Status (2026-09-17): 0 errors** — `mypy src` is clean after #36, #37, #38 and
-the typing-boundary fixes for `requirements/extractor.py` and
-`pipeline/orchestrator.py`. The CI job stays advisory until a decision is made to
-make it blocking. The measurement below is the historical starting point.
+**Status (2026-11-15): 46 errors in 15 files** in CI (Linux, Python 3.12, mypy 2.3.0; CI run
+43732697419 on ce15632, `main` plus Phase B PR #230). The same `mypy src` on Windows (mypy 2.4.1)
+reports 23 errors in 10 files: the other 23 are `attr-defined` and `no-redef` errors in Windows-only
+modules (`launcher/autostart.py`, `launcher/winproc.py`, `launcher/window.py`, `ai/runtime/hardware.py`,
+`api/stop_signal.py`), which use `winreg` and `ctypes.windll` that Linux type stubs do not define.
+The CI job stays advisory. Phase B B10 (P-021) records this count; it does not fix the errors.
+
+| File | Errors (CI) |
+|---|---:|
+| `src/discovery/presets.py` | 12 |
+| `src/launcher/autostart.py` | 11 |
+| `src/ai/runtime/hardware.py` | 7 |
+| `src/launcher/winproc.py` | 3 |
+| `src/evaluation/metrics.py` | 2 |
+| `src/api/routes/settings.py` | 2 |
+| `src/privacy/erasure.py`, `src/privacy/delete_all.py`, `src/pipeline/orchestrator.py`, `src/launcher/window.py`, `src/evaluation/runner.py`, `src/evaluation/__main__.py`, `src/discovery/query_expansion.py`, `src/api/stop_signal.py`, `src/api/routes/profile.py` | 1 each |
+
+By code: `attr-defined` 21, `union-attr` 14, `arg-type` 6, `no-any-return` 3, `var-annotated` 1,
+`no-redef` 1.
+
+Earlier status (2026-09-17): 0 errors after #36, #37, #38 and the typing-boundary fixes for
+`requirements/extractor.py` and `pipeline/orchestrator.py`. The measurement below is the historical
+starting point.
 
 Measured on `main` at 42ece22 (2026-09-16) with mypy 2.3.0: `mypy src`
 

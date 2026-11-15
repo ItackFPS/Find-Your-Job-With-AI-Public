@@ -13,6 +13,9 @@ import { DomainPicker } from './profile/DomainPicker'
 import { HomePicker, LocationPreferencesEditor } from './profile/LocationEditors'
 import { fieldGroup, inputStyle, label, sectionDivider } from './profile/shared'
 
+// Kept importable from this page (existing tests import it from here).
+export { DomainPicker }
+
 const REMOTE_POLICY_KEYS: (keyof RemotePolicy)[] = ['remote_france', 'remote_eu', 'remote_worldwide', 'hybrid']
 
 const EDUCATION_LEVELS = ['bac', 'bac+1', 'bac+2', 'bac+3', 'bac+4', 'bac+5', 'bac+8']
@@ -124,7 +127,12 @@ export default function ProfilePage() {
               label={profile.focus_domain ? t('profile.fields.focusDomain') : t('profile.fields.focusSkills')}
             />
           </div>
-          <DomainPicker values={profile.target_domains} onChange={v => set('target_domains', v)} />
+          <DomainPicker
+            values={profile.target_domains}
+            onChange={v => set('target_domains', v)}
+            occupations={profile.target_occupations ?? []}
+            onOccupationsChange={v => set('target_occupations', v)}
+          />
         </div>
 
         <hr style={sectionDivider} />

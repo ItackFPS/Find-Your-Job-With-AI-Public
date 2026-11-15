@@ -76,8 +76,10 @@ def _normalised(result) -> dict:
     stats = result.stats.to_dict()
     for k in ("stage_times", "duration_seconds", "decisions", "stage_progress", "preflight",
               "embedding_cache_hits", "embedding_cache_misses",
-              "personalization_cache_hits", "personalization_cache_misses"):
+              "personalization_cache_hits", "personalization_cache_misses", "post_seconds"):
         stats.pop(k, None)
+    for row in stats.get("by_source", {}).values():   # per-source collection time (B7-B)
+        row.pop("seconds", None)
     return {
         "scored": [(r.job_id, r.final_score, r.deterministic_score, r.semantic_score, r.factors,
                     r.personalization_adjustment) for r in result.scored_jobs],
@@ -99,6 +101,15 @@ def on(tmp_path_factory):
 def test_journal_changes_nothing_observable(off, on):
     assert _normalised(off[0]) == _normalised(on[0])
     assert len(on[0].scored_jobs) > 10 and len(on[0].rejection_records) > 10   # non-trivial run
+
+
+def test_journal_write_time_is_recorded_as_its_own_stage(off, on):
+    """B1-B: the journal write is timed as stage ``journal``, whether or not the journal is enabled,
+    and is persisted with the run's stats."""
+    for result in (off[0], on[0]):
+        t = result.stats.stage_times.get("journal")
+        assert isinstance(t, float) and t >= 0.0
+        assert "journal" in result.stats.to_dict()["stage_times"]
 
 
 def test_disabled_journal_writes_no_rows(off):

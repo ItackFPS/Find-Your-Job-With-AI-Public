@@ -154,3 +154,18 @@ class TestApiRejectsTypoInOnDiskProfile:
         r = client.put("/api/profile", json={"freshness_days": 14})
         assert r.status_code == 200
         assert r.json()["freshness_days"] == 14
+
+
+class TestTargetOccupations:
+    def test_absent_means_empty_so_older_profiles_still_load(self) -> None:
+        assert JobSearchProfile(target_domains=["infirmier"]).target_occupations == []
+
+    def test_occupation_round_trips_with_its_french_label(self) -> None:
+        profile = JobSearchProfile(target_occupations=[
+            {"label": "nurse", "keyword": "nurse", "label_fr": "infirmier"}])
+        again = JobSearchProfile.model_validate(profile.model_dump())
+        assert again.target_occupations[0].label_fr == "infirmier"
+
+    def test_unknown_occupation_fields_are_still_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            JobSearchProfile(target_occupations=[{"label": "nurse", "bogus": 1}])

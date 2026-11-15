@@ -80,7 +80,8 @@ def test_the_lab_defaults_to_the_tuning_part_of_a_real_dataset(tmp_path):
 
     real = load_split(_real(tmp_path, 50, 50))
     assert split_of(_split(real, None)) == "tuning"
-    assert split_of(_split(real, "heldout")) == "heldout"
+    # held-out labels of a real dataset only for a named pre-registered candidate (owner decision D4)
+    assert split_of(_split(real, "heldout", candidate="2026-10-30-h1-distance-first-in-order")) == "heldout"
     synth = load_dataset(DS)
     assert _split(synth, None) is synth
     assert split_of(_split(dataclasses.replace(synth), "tuning")) == "tuning"

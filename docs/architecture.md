@@ -69,6 +69,16 @@ detail page shows the record (supporting / against / unknown / conflicts). Confi
 `config/decisions.yaml`. See
 [ADR 0008](adr/0008-decision-journal.md).
 
+**Growth and retention** (Phase B B10, P-009; measured 2026-11-15 on the audit copy, an estimate beyond
+that). The journal is the largest part of `jobs.db`: on the audit copy, 54,083 decision rows over 7 runs
+take about 160 MB of row data (about 3 KB each) and 20,714 snapshots about 42 MB. A full daily run of the
+audited size (run `5f38fef7`: 17,871 decisions) adds about 50 MB. Retention is applied after each run and
+tested (`tests/test_decision_journal_storage.py`): snapshot text goes after `text_retention_days` (60) and
+decision rows after `record_retention_days` (365). At that size, a year of daily runs would therefore hold
+roughly 18 GB of journal rows before it levels off: this is a projection, not a measurement. Lowering
+`record_retention_days`, or not journaling an unchanged rejection again, are the levers; each changes what
+can be audited later and is a decision of its own.
+
 ## Disagreement and abstention
 
 `src/decisions/disagreement.py` compares the deterministic fit, semantic similarity, Phase 2
@@ -104,7 +114,7 @@ not counted).
 | Stage | Module | Purpose |
 |---|---|---|
 | Discovery | `src/discovery/registry.py` | Loads and validates source configurations from `config/sources.yaml` |
-| Query expansion | `src/discovery/query_expansion.py` | Generates multilingual search terms per source: a hardcoded baseline plus optional profile-/LLM-derived additions, capped at `max_queries` (default 12) |
+| Query expansion | `src/discovery/query_expansion.py` | Generates multilingual search terms per source: the applicable preset's baseline (`config/presets/`) plus the profile's own terms and optional LLM-derived additions, capped at `max_queries` (default 12) |
 | Collection | `src/collectors/*.py` | Fetches raw jobs from each active source; never raises — returns a `CollectorResult` with `.errors` populated on failure |
 | Normalization | `src/pipeline/normalize.py` | Maps source-specific data to the unified `Job` Pydantic model |
 | Validation | `src/pipeline/validate.py` | Checks required fields and data integrity |
@@ -129,9 +139,6 @@ orchestrator loads collectors dynamically based on the `type` field in
 | Type | File | Status |
 |---|---|---|
 | `france_travail` | `france_travail.py` | Active — OAuth2 REST API, bounded concurrency, exhaustive pagination |
-| `remoteok` | `remoteok.py` | Active — unauthenticated REST API |
-| `jobicy` | `jobicy.py` | Active — unauthenticated REST API |
-| `weworkremotely` | `weworkremotely.py` | Active — RSS/Atom feeds |
 | `indeed` | `indeed.py` | Active — unofficial mobile GraphQL API, cursor-based pagination |
 | `eures` | `eures.py` | Active — public REST API |
 | `bundesagentur` | `bundesagentur.py` | Disabled — Germany-only, fails this project's location filter |

@@ -1,9 +1,9 @@
 """Forwarding headers cannot get a request past the local-only guards.
 
 uvicorn trusts ``X-Forwarded-For``/``-Proto`` from loopback by default and
-rewrites the client address and scheme. In the default configuration
-(``API_SAME_USER_ONLY`` off, so the peer guard that refuses these headers is
-not active) nothing may depend on what they say: the Host guard (DNS
+rewrites the client address and scheme. With ``API_SAME_USER_ONLY=0`` (the peer
+guard that refuses these headers is then not active, as in these tests) nothing
+may depend on what they say: the Host guard (DNS
 rebinding) reads the raw ``Host`` header and the write guard reads ``Origin``.
 
 The app here is the real production app object wrapped exactly like uvicorn

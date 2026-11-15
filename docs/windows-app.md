@@ -114,9 +114,9 @@ There is no installer: the app runs from its folder (which may contain spaces).
 - The backend binds to `127.0.0.1` only, and refuses requests whose `Host` is not this
   machine (DNS rebinding) and cross-site writes from web pages
   (`src/api/origin_guard.py`). It has no login: every process of every account on this
-  machine can call it. `API_SAME_USER_ONLY=1` (in `.env`) restricts it to processes of
-  your Windows account — recommended when another account (such as the isolated lab
-  agent) uses this machine; the dev server cannot be used in that mode.
+  machine could call it, so by default it serves only processes of your Windows account
+  (owner decision D5; `API_SAME_USER_ONLY=0` in `.env` turns that off). A refused request
+  gets a 403 that says why, and the backend log names the reason.
 - The stop request is a named event in your logon session; only your own processes can
   send it, and it can only stop the app.
 

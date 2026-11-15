@@ -17,6 +17,10 @@ import pytest
 os.environ["API_ALLOWED_HOSTS"] = ",".join(
     filter(None, [os.environ.get("API_ALLOWED_HOSTS", ""), "testserver"])
 )
+# The same-account guard (on by default, owner decision D5) refuses TestClient's
+# "testclient" peer, which is not a loopback address. Tests of the app turn it off here;
+# tests/test_api_peer_guard.py exercises the guard itself, on real loopback connections.
+os.environ.setdefault("API_SAME_USER_ONLY", "0")
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _REAL_CONFIG_DIR = _REPO_ROOT / "config"
@@ -227,3 +231,13 @@ def isolated_app(tmp_path, monkeypatch):
         progress_bus=app.state.progress_bus,
     ))
     return app
+
+
+@pytest.fixture(autouse=True)
+def _collection_freeze_off_unless_marked(request, monkeypatch):
+    """The collection freeze (owner decision D7) is on in the product. Tests that run collection with
+    mocked collectors predate it and test collection itself, so it is off for them; a test marked
+    ``collection_freeze`` runs with it enforced."""
+    from src.collectors import freeze
+
+    monkeypatch.setattr(freeze, "ENFORCED", request.node.get_closest_marker("collection_freeze") is not None)

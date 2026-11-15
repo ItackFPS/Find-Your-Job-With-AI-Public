@@ -24,6 +24,16 @@ from src.api.staged_sources import (
 from src.models.job import Job
 
 
+def _chosen(tmp_path: Path) -> Path:
+    """A settings file where the user turned LinkedIn and HelloWork on (src/source_enablement.py:
+    a staged source is on only when its config provides it AND the user chose it)."""
+    import json
+
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"unofficial_sources": {"linkedin": True, "hellowork": True}}), encoding="utf-8")
+    return path
+
+
 # ---------------------------------------------------------------------------
 # Fake staging stores
 # ---------------------------------------------------------------------------
@@ -99,12 +109,12 @@ def _fake_row_to_job(row: dict[str, Any]) -> Job:
 
 class TestProtocolConformance:
     def test_linkedin_adapter_satisfies_protocol(self, tmp_path: Path):
-        adapter = LinkedInStagedSourceAdapter(db_path="x", config_dir=str(tmp_path))
+        adapter = LinkedInStagedSourceAdapter(db_path="x", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
         assert isinstance(adapter, StagedSourceAdapter)
         assert adapter.name == "linkedin"
 
     def test_hellowork_adapter_satisfies_protocol(self, tmp_path: Path):
-        adapter = HelloWorkStagedSourceAdapter(db_path="x", config_dir=str(tmp_path))
+        adapter = HelloWorkStagedSourceAdapter(db_path="x", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
         assert isinstance(adapter, StagedSourceAdapter)
         assert adapter.name == "hellowork"
 
@@ -130,7 +140,7 @@ class TestLinkedInStagedSourceAdapter:
         fake_job_store = FakeJobStore("x")
         self._patch_stores(monkeypatch, fake_staging, fake_job_store)
 
-        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path))
+        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
         jobs = adapter.snapshot_for_run("run-1")
 
         assert jobs == []
@@ -143,7 +153,7 @@ class TestLinkedInStagedSourceAdapter:
         fake_job_store = FakeJobStore("x")
         self._patch_stores(monkeypatch, fake_staging, fake_job_store)
 
-        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path))
+        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
         jobs = adapter.snapshot_for_run("run-1")
 
         assert jobs == []
@@ -157,7 +167,7 @@ class TestLinkedInStagedSourceAdapter:
         fake_job_store.active_jobs = [_job("existing-1")]
         self._patch_stores(monkeypatch, fake_staging, fake_job_store)
 
-        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path))
+        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
         jobs = adapter.snapshot_for_run("run-1")
 
         ids = {j.id for j in jobs}
@@ -178,7 +188,7 @@ class TestLinkedInStagedSourceAdapter:
         fake_job_store.active_jobs = [_job("dup-1")]  # would be excluded by a real store
         self._patch_stores(monkeypatch, fake_staging, fake_job_store)
 
-        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path))
+        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
         adapter.snapshot_for_run("run-1")
 
         assert fake_job_store.calls[0][1] == {"dup-1"}
@@ -190,7 +200,7 @@ class TestLinkedInStagedSourceAdapter:
         fake_job_store = FakeJobStore("x")
         self._patch_stores(monkeypatch, fake_staging, fake_job_store)
 
-        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path))
+        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
         adapter.snapshot_for_run("run-1")  # no linkedin.yaml -> disabled
         adapter.finalize("run-1", {"x"}, succeeded=True)
 
@@ -204,7 +214,7 @@ class TestLinkedInStagedSourceAdapter:
         fake_job_store = FakeJobStore("x")
         self._patch_stores(monkeypatch, fake_staging, fake_job_store)
 
-        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path))
+        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
         adapter.snapshot_for_run("run-1")
         adapter.finalize("run-1", {"j1"}, succeeded=True)
 
@@ -219,7 +229,7 @@ class TestLinkedInStagedSourceAdapter:
         fake_job_store = FakeJobStore("x")
         self._patch_stores(monkeypatch, fake_staging, fake_job_store)
 
-        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path))
+        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
         adapter.snapshot_for_run("run-1")
         adapter.finalize("run-1", set(), succeeded=False)
 
@@ -232,7 +242,7 @@ class TestLinkedInStagedSourceAdapter:
         fake_job_store = FakeJobStore("x")
         self._patch_stores(monkeypatch, fake_staging, fake_job_store)
 
-        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path))
+        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
         adapter.snapshot_for_run("run-1")
         adapter.close()
 
@@ -240,7 +250,7 @@ class TestLinkedInStagedSourceAdapter:
 
     def test_close_is_a_noop_when_never_snapshotted(self, tmp_path: Path):
         """No exception when close() is called without ever calling snapshot_for_run."""
-        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path))
+        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
         adapter.close()  # must not raise
 
     def test_snapshot_failure_fails_open(self, tmp_path: Path, monkeypatch):
@@ -253,7 +263,7 @@ class TestLinkedInStagedSourceAdapter:
 
         monkeypatch.setattr("src.linkedin.staging.LinkedInStagingStorage", _boom)
 
-        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path))
+        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
         jobs = adapter.snapshot_for_run("run-1")
 
         assert jobs == []
@@ -297,7 +307,7 @@ class TestHelloWorkStagedSourceAdapter:
         fake_job_store = FakeJobStore("x")
         self._patch_stores(monkeypatch, fake_staging, fake_job_store)
 
-        adapter = HelloWorkStagedSourceAdapter(db_path="db", config_dir=str(tmp_path))
+        adapter = HelloWorkStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
         jobs = adapter.snapshot_for_run("run-1")
 
         assert jobs == []
@@ -309,7 +319,7 @@ class TestHelloWorkStagedSourceAdapter:
         fake_job_store = FakeJobStore("x")
         self._patch_stores(monkeypatch, fake_staging, fake_job_store, active=False)
 
-        adapter = HelloWorkStagedSourceAdapter(db_path="db", config_dir=str(tmp_path))
+        adapter = HelloWorkStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
         jobs = adapter.snapshot_for_run("run-1")
 
         assert jobs == []
@@ -323,7 +333,7 @@ class TestHelloWorkStagedSourceAdapter:
         fake_job_store.active_jobs = [_job("hw-existing-1")]
         self._patch_stores(monkeypatch, fake_staging, fake_job_store, active=True)
 
-        adapter = HelloWorkStagedSourceAdapter(db_path="db", config_dir=str(tmp_path))
+        adapter = HelloWorkStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
         jobs = adapter.snapshot_for_run("run-1")
 
         ids = {j.id for j in jobs}
@@ -337,7 +347,7 @@ class TestHelloWorkStagedSourceAdapter:
         fake_job_store = FakeJobStore("x")
         self._patch_stores(monkeypatch, fake_staging, fake_job_store, active=True)
 
-        adapter = HelloWorkStagedSourceAdapter(db_path="db", config_dir=str(tmp_path))
+        adapter = HelloWorkStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
         adapter.snapshot_for_run("run-1")
         adapter.finalize("run-1", {"hw-1"}, succeeded=True)
 
@@ -351,7 +361,7 @@ class TestHelloWorkStagedSourceAdapter:
         fake_job_store = FakeJobStore("x")
         self._patch_stores(monkeypatch, fake_staging, fake_job_store, active=True)
 
-        adapter = HelloWorkStagedSourceAdapter(db_path="db", config_dir=str(tmp_path))
+        adapter = HelloWorkStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
         adapter.snapshot_for_run("run-1")
         adapter.finalize("run-1", set(), succeeded=False)
 
@@ -362,7 +372,7 @@ class TestHelloWorkStagedSourceAdapter:
         fake_job_store = FakeJobStore("x")
         self._patch_stores(monkeypatch, fake_staging, fake_job_store, active=False)
 
-        adapter = HelloWorkStagedSourceAdapter(db_path="db", config_dir=str(tmp_path))
+        adapter = HelloWorkStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
         adapter.snapshot_for_run("run-1")
         adapter.finalize("run-1", {"x"}, succeeded=True)
 

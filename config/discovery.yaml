@@ -1,0 +1,26 @@
+# Profession-neutral discovery vocabulary.
+#
+# Used for every profile, whatever its line of work. Profession-specific search
+# vocabulary lives in config/presets/*.yaml (one file per line of work).
+#
+# contract_terms          per source language: contract type -> word placed before each
+#                         selected domain to build a query ("stage" + "infirmier").
+# partition_vocabulary    per source type: generic role words used to split a France
+#                         Travail query that hits the API's result limit. Used only
+#                         when no preset supplies its own vocabulary.
+contract_terms:
+  fr:
+    internship: stage
+    alternance: alternance
+partition_vocabulary:
+  france_travail:
+  - assistant
+  - responsable
+  - technicien
+  - agent
+  - conseiller
+  - ingénieur
+  - opérateur
+  - chargé
+  - manager
+  - directeur

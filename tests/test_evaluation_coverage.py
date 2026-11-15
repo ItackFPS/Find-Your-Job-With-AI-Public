@@ -13,13 +13,13 @@ from src.storage.sqlite import Storage
 NOW = datetime(2026, 11, 8, 12, tzinfo=UTC)
 
 
-def _db(tmp_path, rows):
+def _db(tmp_path, rows, now=NOW):
     tmp_path.mkdir(parents=True, exist_ok=True)
     path = tmp_path / "jobs.db"
     Storage(db_path=str(path)).init_db()           # the app's own schema and migrations
     conn = sqlite3.connect(path)
     for i, (source, number, days_ago) in enumerate(rows):
-        seen = (NOW - timedelta(days=days_ago)).isoformat(timespec="seconds")
+        seen = (now - timedelta(days=days_ago)).isoformat(timespec="seconds")
         conn.execute("INSERT INTO job_provenance (job_id, source, source_job_id, url, first_seen_at, last_seen_at) "
                      "VALUES (?, ?, ?, NULL, ?, ?)", (f"job{i}", source, number, seen, seen))
     conn.commit()
@@ -62,7 +62,8 @@ def test_api_reports_the_coverage_of_the_app_database(tmp_path):
 
     from src.api.app import app
 
-    path = _db(tmp_path, [(API_SOURCE, "1", 0), (WEB_SOURCE, "1", 0), (API_SOURCE, "2", 0)])
+    # the route reads the real clock: the offers are seen today, inside its window
+    path = _db(tmp_path, [(API_SOURCE, "1", 0), (WEB_SOURCE, "1", 0), (API_SOURCE, "2", 0)], now=datetime.now(UTC))
     saved = app.state.db_path
     app.state.db_path = str(path)
     try:

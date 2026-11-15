@@ -26,6 +26,9 @@ from src.storage.runs import RunStorage
 from src.storage.sqlite import Storage
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from src.discovery.presets import DiscoveryPreset
     from src.models.profile import JobSearchProfile
 
 
@@ -69,36 +72,18 @@ class JobStatsOut(BaseModel):
     title_categories: list[TitleCategoryFacet] = []
 
 
-# A display-only grouping of the frequency facet into "skills" (languages,
-# frameworks) vs. "tools" (platforms/infra) for the Stats page — does not
-# affect matching or scoring, just how the same tag data is labeled.
-_TOOL_KEYWORDS = frozenset({
-    "docker", "git", "aws", "kubernetes", "n8n", "jira", "linux", "bash",
-    "terraform", "jenkins", "azure", "gcp", "ansible", "nginx", "grafana",
-    "prometheus", "ci/cd", "github", "gitlab",
-})
-
-# Title-category buckets mirror config/sources.yaml's Indeed `queries` groups
-# (the pipeline's own configured search terms) — used only to label real,
-# already-collected job titles, never to invent new data.
-_TITLE_CATEGORIES: list[tuple[str, list[str]]] = [
-    ("Python / Data", ["python", "data engineer", "data analyst", "data scientist"]),
-    ("Web / Backend (JS, PHP, Node)", ["javascript", " php", "node.js", "développeur web", "developpeur web"]),
-    ("Frontend / Backend / Fullstack", [
-        "frontend", "front-end", "backend", "back-end", "fullstack", "full stack",
-        "software engineer", "ingénieur logiciel", "ingenieur logiciel",
-    ]),
-    ("QA / Test / Automation", ["qa engineer", "ingénieur test", "ingenieur test", "automation engineer"]),
-    ("DevOps / Cloud", ["devops", "cloud engineer"]),
-    ("Cybersecurity", ["cybersecurity", "cybersécurité", "cybersecurite", "ingénieur sécurité", "ingenieur securite"]),
-    ("IT Support / Network", [
-        "support informatique", "administrateur système", "administrateur systeme", "ingénieur réseau", "ingenieur reseau",
-    ]),
-]
+# Stats page groupings come from the line-of-work presets that apply to the profile
+# (config/presets/*.yaml, ``stats`` section): the "tools" split of the skills facet, the
+# title buckets, and whether skills are limited to known technology names. A profile
+# outside every preset gets neutral stats: skills as collected (minus sentence-like
+# source noise) and no title buckets. Display only: nothing here affects matching or scoring.
+_MAX_SKILL_WORDS = 5
+_MAX_SKILL_CHARS = 40
 
 
 def _aggregate_tech_facets(
     skill_rows: list,
+    presets: "Sequence[DiscoveryPreset]" = (),
 ) -> tuple[list[SkillFacet], list[SkillFacet]]:
     """Roll up raw ``jobs.skills`` values into skill/tool facets for the Stats page.
 
@@ -115,14 +100,23 @@ def _aggregate_tech_facets(
     "Docker" vs "docker") are merged into one facet, using whichever raw
     casing occurred most often in the source data as the display label —
     no manually maintained capitalization table.
+
+    With no applicable preset (a profile outside IT) there is no technology list: values
+    are kept as collected, except sentence-like ones (more than ``_MAX_SKILL_WORDS``
+    words or ``_MAX_SKILL_CHARS`` characters), which are the source noise described above.
     """
+    technologies_only = any(p.technologies_only for p in presets)
+    tool_keywords = frozenset().union(*(p.tool_keywords for p in presets)) if presets else frozenset()
     counts: dict[str, int] = {}
     display_votes: dict[str, dict[str, int]] = {}
     for r in skill_rows:
         raw_name = r["name"]
         count = r["count"]
         norm = raw_name.strip().lower()
-        if norm not in KNOWN_TECHNOLOGIES:
+        if technologies_only:
+            if norm not in KNOWN_TECHNOLOGIES:
+                continue
+        elif not norm or len(norm) > _MAX_SKILL_CHARS or len(norm.split()) > _MAX_SKILL_WORDS:
             continue
         counts[norm] = counts.get(norm, 0) + count
         votes = display_votes.setdefault(norm, {})
@@ -133,7 +127,7 @@ def _aggregate_tech_facets(
     for norm, count in counts.items():
         display_name = max(display_votes[norm].items(), key=lambda kv: kv[1])[0]
         facet = SkillFacet(name=display_name, count=count)
-        (tools if norm in _TOOL_KEYWORDS else skills).append(facet)
+        (tools if norm in tool_keywords else skills).append(facet)
 
     skills.sort(key=lambda f: f.count, reverse=True)
     tools.sort(key=lambda f: f.count, reverse=True)
@@ -288,7 +282,7 @@ def list_jobs(
         # Scope to the latest completed run so the Jobs page reflects current
         # results rather than all historical accumulation.  If no run exists yet
         # (fresh install or CLI-only use), fall back to showing all stored jobs.
-        latest_run = rs.get_latest_completed_run()
+        latest_run = rs.get_latest_visible_run()
         latest_run_id = latest_run["id"] if latest_run else None
 
         run_job_ids: list[str] | None = None
@@ -337,7 +331,8 @@ def list_jobs(
             in_run = [j for j in (run_job_ids or []) if j in saved]
             run_job_ids = in_run + sorted(saved - set(in_run))
         exclude_hashes = set() if include_hidden else s.get_content_hashes(sorted(hidden_ids))
-        exclude_ids = set() if include_hidden else hidden_ids
+        exclude_ids = set() if include_hidden else set(hidden_ids)
+        exclude_ids |= _switched_off_ids(request, s, list_state)
 
         if q:
             # FTS prefix search: fetch up to 2000 matches then apply all
@@ -461,12 +456,13 @@ def list_decouverte(request: Request) -> list[JobDetailOut]:
 
     s, rs = _get_storages(request)
     try:
-        latest_run = rs.get_latest_completed_run()
+        latest_run = rs.get_latest_visible_run()
         if not latest_run:
             return []
         ids = [d["job_id"] for d in drawn_for_run(request.app.state.db_path, latest_run["id"])]
         list_state = _list_state(request)
-        ids = [j for j in ids if not list_state.get(j, {}).get("hidden")]
+        off = _switched_off_ids(request, s, list_state)
+        ids = [j for j in ids if not list_state.get(j, {}).get("hidden") and j not in off]
         scores_by_id = rs.get_latest_scores_for_jobs(ids) if ids else {}
         jobs_by_id = s.get_jobs_by_ids(ids) if ids else {}
         result: list[JobDetailOut] = []
@@ -497,7 +493,7 @@ def list_outside_criteria(request: Request) -> list[JobDetailOut]:
 
     s, rs = _get_storages(request)
     try:
-        latest_run = rs.get_latest_completed_run()
+        latest_run = rs.get_latest_visible_run()
         if not latest_run:
             return []
         rows = rs.get_jobs_for_run(latest_run["id"], limit=-1)        # -1: every row of the run
@@ -505,9 +501,11 @@ def list_outside_criteria(request: Request) -> list[JobDetailOut]:
         lanes = assign_lanes(((r["job_id"], float(r.get("final_score") or 0.0), r.get("score_breakdown"))
                               for r in rows), load_lane_params(config_dir / "scoring.yaml"))
         list_state = _list_state(request)
+        off = _switched_off_ids(request, s, list_state)
         score = {r["job_id"]: float(r.get("final_score") or 0.0) for r in rows}
         ids = sorted((j for j, lane in lanes.items() if lane == OUTSIDE
-                      and not list_state.get(j, {}).get("hidden")), key=lambda j: (-score[j], j))
+                      and not list_state.get(j, {}).get("hidden") and j not in off),
+                     key=lambda j: (-score[j], j))
         scores_by_id = rs.get_latest_scores_for_jobs(ids) if ids else {}
         jobs_by_id = s.get_jobs_by_ids(ids) if ids else {}
         result: list[JobDetailOut] = []
@@ -526,6 +524,36 @@ def list_outside_criteria(request: Request) -> list[JobDetailOut]:
         rs.close()
 
 
+class JobCountOut(BaseModel):
+    count: int
+
+
+@router.get("/count", response_model=JobCountOut)
+def count_jobs(
+    request: Request,
+    source: str | None = Query(default=None),
+    country: str | None = Query(default=None),
+    department: str | None = Query(default=None),
+    remote: bool | None = Query(default=None),
+    q: str | None = Query(default=None),
+    min_tier: str | None = Query(default=None),
+    include_expired: bool = Query(default=False),
+    include_hidden: bool = Query(default=False),
+    saved_only: bool = Query(default=False),
+) -> JobCountOut:
+    """How many offers ``GET /api/jobs`` lists for the same filters, all pages together (Phase B
+    B7-C, P-017): the number a headline may announce is the number the list shows."""
+    total, offset, page = 0, 0, 500
+    while True:
+        rows = list_jobs(request, source=source, country=country, department=department, remote=remote, q=q,
+                         min_tier=min_tier, include_expired=include_expired, include_hidden=include_hidden,
+                         saved_only=saved_only, limit=page, offset=offset)
+        total += len(rows)
+        if len(rows) < page:
+            return JobCountOut(count=total)
+        offset += page
+
+
 @router.get("/countries", response_model=CountriesOut)
 def get_job_countries(request: Request) -> CountriesOut:
     """Return job counts grouped by country, scoped to the latest completed run.
@@ -538,7 +566,7 @@ def get_job_countries(request: Request) -> CountriesOut:
     """
     s, rs = _get_storages(request)
     try:
-        latest_run = rs.get_latest_completed_run()
+        latest_run = rs.get_latest_visible_run()
         latest_run_id = latest_run["id"] if latest_run else None
         run_job_ids: list[str] | None = None
         if latest_run_id:
@@ -588,26 +616,29 @@ def get_job_stats(request: Request) -> JobStatsOut:
     """Real, DB-derived stats for the Stats page. See compute_job_stats()."""
     s, rs = _get_storages(request)
     try:
-        return compute_job_stats(s, rs)
+        profile = _load_profile_safe(Path(getattr(request.app.state, "config_dir", "config")))
+        return compute_job_stats(s, rs, profile)
     finally:
         s.close()
         rs.close()
 
 
-def compute_job_stats(s: Storage, rs: RunStorage) -> JobStatsOut:
+def compute_job_stats(
+    s: Storage, rs: RunStorage, profile: "JobSearchProfile | None" = None
+) -> JobStatsOut:
     """Real, DB-derived stats for GET /api/jobs/stats, computed in exactly
     one place.
 
     Skills/tools frequency, score-tier distribution and rejection reasons are
     scoped to the latest completed run (same scoping as GET /countries).
-    Title categories bucket real job titles from that run against the
-    pipeline's own configured Indeed query groups (config/sources.yaml) —
-    no invented numbers. Skill/tool frequency is filtered through
+    Title categories bucket real job titles from that run against the title
+    buckets of the line-of-work presets that apply to ``profile`` (none without
+    one) — no invented numbers. Skill/tool frequency is filtered through
     ``_aggregate_tech_facets`` so source-specific noise in ``jobs.skills``
     (e.g. France Travail's ROME task/activity descriptions) never shows up
     as a "skill".
     """
-    latest_run = rs.get_latest_completed_run()
+    latest_run = rs.get_latest_visible_run()
     latest_run_id = latest_run["id"] if latest_run else None
     run_job_ids: list[str] | None = None
     if latest_run_id:
@@ -640,7 +671,12 @@ def compute_job_stats(s: Storage, rs: RunStorage) -> JobStatsOut:
         title_rows = conn.execute("SELECT title FROM jobs").fetchall()
         total_jobs = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
 
-    skills, tools = _aggregate_tech_facets(skill_rows)
+    from src.discovery.presets import load_domain_keywords, load_presets, matching_presets
+    from src.pipeline.domain_vocabulary import effective_domains
+
+    presets = matching_presets(load_presets(), effective_domains(profile, load_domain_keywords())
+                               if profile is not None else [])
+    skills, tools = _aggregate_tech_facets(skill_rows, presets)
 
     score_tiers: list[ScoreTierFacet] = []
     rejections: list[RejectionFacet] = []
@@ -675,10 +711,11 @@ def compute_job_stats(s: Storage, rs: RunStorage) -> JobStatsOut:
             reverse=True,
         )
 
-    category_counts: dict[str, int] = {name: 0 for name, _ in _TITLE_CATEGORIES}
+    categories = [c for p in presets for c in p.title_categories]
+    category_counts: dict[str, int] = {name: 0 for name, _ in categories}
     for row in title_rows:
         title = f" {(row['title'] or '').lower()} "
-        for name, keywords in _TITLE_CATEGORIES:
+        for name, keywords in categories:
             if any(kw in title for kw in keywords):
                 category_counts[name] += 1
                 break
@@ -737,7 +774,7 @@ def get_job_explanation(job_id: str, request: Request) -> JobExplanationOut:
             raise HTTPException(status_code=404, detail="Job not found")
 
         # Determine filter result from the latest run's rejection records.
-        latest_run = rs.get_latest_completed_run()
+        latest_run = rs.get_latest_visible_run()
         rejection_detail: str | None = None
         filter_result = "passed"
 
@@ -1027,6 +1064,27 @@ def _list_state(request: Request, job_ids: list[str] | None = None) -> dict[str,
         return {}
     finally:
         store.close()
+
+
+def _switched_off_ids(request: Request, storage: Storage, list_state: dict[str, dict[str, bool]]) -> set[str]:
+    """Offers of a source the user turned off, hidden from every list while it is off (owner
+    decision D1, Phase B B4-A). Never deleted; an offer the user saved or tracks
+    (``application_status``) stays listed."""
+    from src.source_enablement import settings_path_for, switched_off_sources
+
+    state = request.app.state
+    settings = getattr(state, "settings_path", None) or settings_path_for(state.db_path)
+    try:
+        off = switched_off_sources(getattr(state, "config_dir", "config"), settings)
+    except Exception as exc:  # noqa: BLE001 — listing offers never fails on the settings
+        logger.warning("Source switches unavailable: %s", exc)
+        return set()
+    if not off:
+        return set()
+    rows = storage._get_conn().execute(  # noqa: SLF001
+        f"SELECT id FROM jobs WHERE source IN ({','.join('?' * len(off))}) "
+        "AND (application_status IS NULL OR application_status = '')", sorted(off)).fetchall()
+    return {r[0] for r in rows if not list_state.get(r[0], {}).get("saved")}
 
 
 def _get_jobs_filtered(

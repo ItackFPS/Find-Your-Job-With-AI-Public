@@ -4,7 +4,7 @@ Fetches jobs from remote job boards. Dispatches on the configured source
 ``type``:
 
 - ``rss``: fetch the configured ``careers_url`` and parse it as an RSS/Atom
-  feed (e.g. We Work Remotely: https://weworkremotely.com/jobs/rss).
+  feed.
 - anything else: treat ``careers_url`` as a JSON REST API endpoint (existing
   behavior, preserved for any future non-RSS "remote" source), also
   requiring a configured URL rather than a hardcoded/guessed one.

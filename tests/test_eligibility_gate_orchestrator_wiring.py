@@ -57,7 +57,7 @@ class TestOrchestratorWiresEligibilityGate:
 
         assert result.status == "completed", f"Pipeline failed: {result.error}"
         spy_run.assert_not_called()
-        assert result.stats.llm_eligibility == {}
+        assert result.stats.llm_eligibility == {"ran": False}  # skipped, said so (P-016, B7-C)
         assert result.stats.llm_eligibility_rejected == 0
 
     def test_explicitly_disabled_never_constructs_gate(self, tmp_path):

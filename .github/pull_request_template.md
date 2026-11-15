@@ -27,6 +27,7 @@ Closes #
 - [ ] Only changes required by the linked issue
 - [ ] No unrelated refactors, renames or formatting
 - [ ] No data/, personal config, caches, logs or secrets committed
+- [ ] Golden files re-recorded? Then the body has the explanation table (offer, old → new decision or tier, why)
 
 ## Follow-ups
 

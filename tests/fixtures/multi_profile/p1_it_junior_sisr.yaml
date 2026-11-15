@@ -1,0 +1,72 @@
+# Phase B multi-profile fixture P1 (evaluation strategy 09 §4): junior IT, systems and networks,
+# BTS SIO SISR-style, Bac+2, at most 2 years. Synthetic, not a real person.
+target_domains:
+- it_support
+- systems
+- networking
+- cybersecurity
+focus_domain: true
+target_skills:
+- Windows Server
+- Active Directory
+- Linux
+- TCP/IP
+- Cisco
+- VMware
+- PowerShell
+- GLPI
+geography:
+  preferred_countries:
+  - France
+  allowed_regions:
+  - Europe
+  home:
+    name: Toulon
+    insee: '83137'
+    lat: 43.1242
+    lon: 5.928
+    department: '83'
+    precision: commune
+  max_distance_km: 60
+  strict_distance: false
+  remote_policy:
+    remote_france: true
+    remote_eu: false
+    remote_worldwide: false
+    hybrid: true
+work_modes:
+- on-site
+- hybrid
+- remote
+contract_types:
+- alternance
+- cdi
+- cdd
+- full-time
+experience:
+  preferred_levels:
+  - alternance
+  - junior
+  - entry_level
+  max_years: 2
+  excluded_seniority:
+  - senior
+  - lead
+  - manager
+  - director
+  - vp
+  - executive
+  - c_suite
+max_education: bac+2
+languages:
+- French
+- English
+freshness_days: 30
+matching:
+  education_hard_constraint: true
+  education_preferred_penalty: 0.2
+  principal_skill_gate: true
+  mandatory_central_skill_gate: false
+  llm_extraction_enabled: false
+  llm_eligibility_enabled: false
+  llm_eligibility_reject_confidence: 0.75
