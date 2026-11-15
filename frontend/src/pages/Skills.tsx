@@ -24,8 +24,9 @@ function Bar({ share, color }: { share: number; color: string }) {
   )
 }
 
-// Presentational: one development opportunity with the evidence behind it.
-export function GapCard({ gap }: { gap: SkillGap }) {
+// Presentational: one development opportunity with the evidence behind it. The sentence is built
+// here from the numbers, in the user's language; the server's English ``why`` is not shown.
+export function GapCard({ gap, total }: { gap: SkillGap; total: number }) {
   const { t } = useTranslation()
   return (
     <Card compact style={{ marginBottom: 'var(--space-2)' }}>
@@ -34,7 +35,10 @@ export function GapCard({ gap }: { gap: SkillGap }) {
         <span style={{ fontSize: '0.8rem', color: 'var(--color-muted)' }}>{t('skills.shareOfRelevant', { percent: Math.round(gap.relevant_share * 100) })}</span>
       </div>
       <div style={{ margin: '0.35rem 0' }}><Bar share={gap.relevant_share} color="var(--color-warning)" /></div>
-      <div style={{ fontSize: '0.85rem' }}>{gap.why}</div>
+      <div style={{ fontSize: '0.85rem' }}>
+        {t('skills.gapWhy', { count: gap.relevant_demand, total, percent: Math.round(gap.relevant_share * 100) })}
+        {gap.adjacent_owned.length > 0 && t('skills.gapAlongside', { skills: gap.adjacent_owned.map(a => a.skill).join(', ') })}
+      </div>
       {gap.example_titles.length > 0 && (
         <div style={{ fontSize: '0.78rem', color: 'var(--color-muted)', marginTop: '0.3rem' }}>
           {t('skills.examples', { titles: gap.example_titles.join(' · ') })}
@@ -109,17 +113,17 @@ export default function Skills() {
       {data && data.nodes.length === 0 && <EmptyState message={t('skills.empty')} />}
       {data && data.nodes.length > 0 && (
         <>
-          <Card title={t('skills.opportunities')} subtitle={t('skills.relevantDefinition', { definition: data.relevant_definition })} style={{ marginBottom: 'var(--space-4)' }}>
+          <Card title={t('skills.opportunities')} subtitle={t('skills.relevantDefinition', { score: data.relevant_score ?? 0.65 })} style={{ marginBottom: 'var(--space-4)' }}>
             {data.gaps.length === 0
               ? <EmptyState message={t('skills.noGaps')} />
-              : data.gaps.slice(0, 8).map(g => <GapCard key={g.skill} gap={g} />)}
+              : data.gaps.slice(0, 8).map(g => <GapCard key={g.skill} gap={g} total={data.n_relevant} />)}
           </Card>
           <Card title={t('skills.market')} style={{ marginBottom: 'var(--space-4)' }}>
             <SkillList graph={data} />
           </Card>
           <Card title={t('skills.limits')}>
             <ul style={{ margin: 0, paddingLeft: '1.1rem', fontSize: '0.85rem', color: 'var(--color-muted)' }}>
-              {data.limitations.map(l => <li key={l}>{l}</li>)}
+              {(['tags', 'profile', 'kept'] as const).map(k => <li key={k}>{t(`skills.limitation.${k}`)}</li>)}
             </ul>
           </Card>
         </>

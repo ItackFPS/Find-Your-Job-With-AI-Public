@@ -66,11 +66,11 @@ def build_skill_graph(
     cutoff = (now - timedelta(days=days)).isoformat()
     owned = {s.strip().lower() for s in target_skills if s.strip()}
     graph: dict[str, Any] = {
-        "window_days": days, "relevant_definition": (
+        "window_days": days, "relevant_score": relevant_score, "relevant_definition": (
             f"latest final score >= {relevant_score:.2f}, or marked interested / acted on (not withdrawn)"),
         "n_jobs": 0, "n_relevant": 0, "nodes": [], "edges": [], "gaps": [], "owned": sorted(owned),
         "limitations": [
-            "skills come from the technology tags of stored postings; requirements written only in free text are missed",
+            "skills come from the skill tags of stored postings; requirements written only in free text are missed",
             "the profile lists target skills, not proven proficiency",
             "only jobs the pipeline kept are stored: demand among rejected postings is not counted",
         ],

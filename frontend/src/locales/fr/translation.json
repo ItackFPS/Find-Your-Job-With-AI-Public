@@ -497,13 +497,20 @@
   },
   "skills": {
     "title": "Compétences",
-    "intro": "Les technologies demandées par les offres qui vous correspondent, comment elles se combinent et ce qui manque à votre profil — d’après les annonces conservées par la recherche.",
+    "intro": "Les compétences demandées par les offres qui vous correspondent, comment elles se combinent et ce qui manque à votre profil — d’après les annonces conservées par la recherche.",
     "days": "{count, number} jours",
     "relevantOf": "{relevant, number} pertinentes sur {total, number} offres étiquetées",
     "unavailable": "Le graphe des compétences est indisponible.",
     "empty": "Aucune offre étiquetée sur cette période pour l’instant.",
     "opportunities": "Pistes de progression",
-    "relevantDefinition": "Pertinente = {definition}",
+    "relevantDefinition": "Pertinente = score final le plus récent ≥ {score, number}, ou offre marquée intéressante ou suivie (hors retrait)",
+    "gapWhy": "Demandée par {count, number} des {total, number} offres pertinentes ({percent} %)",
+    "gapAlongside": " ; souvent avec votre {skills}",
+    "limitation": {
+      "tags": "Les compétences viennent des étiquettes des annonces conservées ; une exigence écrite seulement dans le texte n’est pas comptée.",
+      "profile": "Le profil liste des compétences visées, pas un niveau prouvé.",
+      "kept": "Seules les offres retenues par la recherche sont conservées : la demande parmi les offres rejetées n’est pas comptée."
+    },
     "noGaps": "Aucune compétence absente de votre profil n’est assez souvent demandée parmi les offres pertinentes.",
     "market": "Ce que demande le marché",
     "limits": "Limites de cette vue",
