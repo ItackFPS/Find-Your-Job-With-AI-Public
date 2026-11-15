@@ -151,6 +151,37 @@ def scope_tables() -> list[str]:
     return sorted(t for t, c in JOBS_DB_TABLES.items() if c in ("personal", "derived"))
 
 
+# The decision journal (``job_decisions``, public) records the user's stance on an offer when the
+# disagreement engine read it: ``signals_json`` → ``assessment.signals.user`` (stance, basis, feedback
+# event id, time), plus a reason and a conflict quoting that basis. An erasure removes them; the rest
+# of the journal row stays (Phase B B11 finding: verification found the event ids in the bytes).
+_USER_STANCE_SQL = "json_extract(signals_json, '$.assessment.signals.user') IS NOT NULL"
+_USER_STANCE_TEXT = ("the user's own feedback", "user feedback (")
+
+
+def _without_user_text(items: Any, key: str | None = None) -> Any:
+    if not isinstance(items, list):
+        return items
+    return [x for x in items
+            if not str(x.get(key, "") if key and isinstance(x, dict) else x).startswith(_USER_STANCE_TEXT)]
+
+
+def _strip_journal_user_stance(conn: sqlite3.Connection) -> int:
+    """Remove the user's stance from every journal row that carries one → number of rows changed."""
+    rows = conn.execute(f"SELECT decision_id, signals_json, conflicts_json FROM job_decisions "  # noqa: S608
+                        f"WHERE {_USER_STANCE_SQL}").fetchall()
+    for decision_id, signals_json, conflicts_json in rows:
+        signals = json.loads(signals_json)
+        assessment = signals["assessment"]
+        assessment["signals"]["user"] = None
+        for key in ("reasons", "conflicts"):
+            assessment[key] = _without_user_text(assessment.get(key))
+        conflicts = _without_user_text(json.loads(conflicts_json), "description")
+        conn.execute("UPDATE job_decisions SET signals_json = ?, conflicts_json = ? WHERE decision_id = ?",
+                     (json.dumps(signals), json.dumps(conflicts), decision_id))
+    return len(rows)
+
+
 def scope_columns(scope: Scope) -> list[tuple[str, str]]:
     cols = [(t, c) for t, names in PERSONAL_COLUMNS.items() for c in names]
     return [tc for tc in cols if not (scope.keep_tracker and tc == TRACKER_COLUMN)]
@@ -329,6 +360,8 @@ class _Job:
                 if table in tables and col in self._columns(table):
                     counts[f"{table}.{col}"] = conn.execute(
                         f"UPDATE {table} SET {col} = NULL WHERE {col} IS NOT NULL").rowcount  # noqa: S608
+            if "job_decisions" in tables:
+                counts["job_decisions.user_stance"] = _strip_journal_user_stance(conn)
             for _, sql in triggers:
                 conn.execute(sql)
             before = app_state.read(conn).erasure_generation
@@ -462,6 +495,9 @@ def verify(db_path: Path, conn: sqlite3.Connection, erasure_id: str, scope: Scop
         if table in tables and col in {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}:
             rows_ok = rows_ok and conn.execute(
                 f"SELECT COUNT(*) FROM {table} WHERE {col} IS NOT NULL").fetchone()[0] == 0  # noqa: S608
+    if "job_decisions" in tables:
+        rows_ok = rows_ok and conn.execute(
+            f"SELECT COUNT(*) FROM job_decisions WHERE {_USER_STANCE_SQL}").fetchone()[0] == 0  # noqa: S608
     data = db_path.read_bytes()
     wal = db_path.with_name(db_path.name + "-wal")
     if wal.exists():

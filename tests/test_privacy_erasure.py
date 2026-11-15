@@ -113,6 +113,50 @@ def test_full_erasure_reaches_complete_and_verifies(db):
         conn.close()
 
 
+def test_erasure_removes_the_users_stance_from_the_decision_journal(db):
+    # Phase B B11: on a real copy the journal kept the stance (with its feedback event id) and the
+    # erasure stopped at BLOCKED, verification_failed: bytes.
+    import json
+
+    from src.decisions.storage import DecisionStorage
+
+    ds = DecisionStorage(db)
+    ds.init_db()
+    ds.close()
+    conn = sqlite3.connect(db)
+    try:
+        event_id = conn.execute("SELECT event_id FROM feedback_events WHERE job_id = 'j3'").fetchone()[0]
+        basis = "explicit:interested"
+        signals = {"assessment": {"state": "review", "reasons": [
+            f"the user's own feedback ({basis}) says they want this job; a rejection that contradicts it is reviewed",
+            "evidence contradicts itself"], "conflicts": [f"user feedback ({basis}) vs pipeline rejection"],
+            "signals": {"rules": 0.4, "user": {"stance": "wants", "basis": basis, "event_id": event_id,
+                                               "at": "2026-11-01T10:00:00"}}}}
+        conflicts = [{"dimensions": [], "description": f"user feedback ({basis}) vs pipeline rejection"},
+                     {"dimensions": ["salary"], "description": "salary below the minimum"}]
+        conn.execute("INSERT INTO job_decisions (decision_id, schema_version, run_id, job_id, decided_at, outcome,"
+                     " deciding_stage, strategy_version, evidence_json, conflicts_json, signals_json,"
+                     " stage_trace_json) VALUES ('d1', 1, 'r1', 'j3', '2026-11-01', 'rejected', 'filter', 's',"
+                     " '[]', ?, ?, '[]')", (json.dumps(conflicts), json.dumps(signals)))
+        conn.commit()
+    finally:
+        conn.close()
+    erasure.request(db, erasure.Scope(keep_tracker=False, erase_calibration=True))
+    st = erasure.run(db)
+    assert st["state"] == "COMPLETE", st
+    assert st["counts"]["job_decisions.user_stance"] == 1
+    conn = sqlite3.connect(db)
+    try:
+        sig, conf = conn.execute("SELECT signals_json, conflicts_json FROM job_decisions").fetchone()
+    finally:
+        conn.close()
+    a = json.loads(sig)["assessment"]
+    assert a["signals"] == {"rules": 0.4, "user": None}
+    assert a["reasons"] == ["evidence contradicts itself"] and a["conflicts"] == []
+    assert json.loads(conf) == [{"dimensions": ["salary"], "description": "salary below the minimum"}]
+    assert event_id.encode() not in Path(db).read_bytes()
+
+
 def test_write_stamped_before_erasure_is_refused(db):
     old = app_state.current(db).token
     erasure.request(db, erasure.Scope())
