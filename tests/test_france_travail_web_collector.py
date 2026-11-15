@@ -522,3 +522,31 @@ def test_a_profile_matching_no_occupation_page_is_skipped_not_failed(monkeypatch
     assert "matches a France Travail occupation page" in result.metadata["skipped_reason"]
     assert result.metadata["pages_planned"] == 0
     assert len(_Client.last.urls) == 2  # robots.txt and the sitemap: no listing page asked for
+
+
+P1_SITEMAP = """<urlset>
+<url><loc>https://candidat.francetravail.fr/offres/emploi/technicien-support-informatique/var/s28m5d83</loc></url>
+<url><loc>https://candidat.francetravail.fr/offres/emploi/administrateur-systemes-et-reseaux/var/s28m11d83</loc></url>
+<url><loc>https://candidat.francetravail.fr/offres/emploi/technicien-reseaux/var/s28m19d83</loc></url>
+<url><loc>https://candidat.francetravail.fr/offres/emploi/expert-cybersecurite/var/s28m25d83</loc></url>
+<url><loc>https://candidat.francetravail.fr/offres/emploi/infirmier-infirmiere/var/s13m1d83</loc></url>
+</urlset>"""
+
+
+def test_a_junior_it_profile_with_typed_labels_plans_pages(monkeypatch) -> None:  # noqa: ANN001
+    """Phase B B5 acceptance: France Travail web plans pages for P1's typed labels (it planned none)."""
+    from src.discovery.presets import load_domain_keywords
+    from src.pipeline.domain_vocabulary import resolve_domains
+
+    labels = ["Administration systèmes", "Support informatique", "Réseaux informatiques",
+              "Cybersécurité", "Maintenance informatique"]
+    kws = load_domain_keywords()
+    families = {label: list(resolve_domains([label], kws).families) for label in labels}
+    monkeypatch.setattr(ftw.httpx, "Client", _Client)
+    monkeypatch.setattr(_Client, "sitemap_text", P1_SITEMAP)
+    result = _collector({"target_domains": labels, "departments": ["83"], "rate_limit_delay": 0,
+                         "domain_families": families}).collect()
+    listing = _Client.last.urls[2:]
+    assert len(listing) == 4 and not any("infirmier" in u for u in listing)
+    assert result.metadata["pages_planned"] == 4 and result.errors == []
+    assert result.jobs and all(j["occupation"]["target_domains"] for j in result.jobs)
