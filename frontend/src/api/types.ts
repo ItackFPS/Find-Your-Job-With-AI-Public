@@ -223,6 +223,8 @@ export interface RunStats {
     processed?: number
     total?: number
   }
+  // Decision journal + expiry after duration_seconds (the internal duration); absent on older runs.
+  post_seconds?: number
 }
 
 export interface PipelineRun {

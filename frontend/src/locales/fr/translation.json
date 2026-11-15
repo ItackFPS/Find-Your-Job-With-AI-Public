@@ -977,6 +977,7 @@
       "aiEnabled": "✓ IA (phase 2) activée"
     },
     "duration": "Durée : {duration}",
+    "durationDetail": "(pipeline {pipeline}, puis journal des décisions et nettoyage {post})",
     "started": "Début : {date}",
     "ended": "Fin : {date}",
     "aiBadge": "✓ IA (phase 2)",

@@ -269,6 +269,9 @@ class RunStats(BaseModel):
     # semantic, phase2, personalize) uniformly — see PipelineStats.stage_progress
     # in src/pipeline/orchestrator.py. Empty between updates/when idle.
     stage_progress: dict[str, Any] = {}
+    # Decision journal + expiry, after duration_seconds (the internal duration) is taken. The run's
+    # wall clock is completed_at - started_at (Phase B B7-B).
+    post_seconds: float = 0.0
 
 
 class PipelineRunOut(BaseModel):

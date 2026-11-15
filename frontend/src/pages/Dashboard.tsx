@@ -15,7 +15,7 @@ import { useCollectionFrozen } from '../hooks/useCollectionFrozen'
 import { PIPELINE_STAGES, type PipelineStageDef } from '../config/pipelineStages'
 import { usePipelineEvents, stageLabel, type ConnectionState, type ActivityEntry } from '../hooks/usePipelineEvents'
 import {
-  formatDuration, formatDateTime, scannerControl, scannerProgressLabel, scannerWorkEstimate,
+  formatDuration, formatDateTime, runWallSeconds, scannerControl, scannerProgressLabel, scannerWorkEstimate,
   startHoldEnded, type StartHold,
 } from '../utils'
 
@@ -299,6 +299,7 @@ interface CurrentRun {
   stats: RunStats
   error: string | null
   startedAt: string | null
+  completedAt?: string | null
 }
 
 function CurrentRunCard({ run, activity, isLive }: { run: CurrentRun; activity: ActivityEntry[]; isLive: boolean }) {
@@ -309,7 +310,7 @@ function CurrentRunCard({ run, activity, isLive }: { run: CurrentRun; activity: 
     <Card
       style={{ marginBottom: 'var(--space-5)', borderColor: run.status === 'running' ? 'var(--color-accent)' : 'var(--color-border)' }}
       title={isLive ? t('dashboard.liveRun') : t('dashboard.latestRun')}
-      subtitle={!isLive && run.startedAt ? `${formatDateTime(run.startedAt)} · ${formatDuration(s.duration_seconds)}` : undefined}
+      subtitle={!isLive && run.startedAt ? `${formatDateTime(run.startedAt)} · ${formatDuration(runWallSeconds({ started_at: run.startedAt, completed_at: run.completedAt, stats: s }))}` : undefined}
       actions={
         <>
           {s.model_name && <Chip>{s.model_name}</Chip>}
@@ -531,7 +532,7 @@ export default function Dashboard() {
   const currentRun: CurrentRun | null = liveEvent
     ? { status: liveEvent.status, stage: liveEvent.stage, stats: liveEvent.stats, error: liveEvent.error, startedAt: null }
     : d.latest_run
-      ? { status: d.latest_run.status, stage: d.latest_run.stats.current_stage || '', stats: d.latest_run.stats, error: d.latest_run.error, startedAt: d.latest_run.started_at }
+      ? { status: d.latest_run.status, stage: d.latest_run.stats.current_stage || '', stats: d.latest_run.stats, error: d.latest_run.error, startedAt: d.latest_run.started_at, completedAt: d.latest_run.completed_at }
       : null
   const matchedCount = currentRun?.stats.personalized ?? 0
   const isAlreadyRunning = currentRun?.status === 'running' || d.is_running
