@@ -18,6 +18,7 @@ import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Literal
 
 from src.geo.places import COMMUNE
@@ -302,10 +303,12 @@ def load_filter_config(
     return build_filter_config(load_profile(profile_path), load_filters(engine_path))
 
 
+@lru_cache(maxsize=65536)
 def _normalize(text: str) -> str:
     """Lowercase and strip diacritical marks for accent-insensitive matching.
 
-    "Développeur" and "developpeur" both become "developpeur".
+    "Développeur" and "developpeur" both become "developpeur". Memoised (Phase B B10, P-032): every
+    offer re-normalised the same configured keywords, about 130 calls per offer.
     """
     nfd = unicodedata.normalize("NFD", text)
     return "".join(c for c in nfd if unicodedata.category(c) != "Mn").lower()
