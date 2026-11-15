@@ -123,7 +123,8 @@
     "pipelineRunning": "⟳ Pipeline en cours…",
     "today": {
       "title": "Aujourd’hui",
-      "lastRun": "Dernière recherche : {date}. {count, number} offres correspondent à votre profil.",
+      "lastRun": "Dernière recherche : {date}. {count, number} offres sont pertinentes ou mieux pour votre profil.",
+      "lastRunDate": "Dernière recherche : {date}.",
       "noRun": "Aucune recherche pour le moment.",
       "nextRun": "Prochaine recherche : {date}.",
       "problems": "{count, plural, one {# source a eu} other {# sources ont eu}} un problème lors de la dernière recherche",
@@ -144,7 +145,7 @@
       "paused": "Collecte en pause"
     },
     "noRuns": "Aucune exécution du pipeline pour l’instant. <run>Lancez le pipeline</run> pour voir les résultats ici.",
-    "browseMatched": "Parcourir les {count, number} offres retenues →",
+    "browseMatched": "Parcourir les {count, number} offres pertinentes →",
     "backendError": "Impossible de joindre le serveur local. Relancez l’application avec son raccourci <app>Find Your Job With AI</app> (ou <cmd/>) ; si elle ne démarre pas, sa fenêtre en indique la raison, et le détail se trouve dans <log/> dans le dossier de l’application.",
     "liveRun": "Exécution en direct",
     "latestRun": "Dernière exécution",
@@ -438,7 +439,7 @@
   },
   "stats": {
     "title": "Statistiques",
-    "subtitle": "Ce que demande le marché, sur {count, number} offres collectées",
+    "subtitle": "Ce que demande le marché, sur les {count, number} offres retenues après les filtres",
     "notEnoughData": "Pas encore assez de données.",
     "noDataYet": "Pas encore de données",
     "noDataYetDot": "Pas encore de données.",

@@ -524,6 +524,36 @@ def list_outside_criteria(request: Request) -> list[JobDetailOut]:
         rs.close()
 
 
+class JobCountOut(BaseModel):
+    count: int
+
+
+@router.get("/count", response_model=JobCountOut)
+def count_jobs(
+    request: Request,
+    source: str | None = Query(default=None),
+    country: str | None = Query(default=None),
+    department: str | None = Query(default=None),
+    remote: bool | None = Query(default=None),
+    q: str | None = Query(default=None),
+    min_tier: str | None = Query(default=None),
+    include_expired: bool = Query(default=False),
+    include_hidden: bool = Query(default=False),
+    saved_only: bool = Query(default=False),
+) -> JobCountOut:
+    """How many offers ``GET /api/jobs`` lists for the same filters, all pages together (Phase B
+    B7-C, P-017): the number a headline may announce is the number the list shows."""
+    total, offset, page = 0, 0, 500
+    while True:
+        rows = list_jobs(request, source=source, country=country, department=department, remote=remote, q=q,
+                         min_tier=min_tier, include_expired=include_expired, include_hidden=include_hidden,
+                         saved_only=saved_only, limit=page, offset=offset)
+        total += len(rows)
+        if len(rows) < page:
+            return JobCountOut(count=total)
+        offset += page
+
+
 @router.get("/countries", response_model=CountriesOut)
 def get_job_countries(request: Request) -> CountriesOut:
     """Return job counts grouped by country, scoped to the latest completed run.

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  getDashboard, startRun, getLinkedInStatus, triggerLinkedInScan, listLinkedInScans,
+  countJobs, getDashboard, startRun, getLinkedInStatus, triggerLinkedInScan, listLinkedInScans,
   pauseLinkedInScan, resumeLinkedInScan,
   getHelloWorkStatus, triggerHelloWorkScan, listHelloWorkScans,
   pauseHelloWorkScan, resumeHelloWorkScan,
@@ -511,6 +511,8 @@ export default function Dashboard() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
   })
 
+  // What the Jobs page lists by default (relevant or better): the link announces that number (P-017).
+  const listed = useQuery({ queryKey: ['default-list-count', data?.latest_run?.id ?? null], queryFn: () => countJobs({ min_tier: 'relevant' }) })
   if (isLoading) return <LoadingState />
   if (error) {
     return (
@@ -533,7 +535,7 @@ export default function Dashboard() {
     : d.latest_run
       ? { status: d.latest_run.status, stage: d.latest_run.stats.current_stage || '', stats: d.latest_run.stats, error: d.latest_run.error, startedAt: d.latest_run.started_at }
       : null
-  const matchedCount = currentRun?.stats.personalized ?? 0
+  const matchedCount = listed.data ?? 0
   const isAlreadyRunning = currentRun?.status === 'running' || d.is_running
 
   return (

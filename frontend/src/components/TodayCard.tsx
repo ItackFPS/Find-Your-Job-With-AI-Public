@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { getSchedulerStatus, listJobs, type Dashboard } from '../api/client'
+import { countJobs, getSchedulerStatus, listJobs, type Dashboard } from '../api/client'
 import { formatDateTime } from '../utils'
 import { Card } from './Card'
 
@@ -17,6 +17,8 @@ export function TodayCard({ dashboard }: { dashboard: Dashboard }) {
     queryFn: () => listJobs({ min_tier: 'strong', limit: 5 }),
   })
   const scheduler = useQuery({ queryKey: ['scheduler-status'], queryFn: getSchedulerStatus, retry: false })
+  // The headline counts what the Jobs page lists by default (relevant or better), P-017.
+  const listed = useQuery({ queryKey: ['default-list-count', run?.id ?? null], queryFn: () => countJobs({ min_tier: 'relevant' }) })
 
   const nextRun = scheduler.data?.schedules.find(s => s.id === 'pipeline_daily')?.next_run_at ?? null
   const sources = Object.values(run?.stats.by_source ?? {})
@@ -32,7 +34,9 @@ export function TodayCard({ dashboard }: { dashboard: Dashboard }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
         <p style={line}>
           {run?.completed_at
-            ? t('dashboard.today.lastRun', { date: formatDateTime(run.completed_at), count: run.stats.personalized ?? 0 })
+            ? (listed.data !== undefined
+              ? t('dashboard.today.lastRun', { date: formatDateTime(run.completed_at), count: listed.data })
+              : t('dashboard.today.lastRunDate', { date: formatDateTime(run.completed_at) }))
             : t('dashboard.today.noRun')}
         </p>
         {nextRun && <p style={{ ...line, color: 'var(--color-muted)' }}>{t('dashboard.today.nextRun', { date: formatDateTime(nextRun) })}</p>}

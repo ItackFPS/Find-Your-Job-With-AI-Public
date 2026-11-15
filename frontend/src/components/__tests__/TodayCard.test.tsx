@@ -8,9 +8,11 @@ import type { Dashboard, Job } from '../../api/client'
 
 const listJobs = vi.fn()
 const getSchedulerStatus = vi.fn()
+const countJobs = vi.fn()
 vi.mock('../../api/client', async importOriginal => ({
   ...await importOriginal<typeof import('../../api/client')>(),
   listJobs: (params: unknown) => listJobs(params),
+  countJobs: (params: unknown) => countJobs(params),
   getSchedulerStatus: () => getSchedulerStatus(),
 }))
 
@@ -22,6 +24,7 @@ const show = (d: Dashboard) => render(
 
 beforeEach(() => {
   listJobs.mockReset().mockResolvedValue([])
+  countJobs.mockReset().mockResolvedValue(7)
   getSchedulerStatus.mockReset().mockResolvedValue({
     paused: false, background: null,
     schedules: [{ id: 'pipeline_daily', next_run_at: '2026-11-09T08:00:00+00:00' }],
@@ -79,6 +82,12 @@ describe('TodayCard', () => {
     show(dashboard)
     await screen.findByText(/Next search/)
     expect(screen.queryByTestId('run-outcome')).toBeNull()
+  })
+
+  it('announces the number the Jobs list shows by default (P-017)', async () => {
+    show(dashboard)
+    expect(await screen.findByText(/7 offers are relevant or better/)).toBeInTheDocument()
+    expect(countJobs).toHaveBeenCalledWith({ min_tier: 'relevant' })
   })
 
   it('says so before any search', async () => {
