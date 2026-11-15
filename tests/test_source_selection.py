@@ -43,7 +43,8 @@ def test_each_inactive_removed_skipped_or_paused_source_is_classified(tmp_path: 
     assert [s["name"] for s in sel.runnable] == ["ok", "ok2"]
     assert list(sel.not_run_rows) == ["old", "nocred", "tripped"]      # removed, preflight, paused; "off" absent
     assert sel.not_run_rows["old"] == {"collected": 0, "accepted": 0, "errors": 0, "status": "skipped",
-                                       "reason": REMOVED_SOURCE_TYPES["apec"]}
+                                       "reason": REMOVED_SOURCE_TYPES["apec"], "reason_key": "removed"}
+    assert "reason_key" not in sel.not_run_rows["nocred"]               # free text: shown as recorded
     assert sel.not_run_rows["nocred"]["reason"] == "set FT_CLIENT_ID"
     row = sel.not_run_rows["tripped"]
     assert row["status"] == "paused" and row["consecutive_failures"] == 3
@@ -89,3 +90,16 @@ def test_a_network_outage_moves_no_breaker_and_is_reported(tmp_path: Path) -> No
 
     assert by_source["ok"]["network_outage"] is True
     assert load_states(db) == {"ok": BreakerState("ok", consecutive_failures=1)}
+
+
+def test_fixed_skip_reasons_carry_a_key_for_the_interface():
+    # Phase B B11: the English reason reached the French UI; the key lets it be translated.
+    from src.collectors import freeze
+    from src.pipeline.preflight import _FT_API_RESTRICTED, _INDEED_OFF
+    from src.pipeline.source_selection import reason_key
+
+    assert reason_key(_FT_API_RESTRICTED) == "ft_api_restricted"
+    assert reason_key(_INDEED_OFF) == "indeed_off"
+    assert reason_key(freeze.FROZEN_REASON) == "frozen"
+    assert reason_key(REMOVED_SOURCE_TYPES["wttj"]) == "removed"
+    assert reason_key("HTTP 403 from the site") is None

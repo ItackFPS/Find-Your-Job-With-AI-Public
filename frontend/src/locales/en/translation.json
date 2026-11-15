@@ -1,4 +1,12 @@
 {
+  "sourceStatus": {
+    "reason": {
+      "ft_api_restricted": "Not required. The France Travail API is restricted and has no access set up here; the France Travail website and the other sources still run.",
+      "indeed_off": "Indeed is off. It is an unofficial source (Indeed has no public API), so it only runs if you choose it, in Settings › Sources; the other sources still run.",
+      "frozen": "Collection is paused while each source is checked (temporary). Your stored offers, saved offers and applications are kept. A source comes back only after it passes its checks and you turn it on.",
+      "removed": "This source was removed from the application; it is skipped, and offers it found stay saved."
+    }
+  },
   "common": {
     "loading": "Loading…",
     "noData": "No data",

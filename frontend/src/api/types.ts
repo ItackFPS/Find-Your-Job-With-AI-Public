@@ -154,6 +154,8 @@ export interface SourceStats {
   status?: string | null
   // why a skipped source was left out and what to set up
   reason?: string | null
+  // a fixed skip reason's key (sourceStatus.reason.<key>), so it is shown in the user's language
+  reason_key?: string | null
   // no source answered at all in this run: the machine's connection, not the sources
   network_outage?: boolean | null
 }

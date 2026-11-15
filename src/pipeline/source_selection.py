@@ -45,8 +45,24 @@ class SourceSelection:
     now: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
+def reason_key(reason: str) -> str | None:
+    """A stable key for a fixed skip reason, so the interface can say it in the user's language
+    (Phase B B11: the English text reached the French UI). ``None`` for any other text."""
+    from src.collectors import freeze
+    from src.pipeline.preflight import _FT_API_RESTRICTED, _INDEED_OFF
+
+    if reason in REMOVED_SOURCE_TYPES.values():
+        return "removed"
+    return {_FT_API_RESTRICTED: "ft_api_restricted", _INDEED_OFF: "indeed_off",
+            freeze.FROZEN_REASON: "frozen"}.get(reason)
+
+
 def _not_run_row(status: str, reason: str, **extra: Any) -> dict[str, Any]:
-    return {"collected": 0, "accepted": 0, "errors": 0, "status": status, "reason": reason, **extra}
+    row = {"collected": 0, "accepted": 0, "errors": 0, "status": status, "reason": reason, **extra}
+    key = reason_key(reason)
+    if key:
+        row["reason_key"] = key
+    return row
 
 
 def select_sources(

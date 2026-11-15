@@ -242,6 +242,7 @@ interface SourceRow {
   errors: number
   status?: string | null
   reason?: string | null
+  reason_key?: string | null
 }
 
 const sourceColumns = (t: TFunction): DataTableColumn<SourceRow>[] => [
@@ -250,7 +251,7 @@ const sourceColumns = (t: TFunction): DataTableColumn<SourceRow>[] => [
   { key: 'accepted', header: t('dashboard.sourceTable.accepted'), align: 'right', render: r => <span style={{ color: 'var(--color-success)' }}>{r.accepted}</span> },
   { key: 'rejected', header: t('dashboard.sourceTable.rejected'), align: 'right', render: r => <span style={{ color: 'var(--color-muted)' }}>{r.collected - r.accepted}</span> },
   { key: 'errors', header: t('dashboard.sourceTable.errors'), align: 'right', render: r => <span style={{ color: r.errors > 0 ? 'var(--color-error)' : 'var(--color-muted)' }}>{r.errors}</span> },
-  { key: 'status', header: t('dashboard.sourceTable.status'), render: r => <SourceStatus status={r.status} reason={r.reason} /> },
+  { key: 'status', header: t('dashboard.sourceTable.status'), render: r => <SourceStatus status={r.status} reason={r.reason} reasonKey={r.reason_key} /> },
 ]
 
 function BySourceTable({ bySource }: { bySource: Record<string, SourceStats> }) {
