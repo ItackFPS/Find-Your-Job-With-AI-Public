@@ -1058,7 +1058,8 @@
       "curated": "Sélection",
       "placeholder": "Rechercher un domaine ou un métier (p. ex. développement logiciel, vendeur, agent d’entretien)…",
       "addCustomHint": "Aucun résultat ? Appuyez sur Entrée pour ajouter « {value} » comme domaine personnalisé",
-      "noMatch": "Aucun résultat pour « {value} » — appuyez sur Entrée pour l’ajouter comme domaine personnalisé."
+      "noMatch": "Aucun résultat pour « {value} » — appuyez sur Entrée pour l’ajouter comme domaine personnalisé.",
+      "unresolved": "Absents du vocabulaire intégré : {labels}. La recherche utilise ces mots tels quels, sans synonymes."
     },
     "location": {
       "statusLabel": "Priorité de ce lieu",

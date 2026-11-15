@@ -101,6 +101,29 @@ class CareerTargetsIn(BaseModel):
     years_override: float | None = Field(default=None, ge=0, le=60)
 
 
+class DomainResolveIn(BaseModel):
+    """Labels to explain (POST /api/profile/domains/resolve). Nothing is saved."""
+
+    labels: list[str] = Field(default_factory=list, max_length=200)
+
+
+class DomainResolutionOut(BaseModel):
+    """How the search reads one line-of-work label (src/pipeline/domain_vocabulary.py).
+
+    ``known``: a vocabulary key. ``resolved``: typed text that names one or more vocabulary
+    families. ``unresolved``: typed text the vocabulary does not know; the search still uses it,
+    by its own words only (in a title, any order or inflection).
+    """
+
+    label: str
+    status: Literal["known", "resolved", "unresolved"]
+    families: list[str] = Field(default_factory=list)
+
+
+class DomainResolveOut(BaseModel):
+    labels: list[DomainResolutionOut]
+
+
 class ProfileReviewIn(BaseModel):
     """Mirrors ``src.models.profile.ProfileReview`` — the one-time review screen."""
     pending: bool = True
