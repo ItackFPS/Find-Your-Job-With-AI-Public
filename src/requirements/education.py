@@ -879,3 +879,29 @@ def candidate_education(profile: object) -> tuple[int | None, str | None, int | 
     raw = getattr(profile, "max_education", None)
     level = parse_education_level(raw) if raw else None
     return level, None, level
+
+
+def candidate_education_in_progress(profile: object) -> tuple[int | None, str | None]:
+    """``(max Bac+N, display label)`` of the highest qualification being prepared, when it
+    is above every held one; ``(None, None)`` otherwise.
+
+    Preparing a level is not holding it, and it is not evidence of falling short of it
+    either: the gate lets an offer asking that level through with the doubt recorded
+    instead of rejecting it. A v1 profile has no in-progress entry.
+    """
+    from src.models.levels import level_to_max_bac_plus
+
+    if int(getattr(profile, "profile_version", 1) or 1) < 2:
+        return None, None
+    entries = [e for e in (getattr(profile, "education", None) or [])
+               if getattr(e, "level", None) is not None]
+    preparing = [e for e in entries if getattr(e, "in_progress", False)]
+    if not preparing:
+        return None, None
+    top = max(preparing, key=lambda e: e.level)
+    held = [e.level for e in entries if not getattr(e, "in_progress", False)]
+    if held and max(held) >= top.level:
+        return None, None
+    name = (top.qualification or "").strip()
+    label = f"level {top.level}" + (f" ({name})" if name else "")
+    return level_to_max_bac_plus(top.level), label
