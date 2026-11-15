@@ -110,15 +110,15 @@ def _num(s: str) -> float:
 
 def parse_experience_years(label: str) -> float | None:
     """Years stated in an FT experience label: "2 An(s)" → 2.0, "6 Mois" → 0.5,
-    "Débutant accepté" → 0.0, "Expérience exigée" (no duration) → None."""
+    "2 An(s) 6 Mois" → 2.5, "Débutant accepté" → 0.0, "Expérience exigée" (no duration) → None."""
     low = label.lower()
     if "débutant" in low or "debutant" in low:
         return 0.0
-    if m := _YEARS.search(label):
-        return _num(m.group(1))
-    if m := _MONTHS.search(label):
-        return round(_num(m.group(1)) / 12, 2)
-    return None
+    years, months = _YEARS.search(label), _MONTHS.search(label)
+    if years is None and months is None:
+        return None
+    total = (_num(years.group(1)) if years else 0.0) + (_num(months.group(1)) / 12 if months else 0.0)
+    return round(total, 2)
 
 
 def _experience(offer: dict[str, Any]) -> StructuredExperience | None:

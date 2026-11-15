@@ -104,8 +104,13 @@ def test_mandatory_4yr_rejects_junior_candidate():
         user_max_education_level=None,
         user_max_years_experience=3,
     )
+    # Owner decision D12: 4 years against a maximum of 3 is within one year above it → kept, flagged
     result = gate.check(requirements)
-    assert not result.passes, "MANDATORY experience > max must be a hard gate rejection"
+    assert result.passes and any("Experience" in f for f in result.flags)
+    # more than max + 1 years, mandatory → a hard gate rejection
+    gate2 = HardConstraintGate(user_max_education_level=None, user_max_years_experience=2)
+    result = gate2.check(requirements)
+    assert not result.passes, "MANDATORY experience > max + 1 must be a hard gate rejection"
     assert any(r.type == "experience" for r in result.reasons)
 
 
