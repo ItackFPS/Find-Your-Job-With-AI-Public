@@ -9,7 +9,9 @@ listed in its own sitemaps), and nothing else:
 * **Only published pages**: the occupation x département pages France Travail lists in
   its sitemap (it answers 410 Gone for other combinations). The occupations read are the
   profile's: codes from a discovery preset where one exists, otherwise any sitemap
-  occupation whose name matches a target domain or occupation (see ``_slug_matches``).
+  occupation whose name matches a target domain or occupation (see ``_slug_matches`` and
+  ``_slug_names``). A label the user typed reaches a preset's codes through the vocabulary
+  family it resolves to (``domain_families``, from ``src/pipeline/domain_vocabulary.py``).
 * **robots.txt is respected**: the rules are fetched at the start of every run and
   every URL is checked against them (``*`` wildcards included). The keyword search
   (``motsCles=``) and the pages that load an offer's full text (``t:ac=``) are
@@ -77,17 +79,40 @@ def _fold(text: str) -> list[str]:
     return re.findall(r"[a-z0-9]+", plain.lower())
 
 
+def _content_stems(text: str) -> tuple[str, ...]:
+    # Imported here: importing src.pipeline at module load would pull the whole pipeline in.
+    from src.pipeline.domain_vocabulary import content_stems as stems_of
+
+    return stems_of(text)
+
+
+def _slug_stems(slug: str) -> set[str]:
+    return set(_content_stems(" ".join(_fold(slug))))
+
+
 def _slug_matches(term: str, slug: str) -> bool:
-    """Whether an occupation slug names ``term``: every word of the term starts a slug word
-    (or the reverse for words of five letters or more, so "infirmiere" finds "infirmier")."""
-    words = _fold(term)
-    slug_words = _fold(slug)
-    if not words or not slug_words:
-        return False
-    return all(
-        any(sw.startswith(w) or (len(sw) >= 5 and w.startswith(sw)) for sw in slug_words)
-        for w in words
-    )
+    """Whether an occupation slug states ``term``: every content word of the term, reduced to its
+    stem, is a word of the slug ("infirmière" finds ``infirmier-infirmiere``, "Comptabilité" finds
+    ``comptable``). The same stem rule as the hard filter and the scorer
+    (``src/pipeline/domain_vocabulary.py``, Phase B B5-B), so a label is read one way everywhere."""
+    stems = set(_content_stems(term))
+    return bool(stems) and stems <= _slug_stems(slug)
+
+
+_NAMES_MIN = 5  # a shared stem shorter than this ("chef", "tech") says nothing about an occupation
+
+
+def _slug_names(term: str, slug: str) -> bool:
+    """Whether an occupation slug shares a meaningful word with ``term`` without stating all of it:
+    "Maintenance informatique" names ``technicien-de-maintenance-industrielle``. Such a page is read
+    (wider coverage), but its occupation is not evidence about the offer's line of work."""
+    return bool({st for st in _content_stems(term) if len(st) >= _NAMES_MIN} & _slug_stems(slug))
+
+
+def _skipped(reason: str, **metadata: Any) -> CollectorResult:
+    """A run with nothing to search: no request was wasted and the source did not fail."""
+    return CollectorResult(source_name="france-travail-web", jobs=[],
+                           metadata={"skipped_reason": reason, **metadata})
 
 
 # -- listing parsing ------------------------------------------------------------------------
@@ -185,6 +210,12 @@ class FranceTravailWebCollector(BaseCollector):
         }
         self.target_domains = [str(d) for d in cfg.get("target_domains") or [] if str(d).strip()]
         self.target_terms = [str(t) for t in cfg.get("target_terms") or [] if str(t).strip()]
+        # {label: [vocabulary keys]}: a typed label ("Systèmes et réseaux") reaches the codes a
+        # preset gives its families. Malformed entries are ignored.
+        families = cfg.get("domain_families") or {}
+        self.domain_families: dict[str, list[str]] = {
+            str(k): [str(f) for f in v] for k, v in families.items() if isinstance(v, list)
+        } if isinstance(families, dict) else {}
         self.departments = [str(d).upper().zfill(2) for d in cfg.get("departments") or []]
         self._client: httpx.Client | None = None
 
@@ -209,12 +240,12 @@ class FranceTravailWebCollector(BaseCollector):
                                self._load_fixture("france_travail_web_listing.html"), parse_listing)
 
     def collect(self) -> CollectorResult:
+        # Nothing to search is not a failure of the source: the run reports it as skipped, with
+        # the reason, and its breaker does not move (Phase B B5-B).
         if not self.target_domains and not self.target_terms:
-            return CollectorResult(source_name="france-travail-web", jobs=[], errors=[
-                "no target domain or occupation in the profile; nothing to search"])
+            return _skipped("no target domain or occupation in the profile; nothing to search")
         if not self.departments:
-            return CollectorResult(source_name="france-travail-web", jobs=[], errors=[
-                "no département in the profile's locations; add a place to search France Travail"])
+            return _skipped("no département in the profile's locations; add a place to search France Travail")
         errors: list[str] = []
         jobs: dict[str, dict[str, Any]] = {}
         with httpx.Client(timeout=self.timeout, follow_redirects=False,
@@ -243,6 +274,11 @@ class FranceTravailWebCollector(BaseCollector):
             if offsite:
                 logger.warning("France Travail web: %d sitemap URLs outside %s skipped", offsite, BASE)
             pages = self._pages(published)
+            if not pages:
+                self._client = None
+                return _skipped("no target domain or occupation in the profile matches a France Travail "
+                                "occupation page; nothing to search",
+                                pages_planned=0, pages_read=0, sitemap_offsite_skipped=offsite)
             for url, occupation in pages[: self.max_pages]:
                 path = url[len(BASE):]
                 if not robots_allows(rules, path):
@@ -291,19 +327,29 @@ class FranceTravailWebCollector(BaseCollector):
     def _pages(self, published: list[tuple[str, str, str, str]]) -> list[tuple[str, dict[str, Any]]]:
         """Pages to read, round-robin across départements so a page cap stays fair."""
         wanted: dict[str, list[str]] = {}
+        coded: set[str] = set()
         for domain in self.target_domains:
-            for code in self.occupations.get(domain, []):
-                wanted.setdefault(code, []).append(domain)
+            for key in dict.fromkeys([domain, *self.domain_families.get(domain, [])]):
+                for code in self.occupations.get(key, []):
+                    wanted.setdefault(code, []).append(domain)
+                    coded.add(domain)
         # Domains and occupations with no code table are read by occupation name.
-        by_name = [t for t in (*self.target_domains, *self.target_terms) if t not in self.occupations]
+        by_name = [t for t in (*self.target_domains, *self.target_terms) if t not in coded]
         by_dept: dict[str, list[tuple[str, dict[str, Any]]]] = {d: [] for d in self.departments}
         for url, slug, code, dept in published:
             if dept not in by_dept:
                 continue
-            hits = list(wanted.get(code, [])) + [t for t in by_name if _slug_matches(t, slug)]
-            if hits:
-                by_dept[dept].append((url, {"scheme": "france-travail", "slug": slug, "code": code,
-                                            "target_domains": sorted(set(hits))}))
+            # Evidence: a preset's code, or an occupation that states the whole label.
+            stated = list(wanted.get(code, [])) + [t for t in by_name if _slug_matches(t, slug)]
+            shared = [t for t in by_name if t not in stated and _slug_names(t, slug)]
+            if stated or shared:
+                occupation: dict[str, Any] = {"scheme": "france-travail", "slug": slug, "code": code,
+                                              "target_domains": sorted(set(stated))}
+                if shared:
+                    occupation["read_for"] = sorted(set(shared))  # read for coverage, not evidence
+                by_dept[dept].append((url, occupation))
+        for pages_of_dept in by_dept.values():
+            pages_of_dept.sort(key=lambda page: not page[1]["target_domains"])  # a page cap keeps these
         lists = [by_dept[d] for d in self.departments]
         pages: list[tuple[str, dict[str, Any]]] = []
         for i in range(max((len(p) for p in lists), default=0)):
