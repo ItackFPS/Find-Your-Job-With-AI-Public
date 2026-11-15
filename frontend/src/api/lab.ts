@@ -8,7 +8,7 @@ export interface SkillGap {
   adjacent_owned: { skill: string; jobs: number }[]; example_titles: string[]; why: string
 }
 export interface SkillGraph {
-  window_days: number; relevant_definition: string; n_jobs: number; n_relevant: number
+  window_days: number; relevant_score?: number; relevant_definition: string; n_jobs: number; n_relevant: number
   nodes: SkillNode[]; edges: SkillEdge[]; gaps: SkillGap[]; owned: string[]; limitations: string[]
 }
 export const getSkillGraph = (days = 90) =>

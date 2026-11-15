@@ -13,14 +13,16 @@ const graph: SkillGraph = {
   edges: [{ source: 'docker', target: 'python', weight: 3 }],
   gaps: [{ skill: 'docker', relevant_demand: 3, demand: 3, relevant_share: 0.75,
     adjacent_owned: [{ skill: 'python', jobs: 3 }], example_titles: ['Dev Python 1'],
-    why: 'asked for by 3 of 4 relevant job(s) (75%); often alongside your python' }],
+    why: 'SERVER SENTENCE' }],
   limitations: [],
 }
 
 describe('Skills', () => {
   it('shows a gap with its evidence', () => {
-    render(<GapCard gap={graph.gaps[0]} />)
+    render(<GapCard gap={graph.gaps[0]} total={4} />)
     expect(screen.getByText('docker')).toBeInTheDocument()
+    expect(screen.getByText(/Asked for by 3 of 4 relevant jobs \(75%\)/)).toBeInTheDocument()
+    expect(screen.queryByText(/SERVER SENTENCE/)).toBeNull()               // built from the numbers, translated
     expect(screen.getByText('75% of relevant jobs')).toBeInTheDocument()
     expect(screen.getByText(/often alongside your python/)).toBeInTheDocument()
     expect(screen.getByText(/Dev Python 1/)).toBeInTheDocument()

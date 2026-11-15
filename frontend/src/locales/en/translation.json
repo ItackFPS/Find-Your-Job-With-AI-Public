@@ -497,13 +497,20 @@
   },
   "skills": {
     "title": "Skills",
-    "intro": "Which technologies the jobs you are a fit for ask for, how they go together, and what your profile is missing — counted from the postings the pipeline kept.",
+    "intro": "Which skills the jobs you are a fit for ask for, how they go together, and what your profile is missing — counted from the postings the search kept.",
     "days": "{count, number} days",
     "relevantOf": "{relevant, number} relevant of {total, number} tagged jobs",
     "unavailable": "The skill graph is unavailable.",
     "empty": "No tagged jobs in this window yet.",
     "opportunities": "Development opportunities",
-    "relevantDefinition": "Relevant = {definition}",
+    "relevantDefinition": "Relevant = latest final score ≥ {score, number}, or marked interested or acted on (not withdrawn)",
+    "gapWhy": "Asked for by {count, number} of {total, number} relevant jobs ({percent}%)",
+    "gapAlongside": "; often alongside your {skills}",
+    "limitation": {
+      "tags": "Skills come from the skill tags of stored postings; requirements written only in free text are missed.",
+      "profile": "The profile lists target skills, not proven proficiency.",
+      "kept": "Only jobs the search kept are stored: demand among rejected postings is not counted."
+    },
     "noGaps": "No skill is asked for often enough among relevant jobs that your profile lacks.",
     "market": "What the market asks for",
     "limits": "Limits of this view",
