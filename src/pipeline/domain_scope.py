@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.models.profile import JobSearchProfile
@@ -72,3 +72,23 @@ def groups_outside_profile(
         if not group_belongs_to_profile(group_key, keywords, profile, terms):
             flat.extend(keywords)
     return flat
+
+
+# Sources whose raw_payload["occupation"] (the source's own occupation for an offer) is
+# trusted as evidence about the offer's line of work (France Travail web: the occupation
+# page the offer was listed on, set by src/collectors/france_travail_web.py).
+OCCUPATION_EVIDENCE_SOURCES = frozenset({"france-travail-web"})
+
+
+def source_occupation_in_profile(job: Any, profile_domains: Any) -> bool:
+    """Whether the source files ``job`` under an occupation that states one of
+    ``profile_domains``. Only trusted from a source that sets it, and only in the shape it
+    sets (a dict whose "target_domains" is a list of strings); anything else is False."""
+    if getattr(job, "source", None) not in OCCUPATION_EVIDENCE_SOURCES:
+        return False
+    payload = getattr(job, "raw_payload", None)
+    occupation = payload.get("occupation") if isinstance(payload, dict) else None
+    domains = occupation.get("target_domains") if isinstance(occupation, dict) else None
+    return bool(isinstance(domains, list) and isinstance(profile_domains, list)
+                and {d for d in domains if isinstance(d, str)}
+                & {d for d in profile_domains if isinstance(d, str)})

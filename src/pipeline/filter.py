@@ -22,7 +22,10 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from src.geo.places import COMMUNE
 from src.models.job import Job
-from src.pipeline.domain_scope import groups_outside_profile
+from src.pipeline.domain_scope import (
+    groups_outside_profile,
+    source_occupation_in_profile,
+)
 from src.pipeline.domain_vocabulary import profile_labels, resolve_domains, title_has_stem_set
 from src.pipeline.location_distance import (
     assess,
@@ -34,11 +37,6 @@ from src.pipeline.location_distance import (
 
 if TYPE_CHECKING:
     from src.models.profile import JobSearchProfile
-
-# Sources whose raw_payload["occupation"] (the source's own occupation for an offer)
-# counts as role evidence in the title check: the source name set in config/sources.yaml
-# for src/collectors/france_travail_web.py. Other sources' payloads are not read for it.
-_OCCUPATION_EVIDENCE_SOURCES = frozenset({"france-travail-web"})
 
 # Skill abbreviation → expanded canonical forms used for DESCRIPTION matching.
 # The raw abbreviation stays in TITLE matching (short tokens are fine in titles
@@ -728,14 +726,8 @@ def matches_title_keywords(job: Job, config: dict[str, Any]) -> bool:
     #     cannot name the role; exclusions and non-IT functions above still apply.
     #     Only trusted from the source that sets it, and only in the shape it sets
     #     (a dict whose "target_domains" is a list of strings); anything else is ignored.
-    if job.source in _OCCUPATION_EVIDENCE_SOURCES:
-        occupation = (job.raw_payload or {}).get("occupation")
-        domains = occupation.get("target_domains") if isinstance(occupation, dict) else None
-        profile_domains = config.get("target_domains")
-        if (isinstance(domains, list) and isinstance(profile_domains, list)
-                and {d for d in domains if isinstance(d, str)}
-                & {d for d in profile_domains if isinstance(d, str)}):
-            return True
+    if source_occupation_in_profile(job, config.get("target_domains")):
+        return True
 
     # 4. Title match → accept immediately (IT keyword found in title).
     # Word-boundary guards prevent short abbreviations like "ia" (the "IA" skill)
