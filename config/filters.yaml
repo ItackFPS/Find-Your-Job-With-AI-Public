@@ -827,6 +827,23 @@ contract_keywords:
       - apprentice
       - placement
     description: []
+    # Whole words that reject a title when the profile asks for neither the
+    # internship contract nor the internship level (matches_contract_type in
+    # src/pipeline/filter.py). Kept apart from `title` above: "placement" also
+    # names a finance or electronics job.
+    reject_title_words:
+      - stage
+      - stagiaire
+      - intern
+      - internship
+    # Removed from the title before the words above are looked for.
+    not_a_contract_phrases:
+      - early stage
+      - late stage
+      - seed stage
+      - growth stage
+      - 1er stage
+      - premier stage
 
   alternance:
     title:
@@ -835,6 +852,15 @@ contract_keywords:
       - apprentissage
       - apprenti
     description: []
+    reject_title_words:
+      - alternance
+      - alternant
+      - alternante
+      - apprenti
+      - apprentie
+      - apprentissage
+      - apprenticeship
+      - apprentice
 
   cdi:
     title: []
