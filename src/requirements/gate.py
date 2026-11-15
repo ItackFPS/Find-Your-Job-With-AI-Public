@@ -132,6 +132,8 @@ class HardConstraintGate:
         career_level: dict | None = None,
         user_education_label: str | None = None,
         user_held_education_level: int | None = None,
+        user_in_progress_education_level: int | None = None,
+        user_in_progress_education_label: str | None = None,
     ):
         self._user_max_edu = user_max_education_level
         self._user_max_years_exp = user_max_years_experience
@@ -150,6 +152,21 @@ class HardConstraintGate:
         # defaults to user_max_education_level (v1: the same number).
         self._user_held_edu = (user_held_education_level if user_held_education_level is not None
                                else user_max_education_level)
+        # Highest Bac+N of a qualification being prepared above the held one
+        # (candidate_education_in_progress). A requirement within it is neither met nor
+        # missed: recorded as unknown with a flag, never rejected. Owner decision D13a
+        # (2026-11-14, Phase B B6-D): the offer is accepted with that visible note and a
+        # lower score — the usual education penalty of gate_jobs() still applies.
+        self._user_preparing_edu = user_in_progress_education_level
+        self._preparing_label = user_in_progress_education_label
+
+    def is_preparing_level(self, bac_plus: int) -> bool:
+        """True when ``bac_plus`` is above the held level but within the one being prepared."""
+        return (
+            self._user_preparing_edu is not None
+            and self._user_max_edu is not None
+            and self._user_max_edu < bac_plus <= self._user_preparing_edu
+        )
 
     def check(
         self,
@@ -359,6 +376,15 @@ class HardConstraintGate:
 
         candidate_label = self._candidate_education_label()
         required_label = self._required_education_label(edu.level_bac_plus, edu.level_label)
+
+        if self.is_preparing_level(edu.level_bac_plus):
+            preparing = self._preparing_label or f"bac+{self._user_preparing_edu}"
+            flag = (
+                f"Education: job asks for {required_label}; you are preparing {preparing} "
+                f"and hold {candidate_label} — kept with a lower score, check the offer."
+            )
+            return [], ConstraintState.UNKNOWN, flag
+
         # The message names why the level counts as required: a PREFERRED
         # reading only rejects as a stated bar ("Bac+5 ou équivalent"), and
         # calling that "preferred" would contradict the decision it explains.

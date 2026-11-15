@@ -768,7 +768,10 @@ def run_pipeline(
         gate_results: dict[str, Any] = {}
         if profile is not None:
             try:
-                from src.requirements.education import candidate_education
+                from src.requirements.education import (
+                    candidate_education,
+                    candidate_education_in_progress,
+                )
                 from src.requirements.extractor import (
                     RequirementExtractor,
                     build_requirements_llm_provider,
@@ -781,6 +784,7 @@ def run_pipeline(
 
                 # Profile v2: the highest held French/EQF level (F5.3); v1: max_education.
                 user_max_edu_level, user_edu_label, user_held_edu = candidate_education(profile)
+                user_preparing_edu, user_preparing_label = candidate_education_in_progress(profile)
 
                 # Build LLM provider when enabled in matching config (None otherwise,
                 # or if construction fails — the gate always works heuristic-only).
@@ -805,6 +809,8 @@ def run_pipeline(
                     career_level=filters_config.get("career_level"),
                     user_education_label=user_edu_label,
                     user_held_education_level=user_held_edu,
+                    user_in_progress_education_level=user_preparing_edu,
+                    user_in_progress_education_label=user_preparing_label,
                 )
                 edu_penalty = getattr(profile.matching, "education_preferred_penalty", 0.20)
 
