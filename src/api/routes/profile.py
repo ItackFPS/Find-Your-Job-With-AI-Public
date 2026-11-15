@@ -2,6 +2,7 @@
 
 GET  /api/profile  — read the profile in effect as JSON
 PUT  /api/profile  — validate via JobSearchProfile, write profile.local.yaml
+POST /api/profile/domains/resolve — how the search reads line-of-work labels (nothing saved)
 
 The profile in effect is config/profile.local.yaml when it exists, otherwise
 the tracked default config/profile.yaml (see src/config_files.py). Saves
@@ -16,7 +17,7 @@ from pathlib import Path
 import yaml
 from fastapi import APIRouter, HTTPException
 
-from src.api.schemas import ProfileIn, ProfileOut
+from src.api.schemas import DomainResolutionOut, DomainResolveIn, DomainResolveOut, ProfileIn, ProfileOut
 from src.config_files import PROFILE_WRITE_LOCK, local_config_path, resolve_config_path, write_yaml_atomic
 from src.geo.profile_migration import backup_profile, migrate_profile_all
 from src.models.profile import JobSearchProfile
@@ -51,6 +52,30 @@ def get_profile() -> ProfileOut:
         data = yaml.safe_load(f) or {}
     data, _geo_notes, _v2_notes = migrate_profile_all(data)
     return ProfileOut(**data)
+
+
+@router.post("/domains/resolve", response_model=DomainResolveOut)
+def resolve_profile_domains(payload: DomainResolveIn) -> DomainResolveOut:
+    """How the search reads each line-of-work label, with the same resolver as the hard filter,
+    the scorer and discovery (Phase B B5-C), so the Profile and Onboarding pages can show the
+    labels the vocabulary does not know. Read-only: the profile keeps what the user typed."""
+    from src.discovery.presets import load_domain_keywords
+    from src.pipeline.domain_vocabulary import plain, resolve_domains
+
+    vocabulary = load_domain_keywords(_CONFIG_DIR)
+    keys = {plain(key.replace("_", " ")) for key in vocabulary}
+    out: list[DomainResolutionOut] = []
+    for raw in payload.labels:
+        label = str(raw).strip()
+        if not label:
+            continue
+        families = list(resolve_domains([label], vocabulary).families)
+        if plain(label.replace("_", " ")) in keys:
+            status = "known"
+        else:
+            status = "resolved" if families else "unresolved"
+        out.append(DomainResolutionOut(label=label, status=status, families=families))
+    return DomainResolveOut(labels=out)
 
 
 def _merge_profile_updates(existing: dict, updates: dict) -> dict:

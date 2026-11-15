@@ -1058,7 +1058,8 @@
       "curated": "Curated",
       "placeholder": "Search any domain or occupation (e.g. software development, seller, cleaner)…",
       "addCustomHint": "No match? Press Enter to add “{value}” as a custom domain",
-      "noMatch": "No match for “{value}” — press Enter to add it as a custom domain."
+      "noMatch": "No match for “{value}” — press Enter to add it as a custom domain.",
+      "unresolved": "Not in the built-in vocabulary: {labels}. The search uses these words as typed, without synonyms."
     },
     "location": {
       "statusLabel": "Priority of this location",
