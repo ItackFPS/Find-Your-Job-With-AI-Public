@@ -69,6 +69,16 @@ detail page shows the record (supporting / against / unknown / conflicts). Confi
 `config/decisions.yaml`. See
 [ADR 0008](adr/0008-decision-journal.md).
 
+**Growth and retention** (Phase B B10, P-009; measured 2026-11-15 on the audit copy, an estimate beyond
+that). The journal is the largest part of `jobs.db`: on the audit copy, 54,083 decision rows over 7 runs
+take about 160 MB of row data (about 3 KB each) and 20,714 snapshots about 42 MB. A full daily run of the
+audited size (run `5f38fef7`: 17,871 decisions) adds about 50 MB. Retention is applied after each run and
+tested (`tests/test_decision_journal_storage.py`): snapshot text goes after `text_retention_days` (60) and
+decision rows after `record_retention_days` (365). At that size, a year of daily runs would therefore hold
+roughly 18 GB of journal rows before it levels off: this is a projection, not a measurement. Lowering
+`record_retention_days`, or not journaling an unchanged rejection again, are the levers; each changes what
+can be audited later and is a decision of its own.
+
 ## Disagreement and abstention
 
 `src/decisions/disagreement.py` compares the deterministic fit, semantic similarity, Phase 2
