@@ -176,6 +176,44 @@ def test_breaker_pauses_skips_and_resumes_a_failing_source(pipeline) -> None:  #
     assert load_states(pipeline.db)["down"] == BreakerState("down")
 
 
+def test_a_source_with_nothing_to_search_is_skipped_and_its_breaker_does_not_move(
+        pipeline, monkeypatch) -> None:  # noqa: ANN001
+    """Phase B B5-B: a profile that gives a source nothing to search is not that source's failure."""
+    save_states(pipeline.db, [BreakerState("healthy", consecutive_failures=2)])
+    monkeypatch.setattr(_Healthy, "collect", lambda self: CollectorResult(
+        source_name="healthy", jobs=[], metadata={"skipped_reason": "nothing to search"}))
+    row = pipeline()["healthy"]
+    assert row["status"] == "skipped" and row["reason"] == "nothing to search"
+    assert "skipped_reason" not in row and "canary" not in row
+    assert load_states(pipeline.db)["healthy"].consecutive_failures == 2
+
+
+def test_france_travail_web_gets_the_families_of_each_typed_label(tmp_path: Path, monkeypatch) -> None:
+    """Phase B B5-B: a typed label reaches the occupation codes of the family it resolves to."""
+    from src.collectors.registry import registry
+    from src.pipeline.orchestrator import run_pipeline
+
+    seen: dict[str, Any] = {}
+
+    class _Capture(_Healthy):
+        def __init__(self, config: dict | None = None) -> None:
+            super().__init__(config)
+            seen.update(config or {})
+
+    monkeypatch.setattr(registry, "get_collector_class", lambda src_type: _Capture)
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "profile.yaml").write_text(
+        "target_domains: [Développement web, Boulangerie]\ntarget_skills: [python]\n", encoding="utf-8")
+    (config_dir / "filters.yaml").write_text(
+        "domain_keywords:\n  web_development:\n    title: [développeur web, développement web]\n",
+        encoding="utf-8")
+    (config_dir / "sources.yaml").write_text(
+        "sources:\n  - {name: ftw, type: france_travail_web, active: true}\n", encoding="utf-8")
+    run_pipeline(db_path=str(tmp_path / "jobs.db"), config_dir=str(config_dir))
+    assert seen["domain_families"] == {"Développement web": ["web_development"], "Boulangerie": []}
+
+
 def test_served_pages_with_no_offer_are_reported_as_a_parser_change(pipeline) -> None:  # noqa: ANN001
     by_source = pipeline()
     served = by_source["served"]

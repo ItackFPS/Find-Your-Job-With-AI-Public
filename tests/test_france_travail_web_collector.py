@@ -243,7 +243,8 @@ def test_a_lasting_server_error_is_reported_per_page(monkeypatch) -> None:
 ])
 def test_nothing_to_search_is_reported_not_raised(cfg, needle) -> None:  # noqa: ANN001
     result = FranceTravailWebCollector(cfg).collect()
-    assert result.jobs == [] and needle in result.errors[0]
+    # skipped with its reason, not a failure of the source (Phase B B5-B)
+    assert result.jobs == [] and result.errors == [] and needle in result.metadata["skipped_reason"]
 
 
 def test_unreachable_site_is_one_clear_error(monkeypatch) -> None:
@@ -444,3 +445,108 @@ def test_target_terms_from_occupations_are_read_by_name(monkeypatch) -> None:  #
     FranceTravailWebCollector({
         "target_terms": ["aide soignant"], "departments": ["83"], "rate_limit_delay": 0}).collect()
     assert [u.rsplit("/", 3)[-3] for u in _Client.last.urls[2:]] == ["aide-soignant"]
+
+
+# -- typed labels (Phase B B5-B): one stem rule, families reach preset codes ----------------
+
+@pytest.mark.parametrize(("label", "slug", "stated"), [
+    ("Agriculture", "agriculteur", True),
+    ("Comptabilité", "comptable", True),
+    ("Cuisine", "chef-cuisinier", True),
+    ("Développement web", "developpeur-web", True),
+    ("Maintenance informatique", "technicien-de-maintenance-industrielle", False),
+    ("Administration systèmes", "ingenieur-systemes-embarques", False),
+    ("Support informatique", "consultant-informatique", False),
+    ("Finance", "comptable", False),
+])
+def test_a_slug_states_a_label_when_it_holds_every_word(label: str, slug: str, stated: bool) -> None:
+    assert _slug_matches(label, slug) is stated
+
+
+@pytest.mark.parametrize(("label", "slug", "named"), [
+    ("Maintenance informatique", "technicien-de-maintenance-industrielle", True),
+    ("Support informatique", "consultant-informatique", True),
+    ("Chef de projet", "chef-cuisinier", False),  # "chef" is too short to name an occupation
+    ("Cuisine", "plombier", False),
+])
+def test_a_slug_names_a_label_when_it_shares_a_long_word(label: str, slug: str, named: bool) -> None:
+    assert ftw._slug_names(label, slug) is named
+
+
+def test_a_page_found_by_a_shared_word_is_read_but_is_not_evidence() -> None:
+    collector = _collector({"target_domains": ["Maintenance informatique", "Infirmier"], "departments": ["83"]})
+    published = [(f"https://x/{slug}", slug, "s1m1", "83")
+                 for slug in ("technicien-de-maintenance-industrielle", "infirmier")]
+    pages = collector._pages(published)
+    # the page that states a label comes first, so a page cap keeps it
+    assert [page[1]["slug"] for page in pages] == ["infirmier", "technicien-de-maintenance-industrielle"]
+    assert pages[0][1]["target_domains"] == ["Infirmier"] and "read_for" not in pages[0][1]
+    assert pages[1][1]["target_domains"] == [] and pages[1][1]["read_for"] == ["Maintenance informatique"]
+
+
+def test_an_offer_read_for_coverage_still_needs_its_own_title_evidence() -> None:
+    raw = parse_listing(LISTING, now=NOW)[0]  # "Chargé de projet": no IT word in title or extract
+    raw["occupation"] = {"scheme": "france-travail", "slug": "technicien-de-maintenance-industrielle",
+                         "code": "s1m1", "target_domains": [], "read_for": ["Maintenance informatique"]}
+    job = normalize_jobs("france_travail_web", [raw])[0]
+    config = {"title_keywords": {"include": ["developpeur"], "description_include": ["developpeur"],
+                                 "exclude": [], "non_it_functions": []},
+              "target_domains": ["Maintenance informatique"]}
+    assert matches_title_keywords(job, config) is False
+
+
+def test_a_typed_label_reaches_the_codes_of_the_family_it_resolves_to() -> None:
+    collector = _collector({"target_domains": ["Développement web"], "departments": ["83"],
+                            "domain_families": {"Développement web": ["web_development"]}})
+    published = [("https://x/a", "developpeur-web", "s28m7", "83"),
+                 ("https://x/b", "integrateur-web", OCCUPATIONS["web_development"][-1], "83")]
+    pages = collector._pages(published)
+    assert {page[1]["code"] for page in pages} >= {"s28m7"}
+    # the evidence is the label the user typed, the one the filter compares with
+    assert all(page[1]["target_domains"] == ["Développement web"] for page in pages)
+
+
+@pytest.mark.parametrize("families", [None, "web_development", {"x": "not a list"}, ["a"]])
+def test_malformed_domain_families_are_ignored(families) -> None:  # noqa: ANN001
+    collector = _collector({"target_domains": ["web_development"], "departments": ["83"],
+                            "domain_families": families})
+    assert isinstance(collector.domain_families, dict)
+    assert collector._pages([("https://x/a", "developpeur-web", "s28m7", "83")])
+
+
+def test_a_profile_matching_no_occupation_page_is_skipped_not_failed(monkeypatch) -> None:  # noqa: ANN001
+    monkeypatch.setattr(ftw.httpx, "Client", _Client)
+    result = FranceTravailWebCollector({"target_domains": ["Finance"], "departments": ["83"],
+                                        "rate_limit_delay": 0}).collect()
+    assert result.jobs == [] and result.errors == []
+    assert "matches a France Travail occupation page" in result.metadata["skipped_reason"]
+    assert result.metadata["pages_planned"] == 0
+    assert len(_Client.last.urls) == 2  # robots.txt and the sitemap: no listing page asked for
+
+
+P1_SITEMAP = """<urlset>
+<url><loc>https://candidat.francetravail.fr/offres/emploi/technicien-support-informatique/var/s28m5d83</loc></url>
+<url><loc>https://candidat.francetravail.fr/offres/emploi/administrateur-systemes-et-reseaux/var/s28m11d83</loc></url>
+<url><loc>https://candidat.francetravail.fr/offres/emploi/technicien-reseaux/var/s28m19d83</loc></url>
+<url><loc>https://candidat.francetravail.fr/offres/emploi/expert-cybersecurite/var/s28m25d83</loc></url>
+<url><loc>https://candidat.francetravail.fr/offres/emploi/infirmier-infirmiere/var/s13m1d83</loc></url>
+</urlset>"""
+
+
+def test_a_junior_it_profile_with_typed_labels_plans_pages(monkeypatch) -> None:  # noqa: ANN001
+    """Phase B B5 acceptance: France Travail web plans pages for P1's typed labels (it planned none)."""
+    from src.discovery.presets import load_domain_keywords
+    from src.pipeline.domain_vocabulary import resolve_domains
+
+    labels = ["Administration systèmes", "Support informatique", "Réseaux informatiques",
+              "Cybersécurité", "Maintenance informatique"]
+    kws = load_domain_keywords()
+    families = {label: list(resolve_domains([label], kws).families) for label in labels}
+    monkeypatch.setattr(ftw.httpx, "Client", _Client)
+    monkeypatch.setattr(_Client, "sitemap_text", P1_SITEMAP)
+    result = _collector({"target_domains": labels, "departments": ["83"], "rate_limit_delay": 0,
+                         "domain_families": families}).collect()
+    listing = _Client.last.urls[2:]
+    assert len(listing) == 4 and not any("infirmier" in u for u in listing)
+    assert result.metadata["pages_planned"] == 4 and result.errors == []
+    assert result.jobs and all(j["occupation"]["target_domains"] for j in result.jobs)

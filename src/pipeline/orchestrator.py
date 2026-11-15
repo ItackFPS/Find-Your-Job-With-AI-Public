@@ -480,6 +480,16 @@ def run_pipeline(
                 merged_cfg.setdefault("target_domains", list(early_profile.target_domains))
                 merged_cfg.setdefault("target_terms", [
                     (o.label_fr or o.keyword or o.label) for o in early_profile.target_occupations])
+                try:  # a typed label reaches a preset's occupation codes through its families
+                    from src.discovery.presets import load_domain_keywords
+                    from src.pipeline.domain_vocabulary import resolve_domains
+
+                    domain_kws = load_domain_keywords(config_dir)
+                    merged_cfg.setdefault("domain_families", {
+                        label: list(resolve_domains([label], domain_kws).families)
+                        for label in merged_cfg["target_domains"]})
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("France Travail web: domain families not resolved: %s", exc)
                 distance_cfg = distance_config(early_profile)
                 merged_cfg.setdefault("departments", ft_departments(distance_cfg) if distance_cfg else [
                     p.value for p in early_profile.geography.location_preferences
@@ -505,6 +515,8 @@ def run_pipeline(
                     source_stats["per_query_status"] = result.metadata["per_query_status"]
                 if result.listing_complete:
                     source_stats["listing_complete"] = True
+                if result.metadata.get("skipped_reason") and not result.jobs and not result.errors:
+                    source_stats["skipped_reason"] = str(result.metadata["skipped_reason"])
                 errors = [f"{name}: {e}" for e in result.errors]
                 _apply_source_contract(collector, source_stats, errors, name)
                 logger.info("  Collected %d jobs from %s", len(normalized), name)
@@ -535,6 +547,10 @@ def run_pipeline(
                 name, normalized, source_stats, errors = future.result()
                 all_jobs.extend(normalized)
                 source_stats["status"] = collection_status(source_stats["collected"], source_stats["errors"])
+                if source_stats.get("skipped_reason") and source_stats["status"] == "completed":
+                    # nothing to search (the source said why): no breaker move, no yield
+                    source_stats["status"] = "skipped"
+                    source_stats["reason"] = source_stats.pop("skipped_reason")
                 if source_stats["status"] in ("failed", "partial") and errors:
                     # the Sources table shows a row's reason, as it does for a skipped source
                     source_stats["reason"] = errors[0].removeprefix(f"{name}: ")
@@ -1470,7 +1486,8 @@ def run_pipeline(
 def collection_status(collected: int, errors: int) -> str:
     """How one source's collection went: ``completed`` (no error), ``partial`` (errors,
     but jobs came back) or ``failed`` (errors and nothing collected). A source the
-    preflight left out is ``skipped`` instead (set where it is skipped)."""
+    preflight left out, or one that had nothing to search, is ``skipped`` instead (set where
+    it is skipped)."""
     if not errors:
         return "completed"
     return "partial" if collected else "failed"
