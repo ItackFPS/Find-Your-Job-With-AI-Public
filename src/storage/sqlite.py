@@ -481,7 +481,7 @@ class Storage:
         return cur.rowcount > 0
 
     def upsert_jobs_batch(
-        self, jobs: list[Job], detect_field_changes: bool = False
+        self, jobs: list[Job], detect_field_changes: bool = False, return_inserted_ids: bool = False
     ) -> dict[str, Any]:
         """Upsert a batch of jobs, committing periodically in chunks.
 
@@ -497,8 +497,8 @@ class Storage:
         that only read the three top-level counts are unaffected; it exists
         so a caller can distinguish new-vs-already-known jobs PER SOURCE
         without a second query, feeding source_checkpoints observability.
-        A non-empty batch also returns ``inserted_ids`` (additive, Phase B B8-A): the ids
-        stored for the first time.
+        ``return_inserted_ids`` (default False, same shape when omitted) adds ``inserted_ids``:
+        the ids stored for the first time (Phase B B8-A "newly discovered").
 
         ``detect_field_changes`` (EXPERIMENTAL / I19, default False — zero
         cost and byte-identical return shape when omitted) additionally
@@ -517,6 +517,8 @@ class Storage:
             }
             if detect_field_changes:
                 empty_result["field_changes"] = {}
+            if return_inserted_ids:
+                empty_result["inserted_ids"] = []
             return empty_result
 
         conn = self._get_conn()
@@ -692,9 +694,9 @@ class Storage:
             "updated": updated,
             "unchanged": unchanged,
             "by_source": dict(by_source),
-            # ids stored for the first time (additive, Phase B B8-A "newly discovered")
-            "inserted_ids": inserted_ids,
         }
+        if return_inserted_ids:
+            result["inserted_ids"] = inserted_ids
         if detect_field_changes:
             result["field_changes"] = field_changes
         return result

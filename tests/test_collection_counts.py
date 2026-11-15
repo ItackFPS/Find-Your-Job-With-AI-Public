@@ -50,12 +50,14 @@ def test_storage_returns_the_ids_stored_for_the_first_time(tmp_path: Path) -> No
     st = Storage(db_path=str(tmp_path / "jobs.db"))
     st.init_db()
     try:
-        first = st.upsert_jobs_batch(jobs[:1])
-        both = st.upsert_jobs_batch(jobs)
+        first = st.upsert_jobs_batch(jobs[:1], return_inserted_ids=True)
+        both = st.upsert_jobs_batch(jobs, return_inserted_ids=True)
+        plain = st.upsert_jobs_batch(jobs)
     finally:
         st.close()
     assert first["inserted_ids"] == [jobs[0].id]
     assert both["inserted_ids"] == [jobs[1].id]
+    assert "inserted_ids" not in plain                     # the default shape is unchanged
 
 
 # -- in a pipeline run ---------------------------------------------------------------------

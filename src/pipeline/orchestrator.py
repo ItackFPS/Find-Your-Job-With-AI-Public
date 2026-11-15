@@ -1011,7 +1011,7 @@ def run_pipeline(
         recorder.observe_gate_results(gate_results)
         recorder.observe_scores(scored_with_breakdown, scoring_config=scoring_config)
         storage_stats = storage.upsert_jobs_batch(
-            [job for job, _, _ in scored_with_breakdown]
+            [job for job, _, _ in scored_with_breakdown], return_inserted_ids=True,
         )
         stats.stored_new = int(storage_stats.get("inserted", 0))
         new_ids = set(storage_stats.get("inserted_ids") or ())
