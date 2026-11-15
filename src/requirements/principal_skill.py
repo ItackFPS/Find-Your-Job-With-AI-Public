@@ -196,6 +196,21 @@ def _build_known_technologies() -> frozenset[str]:
 # detect_missing_principal_skills[_with_or] below.
 KNOWN_TECHNOLOGIES: frozenset[str] = _build_known_technologies()
 
+# A source's skill value longer than this is a sentence (France Travail's task descriptions,
+# "Configurer le poste de travail aux besoins de l'utilisateur"), not a skill. Used where no
+# technology list applies: a profile outside IT (Stats page, Skills page; Phase B B10, P-018).
+MAX_SKILL_WORDS = 5
+MAX_SKILL_CHARS = 40
+
+
+def is_skill_label(value: str, *, technologies_only: bool) -> bool:
+    """Whether a lower-cased ``jobs.skills`` value counts as a skill on the Stats and Skills pages:
+    a known technology name when the profile's preset limits skills to technologies (IT), otherwise
+    any value that is not sentence-like."""
+    if technologies_only:
+        return value in KNOWN_TECHNOLOGIES
+    return bool(value) and len(value) <= MAX_SKILL_CHARS and len(value.split()) <= MAX_SKILL_WORDS
+
 # Tokens excluded from extract_known_technologies() below: real technologies
 # that also double as ordinary English/French words ("go", "swift", "dart",
 # the single-letter "r" language), so scanning them against unstructured
