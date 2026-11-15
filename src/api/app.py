@@ -365,10 +365,16 @@ DEV_WEB_ORIGINS: tuple[str, ...] = (
 def allowed_web_origins(same_user_only_enabled: bool, dev_server: bool = False) -> tuple[str, ...]:
     """The dev server's origins only while dev mode runs it (``FYJ_DEV_SERVER=1``, set
     by ``FindYourJob.cmd dev``): otherwise its port is free, and any local program could
-    serve a page there that your browser would let read and write the API. None under
-    API_SAME_USER_ONLY either: the dev server would relay other accounts' requests as
-    yours."""
-    return DEV_WEB_ORIGINS if dev_server and not same_user_only_enabled else ()
+    serve a page there that your browser would let read and write the API.
+
+    The same-account guard (on by default, owner decision D5) does not change this: the
+    dev server is a program of your account, so the guard lets through whatever it
+    relays, with or without an allowed Origin (an Origin-less request passes the Origin
+    guard). Refusing its origins would only break dev mode. The boundary is documented:
+    in dev mode, the dev server's port must not be reachable by another account
+    (docs/development.md). ``same_user_only_enabled`` is kept for callers."""
+    del same_user_only_enabled
+    return DEV_WEB_ORIGINS if dev_server else ()
 
 
 def dev_server_from_env(environ: Mapping[str, str] = os.environ) -> bool:
@@ -448,9 +454,10 @@ app.add_middleware(
     extra_hosts=os.environ.get("API_ALLOWED_HOSTS", "").split(","),
 )
 
-# Opt-in, outermost: API_SAME_USER_ONLY=1 serves only processes of the OS account
-# running this server, so a lab agent under its own account cannot make the API
-# write production state for it (ADR 0011, "Promotion authority"). Off by default.
+# Outermost: serves only processes of the OS account running this server, so a lab
+# agent or another account cannot make the API write production state for it (ADR 0011,
+# "Promotion authority"). On by default (owner decision D5); API_SAME_USER_ONLY=0 turns
+# it off explicitly.
 app.add_middleware(SameUserPeerGuardMiddleware, enabled=same_user_only())
 
 # ---------------------------------------------------------------------------

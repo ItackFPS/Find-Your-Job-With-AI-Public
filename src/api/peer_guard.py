@@ -1,4 +1,8 @@
-"""Serve the local API only to processes of the OS account that runs it (opt-in: ``API_SAME_USER_ONLY=1``).
+"""Serve the local API only to processes of the OS account that runs it.
+
+On by default (owner decision D5, Phase B B10, P-033); ``API_SAME_USER_ONLY=0`` turns it off explicitly.
+A refused request gets a 403 whose body says why, and the server logs the reason (rate-limited), so a
+legitimate local tool that is blocked can be diagnosed instead of failing silently.
 
 The Host and Origin guards (``origin_guard.py``) trust every process on this machine. That is right while
 one person uses it, and wrong once an automated lab agent runs under its own, less privileged account
@@ -28,19 +32,22 @@ from __future__ import annotations
 import ctypes
 import ipaddress
 import json
+import logging
 import os
 import socket
 import sys
+import time
 from collections.abc import Callable
 from typing import Any
 
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+logger = logging.getLogger(__name__)
+
 ENV_VAR = "API_SAME_USER_ONLY"
 # isolation-check (src/lab/isolation.py) recognises a refusal by this header; it keeps its own copy of the
 # name because the lab never imports the API (a test checks the two agree)
 REFUSAL_HEADER = "x-fyj-peer-guard"
-_REFUSAL_BODY = json.dumps({"detail": "This API only serves the OS account that runs it"}).encode()
 
 Address = tuple[str, int]
 # headers a server or proxy layer may use to replace the connection's real peer address
@@ -48,8 +55,12 @@ FORWARDING_HEADERS = frozenset({b"x-forwarded-for", b"forwarded", b"x-real-ip", 
                                 b"x-client-ip", b"x-forwarded-host", b"x-forwarded-port"})
 
 
+_OFF_VALUES = ("0", "false", "no", "off")
+
+
 def enabled_from_env(environ: Any = os.environ) -> bool:
-    return str(environ.get(ENV_VAR, "")).strip().lower() in ("1", "true", "yes", "on")
+    """On unless ``API_SAME_USER_ONLY`` says off (owner decision D5): unset or empty means on."""
+    return str(environ.get(ENV_VAR, "")).strip().lower() not in _OFF_VALUES
 
 
 # -- who owns the client end of a loopback connection -----------------------------------------------------
@@ -228,6 +239,22 @@ def peer_is_owner(scope: Scope, owner_of: Callable[[Address, Address], str | Non
     return owner is not None and owner == self_owner
 
 
+def refusal_reason(scope: Scope, owner_of: Callable[[Address, Address], str | None], self_owner: str) -> str:
+    """Why ``peer_is_owner`` refused this request, in words a user can act on."""
+    client, server = scope.get("client"), scope.get("server")
+    if not client or not server or not _is_loopback(str(client[0])):
+        return "the request does not come from this computer (loopback)"
+    if any(name.lower() in FORWARDING_HEADERS for name, _ in scope.get("headers") or ()):
+        return "the request carries a forwarding header (a proxy), so its sender cannot be identified"
+    try:
+        owner = owner_of((str(client[0]), int(client[1])), (str(server[0]), int(server[1])))
+    except (OSError, ValueError):
+        owner = None
+    if owner is None:
+        return "the account of the sending program could not be identified"
+    return "the sending program runs under another account of this computer"
+
+
 def is_same_account_peer(scope: Scope) -> bool:
     """Whether this request comes from a process of the account running this server, on loopback.
 
@@ -257,10 +284,23 @@ class SameUserPeerGuardMiddleware:
         lookup = owner_of or connection_owner
         me = self_owner if self_owner is not None else (current_owner() if current_owner is not None else None)
         if lookup is None or not me:
-            raise RuntimeError(f"{ENV_VAR} is set but this platform ({sys.platform}) cannot identify the account "
-                               "of a local peer: refusing to start rather than serve every local account")
+            raise RuntimeError(f"The local API serves only this account's programs, but this platform "
+                               f"({sys.platform}) cannot identify the account of a local program: refusing to "
+                               f"start rather than serve every local account. To run without this protection, "
+                               f"set {ENV_VAR}=0 explicitly.")
         self.owner_of: Callable[[Address, Address], str | None] = lookup
         self.self_owner: str = me
+        self._last_logged: dict[str, float] = {}
+
+    def _log_refusal(self, scope: Scope, reason: str) -> None:
+        now = time.monotonic()
+        if now - self._last_logged.get(reason, -1e9) < 60:      # once a minute per reason
+            return
+        self._last_logged[reason] = now
+        client = scope.get("client")
+        logger.warning("Refused %s %s from %s: %s. This API serves only the programs of the account that "
+                       "runs it (%s=0 turns that off).", scope.get("method", "WS"), scope.get("path", ""),
+                       f"{client[0]}:{client[1]}" if client else "an unknown peer", reason, ENV_VAR)
 
     def allowed(self, scope: Scope) -> bool:
         return peer_is_owner(scope, self.owner_of, self.self_owner)
@@ -269,10 +309,13 @@ class SameUserPeerGuardMiddleware:
         if not self.enabled or scope["type"] not in ("http", "websocket") or self.allowed(scope):
             await self.app(scope, receive, send)
             return
+        reason = refusal_reason(scope, self.owner_of, self.self_owner)
+        self._log_refusal(scope, reason)
         if scope["type"] == "websocket":
             await send({"type": "websocket.close", "code": 1008})
             return
+        body = json.dumps({"detail": "This API only serves the OS account that runs it", "reason": reason}).encode()
         await send({"type": "http.response.start", "status": 403,
                     "headers": [(b"content-type", b"application/json"), (REFUSAL_HEADER.encode(), b"refused"),
-                                (b"content-length", str(len(_REFUSAL_BODY)).encode())]})
-        await send({"type": "http.response.body", "body": _REFUSAL_BODY})
+                                (b"content-length", str(len(body)).encode())]})
+        await send({"type": "http.response.body", "body": body})

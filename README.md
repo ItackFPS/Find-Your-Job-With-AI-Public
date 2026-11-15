@@ -289,9 +289,9 @@ embeddings and every collected job (`data/`), logs (`logs/`) and secrets (`.env`
 these are git-ignored.
 
 **Exposure:** the backend listens on `127.0.0.1` only and refuses foreign `Host` headers
-and cross-site writes, but it has **no login**: any program running on this computer can
-use it. Set `API_SAME_USER_ONLY=1` to serve only your Windows account's processes. Never
-expose port 8000 to a network. See [SECURITY.md](SECURITY.md).
+and cross-site writes, but it has **no login**. By default it serves only the programs of
+your Windows account; programs of other accounts on this computer are refused
+(`API_SAME_USER_ONLY=0` turns that off). Never expose port 8000 to a network. See [SECURITY.md](SECURITY.md).
 
 ---
 
@@ -370,7 +370,7 @@ Copy `.env.example` to `.env`; every variable is optional.
 | `FRANCE_TRAVAIL_CLIENT_ID` / `FRANCE_TRAVAIL_CLIENT_SECRET` | the France Travail collector ([developer.francetravail.fr](https://developer.francetravail.fr), scope `o2dsoffre api_offresdemploiv2`) |
 | `PHASE2_LLM_PROVIDER`, `PHASE2_LLM_ENDPOINT`, `PHASE2_LLM_MODEL_NAME`, … | local LLM, see [Local AI](#local-ai) |
 | `API_ALLOWED_HOSTS` | extra `Host` names the backend accepts (e.g. `host.docker.internal`) |
-| `API_SAME_USER_ONLY` | `1` serves only processes of the account running the backend |
+| `API_SAME_USER_ONLY` | on by default: serves only processes of the account running the backend; `0` serves every local account |
 | `FYJ_PORT` | fixed backend port for the launcher (default: a free port chosen at each start; `dev` mode: 8000) |
 | `HF_HUB_OFFLINE` | `1` once the model is cached: no Hugging Face requests at all |
 

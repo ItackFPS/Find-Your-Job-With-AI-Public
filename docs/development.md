@@ -534,7 +534,8 @@ and that check probes all four from the agent's account:
    - The same applies to links: a junction (e.g. under `.claude\skills\`) whose target is missing can be
      created by any account, which could plant skills that **your** Claude Code loads.
 3. **API**: the API runs as you and writes production state for whoever it serves, so it must refuse the
-   account. Start it with `API_SAME_USER_ONLY=1` (environment or `.env`).
+   account. It does by default (owner decision D5); never start it with `API_SAME_USER_ONLY=0` while the
+   agent runs.
    - It then asks Windows which process owns each loopback connection and serves only its own
      account (`src/api/peer_guard.py`).
    - It refuses everything else: other accounts, non-loopback peers, connections it cannot attribute
@@ -542,8 +543,11 @@ and that check probes all four from the agent's account:
      uvicorn trusts `X-Forwarded-For` from loopback by default and rewrites the client address, port
      included. An agent could otherwise name the port of one of *your* open connections (any account can
      list them) and be served as you. That was reproduced against a real server before the fix.
-   - In this mode the Vite origins are also dropped from CORS and the origin guard.
-   - It is off by default.
+   - It is on by default. In dev mode (`FindYourJob.cmd dev`) the Vite origins stay allowed: the dev
+     server is a program of your account, so the guard serves whatever it relays anyway. Its port must
+     therefore not be reachable by another account (step 4).
+   - A refused request gets a 403 whose body gives the reason; the backend logs it (once a minute per
+     reason).
 4. **No relays**: a service of *your* account that forwards requests to the API is served as you. That
    includes the Vite dev proxy on 5173 (often on `::1` only), an n8n left on 5678 by an older version
    (its webhooks and API, via Docker's proxy; remove its logon task with
@@ -624,7 +628,7 @@ which other accounts cannot read:
   repository).
 - Set `PYTHONDONTWRITEBYTECODE=1`, since the repository is not writable.
 
-Verify (step 6), with the API running under `API_SAME_USER_ONLY=1` and no relay:
+Verify (step 6), with the API running with its default guard (not `API_SAME_USER_ONLY=0`) and no relay:
 
 ```bash
 runas /user:fyj-lab cmd        # then, in that window, from the repository, paste the command Audit printed:
