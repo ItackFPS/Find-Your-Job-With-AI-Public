@@ -142,6 +142,10 @@ class PipelineStats:
     # Which filters.yaml / scoring.yaml the run used: the human-approved active strategy or config/
     # (src/decisions/active_strategy.py): {status, reason, pointer_id, bundle_hash, ...}.
     active_strategy: dict[str, Any] = field(default_factory=dict)
+    # Offers stored for the first time by this run (None until storage ran) and the run's outcome
+    # (src/pipeline/run_outcome.py, Phase B B7-A; "" until the run ends).
+    stored_new: int | None = None
+    outcome: str = ""
     # Post-processing after duration_seconds is taken: the decision journal and expiry (Phase B
     # B7-B). The run's wall clock is its row's completed_at - started_at, which also covers the
     # runner's own saving; duration_seconds alone is the pipeline's internal duration.
@@ -216,6 +220,8 @@ class PipelineStats:
             "decisions": self.decisions,
             # Which filters.yaml / scoring.yaml this run used (persisted so the run history can say so).
             "active_strategy": self.active_strategy,
+            "stored_new": self.stored_new,
+            "outcome": self.outcome,
             "post_seconds": self.post_seconds,
         }
 
@@ -330,6 +336,7 @@ def run_pipeline(
 
         if not preflight_result.ready:
             stats.errors.extend(preflight_result.errors)
+            stats.outcome = "failed"
             stats.duration_seconds = (datetime.now(UTC) - started_at).total_seconds()
             storage.close()
             return PipelineResult(
@@ -1005,6 +1012,7 @@ def run_pipeline(
         storage_stats = storage.upsert_jobs_batch(
             [job for job, _, _ in scored_with_breakdown]
         )
+        stats.stored_new = int(storage_stats.get("inserted", 0))
         logger.info(
             "Storage: %d inserted, %d updated, %d unchanged",
             storage_stats["inserted"],
@@ -1461,6 +1469,21 @@ def run_pipeline(
         pers_storage.close()
         storage.close()
 
+        # What the run achieved (Phase B B7-A): decides whether it replaces the visible list.
+        try:
+            from src.pipeline.run_outcome import run_outcome
+            from src.storage.runs import RunStorage
+
+            outcome_rs = RunStorage(db_path=db_path)
+            try:
+                has_previous = outcome_rs.get_latest_visible_run(exclude=run_id) is not None
+            finally:
+                outcome_rs.close()
+            stats.outcome = run_outcome("completed", stats.by_source, accepted=stats.personalized,
+                                        stored_new=stats.stored_new, has_previous_list=has_previous)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Run outcome not computed: %s", exc)
+
         return PipelineResult(
             run_id=run_id,
             started_at=started_at,
@@ -1478,6 +1501,7 @@ def run_pipeline(
         except Exception:
             pass
         stats.duration_seconds = (datetime.now(UTC) - started_at).total_seconds()
+        stats.outcome = "failed"
         return PipelineResult(
             run_id=run_id,
             started_at=started_at,

@@ -130,7 +130,10 @@
       "offline": "Aucune source n'a répondu lors de la dernière recherche. Vérifiez votre connexion internet ; la prochaine recherche réessaiera.",
       "top": "Meilleures correspondances",
       "untitled": "Offre sans titre",
-      "noMatch": "Aucune correspondance forte lors de la dernière recherche."
+      "noMatch": "Aucune correspondance forte lors de la dernière recherche.",
+      "keptPrevious": "Aucune source n’a abouti lors de la dernière recherche : les listes montrent toujours la recherche précédente.",
+      "nothingNew": "Rien de nouveau depuis la recherche précédente.",
+      "firstEmpty": "La première recherche n’a trouvé aucune offre pour votre profil. Vérifiez votre métier et vos lieux dans Profil ; la prochaine recherche réessaiera."
     },
     "run": {
       "alreadyRunning": "Une recherche est déjà en cours.",

@@ -130,7 +130,10 @@
       "offline": "No source could be reached in the last search. Check your internet connection; the next search will try again.",
       "top": "Best matches",
       "untitled": "Untitled offer",
-      "noMatch": "No strong match in the last search."
+      "noMatch": "No strong match in the last search.",
+      "keptPrevious": "No source succeeded in the last search, so the lists still show the previous search.",
+      "nothingNew": "Nothing new since the previous search.",
+      "firstEmpty": "The first search found no offer for your profile. Check your line of work and places in Profile; the next search will try again."
     },
     "run": {
       "alreadyRunning": "A search is already running.",
