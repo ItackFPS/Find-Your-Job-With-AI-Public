@@ -1,6 +1,7 @@
 # 0015 — Personal data has four in-app actions; erasure is a resumable, verified job
 
-Status: accepted (2026-11-05). Not implemented yet (stage L1). Full procedure, tables and tests:
+Status: accepted (2026-11-05). Implemented: `src/privacy/` (erasure, delete all, learning reset,
+what was recorded), `config/retention.yaml`. Full procedure, tables and tests:
 `docs/design/learning-architecture-decisions.md` §4.12 (AD-12).
 
 ## Context
