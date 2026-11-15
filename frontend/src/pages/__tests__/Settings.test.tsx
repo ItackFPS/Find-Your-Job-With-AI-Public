@@ -60,9 +60,9 @@ const sources: SourceOverview[] = [
     breaker: null,
   },
   {
-    name: 'remoteok', access_class: 'official', available: true, collected: true, choice: null,
+    name: 'bundesagentur', access_class: 'official', available: true, collected: true, choice: null,
     last_run: { started_at: '2026-10-30T07:00:00+00:00', status: 'failed', reason: 'The site did not answer', collected: 0, accepted: 0, errors: 1 },
-    breaker: { source: 'remoteok', consecutive_failures: 3, paused: true, paused_until: '2026-10-30T12:00:00+00:00', last_failure_reason: 'timeout' },
+    breaker: { source: 'bundesagentur', consecutive_failures: 3, paused: true, paused_until: '2026-10-30T12:00:00+00:00', last_failure_reason: 'timeout' },
   },
   {
     name: 'indeed', access_class: 'unofficial', available: true, collected: false,
@@ -110,7 +110,7 @@ beforeEach(() => {
     'POST /privacy/erase/retry': { state: 'COMPLETE', pending: false, running: false, completed_at: '2026-11-05T11:00:00+00:00' },
     'GET /privacy/delete-all': { state: null, pending: false, running: false, restart_required: false },
     'POST /privacy/delete-all': { state: 'COMPLETE', pending: false, running: false, restart_required: true },
-    'POST /sources/remoteok/breaker/reset': { source: 'remoteok', consecutive_failures: 0, paused: false, paused_until: null, last_failure_reason: null },
+    'POST /sources/bundesagentur/breaker/reset': { source: 'bundesagentur', consecutive_failures: 0, paused: false, paused_until: null, last_failure_reason: null },
   }
 })
 
@@ -180,10 +180,10 @@ describe('Settings › Sources and background', () => {
 
   it('lets the user retry a paused source', async () => {
     renderPage()
-    const remoteok = await screen.findByRole('listitem', { name: 'Remote OK' })
-    expect(within(remoteok).getByText(/paused after 3 failures in a row/i)).toBeInTheDocument()
-    await userEvent.click(within(remoteok).getByRole('button', { name: /try again now/i }))
-    expect(calls).toContainEqual({ method: 'POST', url: '/sources/remoteok/breaker/reset', body: undefined })
+    const official = await screen.findByRole('listitem', { name: 'Bundesagentur für Arbeit' })
+    expect(within(official).getByText(/paused after 3 failures in a row/i)).toBeInTheDocument()
+    await userEvent.click(within(official).getByRole('button', { name: /try again now/i }))
+    expect(calls).toContainEqual({ method: 'POST', url: '/sources/bundesagentur/breaker/reset', body: undefined })
   })
 
   it('removes old expired offers only after a confirmation', async () => {

@@ -65,7 +65,7 @@ class FakeEventSource {
 // names, and technical tokens shown verbatim.
 const DATA_WORDS = new Set((JSON.stringify(fixtures).match(/[A-Za-z]{2,}/g) ?? []).map(w => w.toLowerCase()))
 const ALLOWED = new Set([
-  'find', 'your', 'job', 'with', 'ai', 'linkedin', 'hellowork', 'esco', 'france', 'travail', 'indeed', 'remoteok', 'jobicy',
+  'find', 'your', 'job', 'with', 'ai', 'linkedin', 'hellowork', 'esco', 'france', 'travail', 'indeed',
   'we', 'work', 'remotely', 'eures', 'aa', 'ms', 'pts', 'vs', 'xa',
 ].map(w => w.toLowerCase()))
 
