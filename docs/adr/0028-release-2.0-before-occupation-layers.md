@@ -1,6 +1,6 @@
 # 0028 — 2.0 ships after P3, minimum P6 and P7; L6–L8 move to 2.x; a temporary multi-profile gate covers 2.0
 
-Status: accepted (2026-11-08). Roadmap decision; no code. Supersedes, for release 2.0 only, the order
+Status: accepted (2026-11-08); its IT-scope statement is amended by [ADR 0029](0029-profession-agnostic-discovery.md). Roadmap decision; no code. Supersedes, for release 2.0 only, the order
 and one release gate of ADR 0027. Source:
 `docs/plans/2026-11-08-2.0-release-decision-readiness.md` (removed from the tree, see git history before d90444a) §4 and §14.
 

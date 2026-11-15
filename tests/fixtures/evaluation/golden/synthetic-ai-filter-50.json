@@ -545,20 +545,16 @@
   },
   {
    "assessment": null,
-   "extraction_method": "heuristic",
-   "factors": {
-    "domain_relevance": 0.7,
-    "experience_fit": 0.5,
-    "location_fit": 0.3,
-    "seniority_match": 0.5,
-    "skills_match": 0.52
-   },
+   "extraction_method": null,
+   "factors": null,
    "flags": [],
    "job_id": "bm36",
-   "reasons": [],
-   "score": 0.494,
-   "stage": "passed",
-   "verdict": "accept"
+   "reasons": [
+    "filter:title_keywords"
+   ],
+   "score": null,
+   "stage": "filter",
+   "verdict": "reject"
   },
   {
    "assessment": null,
@@ -764,5 +760,5 @@
   }
  ],
  "schema_version": 1,
- "strategy_fingerprint": "37785e8c825f19fe2cc1a7ac5d647f32fdb3ac9072cc9ebe0d53dd183967120b"
+ "strategy_fingerprint": "f849e2fea0c757cd5dc0c251df57cf248c2dbb398559a06bd50f47e4c6173181"
 }

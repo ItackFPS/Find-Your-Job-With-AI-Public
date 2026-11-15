@@ -49,11 +49,22 @@ describe('PIPELINE_STAGES', () => {
     ])
   })
 
-  it("llm_eligibility's input/done accessors read the matching RunStats fields", () => {
+  it("llm_eligibility's input/done accessors read the matching RunStats fields when the stage ran", () => {
     const stage = findPipelineStage('llm_eligibility')!
-    const stats = baseStats({ llm_eligibility_input: 120, llm_eligibility_passed: 97 })
+    const stats = baseStats({ llm_eligibility_input: 120, llm_eligibility_passed: 97, llm_eligibility: { ran: true } })
     expect(stage.input(stats)).toBe(120)
     expect(stage.done(stats)).toBe(97)
+  })
+
+  it('a skipped eligibility stage shows nothing, not "N / N" (P-016, Phase B B7-C)', () => {
+    const stage = findPipelineStage('llm_eligibility')!
+    const skipped = baseStats({ llm_eligibility_input: 206, llm_eligibility_passed: 206, llm_eligibility: { ran: false } })
+    expect(stage.input(skipped)).toBeUndefined()
+    expect(stage.done(skipped)).toBeUndefined()
+    // a run recorded before "ran" existed: it ran only with AI on
+    const old = baseStats({ llm_eligibility_input: 206, llm_eligibility_passed: 206, use_ai: false })
+    expect(stage.input(old)).toBeUndefined()
+    expect(stage.input({ ...old, use_ai: true })).toBe(206)
   })
 
   it('scoring counts what the eligibility gates passed on, not the hard filter output', () => {

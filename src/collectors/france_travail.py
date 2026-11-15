@@ -53,10 +53,10 @@ _RETRYABLE_STATUS_CODES: frozenset[int] = frozenset({408, 429, 500, 502, 503, 50
 _MAX_RETRY_ATTEMPTS: int = 3
 _RETRY_BACKOFF_BASE: float = 1.0  # seconds; doubles on each successive retry
 
-# Default keyword for the motsCles parameter.  "informatique" is the broadest
-# French IT category on France Travail, covering software, systems, networking,
-# data, and support roles.  Override via sources.yaml config.keywords.
-_DEFAULT_SEARCH_KEYWORDS = "informatique"
+# Default keyword for the motsCles parameter: none. What to search comes from the
+# profile (discovery_queries, injected by the orchestrator) or from sources.yaml
+# config.keywords; no profession is assumed.
+_DEFAULT_SEARCH_KEYWORDS = ""
 
 
 class _RateLimiter:
@@ -114,7 +114,7 @@ class FranceTravailCollector(BaseCollector):
     are deduplicated by source_job_id so the pipeline sees each offer once.
 
     ``discovery_queries`` (list[str]) in config takes priority over the legacy
-    ``keywords`` (str) config key.  Defaults to ``[_DEFAULT_SEARCH_KEYWORDS]``.
+    ``keywords`` (str) config key.  With neither, nothing is searched.
 
     ``max_jobs`` (optional int): safety ceiling on total unique jobs collected.
     When unset (the default), collection is exhaustive — every available result
@@ -129,6 +129,9 @@ class FranceTravailCollector(BaseCollector):
     many at once); pages within a single query are always sequential.
     Set to 1 to disable concurrency entirely (sequential, deterministic order).
     """
+
+    # Its httpx.Client requests do not pass BaseCollector._before_request (B8-A).
+    counts_requests = False
 
     # official: France Travail's documented Offres d'emploi API (francetravail.io), with the
     # user's own OAuth2 credentials. Its own client-side rate limiter paces requests.
@@ -168,7 +171,7 @@ class FranceTravailCollector(BaseCollector):
         if cfg_queries:
             self.discovery_queries: list[str] = cfg_queries
         else:
-            self.discovery_queries = [self.search_keywords]
+            self.discovery_queries = [self.search_keywords] if self.search_keywords else []
 
         # _page_size is exposed for testing; production code uses _PAGE_SIZE
         self._page_size: int = _page_size or _PAGE_SIZE
@@ -206,6 +209,20 @@ class FranceTravailCollector(BaseCollector):
                 "source config keys 'client_id'/'client_secret'). "
                 "Register at https://developer.francetravail.fr to obtain credentials. "
                 "Skipping collection."
+            )
+            duration = time.time() - start_time
+            self._log_collection("france_travail", 0, errors, duration)
+            return CollectorResult(
+                source_name="france_travail",
+                jobs=jobs,
+                errors=errors,
+                duration_seconds=duration,
+            )
+
+        if not self.discovery_queries:
+            errors.append(
+                "France Travail: no search terms. Add target domains, occupations or skills "
+                "to the profile, or set 'keywords' in the source config. Skipping collection."
             )
             duration = time.time() - start_time
             self._log_collection("france_travail", 0, errors, duration)
@@ -888,6 +905,8 @@ class FranceTravailCollector(BaseCollector):
             if isinstance(c, dict) and c.get("libelle")
         ]
 
+        salary_min, salary_max = _annual_salary(raw.get("salaire"))
+
         return {
             # Generic normalizer contract fields
             "source_job_id": job_id,
@@ -902,6 +921,9 @@ class FranceTravailCollector(BaseCollector):
             "url": url,
             "skills": skills,
             "published_at": raw.get("dateCreation"),
+            "salary_min": salary_min,
+            "salary_max": salary_max,
+            "currency": "EUR",
             # Pass through the full original payload for debugging
             "_france_travail_raw": raw,
         }
@@ -910,6 +932,30 @@ class FranceTravailCollector(BaseCollector):
 # ---------------------------------------------------------------------------
 # Module-level helpers
 # ---------------------------------------------------------------------------
+
+def _annual_salary(salaire: Any) -> tuple[float | None, float | None]:
+    """France Travail's ``salaire.libelle`` as an annual EUR range (Phase B B6-B, finding P-007).
+
+    "Annuel de 40000.0 Euros à 50000.0 Euros" is taken as stated. A monthly amount is multiplied by
+    the months the label states ("sur 13.0 mois"), else by 12, the usual French count. Hourly and daily
+    amounts are left empty: turning them into a year needs a working time the offer does not state,
+    and nothing is invented. The label itself stays in the stored payload."""
+    from src.requirements.structured import parse_salary_label
+
+    if not isinstance(salaire, dict) or not isinstance(salaire.get("libelle"), str):
+        return None, None
+    parsed = parse_salary_label(salaire["libelle"])
+    if parsed is None or parsed.minimum is None:
+        return None, None
+    if parsed.period == "annual":
+        factor = 1.0
+    elif parsed.period == "monthly":
+        factor = parsed.months if parsed.months and 1 <= parsed.months <= 14 else 12.0
+    else:
+        return None, None
+    low = parsed.minimum * factor
+    high = (parsed.maximum if parsed.maximum is not None else parsed.minimum) * factor
+    return low, (high if high != low else None)
 
 def _parse_content_range_total(content_range: str) -> int | None:
     """Parse the total result count from a France Travail Content-Range header.

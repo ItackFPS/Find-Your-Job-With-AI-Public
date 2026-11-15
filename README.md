@@ -21,9 +21,13 @@ cloud AI is used.
 they fully control. Version 2.0 installs and configures without a terminal or a file to edit. It
 is a single-user, single-machine app, not a hosted service, and it has no login.
 
-**Stated limit:** 2.0 is tuned for IT and digital roles. Other occupations work through keyword
-search, with fewer offers from France Travail, whose website is read only for IT occupations
-([measured baseline](docs/reports/2026-11-08-g-mo-t-baseline.md)).
+**Any line of work:** searches are built from your profile (target domains, occupations and
+skills), not from a fixed list, so any occupation can be searched. Vocabulary for one line of
+work lives in an editable preset (`config/presets/`; the IT preset ships, see
+[Lines of work and presets](#lines-of-work-and-presets)). The remote boards (RemoteOK, Jobicy,
+We Work Remotely) list mostly digital roles. Live results for non-IT occupations have not been
+measured yet; the [decision record](docs/adr/0029-profession-agnostic-discovery.md) says what is
+and is not verified.
 
 ---
 
@@ -324,6 +328,7 @@ Profile page writes it for you.
 |---|---|
 | `config/profile.yaml` | example profile: domains, skills, ordered location preferences, work modes, contracts, seniority/experience bounds, education ceiling, gate toggles |
 | `config/sources.yaml` | which collectors are active and their settings |
+| `config/discovery.yaml` · `config/presets/*.yaml` | search vocabulary: profession-neutral terms; one preset per line of work (`it.yaml` ships) |
 | `config/filters.yaml` · `config/scoring.yaml` | hard filters; scoring weights and gates |
 | `config/semantic_config.yaml` · `config/personalization.yaml` | embedding model and blend weight; feedback adjustment bounds |
 | `config/linkedin.yaml` · `config/schedules.yaml` | LinkedIn scanner; scheduler definitions |
@@ -332,6 +337,30 @@ Profile page writes it for you.
 `scoring.yaml`, `filters.yaml`, `semantic_config.yaml` and `personalization.yaml` feed
 the strategy fingerprint used by the evaluation harness; changes to them are strategy
 changes ([ADR 0011](docs/adr/0011-experiment-lab.md)).
+
+### Lines of work and presets
+
+Nothing in `src/` assumes a profession. Each run builds its searches from the profile:
+
+- **Target domains and occupations** (Profile page: pick an occupation from the ESCO index or
+  type your own words) become the queries sent to France Travail, EURES and Indeed, and are
+  matched by name against France Travail's published occupation pages. Contract types add
+  words such as "stage" or "alternance" (`config/discovery.yaml`).
+- **A preset** (`config/presets/<name>.yaml`) holds the vocabulary of one line of work: baseline
+  queries, per-source settings (Indeed and EURES queries, We Work Remotely categories,
+  France Travail occupation codes, LinkedIn queries, HelloWork domains), a scoring hint and the
+  Stats page groupings. It applies when the profile's `target_domains` contains one of its
+  `applies_to_domains`. `it.yaml` ships; to add your own line of work, copy it, change
+  `name` and `applies_to_domains`, and keep only the sections you need.
+- **Your own source settings win.** A key you set in `sources.yaml` (or `sources.local.yaml`)
+  is never replaced by a preset's.
+- **Other lines of work in your filters.** `excluded_title_keywords` and
+  `non_it_title_functions` in `filters.yaml` list title words of other lines of work. A group is
+  skipped when it is your own: when its key is one of your target domains, or one of its words
+  is in a target domain or occupation you typed.
+
+Not measured yet: live offers for non-IT occupations. See
+[ADR 0029](docs/adr/0029-profession-agnostic-discovery.md).
 
 ### Environment variables (`.env`)
 

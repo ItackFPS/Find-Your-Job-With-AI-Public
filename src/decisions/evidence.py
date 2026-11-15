@@ -18,11 +18,12 @@ from typing import Any
 
 from src.decisions.models import ConflictItem, Dimension, EvidenceItem, SourceRef, SpanRef
 from src.pipeline.filter import (
+    FilterCheckOutcome,
+    check_outcome,
     explain_filter_checks,
     filter_expected,
     filter_observed,
     freshness_reference,
-    violation_strength,
 )
 from src.pipeline.location_distance import assess
 from src.requirements.models import GateResult, HardRejectionReason
@@ -115,20 +116,21 @@ def filter_failure_items(
     """Evidence for a filter rejection: the deciding check (``code``, from ``filter_jobs``) and,
     optionally, every other check the job also fails."""
     exp = expected if expected is not None else expected_cache(config)
-    items = [EvidenceItem(
-        dimension=FILTER_DIMENSION.get(code, "other"), polarity="negative", state="violated",
-        source=_src("filter", f"filter.{code}", evidence="rule"),
-        message=f"Rejected by hard filter: {code}", observed=filter_observed(code, job, config),
-        expected=exp.get(code), strength=violation_strength(code, job, config))]
+    items = [_violation_item(
+        check_outcome(code, job, config, passed=False, expected=exp.get(code)),
+        f"Rejected by hard filter: {code}")]
     if all_failing:
-        for o in explain_filter_checks(job, config):
-            if not o.passed and o.code != code:
-                items.append(EvidenceItem(
-                    dimension=FILTER_DIMENSION.get(o.code, "other"), polarity="negative", state="violated",
-                    source=_src("filter", f"filter.{o.code}", evidence="rule"),
-                    message=f"Also fails hard filter: {o.code} (not the deciding check)",
-                    observed=o.observed, expected=o.expected, strength=o.strength))
+        items.extend(
+            _violation_item(o, f"Also fails hard filter: {o.code} (not the deciding check)")
+            for o in explain_filter_checks(job, config) if not o.passed and o.code != code)
     return items
+
+
+def _violation_item(outcome: FilterCheckOutcome, message: str) -> EvidenceItem:
+    return EvidenceItem(
+        dimension=FILTER_DIMENSION.get(outcome.code, "other"), polarity="negative", state="violated",
+        source=_src("filter", f"filter.{outcome.code}", evidence="rule"), message=message,
+        observed=outcome.observed, expected=outcome.expected, strength=outcome.strength)
 
 
 def filter_pass_items(

@@ -218,6 +218,12 @@ population and is not comparable with the overall metrics: the hard filter stops
 check, so those jobs' remaining checks were never evaluated.
 `golden --check` failing means "a decision changed — review it", not "the system got
 worse"; after an intentional change review the diff, then run `golden --update`.
+
+**Every re-recorded golden file needs an explanation table in the PR body** (Phase B rule,
+evaluation strategy B3-R): one row per offer whose decision or tier moved, with the old and new
+value, the direction and why. A golden change without that table is not merged. Runs are
+reproducible: the same dataset, code and strategy give byte-identical decisions and metrics
+(`tests/test_evaluation_reproducible.py`), so an unexplained diff is a real change.
 Committed synthetic datasets are regenerated from the Python fixtures with
 `python scripts/materialize_evaluation_fixtures.py`. A dataset exported from the real
 database lives under `data/benchmarks/` and is never committed.

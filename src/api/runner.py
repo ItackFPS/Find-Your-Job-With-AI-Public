@@ -95,8 +95,16 @@ class PipelineRunner:
 
         Raises:
             RuntimeError: If a run is already in progress.
+            CollectionFrozen (a RuntimeError): every configured collector is frozen (owner decision
+                D7, ``src/collectors/freeze.py``): such a run would only re-score stored offers and
+                replace the visible list with them.
         """
         import uuid
+
+        from src.collectors import freeze
+
+        if not freeze.pipeline_allowed(Path(self._db_path).parent / "settings.json", self._config_dir):
+            raise freeze.CollectionFrozen()
 
         # Generate the run_id and reserve the slot atomically under the lock.
         # This closes the race window where two concurrent requests could both

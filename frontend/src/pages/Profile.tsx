@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  getProfile, updateProfile, confirmProfileReview, searchEscoSkills, searchEscoOccupations,
+  getProfile, updateProfile, confirmProfileReview, searchEscoSkills, searchEscoOccupations, resolveProfileDomains,
   getAllDepartments, searchPlaces,
   type Profile, type EscoEntry, type EscoSuggestion, type FrenchDepartment, type LocationPreference,
   type HomePlace, type PlaceSuggestion, type RemotePolicy, type CareerLevel,
@@ -435,6 +435,11 @@ function AutocompleteTagList({ state, onChange, lang = 'en' }: AutocompleteTagLi
 // so it gets that rich keyword list; picking an ESCO match or typing custom
 // text stores it verbatim and is used as a literal title keyword instead
 // (same fallback target_skills already get — see build_filter_config()).
+// An ESCO match is also recorded as a target occupation (with its French label), which
+// job-board discovery searches by name; removing the chip removes both.
+// Typed labels are checked with the search's own resolver (POST /api/profile/domains/resolve,
+// Phase B B5-C): a label the vocabulary does not know gets a dashed chip and a note, because
+// the search then uses its words as typed, without synonyms. Nothing is changed or saved.
 // Either way, this stays a pure search box: nothing is pinned/always-visible.
 // ---------------------------------------------------------------------------
 
@@ -473,10 +478,34 @@ interface DomainSuggestion {
   value: string
   label: string
   badge: 'Curated' | 'ESCO' | null
+  occupation?: EscoEntry
 }
 
-export function DomainPicker({ values, onChange }: { values: string[]; onChange: (v: string[]) => void }) {
+export function DomainPicker({ values, onChange, occupations = [], onOccupationsChange }: {
+  values: string[]
+  onChange: (v: string[]) => void
+  occupations?: EscoEntry[]
+  onOccupationsChange?: (v: EscoEntry[]) => void
+}) {
   const { t } = useTranslation()
+  const [unresolved, setUnresolved] = useState<string[]>([])
+  const typedKey = values.filter(v => !CURATED_DOMAINS.has(v)).join('\u0000')
+
+  useEffect(() => {
+    const typed = typedKey ? typedKey.split('\u0000') : []
+    if (typed.length === 0) {
+      setUnresolved([])
+      return
+    }
+    let cancelled = false
+    const timer = setTimeout(() => {
+      resolveProfileDomains(typed)
+        .then(rows => { if (!cancelled) setUnresolved(rows.filter(r => r.status === 'unresolved').map(r => r.label)) })
+        .catch(() => { if (!cancelled) setUnresolved([]) })  // no note rather than a wrong one
+    }, 300)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [typedKey])
+  const isUnresolved = (v: string) => unresolved.includes(v.trim())
   const [query, setQuery] = useState('')
   const trimmedQuery = query.trim()
   const [escoResults, setEscoResults] = useState<EscoSuggestion[]>([])
@@ -530,18 +559,33 @@ export function DomainPicker({ values, onChange }: { values: string[]; onChange:
   const curatedLabelsLower = new Set(curatedMatches.map(c => c.label.toLowerCase()))
   const escoMatches: DomainSuggestion[] = escoResults
     .filter(r => !curatedLabelsLower.has(r.label.toLowerCase()))
-    .map(r => ({ value: r.keyword, label: r.label, badge: r.is_esco ? ('ESCO' as const) : null }))
+    .map(r => ({
+      value: r.keyword,
+      label: r.label,
+      badge: r.is_esco ? ('ESCO' as const) : null,
+      occupation: r.is_esco
+        ? { concept_uri: r.concept_uri, label: r.label, keyword: r.keyword, custom: false, label_fr: r.label_fr || null }
+        : undefined,
+    }))
 
   const suggestions = [...curatedMatches, ...escoMatches].slice(0, 10)
 
-  const addValue = (v: string) => {
+  const addValue = (v: string, occupation?: EscoEntry) => {
     if (!includesCaseInsensitive(values, v)) onChange([...values, v])
+    if (occupation && onOccupationsChange && !includesCaseInsensitive(occupations.map(o => o.keyword), occupation.keyword)) {
+      onOccupationsChange([...occupations, occupation])
+    }
     setQuery('')
     setEscoResults([])
     setActiveIndex(-1)
   }
 
-  const removeValue = (v: string) => onChange(values.filter(x => x !== v))
+  const removeValue = (v: string) => {
+    onChange(values.filter(x => x !== v))
+    if (onOccupationsChange && occupations.some(o => o.keyword.toLowerCase() === v.toLowerCase())) {
+      onOccupationsChange(occupations.filter(o => o.keyword.toLowerCase() !== v.toLowerCase()))
+    }
+  }
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
@@ -556,7 +600,7 @@ export function DomainPicker({ values, onChange }: { values: string[]; onChange:
     } else if (e.key === 'Enter') {
       e.preventDefault()
       if (activeIndex >= 0 && activeIndex < suggestions.length) {
-        addValue(suggestions[activeIndex].value)
+        addValue(suggestions[activeIndex].value, suggestions[activeIndex].occupation)
       } else if (trimmedQuery) {
         addValue(trimmedQuery)
       }
@@ -569,14 +613,14 @@ export function DomainPicker({ values, onChange }: { values: string[]; onChange:
         {values.map(v => (
           <span key={v} style={{
             background: 'var(--color-surface-elevated)',
-            border: `1px solid ${domainLabel(v) ? 'color-mix(in srgb, var(--color-accent) 40%, transparent)' : 'var(--color-border)'}`,
+            border: `1px ${isUnresolved(v) ? 'dashed' : 'solid'} ${domainLabel(v) ? 'color-mix(in srgb, var(--color-accent) 40%, transparent)' : 'var(--color-border)'}`,
             borderRadius: '7px',
             padding: '0.35rem 0.45rem 0.35rem 0.8rem',
             fontSize: '0.86rem',
             display: 'flex',
             alignItems: 'center',
             gap: '0.5rem',
-          }}>
+          }} data-unresolved={isUnresolved(v) || undefined}>
             {domainLabel(v) ?? v}
             <button onClick={() => removeValue(v)} aria-label={t('profile.remove', { item: v })} style={chipRemoveStyle}>×</button>
           </span>
@@ -597,7 +641,7 @@ export function DomainPicker({ values, onChange }: { values: string[]; onChange:
             {suggestions.map((s, i) => (
               <div
                 key={`${s.badge ?? 'plain'}-${s.value}`}
-                onMouseDown={e => { e.preventDefault(); addValue(s.value) }}
+                onMouseDown={e => { e.preventDefault(); addValue(s.value, s.occupation) }}
                 onMouseEnter={() => setActiveIndex(i)}
                 style={{
                   padding: '0.6rem 0.85rem',
@@ -643,6 +687,11 @@ export function DomainPicker({ values, onChange }: { values: string[]; onChange:
           </div>
         )}
       </div>
+      {unresolved.length > 0 && (
+        <p data-testid="domains-unresolved" style={{ margin: '0.4rem 0 0', fontSize: '0.8rem', color: 'var(--color-muted)' }}>
+          {t('profile.domains.unresolved', { labels: unresolved.join(', ') })}
+        </p>
+      )}
     </div>
   )
 }
@@ -1129,7 +1178,12 @@ export default function ProfilePage() {
               label={profile.focus_domain ? t('profile.fields.focusDomain') : t('profile.fields.focusSkills')}
             />
           </div>
-          <DomainPicker values={profile.target_domains} onChange={v => set('target_domains', v)} />
+          <DomainPicker
+            values={profile.target_domains}
+            onChange={v => set('target_domains', v)}
+            occupations={profile.target_occupations ?? []}
+            onOccupationsChange={v => set('target_occupations', v)}
+          />
         </div>
 
         <hr style={sectionDivider} />

@@ -18,9 +18,9 @@ describe('GettingStarted', () => {
     expect(container.textContent).not.toMatch(/\.env|FRANCE_TRAVAIL_CLIENT|credential/i)
   })
 
-  it('states who this version is tuned for', () => {
+  it('states that any line of work can be searched', () => {
     renderGuide()
-    expect(screen.getByText(/tuned for IT and digital roles/)).toBeInTheDocument()
+    expect(screen.getByText(/any line of work can be searched/)).toBeInTheDocument()
   })
 
   it('links to the profile page', () => {

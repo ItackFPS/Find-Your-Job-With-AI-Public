@@ -95,3 +95,12 @@ weight override and does not change H1, H2 or rules 1–8.
   labels motivated AD-2.
 - Rule 6 applies: below 30 accept labels in the real-v3 held-out cohort the result is exploratory.
 - Passing makes the candidate eligible for a human promotion decision, one check at a time.
+
+## Using a candidate on held-out labels (owner decision D4, 2026-11-14)
+
+Every tool reads a real dataset's **tuning** part by default (Quality page, `python -m src.evaluation
+run` / `compare`, `python -m src.lab run` / `approve`). Reading its held-out labels (`--split heldout`,
+or `all` which includes them) needs the id of a file in this folder (`--candidate <id>` for the
+evaluation commands, `--preregistered <id>` for the lab) and is refused otherwise. Each such run adds
+one line to `<dataset>/heldout-usage.jsonl` (append-only, never part of a result export), and its
+written result holds no held-out job's decision (aggregates only). See `src/evaluation/heldout_guard.py`.

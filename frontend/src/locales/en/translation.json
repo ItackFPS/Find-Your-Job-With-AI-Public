@@ -100,7 +100,7 @@
     "welcome": {
       "title": "Welcome",
       "intro": "A few steps, no file to edit, no command to type. Everything stays on this computer, and you can change it all later.",
-      "scope": "This version is tuned for IT and digital roles. Other occupations work through keyword search, with fewer offers from France Travail."
+      "scope": "Searches are built from your profile, so any line of work can be searched. The remote boards (RemoteOK, Jobicy, We Work Remotely) list mostly digital roles."
     },
     "profile": {
       "title": "What are you looking for?",
@@ -123,24 +123,29 @@
     "pipelineRunning": "⟳ Pipeline running…",
     "today": {
       "title": "Today",
-      "lastRun": "Last search: {date}. {count, number} offers matched your profile.",
+      "lastRun": "Last search: {date}. {count, number} offers are relevant or better for your profile.",
+      "lastRunDate": "Last search: {date}.",
       "noRun": "No search yet.",
       "nextRun": "Next search: {date}.",
       "problems": "{count, plural, one {# source} other {# sources}} had a problem in the last search",
       "offline": "No source could be reached in the last search. Check your internet connection; the next search will try again.",
       "top": "Best matches",
       "untitled": "Untitled offer",
-      "noMatch": "No strong match in the last search."
+      "noMatch": "No strong match in the last search.",
+      "keptPrevious": "No source succeeded in the last search, so the lists still show the previous search.",
+      "nothingNew": "Nothing new since the previous search.",
+      "firstEmpty": "The first search found no offer for your profile. Check your line of work and places in Profile; the next search will try again."
     },
     "run": {
       "alreadyRunning": "A search is already running.",
       "failed": "The search could not start. Try again.",
       "start": "Run pipeline",
       "starting": "Starting…",
-      "running": "Running…"
+      "running": "Running…",
+      "paused": "Collection paused"
     },
     "noRuns": "No pipeline runs yet. <run>Run the pipeline</run> to see results here.",
-    "browseMatched": "Browse {count, number} matched jobs →",
+    "browseMatched": "Browse {count, number} relevant offers →",
     "backendError": "Could not reach the backend. Start the app again with its <app>Find Your Job With AI</app> shortcut (or <cmd/>); if it does not start, its window shows why, and the details are in <log/> in the application folder.",
     "liveRun": "Live run",
     "latestRun": "Latest run",
@@ -150,7 +155,7 @@
       "deduplicated": "Deduplicated",
       "filtered": "Filtered",
       "scored": "Scored",
-      "matched": "Matched",
+      "matched": "Kept after filters",
       "errors": "Errors"
     },
     "sections": {
@@ -248,7 +253,7 @@
       "profile": "Fill in your <profile>Profile</profile>: target roles, skills, locations and languages. Searches are built from it.",
       "sources": "Sources that need no account: {noAccount}. {scanners} are unofficial sources: they stay off unless you choose them or press <b>Scan now</b> on their cards below.",
       "and": " and ",
-      "scope": "This version is tuned for IT and digital roles. Other occupations work through keyword search, with fewer offers from France Travail.",
+      "scope": "Searches are built from your profile, so any line of work can be searched. The remote boards (RemoteOK, Jobicy, We Work Remotely) list mostly digital roles.",
       "run": "To search now, press <b>Run pipeline</b>. The first run downloads the local matching model (about 470 MB) once. No job data is sent to a cloud AI service."
     }
   },
@@ -387,7 +392,12 @@
       "against": "AGAINST ({count, number})",
       "unknown": "UNKNOWN ({count, number})",
       "conflicts": "CONFLICTS ({count, number})",
-      "ids": "Decision {decision} · run {run}"
+      "ids": "Decision {decision} · run {run}",
+      "provenance": {
+        "structured": "from a field of the source",
+        "text": "read in the offer text",
+        "unknown": "not stated in the offer"
+      }
     },
     "header": {
       "noTitle": "(no title)",
@@ -429,7 +439,7 @@
   },
   "stats": {
     "title": "Stats",
-    "subtitle": "What the market is asking for, across {count, number} collected jobs",
+    "subtitle": "What the market is asking for, across the {count, number} offers kept after the filters",
     "notEnoughData": "Not enough data yet.",
     "noDataYet": "No data yet",
     "noDataYetDot": "No data yet.",
@@ -971,6 +981,7 @@
       "aiEnabled": "✓ AI (Phase 2) enabled"
     },
     "duration": "Duration: {duration}",
+    "durationDetail": "(pipeline {pipeline}, then decision journal and cleanup {post})",
     "started": "Started: {date}",
     "ended": "Ended: {date}",
     "aiBadge": "✓ AI (Phase 2)",
@@ -1052,7 +1063,8 @@
       "curated": "Curated",
       "placeholder": "Search any domain or occupation (e.g. software development, seller, cleaner)…",
       "addCustomHint": "No match? Press Enter to add “{value}” as a custom domain",
-      "noMatch": "No match for “{value}” — press Enter to add it as a custom domain."
+      "noMatch": "No match for “{value}” — press Enter to add it as a custom domain.",
+      "unresolved": "Not in the built-in vocabulary: {labels}. The search uses these words as typed, without synonyms."
     },
     "location": {
       "statusLabel": "Priority of this location",
@@ -1393,14 +1405,43 @@
       "title": "Learning",
       "subtitle": "How the app learns from what you do. Your actions always stay on this computer.",
       "pause": "Pause learning",
-      "pauseHelp": "Your actions are still recorded, but the ranking stops adapting to them until you resume.",
+      "pauseHelp": "While paused, the ranking stops adapting to you and no comparison with a personal ranking is made. Your actions, the offers shown to you and the Découverte picks are still recorded on this computer, and Erase removes them.",
       "reset": "Reset learning",
       "resetHelp": "Learning starts over from your next actions. Your saved and hidden offers and your application tracker are kept.",
       "confirm": "Reset learning? What it learned so far is cleared.",
       "confirmYes": "Reset",
       "resetDone": "Learning was reset.",
       "lastReset": "Last reset: {date}",
-      "failed": "The change could not be saved."
+      "failed": "The change could not be saved.",
+      "recorded": {
+        "title": "What was recorded",
+        "intro": "Everything below is stored on this computer only. This view changes nothing; Erase my activity removes it.",
+        "loading": "Loading…",
+        "unavailable": "What was recorded cannot be shown right now.",
+        "none": "Nothing recorded yet.",
+        "colType": "Action",
+        "colCount": "Recorded",
+        "colCounted": "Learning may count",
+        "colLast": "Last time",
+        "eventSurfaces": "Where your actions were taken",
+        "exposuresBySurface": "{count, plural, one {# offer shown, per list} other {# offers shown, per list}}",
+        "exposuresBySource": "Offers shown, per source",
+        "retention": "Offers shown are summarised after {compact} days and deleted after {keep} days.",
+        "repeatedViews": "Opening the same offer again is recorded, but learning counts an offer's views only once. Actions before the last reset are kept but no longer counted.",
+        "types": {
+          "interested": "Interested",
+          "not_interested": "Not for me",
+          "ranking_feedback": "Ranked badly",
+          "unsure": "Not sure",
+          "viewed": "Offer opened",
+          "apply_link_opened": "Apply link opened",
+          "application_status_changed": "Application status changed",
+          "saved": "Saved",
+          "unsaved": "Unsaved",
+          "hidden": "Hidden",
+          "unhidden": "Shown again"
+        }
+      }
     },
     "deleteAll": {
       "title": "Delete all application data",
@@ -1490,6 +1531,12 @@
         "PF": "lists sorted by relevance",
         "IM": "other"
       }
+    }
+  },
+  "collection": {
+    "frozen": {
+      "title": "Collection is paused",
+      "body": "No job source is contacted for now, while each source is checked. Your stored offers, saved offers and applications are kept. A source comes back only after it passes its checks and you turn it on."
     }
   }
 }
