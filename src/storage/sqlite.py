@@ -497,6 +497,8 @@ class Storage:
         that only read the three top-level counts are unaffected; it exists
         so a caller can distinguish new-vs-already-known jobs PER SOURCE
         without a second query, feeding source_checkpoints observability.
+        A non-empty batch also returns ``inserted_ids`` (additive, Phase B B8-A): the ids
+        stored for the first time.
 
         ``detect_field_changes`` (EXPERIMENTAL / I19, default False — zero
         cost and byte-identical return shape when omitted) additionally
@@ -553,6 +555,7 @@ class Storage:
                 existing_source_hashes.add((src, row[0]))
 
         inserted = updated = unchanged = 0
+        inserted_ids: list[str] = []
         by_source: dict[str, dict[str, int]] = defaultdict(
             lambda: {"inserted": 0, "updated": 0, "unchanged": 0}
         )
@@ -648,6 +651,7 @@ class Storage:
             if current is None:
                 # New job — add to FTS.
                 inserted += 1
+                inserted_ids.append(job.id)
                 by_source[job.source]["inserted"] += 1
                 # Update within-batch guard so subsequent same-batch same-hash jobs
                 # are also caught (intra_source_deduplicate should prevent this, but
@@ -688,6 +692,8 @@ class Storage:
             "updated": updated,
             "unchanged": unchanged,
             "by_source": dict(by_source),
+            # ids stored for the first time (additive, Phase B B8-A "newly discovered")
+            "inserted_ids": inserted_ids,
         }
         if detect_field_changes:
             result["field_changes"] = field_changes

@@ -130,6 +130,9 @@ class FranceTravailCollector(BaseCollector):
     Set to 1 to disable concurrency entirely (sequential, deterministic order).
     """
 
+    # Its httpx.Client requests do not pass BaseCollector._before_request (B8-A).
+    counts_requests = False
+
     # official: France Travail's documented Offres d'emploi API (francetravail.io), with the
     # user's own OAuth2 credentials. Its own client-side rate limiter paces requests.
     access_class = "official"
