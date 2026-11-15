@@ -22,16 +22,56 @@
    "domain_description_keywords": [
     "backend",
     "api",
+    "web development",
     "pentest",
-    "sql"
+    "sql",
+    "it support",
+    "qa testing"
    ],
    "domain_title_keywords": [
     "developer",
     "développeur",
     "python",
+    "web development",
     "security",
     "sécurité",
-    "data analyst"
+    "data analyst",
+    "devops",
+    "cloud",
+    "it support",
+    "systems",
+    "networking",
+    "qa testing",
+    "automation"
+   ],
+   "domain_title_stem_sets": [
+    [
+     "web",
+     "develop"
+    ],
+    [
+     "devop"
+    ],
+    [
+     "cloud"
+    ],
+    [
+     "it",
+     "support"
+    ],
+    [
+     "system"
+    ],
+    [
+     "network"
+    ],
+    [
+     "qa",
+     "test"
+    ],
+    [
+     "autom"
+    ]
    ],
    "off_domain_keywords": [
     "commercial",
