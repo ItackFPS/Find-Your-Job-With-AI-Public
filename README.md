@@ -64,7 +64,6 @@ feedback, evaluation, lab) · [ADRs](docs/adr/README.md) · [Windows app](docs/w
 | Experiment lab with human-approved promotion ([ADR 0011](docs/adr/0011-experiment-lab.md)) | 🧪 experimental; the lab agent is OS-isolated only when you run it in its sandbox (`python -m src.lab sandbox`, Windows AppContainer) |
 | Greenhouse, Lever, SmartRecruiters, WorkingNomads collectors | ⚙️ implemented, no source configured |
 | macOS / Linux | ⚠️ backend, CLI and tests run (CI is Linux); the launcher and startup scripts are Windows-only |
-| Docker | ⚠️ the image runs the CLI pipeline only, not the web UI |
 | Windows installer: per-user, bundled Python, desktop + Start Menu shortcuts ([docs](docs/windows-installer.md)) | ✅ 1.0.0 released, 2.0 in qualification; not code-signed |
 | First-run setup: language, your search, sources, matching model, daily search | ✅ no terminal, resumable |
 
@@ -205,9 +204,6 @@ cd frontend && npm run dev          # or, on Windows: FindYourJob.cmd dev
 # CLI: one pipeline run, summary in the terminal
 python src/main.py                  # deterministic pipeline
 python src/main.py --ai             # + local-LLM stages (needs LM Studio/Ollama)
-
-# Docker: CLI pipeline only
-docker compose up --build
 ```
 
 Do not run the backend with `--reload` unattended: a reload restarts the process and
@@ -453,7 +449,6 @@ issue for a security problem.
   they collected before stay in your history. A `config/sources.yaml` from 1.x that still
   lists `apec` or `wttj` is skipped with that reason on each run; delete those entries.
 - Several registered collectors have no configured source.
-- The Docker image runs the CLI pipeline only.
 - The lab agent is OS-isolated only when it runs in the lab sandbox (Windows AppContainer:
   `python -m src.lab sandbox grant --apply`, then `sandbox run -- …`; see
   [docs/development.md](docs/development.md#sandboxed-lab-agent-windows-appcontainer-no-administrator)).
