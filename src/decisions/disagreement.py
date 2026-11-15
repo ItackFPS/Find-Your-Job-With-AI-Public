@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 ENGINE_VERSION = "disagreement.v2"   # v2: user feedback stance
 State = Literal["accept", "review", "reject"]
 # Evidence sources a hard rejection can rest on without an LLM (text/metadata/rule backed).
-SOLID_SOURCES = frozenset({"heuristic", "llm_corroborated", "metadata", "rule"})
+SOLID_SOURCES = frozenset({"heuristic", "llm_corroborated", "metadata", "rule", "structured_field"})
 
 
 class DisagreementConfig(BaseModel):
