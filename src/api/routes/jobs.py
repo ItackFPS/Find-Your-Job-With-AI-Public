@@ -21,7 +21,7 @@ from src.api.schemas import ExplanationReason, ExplanationSignal, JobDetailOut, 
 from src.models.job import Job
 from src.outcomes.models import OutcomeEventType
 from src.outcomes.storage import OutcomeEventStorage
-from src.requirements.principal_skill import KNOWN_TECHNOLOGIES
+from src.requirements.principal_skill import MAX_SKILL_CHARS, MAX_SKILL_WORDS, is_skill_label
 from src.storage.runs import RunStorage
 from src.storage.sqlite import Storage
 
@@ -77,8 +77,8 @@ class JobStatsOut(BaseModel):
 # title buckets, and whether skills are limited to known technology names. A profile
 # outside every preset gets neutral stats: skills as collected (minus sentence-like
 # source noise) and no title buckets. Display only: nothing here affects matching or scoring.
-_MAX_SKILL_WORDS = 5
-_MAX_SKILL_CHARS = 40
+_MAX_SKILL_WORDS = MAX_SKILL_WORDS
+_MAX_SKILL_CHARS = MAX_SKILL_CHARS
 
 
 def _aggregate_tech_facets(
@@ -113,10 +113,7 @@ def _aggregate_tech_facets(
         raw_name = r["name"]
         count = r["count"]
         norm = raw_name.strip().lower()
-        if technologies_only:
-            if norm not in KNOWN_TECHNOLOGIES:
-                continue
-        elif not norm or len(norm) > _MAX_SKILL_CHARS or len(norm.split()) > _MAX_SKILL_WORDS:
+        if not is_skill_label(norm, technologies_only=technologies_only):
             continue
         counts[norm] = counts.get(norm, 0) + count
         votes = display_votes.setdefault(norm, {})

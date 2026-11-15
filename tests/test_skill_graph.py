@@ -103,3 +103,47 @@ def test_no_sqlite_write_connection_is_ever_opened(tmp_path, monkeypatch):
     monkeypatch.setattr(sqlite3, "connect", spy)
     build_skill_graph(db, ["python"], now=NOW)
     assert seen and all("mode=ro" in s for s in seen)
+
+
+# -- any line of work (Phase B B10, P-018) -----------------------------------------------------------
+
+def _nurse_db(path: Path) -> Path:
+    s = Storage(str(path))
+    s.init_db()
+    recent = NOW - timedelta(days=5)
+    jobs = [Job(id=f"n{i}", title=f"Infirmier {i}", first_seen_at=recent, discovered_at=recent,
+                skills=["Soins infirmiers", "Hygiène hospitalière", "Prise de sang",
+                        "Réaliser des soins d'hygiène et de confort auprès des patients hospitalisés"])
+            for i in range(3)]
+    s.upsert_jobs_batch(jobs)
+    s.close()
+    return path
+
+
+def test_outside_it_the_graph_keeps_the_offers_own_skills_and_drops_sentences(tmp_path):
+    db = _nurse_db(tmp_path / "jobs.db")
+    it = build_skill_graph(db, ["soins infirmiers"], now=NOW)                       # default: technologies only
+    assert it["nodes"] == []
+    g = build_skill_graph(db, ["soins infirmiers"], now=NOW, technologies_only=False)
+    assert {n["skill"] for n in g["nodes"]} == {"soins infirmiers", "hygiène hospitalière", "prise de sang"}
+
+
+def test_the_route_applies_the_stats_rule_of_the_profiles_preset(tmp_path):
+    from src.api.app import app
+
+    cfg = tmp_path / "config"
+    cfg.mkdir()
+    saved = (app.state.db_path, app.state.config_dir)
+    try:
+        app.state.db_path, app.state.config_dir = str(_nurse_db(tmp_path / "nurse.db")), str(cfg)
+        (cfg / "profile.yaml").write_text("target_domains: [soins infirmiers]\ntarget_skills: [Prise de sang]\n",
+                                          encoding="utf-8")
+        nurse = TestClient(app).get("/api/skills/graph", params={"days": 365}).json()
+        app.state.db_path = str(_db(tmp_path / "it.db"))
+        (cfg / "profile.yaml").write_text("target_domains: [software_development]\ntarget_skills: [Python]\n",
+                                          encoding="utf-8")
+        it = TestClient(app).get("/api/skills/graph", params={"days": 365}).json()
+    finally:
+        app.state.db_path, app.state.config_dir = saved
+    assert {n["skill"] for n in nurse["nodes"]} == {"soins infirmiers", "hygiène hospitalière", "prise de sang"}
+    assert "configurer le poste de travail" not in {n["skill"] for n in it["nodes"]}    # IT: technologies only
