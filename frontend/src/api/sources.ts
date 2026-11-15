@@ -197,6 +197,7 @@ export interface SourceOverview {
     started_at: string | null
     status: string | null
     reason: string | null
+    reason_key?: string | null
     collected: number | null
     accepted: number | null
     errors: number | null

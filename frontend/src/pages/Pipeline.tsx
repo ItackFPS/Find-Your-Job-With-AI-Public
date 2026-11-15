@@ -77,6 +77,7 @@ interface SourceRow {
   errors: number
   status?: string | null
   reason?: string | null
+  reason_key?: string | null
 }
 
 const sourceColumns = (t: TFunction): DataTableColumn<SourceRow>[] => [
@@ -84,7 +85,7 @@ const sourceColumns = (t: TFunction): DataTableColumn<SourceRow>[] => [
   { key: 'collected', header: t('pipeline.sourceTable.collected'), align: 'right', render: r => r.collected },
   { key: 'accepted', header: t('pipeline.sourceTable.accepted'), align: 'right', render: r => r.accepted },
   { key: 'errors', header: t('pipeline.sourceTable.errors'), align: 'right', render: r => <span style={{ color: r.errors > 0 ? 'var(--color-error)' : 'inherit' }}>{r.errors}</span> },
-  { key: 'status', header: t('pipeline.sourceTable.status'), render: r => <SourceStatus status={r.status} reason={r.reason} /> },
+  { key: 'status', header: t('pipeline.sourceTable.status'), render: r => <SourceStatus status={r.status} reason={r.reason} reasonKey={r.reason_key} /> },
 ]
 
 function SourcesTable({ bySource }: { bySource: RunStats['by_source'] }) {

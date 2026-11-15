@@ -51,7 +51,7 @@ function SourceRow({ source, onChoice, onReset, busy }: {
         <span style={{ color: 'var(--color-muted)' }}>{t('settings.sources.lastSearch')}</span>
         {last ? (
           <>
-            <SourceStatus status={last.status} reason={last.reason} />
+            <SourceStatus status={last.status} reason={last.reason} reasonKey={last.reason_key} />
             {last.collected != null && (
               <span>{t('settings.sources.counts', { collected: last.collected, accepted: last.accepted ?? 0 })}</span>
             )}

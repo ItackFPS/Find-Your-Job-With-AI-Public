@@ -1,4 +1,12 @@
 {
+  "sourceStatus": {
+    "reason": {
+      "ft_api_restricted": "Pas nécessaire. L’API France Travail est réservée et aucun accès n’est configuré ici ; le site France Travail et les autres sources fonctionnent quand même.",
+      "indeed_off": "Indeed est désactivé. C’est une source non officielle (Indeed n’a pas d’API publique) : elle ne fonctionne que si vous la choisissez dans Paramètres › Sources ; les autres sources fonctionnent quand même.",
+      "frozen": "Collecte en pause le temps de vérifier chaque source (temporaire). Vos offres enregistrées, vos offres sauvegardées et vos candidatures sont conservées. Une source ne revient qu’après avoir passé ses vérifications et que vous l’avez réactivée.",
+      "removed": "Cette source a été retirée de l’application ; elle est ignorée, et les offres qu’elle a trouvées restent enregistrées."
+    }
+  },
   "common": {
     "loading": "Chargement…",
     "noData": "Aucune donnée",

@@ -146,7 +146,7 @@ def sources_overview(request: Request) -> dict[str, Any]:
             "choice": choice,
             "last_run": None if stats is None else {
                 "started_at": run_started_at,
-                **{k: stats.get(k) for k in ("status", "reason", "collected", "accepted", "errors")},
+                **{k: stats.get(k) for k in ("status", "reason", "reason_key", "collected", "accepted", "errors")},
             },
             "breaker": breakers.get(name),
         })
