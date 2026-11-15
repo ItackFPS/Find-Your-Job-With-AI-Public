@@ -143,8 +143,8 @@ from doing what the OS lets it do, so:
   delete-child right on `data/` on Windows, the sticky bit on POSIX), and cannot read the secrets
   (`.env*`, `config/*.local.*`: `.env`'s n8n API key reaches the API through n8n).
   File permissions alone are not enough: **the API runs as the human and writes production state for any
-  caller** (`PUT /api/profile`, `POST /api/pipeline/run`, …). With `API_SAME_USER_ONLY=1`
-  (`src/api/peer_guard.py`, opt-in) it asks the OS which process owns each loopback connection and
+  caller** (`PUT /api/profile`, `POST /api/pipeline/run`, …). With the same-account guard
+  (`src/api/peer_guard.py`; on by default since owner decision D5, `API_SAME_USER_ONLY=0` turns it off) it asks the OS which process owns each loopback connection and
   serves only its own account, failing closed on anything it cannot attribute — including any request
   with a forwarding header, since uvicorn by default rewrites the client address from
   `X-Forwarded-For` and an agent could otherwise claim one of the human's open connections (reproduced,
@@ -180,7 +180,7 @@ from doing what the OS lets it do, so:
   account, and Microsoft services it as a security boundary. Every access must also be granted to the
   container's SID, so the user's own ACLs (and a drive root open to Authenticated Users) grant it
   nothing. It has no network unless `internetClient` is given, and never loopback unless an
-  administrator exempts it, so the API and relays are out of reach without `API_SAME_USER_ONLY`.
+  administrator exempts it, so the API and relays are out of reach even with `API_SAME_USER_ONLY=0`.
   `src/lab/sandbox.py` (`python -m src.lab sandbox grant|run|revoke`) grants it read on the application
   folder and its Python and modify on `data/lab/` only. A deny ACE for an AppContainer SID is ignored
   (measured), so secrets are kept closed by never being granted: the root and `config/` pass only a
