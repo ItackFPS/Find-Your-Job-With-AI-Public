@@ -1,6 +1,8 @@
 # 0014 — Learning is split into four planes bound by shared invariants
 
-Status: accepted (2026-11-05). Not implemented yet: the code-level checks below land with stage L1.
+Status: accepted (2026-11-05). Partly implemented (checked 2026-11-15): the INV-2 socket guard
+(`tests/test_personal_data_stays_local.py`) and the import boundary of `src/evaluation` and `src/lab`
+(`tests/test_evaluation_isolation.py`) exist; the other checks listed under Consequences are not verified here.
 
 ## Context
 The owner approved the learning architecture v5

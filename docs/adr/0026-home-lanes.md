@@ -1,7 +1,8 @@
 # 0026 — Home shows three labelled lanes; exploration and "outside criteria" offers are capped and explained
 
-Status: accepted (2026-11-05). Not implemented yet (Home sections in P6; lane inputs arrive with
-stages L4–L6). Source: `docs/design/learning-architecture-decisions.md` §4.11 (AD-11),
+Status: accepted (2026-11-05). Partly implemented: the main list, the outside-criteria lane and
+Découverte (`src/pipeline/lanes.py`, Jobs page). Not implemented: "Reconversion possible" and "À vous
+de juger". Source: `docs/design/learning-architecture-decisions.md` §4.11 (AD-11),
 with the v1 proposal's AD-11.
 
 ## Context

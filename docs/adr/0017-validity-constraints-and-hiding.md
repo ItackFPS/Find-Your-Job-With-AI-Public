@@ -1,7 +1,8 @@
 # 0017 — Offer validity is operational; only strong user constraints reject; weak ones rank; Hide is list management
 
-Status: accepted (2026-11-05). Not implemented yet (stage L5 for weak evidence; salary check after
-the `matches_salary` correction). Classification table, routing and criteria:
+Status: accepted (2026-11-05). Implemented: Hide (list management) and weak-evidence routing (the
+outside-criteria lane, `src/pipeline/lanes.py`). Not implemented: the salary check (waits for the
+`matches_salary` correction and the profile salary contract). Classification table, routing and criteria:
 `docs/design/learning-architecture-decisions.md` §4.2 (AD-2), with the v1 proposal's AD-2.
 
 ## Context
