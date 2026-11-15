@@ -23,8 +23,8 @@ Its security model, in short:
 - **The backend trusts the local machine.** It listens on `127.0.0.1` only and has no
   login. It defends against *web pages* you visit (it refuses foreign `Host` headers —
   DNS rebinding — and cross-site write requests), not against other programs running on
-  the same computer. `API_SAME_USER_ONLY=1` additionally refuses processes of other
-  Windows accounts. Exposing port 8000 to a network is unsupported.
+  the same computer. By default it also refuses processes of other Windows accounts
+  (`API_SAME_USER_ONLY=0` turns that off); programs of your own account can use it. Exposing port 8000 to a network is unsupported.
 - **Secrets live in `.env` only** (for example France Travail credentials). They are never written to tracked files or logs by the
   application; `.env`, `config/*.local.yaml`, `data/` and `logs/` are git-ignored.
 - **Collected job postings are untrusted input.** They are parsed, stored and rendered

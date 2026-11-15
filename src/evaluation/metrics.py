@@ -62,6 +62,12 @@ class Confusion:
         """Share of should-accept jobs that were rejected. Safety gate: must be 0."""
         return self._ratio(self.fn, self.tp + self.fn)
 
+    @property
+    def false_acceptance_rate(self) -> float | None:
+        """Share of should-reject jobs that were accepted (Phase B B3-M: reported by name, so a change
+        that lowers unsafe rejections by accepting everything shows its cost)."""
+        return self._ratio(self.fp, self.fp + self.tn)
+
     def to_dict(self) -> dict[str, float | int | None]:
         d: dict[str, float | int | None] = dict(asdict(self))
         d.update(
@@ -69,6 +75,7 @@ class Confusion:
             recall=self.recall, f1=self.f1, reject_recall=self.reject_recall,
             reject_precision=self.reject_precision,
             unsafe_rejection_rate=self.unsafe_rejection_rate,
+            false_acceptance_rate=self.false_acceptance_rate,
         )
         return d
 
@@ -251,7 +258,7 @@ def _uncertainty(decisions: list[Decision]) -> dict[str, int]:
     }
 
 
-_STATS = ("accuracy", "precision", "recall", "f1", "unsafe_rejection_rate")
+_STATS = ("accuracy", "precision", "recall", "f1", "unsafe_rejection_rate", "false_acceptance_rate")
 
 
 def bootstrap_ci(
@@ -409,6 +416,109 @@ def _auc_ci(ranked: Sequence[tuple[float, str, str]], *, n_boot: int = 1000, see
     return (percentile(values, 0.025), percentile(values, 0.975)) if len(values) >= n_boot // 2 else None  # type: ignore[return-value]
 
 
+RELEVANCE = {"accept": 1.0, "borderline": 0.5, "reject": 0.0}
+NDCG_K = 10
+
+
+def ndcg_at(expected_in_order: Sequence[str], k: int = NDCG_K) -> float | None:
+    """NDCG@k of graded labels in ranked order (accept 1, borderline 0.5, reject 0): DCG of the top k
+    over the DCG of the same offers in the best possible order. ``None`` when nothing is ranked or no
+    ranked offer is relevant (the ideal DCG is 0)."""
+    gains = [RELEVANCE.get(e, 0.0) for e in expected_in_order]
+    if not gains:
+        return None
+
+    def dcg(values: Sequence[float]) -> float:
+        return sum(g / math.log2(i + 2) for i, g in enumerate(values[:k]))
+
+    ideal = dcg(sorted(gains, reverse=True))
+    return dcg(gains) / ideal if ideal > 0 else None
+
+
+def _ndcg_ci(ranked: Sequence[tuple[float, str, str]], *, n_boot: int = 1000,
+             seed: int = 20260917) -> tuple[float, float] | None:
+    """Percentile bootstrap CI95 of NDCG@10: resample the ranked labelled offers, keep their order."""
+    if ndcg_at([e for _, _, e in ranked]) is None:
+        return None
+    rng = random.Random(seed)
+    values = []
+    for _ in range(n_boot):
+        sample = sorted((rng.choice(ranked) for _ in ranked), key=lambda r: (-r[0], r[1]))
+        v = ndcg_at([e for _, _, e in sample])
+        if v is not None:
+            values.append(v)
+    if len(values) < n_boot // 2:
+        return None
+    return (percentile(values, 0.025), percentile(values, 0.975))  # type: ignore[return-value]
+
+
+def coverage_by_domain(decisions: Sequence[Decision], expected: dict[str, str],
+                       domains_of: dict[str, list[str]], domains: Sequence[str]) -> dict[str, dict[str, Any]]:
+    """For each of the profile's ``domains``: offers that resolve to it, how many were accepted, and recall
+    (with a Wilson interval) on the offers of that domain labelled ``accept``. ``domains_of``: job id ->
+    the domains it resolves to. ``expected``: job id -> label."""
+    out: dict[str, dict[str, Any]] = {}
+    for dom in domains:
+        ids = [d for d in decisions if dom in domains_of.get(d.job_id, [])]
+        accepts = [d for d in ids if expected.get(d.job_id) == "accept"]
+        hit = sum(1 for d in accepts if d.verdict == "accept")
+        out[dom] = {"offers": len(ids), "accepted": sum(1 for d in ids if d.verdict == "accept"),
+                    "labelled_accept": len(accepts), "recall": hit / len(accepts) if accepts else None,
+                    "recall_ci95": wilson(hit, len(accepts))}
+    return out
+
+
+DIFFERENCE_METRICS = ("recall", "unsafe_rejection_rate", "false_acceptance_rate", "precision")
+NOT_MEASURABLE = "not measurable with current labels"
+
+
+def difference_report(baseline: Sequence[Decision], candidate: Sequence[Decision], expected: dict[str, str],
+                      *, effect: dict[str, float] | None = None, n_boot: int = 2000,
+                      seed: int = 20260917) -> dict[str, Any]:
+    """Candidate minus baseline on the same labelled offers, for the gate metrics (Phase B B3-M; the
+    minimum-sample rule of the evaluation strategy). Per metric: both values, the difference and a paired
+    bootstrap CI95 of the difference. When ``effect`` names the smallest difference that matters for a
+    metric, ``measurable`` says whether the interval is narrower than that effect; if it is not, the
+    verdict is "not measurable with current labels", never "no effect". Gate decisions also get McNemar's
+    exact p on the offers only one side accepts."""
+    vb = {d.job_id: d.verdict for d in baseline}
+    vc = {d.job_id: d.verdict for d in candidate}
+    ids = sorted(j for j in expected if j in vb and j in vc and expected[j] != "borderline")
+
+    def stats(verdicts: dict[str, str], sample: Sequence[str]) -> Confusion:
+        return confusion((expected[j], verdicts[j]) for j in sample)
+
+    base, cand = stats(vb, ids), stats(vc, ids)
+    rng = random.Random(seed)
+    diffs: dict[str, list[float]] = {m: [] for m in DIFFERENCE_METRICS}
+    for _ in range(n_boot if ids else 0):
+        sample = [rng.choice(ids) for _ in ids]
+        b, c = stats(vb, sample), stats(vc, sample)
+        for m in DIFFERENCE_METRICS:
+            x, y = getattr(b, m), getattr(c, m)
+            if x is not None and y is not None:
+                diffs[m].append(y - x)
+    out: dict[str, Any] = {"n": len(ids)}
+    for m in DIFFERENCE_METRICS:
+        x, y = getattr(base, m), getattr(cand, m)
+        ci = None
+        if len(diffs[m]) >= max(1, n_boot // 2):
+            ci = (percentile(diffs[m], 0.025), percentile(diffs[m], 0.975))
+        row: dict[str, Any] = {"baseline": x, "candidate": y,
+                               "difference": (y - x) if x is not None and y is not None else None, "ci95": ci}
+        if effect and m in effect:
+            row["effect_that_matters"] = effect[m]
+            row["measurable"] = ci is not None and (ci[1] - ci[0]) < effect[m]  # type: ignore[operator]
+            if not row["measurable"]:
+                row["verdict"] = NOT_MEASURABLE
+        out[m] = row
+    only_b = sum(1 for j in ids if vb[j] == "accept" and vc[j] != "accept")
+    only_c = sum(1 for j in ids if vb[j] != "accept" and vc[j] == "accept")
+    out["gate_mcnemar"] = {"only_baseline_accepts": only_b, "only_candidate_accepts": only_c,
+                           "p": mcnemar_exact_p(only_b, only_c)}
+    return out
+
+
 def ranking_metrics(decisions: Sequence[Decision], labels: dict[str, LabelRecord]) -> dict[str, Any]:
     """AUC, precision@k and the visibility floor over the labelled jobs the gates accepted.
 
@@ -443,6 +553,8 @@ def ranking_metrics(decisions: Sequence[Decision], labels: dict[str, LabelRecord
         "n_reject": sum(e == "reject" for _, _, e in ranked),
         "n_borderline": sum(e == "borderline" for _, _, e in ranked),
         "precision_at": precision_at,
+        "ndcg_at_10": {"k": NDCG_K, "n": len(ranked), "value": ndcg_at([e for _, _, e in ranked]),
+                       "ci95": _ndcg_ci(ranked)},
         "visible_at_floor": {
             "tier": VISIBILITY_TIER,
             "min_score": next(t for t, name in TIER_THRESHOLDS if name == VISIBILITY_TIER) / 100,

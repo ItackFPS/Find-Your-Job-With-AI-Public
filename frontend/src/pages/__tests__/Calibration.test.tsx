@@ -153,6 +153,6 @@ describe('measuring a set', () => {
     const user = userEvent.setup()
     renderCard()
     await user.click(await screen.findByRole('button', { name: 'Measure on held-out labels' }))
-    await waitFor(() => expect(posts).toEqual([{ url: '/quality/jobs', body: { kind: 'personal', options: { dataset_id: 'real-v2', split: 'heldout' } } }]))
+    await waitFor(() => expect(posts).toEqual([{ url: '/quality/jobs', body: { kind: 'personal', options: { dataset_id: 'real-v2', split: 'tuning' } } }]))
   })
 })

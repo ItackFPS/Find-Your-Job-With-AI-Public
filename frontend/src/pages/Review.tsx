@@ -8,6 +8,7 @@ import {
 import { Card, Chip, EmptyState, LoadingState } from '../components'
 import { findPipelineStage } from '../config/pipelineStages'
 import { DecisionPanel } from './JobDetail'
+import { useVisibleExposure } from '../hooks/useVisibleExposure'
 
 type Filter = 'all' | 'rejected' | 'accepted'
 
@@ -47,8 +48,12 @@ type Answer = 'interested' | 'not_interested' | 'unsure'
 
 // Presentational: one queued decision with the reasons it needs a human, and the three answers.
 export function ReviewCard({
-  item, pending, onAnswer,
-}: { item: ReviewItem; pending: boolean; onAnswer: (type: Answer) => void }) {
+  item, pending, onAnswer, trackRef,
+}: {
+  item: ReviewItem; pending: boolean; onAnswer: (type: Answer) => void
+  /** Visible-exposure ref (surface "review", ADR 0016). */
+  trackRef?: (el: Element | null) => void
+}) {
   const { t } = useTranslation()
   const [open, setOpen] = useState<'none' | 'decision' | 'posting'>('none')
   const d = item.decision
@@ -59,6 +64,7 @@ export function ReviewCard({
   const deciding = d.evidence.filter(e => e.state === 'violated' && e.source.stage === d.deciding_stage)
   const title = d.job?.title || d.job_id
   return (
+    <div ref={trackRef}>
     <Card style={{ marginBottom: 'var(--space-3)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <div style={{ minWidth: 0 }}>
@@ -129,6 +135,7 @@ export function ReviewCard({
       {open === 'decision' && <div style={{ marginTop: '0.75rem' }}><DecisionPanel decision={d} /></div>}
       {open === 'posting' && <div style={{ marginTop: '0.75rem' }}><Snapshot decisionId={d.decision_id} /></div>}
     </Card>
+    </div>
   )
 }
 
@@ -136,14 +143,17 @@ export default function Review() {
   const { t } = useTranslation()
   const [filter, setFilter] = useState<Filter>('all')
   const queryClient = useQueryClient()
+  const track = useVisibleExposure('review')
   const { data, isLoading, isError } = useQuery({
     queryKey: ['review-queue', filter],
     queryFn: () => getReviewQueue(filter === 'all' ? undefined : filter),
   })
   const [error, setError] = useState<string | null>(null)
   const { mutate, isPending } = useMutation({
-    mutationFn: ({ item, type }: { item: ReviewItem; type: string }) =>
-      postJobFeedback(item.decision.job_id, { type, reasons: [], decision_id: item.decision.decision_id }),
+    mutationFn: ({ item, type, position }: { item: ReviewItem; type: string; position: number }) =>
+      postJobFeedback(item.decision.job_id, {
+        type, reasons: [], decision_id: item.decision.decision_id, context: { surface: 'review', position },
+      }),
     onSuccess: () => { setError(null); queryClient.invalidateQueries({ queryKey: ['review-queue'] }) },
     onError: () => setError(t('review.saveError')),
   })
@@ -166,9 +176,10 @@ export default function Review() {
       {isLoading && <LoadingState />}
       {isError && <EmptyState message={t('review.unavailable')} />}
       {data && data.items.length === 0 && <EmptyState message={t('review.empty')} />}
-      {data?.items.map(item => (
+      {data?.items.map((item, i) => (
         <ReviewCard key={item.decision.decision_id} item={item} pending={isPending}
-          onAnswer={type => mutate({ item, type })} />
+          trackRef={track(item.decision.job_id, i)}
+          onAnswer={type => mutate({ item, type, position: i })} />
       ))}
     </div>
   )

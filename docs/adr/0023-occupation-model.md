@@ -1,7 +1,7 @@
 # 0023 — Offers get a ROME occupation (structured first, then a calibrated per-code classifier); similarity, transferable skills and feasibility stay separate
 
-Status: accepted (2026-11-05). Not implemented yet (stage L2 for structured fields, L6 for the
-classifier). Design, data splits and evaluation tables:
+Status: accepted (2026-11-05). Partly implemented: structured occupation fields in the profile
+(`target_occupations`, `src/models/profile.py`). Not implemented: the classifier (stage L6). Design, data splits and evaluation tables:
 `docs/design/learning-architecture-decisions.md` §1 and §4.7 (AD-7).
 
 ## Context

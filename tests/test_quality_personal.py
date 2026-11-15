@@ -35,12 +35,32 @@ def _run(data: Path, **options):
     return QualityJobStore(data / "jobs.db").get(job_id)
 
 
-def test_measures_the_held_out_part_of_an_imported_set(data):
-    job = _run(data, dataset_id="real-t", split="heldout")
+PREREGISTERED = "2026-10-30-h1-distance-first-in-order"     # an existing docs/lab/preregistered/ file
+
+
+def test_measures_the_tuning_part_of_an_imported_set_by_default(data):
+    """Owner decision D4: the tuning part by default; nothing is logged as a held-out use."""
+    job = _run(data, dataset_id="real-t")
+    assert job["status"] == "completed", job
+    s = job["summary"]
+    full = load_dataset(data / "calibration" / "real-t")
+    assert s["kind"] == "personal" and s["dataset"]["split"] == "tuning"
+    assert 0 < s["dataset"]["labels"] < len(full.labels)
+    assert not (data / "calibration" / "real-t" / "heldout-usage.jsonl").exists()
+
+
+def test_a_held_out_measure_needs_a_preregistered_candidate_and_is_logged(data):
+    refused = _run(data, dataset_id="real-t", split="heldout")
+    assert (refused["status"], refused["error_code"]) == ("failed", "tool_failed")
+    assert not (data / "calibration" / "real-t" / "heldout-usage.jsonl").exists()
+    job = _run(data, dataset_id="real-t", split="heldout", candidate=PREREGISTERED)
     assert job["status"] == "completed", job
     s = job["summary"]
     full = load_dataset(data / "calibration" / "real-t")
     assert s["kind"] == "personal" and s["dataset"]["split"] == "heldout"
+    log = (data / "calibration" / "real-t" / "heldout-usage.jsonl").read_text(encoding="utf-8").splitlines()
+    assert len(log) == 1 and json.loads(log[0])["caller"] == "ui"
+    assert json.loads(log[0])["candidate"] == PREREGISTERED
     assert 0 < s["dataset"]["labels"] < len(full.labels)
     assert set(s["ranking"]) >= {"auc", "auc_ci95", "precision_at_strong", "recall_at_20"}
     assert "pooled_over_enriched_strata" in s["flags"]           # top_scored is an enriched stratum
@@ -87,3 +107,20 @@ def test_the_api_requires_a_set_for_a_personal_measure(tmp_path):
         app.state.db_path = saved
     assert r.status_code == 400 and r.json()["detail"]["code"] == "dataset_required"
     assert bad.status_code == 422
+
+
+def test_the_api_refuses_a_held_out_measure_without_a_preregistered_candidate(tmp_path):
+    from fastapi.testclient import TestClient
+
+    from src.api.app import app
+
+    saved = app.state.db_path
+    app.state.db_path = str(tmp_path / "jobs.db")
+    try:
+        client = TestClient(app)
+        for options in ({"dataset_id": "real-t", "split": "heldout"}, {"dataset_id": "real-t", "split": "all"},
+                        {"dataset_id": "real-t", "split": "heldout", "candidate": "not-registered"}):
+            r = client.post("/api/quality/jobs", json={"kind": "personal", "options": options})
+            assert r.status_code == 409 and r.json()["detail"]["code"] == "heldout_refused", options
+    finally:
+        app.state.db_path = saved

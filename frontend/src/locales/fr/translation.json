@@ -68,10 +68,10 @@
     }
   },
   "pipelineEvents": {
-    "started": "Pipeline démarré",
-    "completed": "Pipeline terminé",
-    "failed": "Échec du pipeline",
-    "failedWithError": "Échec du pipeline — {error}",
+    "started": "Recherche démarrée",
+    "completed": "Recherche terminée",
+    "failed": "Échec de la recherche",
+    "failedWithError": "Échec de la recherche — {error}",
     "reconnected": "Reconnecté — {stage}",
     "stageCount": "{stage} — {count, number} offres"
   },
@@ -81,7 +81,7 @@
     "pausing": "Mise en pause…",
     "resume": "Reprendre",
     "resuming": "Reprise…",
-    "scanNow": "Lancer le scan",
+    "scanNow": "Lancer la collecte",
     "progress": {
       "query": "Requête {query} / {total}",
       "page": " · page {page}",
@@ -100,7 +100,7 @@
     "welcome": {
       "title": "Bienvenue",
       "intro": "Quelques étapes, aucun fichier à modifier, aucune commande à saisir. Tout reste sur cet ordinateur et vous pourrez tout changer ensuite.",
-      "scope": "La recherche part de votre profil : tous les métiers peuvent être cherchés. Les sites de télétravail (RemoteOK, Jobicy, We Work Remotely) proposent surtout des métiers du numérique."
+      "scope": "La recherche part de votre profil : tous les métiers peuvent être cherchés."
     },
     "profile": {
       "title": "Que recherchez-vous ?",
@@ -120,27 +120,32 @@
   "dashboard": {
     "title": "Tableau de bord",
     "jobsInDb": "{count, number} offres en base",
-    "pipelineRunning": "⟳ Pipeline en cours…",
+    "pipelineRunning": "⟳ Recherche en cours…",
     "today": {
       "title": "Aujourd’hui",
-      "lastRun": "Dernière recherche : {date}. {count, number} offres correspondent à votre profil.",
+      "lastRun": "Dernière recherche : {date}. {count, number} offres sont pertinentes ou mieux pour votre profil.",
+      "lastRunDate": "Dernière recherche : {date}.",
       "noRun": "Aucune recherche pour le moment.",
       "nextRun": "Prochaine recherche : {date}.",
       "problems": "{count, plural, one {# source a eu} other {# sources ont eu}} un problème lors de la dernière recherche",
       "offline": "Aucune source n'a répondu lors de la dernière recherche. Vérifiez votre connexion internet ; la prochaine recherche réessaiera.",
       "top": "Meilleures correspondances",
       "untitled": "Offre sans titre",
-      "noMatch": "Aucune correspondance forte lors de la dernière recherche."
+      "noMatch": "Aucune correspondance forte lors de la dernière recherche.",
+      "keptPrevious": "Aucune source n’a abouti lors de la dernière recherche : les listes montrent toujours la recherche précédente.",
+      "nothingNew": "Rien de nouveau depuis la recherche précédente.",
+      "firstEmpty": "La première recherche n’a trouvé aucune offre pour votre profil. Vérifiez votre métier et vos lieux dans Profil ; la prochaine recherche réessaiera."
     },
     "run": {
       "alreadyRunning": "Une recherche est déjà en cours.",
       "failed": "La recherche n’a pas pu démarrer. Réessayez.",
-      "start": "Lancer le pipeline",
+      "start": "Lancer la recherche",
       "starting": "Démarrage…",
-      "running": "En cours…"
+      "running": "En cours…",
+      "paused": "Collecte en pause"
     },
-    "noRuns": "Aucune exécution du pipeline pour l’instant. <run>Lancez le pipeline</run> pour voir les résultats ici.",
-    "browseMatched": "Parcourir les {count, number} offres retenues →",
+    "noRuns": "Aucune recherche pour l’instant. <run>Lancez la recherche</run> pour voir les résultats ici.",
+    "browseMatched": "Parcourir les {count, number} offres pertinentes →",
     "backendError": "Impossible de joindre le serveur local. Relancez l’application avec son raccourci <app>Find Your Job With AI</app> (ou <cmd/>) ; si elle ne démarre pas, sa fenêtre en indique la raison, et le détail se trouve dans <log/> dans le dossier de l’application.",
     "liveRun": "Exécution en direct",
     "latestRun": "Dernière exécution",
@@ -154,7 +159,7 @@
       "errors": "Erreurs"
     },
     "sections": {
-      "stages": "ÉTAPES DU PIPELINE",
+      "stages": "ÉTAPES DE LA RECHERCHE",
       "bySource": "PAR SOURCE",
       "bySourceLive": "PAR SOURCE (en direct)",
       "byCountry": "PAR PAYS",
@@ -181,8 +186,8 @@
       "status": "Statut"
     },
     "scanner": {
-      "linkedin": "Scan LinkedIn",
-      "hellowork": "Scan HelloWork",
+      "linkedin": "Collecte LinkedIn",
+      "hellowork": "Collecte HelloWork",
       "searching": "Recherche en cours…",
       "pausingNextPage": "Pause à la page suivante…",
       "etaUnknown": "Temps restant : pas encore assez de données",
@@ -194,7 +199,7 @@
       "percentDone": " · ~{percent} % effectués",
       "foundNew": "{found, number} trouvées · {new, number} nouvelles",
       "lastAttempt": "Dernière tentative le {date}",
-      "noScans": "Aucun scan pour l’instant.",
+      "noScans": "Aucune collecte pour l’instant.",
       "rateLimited": "Limité par le site — reprend seul après une pause",
       "rateLimitedUntil": "Limité par le site — reprend seul après {time}"
     }
@@ -210,7 +215,7 @@
       "stats": "Statistiques",
       "skills": "Compétences",
       "quality": "Qualité",
-      "pipeline": "Pipeline",
+      "pipeline": "Recherches",
       "label": "Navigation principale",
       "settings": "Paramètres"
     },
@@ -246,10 +251,10 @@
       "title": "Bien démarrer",
       "intro": "Une fois votre profil enregistré, l’application cherche d’elle-même une fois par jour. D’ici là, elle ne collecte rien.",
       "profile": "Remplissez votre <profile>profil</profile> : postes visés, compétences, lieux et langues. Les recherches en découlent.",
-      "sources": "Sources sans compte : {noAccount}. {scanners} sont des sources non officielles : elles restent désactivées sauf si vous les choisissez ou cliquez sur <b>Lancer le scan</b> sur leurs cartes ci-dessous.",
+      "sources": "Sources sans compte : {noAccount}. {scanners} sont des sources non officielles : elles restent désactivées sauf si vous les choisissez ou cliquez sur <b>Lancer la collecte</b> sur leurs cartes ci-dessous.",
       "and": " et ",
-      "scope": "La recherche part de votre profil : tous les métiers peuvent être cherchés. Les sites de télétravail (RemoteOK, Jobicy, We Work Remotely) proposent surtout des métiers du numérique.",
-      "run": "Pour chercher tout de suite, cliquez sur <b>Lancer le pipeline</b>. La première exécution télécharge une seule fois le modèle local de rapprochement (environ 470 Mo). Aucune donnée d’offre n’est envoyée à un service d’IA dans le cloud."
+      "scope": "La recherche part de votre profil : tous les métiers peuvent être cherchés.",
+      "run": "Pour chercher tout de suite, cliquez sur <b>Lancer la recherche</b>. La première exécution télécharge une seule fois le modèle local de rapprochement (environ 470 Mo). Aucune donnée d’offre n’est envoyée à un service d’IA dans le cloud."
     }
   },
   "tiers": {
@@ -295,7 +300,7 @@
     },
     "clear": "Effacer",
     "loadError": "Impossible de charger les offres.",
-    "empty": "Aucune offre trouvée. Modifiez vos filtres ou lancez le pipeline.",
+    "empty": "Aucune offre trouvée. Modifiez vos filtres ou lancez la recherche.",
     "prev": "← Précédent",
     "next": "Suivant →",
     "includeExpired": "Inclure les offres expirées"
@@ -387,7 +392,12 @@
       "against": "EN DÉFAVEUR ({count, number})",
       "unknown": "INCONNU ({count, number})",
       "conflicts": "CONFLITS ({count, number})",
-      "ids": "Décision {decision} · exécution {run}"
+      "ids": "Décision {decision} · exécution {run}",
+      "provenance": {
+        "structured": "d’après un champ de la source",
+        "text": "lu dans le texte de l’offre",
+        "unknown": "non indiqué dans l’offre"
+      }
     },
     "header": {
       "noTitle": "(sans titre)",
@@ -429,7 +439,7 @@
   },
   "stats": {
     "title": "Statistiques",
-    "subtitle": "Ce que demande le marché, sur {count, number} offres collectées",
+    "subtitle": "Ce que demande le marché, sur les {count, number} offres retenues après les filtres",
     "notEnoughData": "Pas encore assez de données.",
     "noDataYet": "Pas encore de données",
     "noDataYetDot": "Pas encore de données.",
@@ -448,7 +458,7 @@
     "rejections": "Pourquoi les offres sont écartées",
     "noRejections": "Pas encore de données d’exclusion.",
     "titleCategories": "Catégories d’intitulés",
-    "titleCategoriesSubtitle": "Intitulés réels de la dernière exécution, regroupés selon les requêtes de recherche configurées du pipeline",
+    "titleCategoriesSubtitle": "Intitulés réels de la dernière exécution, regroupés selon les requêtes de recherche configurées",
     "apiError": "Impossible de joindre l’API. Le serveur local est-il lancé ?",
     "topSkill": "Compétence la plus demandée",
     "topSkillCaps": "COMPÉTENCE LA PLUS DEMANDÉE",
@@ -487,7 +497,7 @@
   },
   "skills": {
     "title": "Compétences",
-    "intro": "Les technologies demandées par les offres qui vous correspondent, comment elles se combinent et ce qui manque à votre profil — d’après les annonces conservées par le pipeline.",
+    "intro": "Les technologies demandées par les offres qui vous correspondent, comment elles se combinent et ce qui manque à votre profil — d’après les annonces conservées par la recherche.",
     "days": "{count, number} jours",
     "relevantOf": "{relevant, number} pertinentes sur {total, number} offres étiquetées",
     "unavailable": "Le graphe des compétences est indisponible.",
@@ -934,7 +944,7 @@
     }
   },
   "pipeline": {
-    "title": "Pipeline",
+    "title": "Recherches",
     "drop": "−{percent} % · {label}",
     "funnel": {
       "collected": "Collectées",
@@ -974,6 +984,7 @@
       "aiEnabled": "✓ IA (phase 2) activée"
     },
     "duration": "Durée : {duration}",
+    "durationDetail": "(recherche {pipeline}, puis journal des décisions et nettoyage {post})",
     "started": "Début : {date}",
     "ended": "Fin : {date}",
     "aiBadge": "✓ IA (phase 2)",
@@ -990,7 +1001,7 @@
       "known": "Connues",
       "staged": "Ajoutées",
       "endedBy": "Arrêt",
-      "failedRetried": "échec (réessayée au prochain scan)"
+      "failedRetried": "échec (réessayée à la prochaine collecte)"
     },
     "scanStats": {
       "raw": "Collectées (brut)",
@@ -1006,10 +1017,10 @@
       "collectorErrors": "Erreurs de collecte",
       "collectionTime": "Durée de collecte"
     },
-    "linkedinHistory": "HISTORIQUE DES SCANS LINKEDIN",
-    "helloworkHistory": "HISTORIQUE DES SCANS HELLOWORK",
+    "linkedinHistory": "HISTORIQUE DES COLLECTES LINKEDIN",
+    "helloworkHistory": "HISTORIQUE DES COLLECTES HELLOWORK",
     "history": "HISTORIQUE",
-    "noScans": "Aucun scan pour l’instant.",
+    "noScans": "Aucune collecte pour l’instant.",
     "noRuns": "Aucune exécution pour l’instant."
   },
   "profile": {
@@ -1055,7 +1066,8 @@
       "curated": "Sélection",
       "placeholder": "Rechercher un domaine ou un métier (p. ex. développement logiciel, vendeur, agent d’entretien)…",
       "addCustomHint": "Aucun résultat ? Appuyez sur Entrée pour ajouter « {value} » comme domaine personnalisé",
-      "noMatch": "Aucun résultat pour « {value} » — appuyez sur Entrée pour l’ajouter comme domaine personnalisé."
+      "noMatch": "Aucun résultat pour « {value} » — appuyez sur Entrée pour l’ajouter comme domaine personnalisé.",
+      "unresolved": "Absents du vocabulaire intégré : {labels}. La recherche utilise ces mots tels quels, sans synonymes."
     },
     "location": {
       "statusLabel": "Priorité de ce lieu",
@@ -1074,7 +1086,7 @@
     },
     "sections": {
       "targets": "Domaines et compétences visés",
-      "targetsSubtitle": "Ce que le pipeline recherche et compare aux offres",
+      "targetsSubtitle": "Ce que la recherche cible et compare aux offres",
       "geography": "Géographie",
       "work": "Conditions de travail",
       "experience": "Expérience",
@@ -1355,9 +1367,6 @@
         "france-travail": "France Travail (API officielle)",
         "france-travail-web": "France Travail (site web)",
         "eures": "EURES",
-        "remoteok": "Remote OK",
-        "jobicy": "Jobicy",
-        "weworkremotely": "We Work Remotely",
         "workingnomads": "Working Nomads",
         "bundesagentur": "Bundesagentur für Arbeit",
         "arbetsformedlingen": "Arbetsförmedlingen",
@@ -1396,14 +1405,43 @@
       "title": "Apprentissage",
       "subtitle": "Comment l’application apprend de vos actions. Vos actions restent toujours sur cet ordinateur.",
       "pause": "Mettre l’apprentissage en pause",
-      "pauseHelp": "Vos actions sont toujours enregistrées, mais le classement cesse de s’y adapter jusqu’à la reprise.",
+      "pauseHelp": "Pendant la pause, le classement cesse de s’adapter à vous et aucune comparaison avec un classement personnel n’est faite. Vos actions, les offres qui vous sont montrées et les tirages Découverte restent enregistrés sur cet ordinateur ; l’effacement les supprime.",
       "reset": "Réinitialiser l’apprentissage",
       "resetHelp": "L’apprentissage repart de vos prochaines actions. Vos offres enregistrées et masquées et votre suivi de candidatures sont conservés.",
       "confirm": "Réinitialiser l’apprentissage ? Ce qu’il a appris jusqu’ici est effacé.",
       "confirmYes": "Réinitialiser",
       "resetDone": "L’apprentissage a été réinitialisé.",
       "lastReset": "Dernière réinitialisation : {date}",
-      "failed": "La modification n’a pas pu être enregistrée."
+      "failed": "La modification n’a pas pu être enregistrée.",
+      "recorded": {
+        "title": "Ce qui a été enregistré",
+        "intro": "Tout ce qui suit est stocké sur cet ordinateur uniquement. Cette vue ne modifie rien ; « Effacer mon activité » le supprime.",
+        "loading": "Chargement…",
+        "unavailable": "Ce qui a été enregistré ne peut pas être affiché pour le moment.",
+        "none": "Rien n’a encore été enregistré.",
+        "colType": "Action",
+        "colCount": "Enregistrées",
+        "colCounted": "Comptables par l’apprentissage",
+        "colLast": "Dernière fois",
+        "eventSurfaces": "Où vos actions ont été faites",
+        "exposuresBySurface": "{count, plural, one {# offre affichée, par liste} other {# offres affichées, par liste}}",
+        "exposuresBySource": "Offres affichées, par source",
+        "retention": "Les offres affichées sont résumées après {compact} jours et supprimées après {keep} jours.",
+        "repeatedViews": "Rouvrir la même offre est enregistré, mais l’apprentissage ne compte qu’une fois les ouvertures d’une offre. Les actions antérieures à la dernière réinitialisation sont conservées mais ne comptent plus.",
+        "types": {
+          "interested": "Intéressé",
+          "not_interested": "Pas pour moi",
+          "ranking_feedback": "Mal classée",
+          "unsure": "Je ne sais pas",
+          "viewed": "Offre ouverte",
+          "apply_link_opened": "Lien de candidature ouvert",
+          "application_status_changed": "Statut de candidature modifié",
+          "saved": "Enregistrée",
+          "unsaved": "Retirée des enregistrées",
+          "hidden": "Masquée",
+          "unhidden": "Réaffichée"
+        }
+      }
     },
     "deleteAll": {
       "title": "Supprimer toutes les données de l’application",
@@ -1493,6 +1531,12 @@
         "PF": "listes triées par pertinence",
         "IM": "autres"
       }
+    }
+  },
+  "collection": {
+    "frozen": {
+      "title": "Collecte en pause",
+      "body": "Aucun site d’offres n’est consulté pour l’instant, le temps de vérifier chaque source. Vos offres enregistrées, vos offres sauvegardées et vos candidatures sont conservées. Une source ne revient qu’après avoir passé ses vérifications et que vous l’avez réactivée."
     }
   }
 }

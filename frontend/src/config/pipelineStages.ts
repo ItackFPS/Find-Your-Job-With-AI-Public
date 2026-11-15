@@ -17,6 +17,11 @@ import i18n from '../i18n'
 // silently returning undefined at every call site.
 // ---------------------------------------------------------------------------
 
+/** Whether the optional AI eligibility stage ran in this run (P-016). */
+export function eligibilityRan(s: RunStats): boolean {
+  return s.llm_eligibility?.ran ?? Boolean(s.use_ai)
+}
+
 export interface PipelineStageDef {
   key: string
   /** Noun-phrase title for a funnel row (e.g. "Requirements Gate"). */
@@ -60,9 +65,12 @@ const STAGE_SPECS: StageSpec[] = [
   // the requirements-gate survivor count even when the stage is skipped
   // (disabled in config, or --ai not passed), the same "always populated"
   // convention hard_filter_*/requirements_gate_* already follow.
+  // A stage that did not run shows "–", not "N / N" (P-016, Phase B B7-C): the run records
+  // llm_eligibility.ran; a run recorded before that ran it only when AI was on.
   {
     key: 'llm_eligibility', unit: 'jobs',
-    input: s => s.llm_eligibility_input, done: s => s.llm_eligibility_passed,
+    input: s => (eligibilityRan(s) ? s.llm_eligibility_input : undefined),
+    done: s => (eligibilityRan(s) ? s.llm_eligibility_passed : undefined),
   },
   {
     key: 'score', unit: 'jobs',

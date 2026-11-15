@@ -234,6 +234,7 @@ domain_keywords:
       - admin sys
       - administratrice systèmes
       - exploitation informatique
+      - exploitation informatiques
     # Added for G-MO-T (ADR 0028): the literal product names of the job, unambiguous in a description.
     description:
       - windows server
@@ -251,8 +252,63 @@ domain_keywords:
       - administrateur reseau
       - ingénieur réseau
       - ingenieur reseau
-      - réseaux
-      - reseaux
+      # Phase B B5-A: no bare "réseaux". On its own it names utility networks as often as
+      # computer ones (detection, electrical, heating, water networks: 29 of the 62 offers the
+      # B5-0 sample classed as correctly rejected). IT network titles name the role or the field.
+      - architecte réseau
+      - architecte reseau
+      - réseau informatique
+      - reseau informatique
+      - réseaux informatiques
+      - reseaux informatiques
+      - systèmes et réseaux
+      - systemes et reseaux
+      - systèmes & réseaux
+      - systemes & reseaux
+      - infrastructure et réseaux
+      - infrastructure et reseaux
+      - infrastructures systèmes et réseaux
+      - réseaux et sécurité
+      - reseaux et securite
+      - réseaux & sécurité
+      - reseaux & securite
+      - réseau sécurité
+      - reseau securite
+      - sécurité réseau
+      - securite reseau
+      - sécurité des réseaux
+      - securite des reseaux
+      - réseaux et télécom
+      - reseaux et telecom
+      - réseaux & télécom
+      - reseaux & telecom
+      - réseaux télécom
+      - reseaux telecom
+      - réseau et télécom
+      - reseau et telecom
+      # Titles are matched on whole words, so plurals are listed too.
+      - administrateur réseaux
+      - administrateur reseaux
+      - ingénieur réseaux
+      - ingenieur reseaux
+      - technicien réseaux
+      - technicien reseaux
+      - architecte réseaux
+      - architecte reseaux
+      - système et réseaux
+      - systeme et reseaux
+      - système et réseau
+      - systeme et reseau
+      - sécurité réseaux
+      - securite reseaux
+      - réseaux et télécoms
+      - reseaux et telecoms
+      - réseaux & télécoms
+      - reseaux & telecoms
+      - réseaux télécoms
+      - reseaux telecoms
+      - réseau et télécoms
+      - reseau et telecoms
       - netzwerk
     description: []
 
@@ -422,6 +478,7 @@ domain_keywords:
       - admin sys
       - administratrice systèmes
       - exploitation informatique
+      - exploitation informatiques
     description:
       - windows server
       - active directory
@@ -429,10 +486,11 @@ domain_keywords:
 
   réseaux:
     title:
-      - réseaux
-      - reseaux
-      - réseau
-      - reseau
+      # Phase B B5-A: no bare "réseau(x)" (utility networks); see the networking entry.
+      - réseaux informatiques
+      - reseaux informatiques
+      - systèmes et réseaux
+      - systemes et reseaux
       - ingénieur réseau
       - ingenieur reseau
       - technicien réseau
@@ -992,6 +1050,54 @@ excluded_title_keywords:
   agriculture:
     - agriculteur
     - exploitant agricole
+  # Phase B B5-A: lines of work whose titles share IT words ("ingénieur systèmes",
+  # "ingénieur sécurité", "système d'information", "réseaux") without being IT roles; found
+  # in the B5-0 classified sample of in-field title rejections.
+  embedded_systems:
+    - embarqué
+    - embarque
+    # plural too: a profile typing "Systèmes embarqués" must own this group (domain_scope.py)
+    - embarqués
+    - embarques
+    - optronique
+    - avionique
+    - avionics
+    - systèmes fluides
+    - systemes fluides
+  safety_engineering:
+    - sécurité des procédés
+    - securite des procedes
+    - sécurité environnement
+    - securite environnement
+    - sécurité & environnement
+    - securite & environnement
+    - sécurité d'installation
+    - securite d'installation
+    - radioprotection
+    - qhse
+  functional_information_systems:
+    - fonctionnel
+    - sirh
+    - maîtrise d'ouvrage
+    - maitrise d'ouvrage
+    - business analyst
+  utility_networks:
+    - détection réseaux
+    - detection reseaux
+    - détection de réseaux
+    - detection de reseaux
+    - réseaux électriques
+    - reseaux electriques
+    - réseaux de chaleur
+    - reseaux de chaleur
+    - réseaux humides
+    - reseaux humides
+    - réseaux souples
+    - reseaux souples
+    - éclairage public
+    - eclairage public
+    - monteur réseaux
+    - monteur reseaux
 
 # ---------------------------------------------------------------------------
 # Non-IT title function words — same grouping/opt-out mechanism as above.

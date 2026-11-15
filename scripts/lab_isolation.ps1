@@ -324,7 +324,7 @@ try {
     $args_ = '--exec-paths-file data/isolation-exec-paths.txt'
 } catch { "  (could not write $listFile, so the paths are on the command line: $($_.Exception.Message))" }
 if ($problems.Count) { $problems | ForEach-Object { "PROBLEM: $_" } }
-'Verify AS the agent account (runas), from the repository, with the API running (API_SAME_USER_ONLY=1) and no relay:'
+'Verify AS the agent account (runas), from the repository, with the API running with its default guard (not API_SAME_USER_ONLY=0) and no relay:'
 "  python -m src.lab --lab-db data/lab/lab.db isolation-check $args_"
 if ($problems.Count) { exit 1 }
 'OK: ACLs as specified (isolation is proven only by the command above, run as the account).'

@@ -14,6 +14,8 @@ export interface SaveHideButtonsProps {
   /** Where the action was taken (feedback context, ADR 0016). */
   surface: string
   position?: number
+  /** The offer was placed by a random draw independent of every ranking (Découverte, ADR 0019). */
+  randomized?: boolean
   /** Called once the server acknowledged the new hidden state. */
   onHiddenChange?: (hidden: boolean) => void
   /** Tests inject an outbox; the application uses the shared one. */
@@ -26,7 +28,7 @@ export interface SaveHideButtonsProps {
  * the activity was erased (409) is dropped and said so; one waiting on an erasure (423) or the
  * network stays queued and is retried.
  */
-export function SaveHideButtons({ jobId, saved = false, hidden = false, surface, position, onHiddenChange, outbox }: SaveHideButtonsProps) {
+export function SaveHideButtons({ jobId, saved = false, hidden = false, surface, position, randomized, onHiddenChange, outbox }: SaveHideButtonsProps) {
   const { t } = useTranslation()
   const [isSaved, setSaved] = useState(saved)
   const [isHidden, setHidden] = useState(hidden)
@@ -38,8 +40,9 @@ export function SaveHideButtons({ jobId, saved = false, hidden = false, surface,
     setMessage(null)
     try {
       const box = await (outbox ?? getOutbox())
-      const context: Record<string, string | number> = { surface }
+      const context: Record<string, string | number | boolean> = { surface }
       if (position !== undefined) context.position = position
+      if (randomized) context.randomized = true
       const { done } = await box.enqueue(jobId, { type, reasons: [], context })
       if (!box.durable) setMessage(t('saveHide.notDurable'))
       const outcome = await done

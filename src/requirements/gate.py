@@ -55,6 +55,7 @@ from src.requirements.models import (
     EducationKind,
     EducationRequirement,
     EvidenceSource,
+    ExperienceRequirement,
     GateResult,
     HardRejectionReason,
     Importance,
@@ -72,9 +73,60 @@ _PREFERRED_EDUCATION_PENALTY = 0.20
 # Applied multiplicatively on top of the education penalty.
 _MANDATORY_SECONDARY_SKILL_PENALTY = 0.40
 
-# Score penalty for preferred experience year mismatches (PREFERRED > profile max).
-# Mandatory excess is a hard reject (see _check_experience); preferred is soft only.
+# Score penalty for an experience requirement above the profile's maximum that does not reject:
+# within one year above it (owner decision D12), or a preferred requirement further above it.
 _PREFERRED_EXPERIENCE_PENALTY = 0.20
+
+# Owner decision D12 (Phase B B6-A): with the profile's max_years = M, an offer stating more than
+# M + 1 years is excluded (when the requirement is mandatory, or the source's own field says the
+# experience is required); more than M and up to M + 1 years is down-ranked; M or less is ranked
+# normally. Missing, malformed or contradictory data never rejects.
+_D12_TOLERANCE_YEARS = 1
+
+
+def _experience_band(years: float, user_max: int) -> str:
+    if years <= user_max:
+        return "within"
+    return "near" if years <= user_max + _D12_TOLERANCE_YEARS else "above"
+
+
+def effective_experience(
+    requirements: JobRequirements, job: object | None, user_max: int | None
+) -> tuple[ExperienceRequirement | None, str | None]:
+    """The experience requirement the gate applies, and a contradiction note or ``None``.
+
+    The text extractor's requirement and the source's typed experience field
+    (src/requirements/structured.py) are combined: the field alone is used
+    as a mandatory requirement when it states a duration; when both exist and fall in different
+    D12 bands the data is contradictory, and no requirement is applied (never rejects).
+    """
+    import math
+
+    from src.requirements.structured import structured_evidence
+
+    text = requirements.experience
+    evidence = structured_evidence(getattr(job, "source", "") or "", getattr(job, "raw_payload", None))
+    field_exp = evidence.experience if evidence is not None else None
+    structured: ExperienceRequirement | None = None
+    if field_exp is not None and field_exp.min_years is not None:
+        if field_exp.required is True and field_exp.min_years > 0:
+            structured = ExperienceRequirement(
+                min_years=math.ceil(field_exp.min_years), importance=Importance.MANDATORY,
+                raw_text=field_exp.label, source=EvidenceSource.STRUCTURED_FIELD)
+        elif field_exp.min_years == 0:   # "Débutant accepté"
+            structured = ExperienceRequirement(
+                min_years=0, importance=Importance.OPTIONAL, raw_text=field_exp.label or "Débutant accepté",
+                source=EvidenceSource.STRUCTURED_FIELD)
+    if structured is None:
+        return text, None
+    if text is None or user_max is None:
+        return structured, None
+    if _experience_band(text.min_years, user_max) != _experience_band(structured.min_years, user_max):
+        return None, (
+            f"Experience: the offer's field says “{structured.raw_text}”, its text says "
+            f"{text.min_years} years — contradictory, not rejected, check the offer."
+        )
+    return structured, None
 
 
 def _norm(text: str) -> str:
@@ -132,6 +184,8 @@ class HardConstraintGate:
         career_level: dict | None = None,
         user_education_label: str | None = None,
         user_held_education_level: int | None = None,
+        user_in_progress_education_level: int | None = None,
+        user_in_progress_education_label: str | None = None,
     ):
         self._user_max_edu = user_max_education_level
         self._user_max_years_exp = user_max_years_experience
@@ -150,6 +204,21 @@ class HardConstraintGate:
         # defaults to user_max_education_level (v1: the same number).
         self._user_held_edu = (user_held_education_level if user_held_education_level is not None
                                else user_max_education_level)
+        # Highest Bac+N of a qualification being prepared above the held one
+        # (candidate_education_in_progress). A requirement within it is neither met nor
+        # missed: recorded as unknown with a flag, never rejected. Owner decision D13a
+        # (2026-11-14, Phase B B6-D): the offer is accepted with that visible note and a
+        # lower score — the usual education penalty of gate_jobs() still applies.
+        self._user_preparing_edu = user_in_progress_education_level
+        self._preparing_label = user_in_progress_education_label
+
+    def is_preparing_level(self, bac_plus: int) -> bool:
+        """True when ``bac_plus`` is above the held level but within the one being prepared."""
+        return (
+            self._user_preparing_edu is not None
+            and self._user_max_edu is not None
+            and self._user_max_edu < bac_plus <= self._user_preparing_edu
+        )
 
     def check(
         self,
@@ -187,8 +256,10 @@ class HardConstraintGate:
             has_unknown = True
 
         # ── 2. Experience hard constraint ─────────────────────────────────
-        exp_reasons, exp_state = self._check_experience(requirements)
+        exp_reasons, exp_state, exp_flag = self._check_experience(requirements, job)
         reasons.extend(exp_reasons)
+        if exp_flag:
+            flags.append(exp_flag)
         if exp_state == ConstraintState.UNKNOWN:
             has_unknown = True
 
@@ -359,6 +430,15 @@ class HardConstraintGate:
 
         candidate_label = self._candidate_education_label()
         required_label = self._required_education_label(edu.level_bac_plus, edu.level_label)
+
+        if self.is_preparing_level(edu.level_bac_plus):
+            preparing = self._preparing_label or f"bac+{self._user_preparing_edu}"
+            flag = (
+                f"Education: job asks for {required_label}; you are preparing {preparing} "
+                f"and hold {candidate_label} — kept with a lower score, check the offer."
+            )
+            return [], ConstraintState.UNKNOWN, flag
+
         # The message names why the level counts as required: a PREFERRED
         # reading only rejects as a stated bar ("Bac+5 ou équivalent"), and
         # calling that "preferred" would contradict the decision it explains.
@@ -444,28 +524,38 @@ class HardConstraintGate:
         return [reason], ConstraintState.VIOLATED, None
 
     def _check_experience(
-        self, requirements: JobRequirements
-    ) -> tuple[list[HardRejectionReason], ConstraintState]:
-        """Return (rejection_reasons, constraint_state) for experience.
+        self, requirements: JobRequirements, job: object | None = None
+    ) -> tuple[list[HardRejectionReason], ConstraintState, str | None]:
+        """Return (rejection_reasons, constraint_state, flag) for experience.
 
-        Three-valued logic:
+        Three-valued logic, with the D12 bands (M = the profile's max_years):
             exp absent                   → SATISFIED (no requirement stated)
+            text and field contradict    → UNKNOWN, flagged (never reject)
             user max absent              → UNKNOWN (can't evaluate; never reject)
-            exp.min_years ≤ user max     → SATISFIED
-            exp.min_years > user max
+            exp.min_years ≤ M            → SATISFIED
+            M < exp.min_years ≤ M + 1    → SATISFIED, flagged (down-ranked by gate_jobs)
+            exp.min_years > M + 1
               + MANDATORY importance     → VIOLATED (hard reject)
-              + PREFERRED                → SATISFIED from gate perspective
-                                           (soft penalty handled by gate_jobs)
+              + otherwise                → SATISFIED from gate perspective
+                                           (a PREFERRED one is penalised by gate_jobs)
         """
-        exp = requirements.experience
+        exp, contradiction = effective_experience(requirements, job, self._user_max_years_exp)
+        if contradiction:
+            return [], ConstraintState.UNKNOWN, contradiction
         if exp is None:
-            return [], ConstraintState.SATISFIED
+            return [], ConstraintState.SATISFIED, None
 
         if self._user_max_years_exp is None:
-            return [], ConstraintState.UNKNOWN
+            return [], ConstraintState.UNKNOWN, None
 
-        if exp.min_years <= self._user_max_years_exp:
-            return [], ConstraintState.SATISFIED
+        band = _experience_band(exp.min_years, self._user_max_years_exp)
+        if band == "within":
+            return [], ConstraintState.SATISFIED, None
+        if band == "near":
+            return [], ConstraintState.SATISFIED, (
+                f"Experience: the offer asks {exp.min_years} years, above your "
+                f"{self._user_max_years_exp} — kept with a lower score."
+            )
 
         if exp.importance == Importance.MANDATORY:
             reason = HardRejectionReason(
@@ -482,10 +572,10 @@ class HardConstraintGate:
                 span=exp.span,
                 evidence_source=exp.source,
             )
-            return [reason], ConstraintState.VIOLATED
+            return [reason], ConstraintState.VIOLATED, None
 
         # PREFERRED excess → soft penalty only (handled by gate_jobs).
-        return [], ConstraintState.SATISFIED
+        return [], ConstraintState.SATISFIED, None
 
     def _check_principal_skills(
         self, requirements: JobRequirements
@@ -669,17 +759,15 @@ def gate_jobs(
             if result.score_penalties:
                 result.skill_penalty = _MANDATORY_SECONDARY_SKILL_PENALTY
 
-            # Apply soft penalty for PREFERRED experience exceeding candidate max.
-            # MANDATORY excess is a hard reject from gate.check(); it never reaches here.
-            exp = requirements.experience
+            # Soft experience penalty (D12): any requirement within one year above the
+            # candidate's max is down-ranked; further above, a PREFERRED one is penalised
+            # (a MANDATORY one was rejected by gate.check() and never reaches here).
             gate_max_years = gate._user_max_years_exp
-            if (
-                exp is not None
-                and gate_max_years is not None
-                and exp.min_years > gate_max_years
-                and exp.importance == Importance.PREFERRED
-            ):
-                result.experience_penalty = _PREFERRED_EXPERIENCE_PENALTY
+            exp, _contradiction = effective_experience(requirements, job, gate_max_years)
+            if exp is not None and gate_max_years is not None:
+                band = _experience_band(exp.min_years, gate_max_years)
+                if band == "near" or (band == "above" and exp.importance == Importance.PREFERRED):
+                    result.experience_penalty = _PREFERRED_EXPERIENCE_PENALTY
 
             # Surface the raw extracted years-of-experience requirement (regardless
             # of importance/penalty status) so the scorer's experience-fit curve

@@ -130,6 +130,9 @@ class FranceTravailCollector(BaseCollector):
     Set to 1 to disable concurrency entirely (sequential, deterministic order).
     """
 
+    # Its httpx.Client requests do not pass BaseCollector._before_request (B8-A).
+    counts_requests = False
+
     # official: France Travail's documented Offres d'emploi API (francetravail.io), with the
     # user's own OAuth2 credentials. Its own client-side rate limiter paces requests.
     access_class = "official"
@@ -902,6 +905,8 @@ class FranceTravailCollector(BaseCollector):
             if isinstance(c, dict) and c.get("libelle")
         ]
 
+        salary_min, salary_max = _annual_salary(raw.get("salaire"))
+
         return {
             # Generic normalizer contract fields
             "source_job_id": job_id,
@@ -916,6 +921,9 @@ class FranceTravailCollector(BaseCollector):
             "url": url,
             "skills": skills,
             "published_at": raw.get("dateCreation"),
+            "salary_min": salary_min,
+            "salary_max": salary_max,
+            "currency": "EUR",
             # Pass through the full original payload for debugging
             "_france_travail_raw": raw,
         }
@@ -924,6 +932,30 @@ class FranceTravailCollector(BaseCollector):
 # ---------------------------------------------------------------------------
 # Module-level helpers
 # ---------------------------------------------------------------------------
+
+def _annual_salary(salaire: Any) -> tuple[float | None, float | None]:
+    """France Travail's ``salaire.libelle`` as an annual EUR range (Phase B B6-B, finding P-007).
+
+    "Annuel de 40000.0 Euros à 50000.0 Euros" is taken as stated. A monthly amount is multiplied by
+    the months the label states ("sur 13.0 mois"), else by 12, the usual French count. Hourly and daily
+    amounts are left empty: turning them into a year needs a working time the offer does not state,
+    and nothing is invented. The label itself stays in the stored payload."""
+    from src.requirements.structured import parse_salary_label
+
+    if not isinstance(salaire, dict) or not isinstance(salaire.get("libelle"), str):
+        return None, None
+    parsed = parse_salary_label(salaire["libelle"])
+    if parsed is None or parsed.minimum is None:
+        return None, None
+    if parsed.period == "annual":
+        factor = 1.0
+    elif parsed.period == "monthly":
+        factor = parsed.months if parsed.months and 1 <= parsed.months <= 14 else 12.0
+    else:
+        return None, None
+    low = parsed.minimum * factor
+    high = (parsed.maximum if parsed.maximum is not None else parsed.minimum) * factor
+    return low, (high if high != low else None)
 
 def _parse_content_range_total(content_range: str) -> int | None:
     """Parse the total result count from a France Travail Content-Range header.

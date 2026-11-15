@@ -164,13 +164,16 @@ const cardLinkStyle: React.CSSProperties = {
   transition: 'border-color 0.15s',
 }
 
-function JobCard({ job, targetSkills, locationPreferences, departmentNames, position, trackRef }: {
+function JobCard({ job, targetSkills, locationPreferences, departmentNames, position, trackRef, surface, randomized }: {
   job: Job
   targetSkills: string[]
   locationPreferences: LocationPreference[]
   departmentNames: Record<string, string>
   position: number
   trackRef: (el: Element | null) => void
+  /** The list the card is shown in (ADR 0016 event context), also given to Save / Hide. */
+  surface: string
+  randomized?: boolean
 }) {
   const finalScore = job.score?.final_score ?? null
   const tier = job.score?.tier ?? null
@@ -185,7 +188,7 @@ function JobCard({ job, targetSkills, locationPreferences, departmentNames, posi
         <span style={{ fontSize: '0.85rem', color: 'var(--color-muted)' }}>
           {t('saveHide.hiddenCard', { title: job.title || t('jobs.noTitle') })}
         </span>
-        <SaveHideButtons jobId={job.id} saved={job.saved} hidden surface="jobs" position={position}
+        <SaveHideButtons jobId={job.id} saved={job.saved} hidden surface={surface} position={position} randomized={randomized}
           onHiddenChange={h => setHiddenNow(h)} />
       </div>
     )
@@ -218,7 +221,7 @@ function JobCard({ job, targetSkills, locationPreferences, departmentNames, posi
       <RelevantSkills job={job} targetSkills={targetSkills} />
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.85rem', gap: '0.5rem', flexWrap: 'wrap' }}>
-        <SaveHideButtons jobId={job.id} saved={job.saved} hidden={false} surface="jobs" position={position}
+        <SaveHideButtons jobId={job.id} saved={job.saved} hidden={false} surface={surface} position={position} randomized={randomized}
           onHiddenChange={h => setHiddenNow(h)} />
         <TierBadge tier={tier} />
       </div>
@@ -265,11 +268,14 @@ export default function Jobs() {
   const [includeExpired, setIncludeExpired] = useState(false)
   // Saved offers (ADR 0016), whatever the run.
   const [savedOnly, setSavedOnly] = useState(false)
-  const track = useVisibleExposure('jobs')
-  const trackS4 = useVisibleExposure('decouverte', undefined, true)
-  const trackOutside = useVisibleExposure('outside_criteria')
   const [minTier, setMinTier] = useState(DEFAULT_MIN_TIER)
   const [q, setQ] = useState('')         // debounced value sent to API
+  // Each list records its own surface (Phase B B9-A): the saved list and a search are not the
+  // ranked main list, so their exposures and actions must not be read as if they were.
+  const listSurface = savedOnly ? 'saved' : q ? 'search' : 'jobs'
+  const track = useVisibleExposure(listSurface)
+  const trackS4 = useVisibleExposure('decouverte', undefined, true)
+  const trackOutside = useVisibleExposure('outside_criteria')
   const [inputQ, setInputQ] = useState('') // immediate input value
   const [offset, setOffset] = useState(0)
 
@@ -489,6 +495,8 @@ export default function Jobs() {
               job={job}
               position={i}
               trackRef={trackS4(job.id, i)}
+              surface="decouverte"
+              randomized
               targetSkills={targetSkills}
               locationPreferences={locationPreferences}
               departmentNames={departmentNames}
@@ -512,6 +520,7 @@ export default function Jobs() {
                 job={job}
                 position={i}
                 trackRef={trackOutside(job.id, i)}
+                surface="outside_criteria"
                 targetSkills={targetSkills}
                 locationPreferences={locationPreferences}
                 departmentNames={departmentNames}
@@ -531,6 +540,7 @@ export default function Jobs() {
           job={job}
           position={offset + i}
           trackRef={track(job.id, offset + i)}
+          surface={listSurface}
           targetSkills={targetSkills}
           locationPreferences={locationPreferences}
           departmentNames={departmentNames}

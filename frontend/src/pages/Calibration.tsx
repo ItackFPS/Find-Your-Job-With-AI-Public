@@ -171,7 +171,7 @@ export default function CalibrationCard() {
   const fail = (err: unknown) => toast.show({ message: t(`quality.calibration.errors.${errorCode(err)}`), tone: 'danger' })
   const jobs = useQuery({ queryKey: ['quality-jobs'], queryFn: () => listQualityJobs(20) })
   const measure = useMutation({
-    mutationFn: (id: string) => startQualityJob('personal', { dataset_id: id, split: 'heldout' }),
+    mutationFn: (id: string) => startQualityJob('personal', { dataset_id: id, split: 'tuning' }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['quality-jobs'] }),
     onError: fail,
   })

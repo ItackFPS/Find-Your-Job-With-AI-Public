@@ -124,6 +124,8 @@ class PipelineStats:
     # stats.phase2 happens to be non-empty.
     use_ai: bool = False
     stage_times: dict[str, float] = field(default_factory=dict)
+    # P-031: collected offers that took their stored row's id ({aligned, same_offer_twice}); empty if none.
+    stored_id_alignment: dict[str, int] = field(default_factory=dict)
     embedding_cache_hits: int = 0
     embedding_cache_misses: int = 0
     personalization_cache_hits: int = 0
@@ -140,6 +142,14 @@ class PipelineStats:
     # Which filters.yaml / scoring.yaml the run used: the human-approved active strategy or config/
     # (src/decisions/active_strategy.py): {status, reason, pointer_id, bundle_hash, ...}.
     active_strategy: dict[str, Any] = field(default_factory=dict)
+    # Offers stored for the first time by this run (None until storage ran) and the run's outcome
+    # (src/pipeline/run_outcome.py, Phase B B7-A; "" until the run ends).
+    stored_new: int | None = None
+    outcome: str = ""
+    # Post-processing after duration_seconds is taken: the decision journal and expiry (Phase B
+    # B7-B). The run's wall clock is its row's completed_at - started_at, which also covers the
+    # runner's own saving; duration_seconds alone is the pipeline's internal duration.
+    post_seconds: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         # Derived lifecycle counters for clearer funnel accounting.
@@ -201,6 +211,7 @@ class PipelineStats:
             "phase2": self.phase2,
             "use_ai": self.use_ai,
             "stage_times": self.stage_times,
+            "stored_id_alignment": self.stored_id_alignment,
             "embedding_cache_hits": self.embedding_cache_hits,
             "embedding_cache_misses": self.embedding_cache_misses,
             "personalization_cache_hits": self.personalization_cache_hits,
@@ -209,6 +220,9 @@ class PipelineStats:
             "decisions": self.decisions,
             # Which filters.yaml / scoring.yaml this run used (persisted so the run history can say so).
             "active_strategy": self.active_strategy,
+            "stored_new": self.stored_new,
+            "outcome": self.outcome,
+            "post_seconds": self.post_seconds,
         }
 
 
@@ -266,7 +280,6 @@ def run_pipeline(
     stats.use_ai = use_ai
 
     # Lazy imports keep startup fast and avoid circular dependency issues.
-    from src.collectors.registry import REMOVED_SOURCE_TYPES
     from src.collectors.registry import registry as collector_registry
     from src.decisions.recorder import DecisionRecorder
     from src.discovery.registry import SourceRegistry
@@ -296,11 +309,8 @@ def run_pipeline(
         integrate_semantic_into_ranking,
         load_semantic_config,
     )
-    from src.pipeline.circuit_breaker import BreakerState, is_network_outage, paused_reason
-    from src.pipeline.circuit_breaker import load_states as load_breaker_states
-    from src.pipeline.circuit_breaker import next_state as next_breaker_state
-    from src.pipeline.circuit_breaker import save_states as save_breaker_states
     from src.pipeline.source_health import annotate_yield_anomalies
+    from src.pipeline.source_selection import select_sources, settle_breakers
     from src.pipeline.validate import validate_jobs
     from src.storage.runs import RunStorage
     from src.storage.sqlite import Storage
@@ -326,6 +336,7 @@ def run_pipeline(
 
         if not preflight_result.ready:
             stats.errors.extend(preflight_result.errors)
+            stats.outcome = "failed"
             stats.duration_seconds = (datetime.now(UTC) - started_at).total_seconds()
             storage.close()
             return PipelineResult(
@@ -409,7 +420,7 @@ def run_pipeline(
                         recent_runs = _hist_rs.list_runs(limit=10)
                     finally:
                         _hist_rs.close()
-                    for src_type in ("france_travail", "jobicy", "remoteok"):
+                    for src_type in ("france_travail",):
                         history = compute_query_yield_history(recent_runs, src_type)
                         if history:
                             yield_history_by_source[src_type] = history
@@ -441,46 +452,11 @@ def run_pipeline(
         _t_collect = time.perf_counter()
         sources_path = Path(config_dir) / "sources.yaml"
         source_registry = SourceRegistry(config_path=str(sources_path))
-        active_sources = [
-            s for s in source_registry.all_sources
-            if s.get("active", True) and s.get("type") not in skipped_source_types
-            and s.get("type") not in REMOVED_SOURCE_TYPES
-        ]
-        # A 1.x config may still list a source type removed in 2.0: skip it with
-        # one line per run saying so, rather than a failure on every run.
-        for s in source_registry.all_sources:
-            removed_reason = REMOVED_SOURCE_TYPES.get(s.get("type", ""))
-            if s.get("active", True) and removed_reason:
-                logger.warning("Skipping source %s: %s", s["name"], removed_reason)
-                stats.by_source[s["name"]] = {
-                    "collected": 0, "accepted": 0, "errors": 0,
-                    "status": "skipped", "reason": removed_reason,
-                }
-        # An active source left out by the preflight is listed as skipped, with what
-        # to set up, so a missing credential never looks like a source that ran.
-        for s in source_registry.all_sources:
-            if s.get("active", True) and s.get("type") in skipped_source_types:
-                stats.by_source[s["name"]] = {
-                    "collected": 0, "accepted": 0, "errors": 0,
-                    "status": "skipped", "reason": skip_reasons.get(s.get("type", ""), ""),
-                }
-
-        # Circuit breaker (plan F6.1): a source that failed FAILURE_THRESHOLD runs in a row
-        # is skipped until its pause is over, then tried again. Never blocks the run.
-        breakers = load_breaker_states(db_path)
-        breaker_now = datetime.now(UTC)
-        paused_names = {s["name"] for s in active_sources
-                        if s["name"] in breakers and breakers[s["name"]].is_paused(breaker_now)}
-        for name in sorted(paused_names):
-            state = breakers[name]
-            reason = paused_reason(state)
-            logger.warning("Skipping source %s: %s", name, reason)
-            stats.by_source[name] = {
-                "collected": 0, "accepted": 0, "errors": 0, "status": "paused", "reason": reason,
-                "paused_until": state.paused_until.isoformat() if state.paused_until else None,
-                "consecutive_failures": state.consecutive_failures,
-            }
-        active_sources = [s for s in active_sources if s["name"] not in paused_names]
+        selection = select_sources(
+            source_registry.all_sources, skipped_types=skipped_source_types,
+            skip_reasons=skip_reasons, db_path=db_path)
+        stats.by_source.update(selection.not_run_rows)
+        active_sources = selection.runnable
 
         all_jobs: list[Job] = []
 
@@ -516,6 +492,16 @@ def run_pipeline(
                 merged_cfg.setdefault("target_domains", list(early_profile.target_domains))
                 merged_cfg.setdefault("target_terms", [
                     (o.label_fr or o.keyword or o.label) for o in early_profile.target_occupations])
+                try:  # a typed label reaches a preset's occupation codes through its families
+                    from src.discovery.presets import load_domain_keywords
+                    from src.pipeline.domain_vocabulary import resolve_domains
+
+                    domain_kws = load_domain_keywords(config_dir)
+                    merged_cfg.setdefault("domain_families", {
+                        label: list(resolve_domains([label], domain_kws).families)
+                        for label in merged_cfg["target_domains"]})
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("France Travail web: domain families not resolved: %s", exc)
                 distance_cfg = distance_config(early_profile)
                 merged_cfg.setdefault("departments", ft_departments(distance_cfg) if distance_cfg else [
                     p.value for p in early_profile.geography.location_preferences
@@ -528,12 +514,15 @@ def run_pipeline(
                 # unparsable timeout) is this source's failure, not the run's
                 # (issue #67).
                 collector = collector_factory(config=merged_cfg)
+                _t_source = time.perf_counter()
                 result = collector.collect()
+                source_seconds = round(time.perf_counter() - _t_source, 3)
                 normalized = normalize_jobs(name, result.jobs)
                 source_stats: dict[str, Any] = {
                     "collected": len(normalized),
                     "accepted": 0,
                     "errors": len(result.errors),
+                    "seconds": source_seconds,   # this source's collection time (B7-B)
                 }
                 if result.metadata.get("per_query_stats"):
                     source_stats["per_query_stats"] = result.metadata["per_query_stats"]
@@ -541,6 +530,8 @@ def run_pipeline(
                     source_stats["per_query_status"] = result.metadata["per_query_status"]
                 if result.listing_complete:
                     source_stats["listing_complete"] = True
+                if result.metadata.get("skipped_reason") and not result.jobs and not result.errors:
+                    source_stats["skipped_reason"] = str(result.metadata["skipped_reason"])
                 errors = [f"{name}: {e}" for e in result.errors]
                 _apply_source_contract(collector, source_stats, errors, name)
                 logger.info("  Collected %d jobs from %s", len(normalized), name)
@@ -571,6 +562,10 @@ def run_pipeline(
                 name, normalized, source_stats, errors = future.result()
                 all_jobs.extend(normalized)
                 source_stats["status"] = collection_status(source_stats["collected"], source_stats["errors"])
+                if source_stats.get("skipped_reason") and source_stats["status"] == "completed":
+                    # nothing to search (the source said why): no breaker move, no yield
+                    source_stats["status"] = "skipped"
+                    source_stats["reason"] = source_stats.pop("skipped_reason")
                 if source_stats["status"] in ("failed", "partial") and errors:
                     # the Sources table shows a row's reason, as it does for a skipped source
                     source_stats["reason"] = errors[0].removeprefix(f"{name}: ")
@@ -581,32 +576,7 @@ def run_pipeline(
                 stats.collected = len(all_jobs)
                 _collect_reporter(_sources_done)
 
-        # Each source that ran moves its breaker: a success closes it, a failure counts,
-        # the third failure in a row pauses the source (its row says until when).
-        # A run where (nearly) every source got no HTTP answer at all is this machine's
-        # outage, not the sources' failure: no breaker moves.
-        ran_rows = [stats.by_source.get(cfg["name"], {}) for cfg in active_sources]
-        if is_network_outage(ran_rows):
-            for row in ran_rows:
-                row["network_outage"] = True
-            stats.errors.append("No source could be reached (network down?): failed sources are not counted "
-                                "towards their circuit breaker this run")
-            active_sources_for_breaker: list[dict[str, Any]] = []
-        else:
-            active_sources_for_breaker = active_sources
-        updated_breakers = []
-        for cfg in active_sources_for_breaker:
-            name = cfg["name"]
-            row = stats.by_source.get(name, {})
-            state = next_breaker_state(breakers.get(name) or BreakerState(source=name),
-                                       row.get("status"), row.get("reason"), breaker_now)
-            if state.consecutive_failures:
-                row["consecutive_failures"] = state.consecutive_failures
-            if state.paused_until is not None:
-                row["paused_until"] = state.paused_until.isoformat()
-            if name in breakers or state.consecutive_failures:
-                updated_breakers.append(state)
-        save_breaker_states(db_path, updated_breakers)
+        stats.errors.extend(settle_breakers(selection, stats.by_source, db_path))
 
         # Inject pre-collected LinkedIn jobs from the staging snapshot.
         # These arrive as proper Job objects, bypassing the collector executor,
@@ -655,6 +625,26 @@ def run_pipeline(
             annotate_yield_anomalies(stats.by_source, _history)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Source yield check failed (non-fatal): %s", exc)
+
+        # P-031 (Phase B B2-A): an offer collected under a new id but already stored under another
+        # (same source and content) takes the stored id before any stage sees it, so its row, score,
+        # decision and expiry share one id. A second copy of an id in this run is the same offer
+        # twice: the first is kept. Fail-open: a failure leaves the ids as collected.
+        try:
+            aliases = storage.align_stored_ids(all_jobs)
+            if aliases:
+                seen_ids: set[str] = set()
+                unique_jobs: list[Job] = []
+                for job in all_jobs:
+                    if job.id not in seen_ids:
+                        seen_ids.add(job.id)
+                        unique_jobs.append(job)
+                stats.stored_id_alignment = {"aligned": len(aliases),
+                                             "same_offer_twice": len(all_jobs) - len(unique_jobs)}
+                all_jobs = unique_jobs
+                logger.info("Stored ids: %d collected offer(s) took the id of their stored row", len(aliases))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Stored-id alignment skipped (non-fatal): %s", exc)
 
         stats.collected = len(all_jobs)
         stats.stage_times["collect"] = time.perf_counter() - _t_collect
@@ -809,7 +799,10 @@ def run_pipeline(
         gate_results: dict[str, Any] = {}
         if profile is not None:
             try:
-                from src.requirements.education import candidate_education
+                from src.requirements.education import (
+                    candidate_education,
+                    candidate_education_in_progress,
+                )
                 from src.requirements.extractor import (
                     RequirementExtractor,
                     build_requirements_llm_provider,
@@ -822,6 +815,7 @@ def run_pipeline(
 
                 # Profile v2: the highest held French/EQF level (F5.3); v1: max_education.
                 user_max_edu_level, user_edu_label, user_held_edu = candidate_education(profile)
+                user_preparing_edu, user_preparing_label = candidate_education_in_progress(profile)
 
                 # Build LLM provider when enabled in matching config (None otherwise,
                 # or if construction fails — the gate always works heuristic-only).
@@ -846,6 +840,8 @@ def run_pipeline(
                     career_level=filters_config.get("career_level"),
                     user_education_label=user_edu_label,
                     user_held_education_level=user_held_edu,
+                    user_in_progress_education_level=user_preparing_edu,
+                    user_in_progress_education_label=user_preparing_label,
                 )
                 edu_penalty = getattr(profile.matching, "education_preferred_penalty", 0.20)
 
@@ -964,7 +960,8 @@ def run_pipeline(
         stats.filtered = len(filtered_jobs)
         stats.llm_eligibility_passed = len(filtered_jobs)
         stats.llm_eligibility_rejected = elig_result.rejected
-        stats.llm_eligibility = elig_result.stats
+        # "ran" tells a skipped stage (AI off) from one that passed everything (P-016, Phase B B7-C).
+        stats.llm_eligibility = {**elig_result.stats, "ran": bool(elig_result.ran)}
 
         stats.stage_times["llm_eligibility"] = time.perf_counter() - _t_eligibility
         _notify(progress_callback, "llm_eligibility", stats)
@@ -981,21 +978,19 @@ def run_pipeline(
         # read scoring.domain_relevance.confirmed_wrong_score from it via
         # cap_personalization_at_gates.
         # Découverte (S4; ADR 0019, stage L4.3): drawn BEFORE ranking, from the ids of the offers that
-        # reached scoring only, so it never depends on either ranking. Skipped while learning is
-        # paused. Fail-open.
+        # reached scoring only, so it never depends on either ranking. It is evidence gathering, not a
+        # personal reordering, so it keeps running while learning is paused (owner decision D2 part 2,
+        # Phase B B9-A). Fail-open.
         s4_draw = None
-        from src.privacy.learning import is_paused as _learning_paused
+        try:
+            from src.learning.exploration import draw as draw_s4
+            from src.learning.exploration import load_slots
 
-        if not _learning_paused(db_path):
-            try:
-                from src.learning.exploration import draw as draw_s4
-                from src.learning.exploration import load_slots
-
-                s4_draw = draw_s4(db_path, run_id, [job.id for job in filtered_jobs],
-                                  slots=load_slots(Path(config_dir) / "personalization.yaml"))
-            except Exception:  # noqa: BLE001 - Découverte never affects the run
-                logger.exception("Découverte draw failed; the run has no Découverte slots")
-                s4_draw = None
+            s4_draw = draw_s4(db_path, run_id, [job.id for job in filtered_jobs],
+                              slots=load_slots(Path(config_dir) / "personalization.yaml"))
+        except Exception:  # noqa: BLE001 - Découverte never affects the run
+            logger.exception("Découverte draw failed; the run has no Découverte slots")
+            s4_draw = None
         scoring_config: dict[str, Any] = {}
         if scoring_path.exists():
             scoring_config = load_scoring_config(str(scoring_path))
@@ -1016,8 +1011,10 @@ def run_pipeline(
         recorder.observe_gate_results(gate_results)
         recorder.observe_scores(scored_with_breakdown, scoring_config=scoring_config)
         storage_stats = storage.upsert_jobs_batch(
-            [job for job, _, _ in scored_with_breakdown]
+            [job for job, _, _ in scored_with_breakdown], return_inserted_ids=True,
         )
+        stats.stored_new = int(storage_stats.get("inserted", 0))
+        new_ids = set(storage_stats.get("inserted_ids") or ())
         logger.info(
             "Storage: %d inserted, %d updated, %d unchanged",
             storage_stats["inserted"],
@@ -1030,19 +1027,6 @@ def run_pipeline(
             storage.record_provenance([job for job, _, _ in scored_with_breakdown], datetime.now(UTC))
         except Exception as exc:  # noqa: BLE001
             logger.warning("Provenance not recorded: %s", exc)
-        # Expiry (issue #86): every offer collected this run stays active (an offer that
-        # failed validation or was merged as a duplicate was still seen); only a source
-        # that read its whole listing counts a miss for the offers it no longer lists.
-        # Never fails the run.
-        try:
-            expiry = storage.apply_expiry(
-                {job.id for job in all_jobs}, sources_counting_misses(stats.by_source),
-                datetime.now(UTC), expire_after_missed_runs(config_dir),
-            )
-            logger.info("Expiry: %s", expiry)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Expiry not applied: %s", exc)
-
         # Phase NEXT / I11: incremental-collection INFRASTRUCTURE only — record
         # that a source's collection completed cleanly, and how many of its
         # jobs were new vs. already known. Deliberately does NOT change what
@@ -1412,7 +1396,9 @@ def run_pipeline(
         all_countries: list[str] = []
         remote_count = 0
 
-        for job, _ in personalized_ranked:
+        from src.pipeline.counts import is_useful
+
+        for job, final_score in personalized_ranked:
             all_countries.extend(job.countries or [])
             if job.remote:
                 remote_count += 1
@@ -1420,6 +1406,12 @@ def run_pipeline(
                 stats.by_source[job.source]["accepted"] += 1
             else:
                 stats.by_source[job.source] = {"collected": 0, "accepted": 1, "errors": 0}
+            # B8-A counts (src/pipeline/counts.py): newly discovered, useful, both
+            row = stats.by_source[job.source]
+            useful, new = is_useful(final_score), job.id in new_ids
+            row["new"] = row.get("new", 0) + int(new)
+            row["useful"] = row.get("useful", 0) + int(useful)
+            row["new_useful"] = row.get("new_useful", 0) + int(new and useful)
 
         stats.by_country = dict(Counter(all_countries))
         stats.by_work_mode = {
@@ -1461,11 +1453,46 @@ def run_pipeline(
                                   for r in scored_job_records), load_lane_params(scoring_path))
             for r in scored_job_records:
                 r.lane = lanes.get(r.job_id, "main")
+        # Journal write time (B1-B, measurement only): runs after duration_seconds is taken.
+        _t_post = _t_journal = time.perf_counter()
         recorder.finalize(scored_job_records)
         stats.decisions = recorder.summary()
+        stats.stage_times["journal"] = time.perf_counter() - _t_journal
+
+        # Expiry (issue #86): every offer collected this run stays active (an offer that
+        # failed validation or was merged as a duplicate was still seen); only a source
+        # that read its whole listing counts a miss for the offers it no longer lists.
+        # Applied only once the run completed (P-002): a run that fails after storage must not
+        # count misses or expire offers. Never fails the run.
+        _t_expiry = time.perf_counter()
+        try:
+            expiry = storage.apply_expiry(
+                {job.id for job in all_jobs}, sources_counting_misses(stats.by_source),
+                datetime.now(UTC), expire_after_missed_runs(config_dir),
+            )
+            logger.info("Expiry: %s", expiry)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Expiry not applied: %s", exc)
+        stats.stage_times["expiry"] = time.perf_counter() - _t_expiry
+        stats.post_seconds = round(time.perf_counter() - _t_post, 3)
 
         pers_storage.close()
         storage.close()
+
+        # What the run achieved (Phase B B7-A): decides whether it replaces the visible list.
+        try:
+            from src.pipeline.run_outcome import run_outcome
+            from src.storage.runs import RunStorage
+
+            outcome_rs = RunStorage(db_path=db_path)
+            try:
+                has_previous = outcome_rs.get_latest_visible_run(exclude=run_id) is not None
+            finally:
+                outcome_rs.close()
+            stats.outcome = run_outcome("completed", stats.by_source, accepted=stats.personalized,
+                                        stored_new=stats.stored_new, has_previous_list=has_previous)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Run outcome not computed: %s", exc)
 
         return PipelineResult(
             run_id=run_id,
@@ -1484,6 +1511,7 @@ def run_pipeline(
         except Exception:
             pass
         stats.duration_seconds = (datetime.now(UTC) - started_at).total_seconds()
+        stats.outcome = "failed"
         return PipelineResult(
             run_id=run_id,
             started_at=started_at,
@@ -1503,7 +1531,8 @@ def run_pipeline(
 def collection_status(collected: int, errors: int) -> str:
     """How one source's collection went: ``completed`` (no error), ``partial`` (errors,
     but jobs came back) or ``failed`` (errors and nothing collected). A source the
-    preflight left out is ``skipped`` instead (set where it is skipped)."""
+    preflight left out, or one that had nothing to search, is ``skipped`` instead (set where
+    it is skipped)."""
     if not errors:
         return "completed"
     return "partial" if collected else "failed"
@@ -1522,6 +1551,8 @@ def _apply_source_contract(
     try:
         source_stats["access_class"] = collector.access_class
         health = collector.health()
+        if getattr(collector, "counts_requests", False):
+            source_stats["requests"] = int(health.get("requests") or 0)   # B8-A
         if health.get("request_cap_reached"):
             source_stats["request_cap_reached"] = True
         if health.get("network_errors") and not health.get("responses"):

@@ -56,6 +56,7 @@ from src.api.peer_guard import (
 from src.api.routes import (
     ai,
     calibration,
+    collection,
     dashboard,
     decisions,
     departments,
@@ -240,7 +241,8 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
     # LinkedIn/HelloWork scan daily only once chosen (plan rule I1, F6.4): the stored choice.
     # An install that scanned them before 2.0 has that observed choice stored once, now; a
     # scan started by hand later never turns daily scans on.
-    from src.app_settings import background_settings, record_observed_choices, unofficial_source_enabled
+    from src.app_settings import background_settings, record_observed_choices
+    from src.source_enablement import source_enabled
 
     try:
         observed = record_observed_choices(Path(application.state.settings_path), {
@@ -253,10 +255,28 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
         logger.warning("Could not record the sources this install already scanned: %s", exc)
 
     def _opted_in(source_id: str) -> bool:
-        return unofficial_source_enabled(Path(application.state.settings_path), source_id)
+        # The single rule of src/source_enablement.py (Phase B B4-A): the choice AND the config.
+        return source_enabled(source_id, application.state.config_dir, application.state.settings_path)
 
-    # Settings › Sources shows the same choice the scheduler acts on (issue #82).
-    application.state.source_opted_in = _opted_in
+    # Settings › Sources reads the same rule (src/source_enablement.py) for "collected" (issue #82).
+
+    # Collection freeze (owner decision D7, ADR 0032): recorded once; never lifted by an update.
+    from src.collectors import freeze
+
+    try:
+        if freeze.record_freeze(Path(application.state.settings_path)):
+            logger.info("Collection freeze recorded: no source is contacted until it is validated "
+                        "and turned back on.")
+    except Exception as exc:  # noqa: BLE001 — the freeze holds even when the date cannot be written
+        logger.warning("Could not record the collection freeze date: %s", exc)
+
+    def _frozen(source_id: str) -> bool:
+        settings = Path(application.state.settings_path)
+        if source_id == PIPELINE_SOURCE_ID:
+            return not freeze.pipeline_allowed(settings, config_dir)
+        return not freeze.collector_allowed(settings, source_id)
+
+    application.state.collection_frozen = _frozen
     scheduler = SchedulerService(
         db_path=db_path,
         config_dir=config_dir,
@@ -265,6 +285,7 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
         opted_in=_opted_in,
         # Daily runs at the user's local time, switchable (issue #80).
         background=lambda: background_settings(Path(application.state.settings_path)),
+        frozen=_frozen,
     )
     scheduler.start()
     application.state.scheduler = scheduler
@@ -344,10 +365,16 @@ DEV_WEB_ORIGINS: tuple[str, ...] = (
 def allowed_web_origins(same_user_only_enabled: bool, dev_server: bool = False) -> tuple[str, ...]:
     """The dev server's origins only while dev mode runs it (``FYJ_DEV_SERVER=1``, set
     by ``FindYourJob.cmd dev``): otherwise its port is free, and any local program could
-    serve a page there that your browser would let read and write the API. None under
-    API_SAME_USER_ONLY either: the dev server would relay other accounts' requests as
-    yours."""
-    return DEV_WEB_ORIGINS if dev_server and not same_user_only_enabled else ()
+    serve a page there that your browser would let read and write the API.
+
+    The same-account guard (on by default, owner decision D5) does not change this: the
+    dev server is a program of your account, so the guard lets through whatever it
+    relays, with or without an allowed Origin (an Origin-less request passes the Origin
+    guard). Refusing its origins would only break dev mode. The boundary is documented:
+    in dev mode, the dev server's port must not be reachable by another account
+    (docs/development.md). ``same_user_only_enabled`` is kept for callers."""
+    del same_user_only_enabled
+    return DEV_WEB_ORIGINS if dev_server else ()
 
 
 def dev_server_from_env(environ: Mapping[str, str] = os.environ) -> bool:
@@ -427,9 +454,10 @@ app.add_middleware(
     extra_hosts=os.environ.get("API_ALLOWED_HOSTS", "").split(","),
 )
 
-# Opt-in, outermost: API_SAME_USER_ONLY=1 serves only processes of the OS account
-# running this server, so a lab agent under its own account cannot make the API
-# write production state for it (ADR 0011, "Promotion authority"). Off by default.
+# Outermost: serves only processes of the OS account running this server, so a lab
+# agent or another account cannot make the API write production state for it (ADR 0011,
+# "Promotion authority"). On by default (owner decision D5); API_SAME_USER_ONLY=0 turns
+# it off explicitly.
 app.add_middleware(SameUserPeerGuardMiddleware, enabled=same_user_only())
 
 # ---------------------------------------------------------------------------
@@ -482,6 +510,7 @@ app.include_router(quality.router)
 app.include_router(calibration.router)
 app.include_router(ai.router)
 app.include_router(sources.router)
+app.include_router(collection.router)
 app.include_router(privacy.router)
 app.include_router(embedding_model.router)
 

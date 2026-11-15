@@ -17,6 +17,12 @@ from typing import TYPE_CHECKING, Any, Callable
 from src.models.job import Job
 from src.pipeline.departments import PACA_NEIGHBOR_DEPARTMENTS, extract_department_code
 from src.pipeline.domain_scope import groups_outside_profile
+from src.pipeline.domain_vocabulary import (
+    effective_domains,
+    profile_labels,
+    resolve_domains,
+    title_has_stem_set,
+)
 from src.pipeline.location_distance import assess as assess_location
 from src.pipeline.location_distance import describe as describe_location
 from src.pipeline.location_distance import distance_config
@@ -359,6 +365,14 @@ def _domain_keyword_matches(kw_norm: str, text_norm: str) -> bool:
     return kw_norm in text_norm
 
 
+# How much of a description the domain and skills factors read (Phase B B5-D, from #189).
+# Postings open with the employer's pitch and name the role's tools after it: 776 of 1,923
+# offers of a real run cited a profile skill only past the former 2,000-character window.
+# Large enough for every source (France Travail stops at 5,000), bounded so one pathological
+# page cannot slow a run. The hard filter's description fallback keeps its own window.
+_DESCRIPTION_WINDOW = 12_000
+
+
 def _norm_text(text: str) -> str:
     """Lowercase and strip diacritical marks."""
     nfd = unicodedata.normalize("NFD", text)
@@ -648,7 +662,9 @@ def build_scoring_config(
     # _score_skills_match / _has_domain_vocabulary_hit in scoring.py
     # for why this must never be merged into target_skills itself.
     domain_vocab_terms: list[str] = []
-    for domain in profile.target_domains:
+    domain_keywords = engine_cfg.get("domain_keywords", {})
+    resolved_domains = effective_domains(profile, domain_keywords)
+    for domain in resolved_domains:
         domain_vocab_terms.extend(
             engine_cfg.get("domain_skill_vocabulary", {}).get(domain, [])
         )
@@ -668,22 +684,19 @@ def build_scoring_config(
         .setdefault("scoring", {})
         .setdefault("domain_relevance", {})
     )
-    domain_title_kws: list[str] = []
-    domain_desc_kws: list[str] = []
-    for domain in profile.target_domains:
-        kws = engine_cfg.get("domain_keywords", {}).get(domain, {})
-        domain_title_kws.extend(kws.get("title", []))
-        domain_desc_kws.extend(kws.get("description", []))
-    domain_rel_cfg["domain_title_keywords"] = list(dict.fromkeys(domain_title_kws))
+    vocabulary = resolve_domains(profile_labels(profile), domain_keywords)
+    domain_rel_cfg["domain_title_keywords"] = list(vocabulary.title_terms)
+    if vocabulary.title_stem_sets:
+        domain_rel_cfg["domain_title_stem_sets"] = [list(s) for s in vocabulary.title_stem_sets]
     # Mid-tier role indicators of the line-of-work presets that apply to this profile.
     from src.discovery.presets import load_presets, matching_presets
 
     domain_rel_cfg["broad_title_indicators"] = list(dict.fromkeys(
         ind
-        for preset in matching_presets(load_presets(), list(profile.target_domains))
+        for preset in matching_presets(load_presets(), resolved_domains)
         for ind in preset.broad_title_indicators
     ))
-    domain_rel_cfg["domain_description_keywords"] = list(dict.fromkeys(domain_desc_kws))
+    domain_rel_cfg["domain_description_keywords"] = list(vocabulary.description_terms)
     off_domain_kws: list[str] = []
     for section in ("excluded_title_keywords", "non_it_title_functions"):
         groups = engine_cfg.get(section, {})
@@ -1187,7 +1200,7 @@ def _score_domain_relevance(
            the only case that triggers the domain gate in _apply_weights.
     1.0  : Domain keyword (from profile.target_domains × filters.yaml
            vocabulary) found in the title.
-    0.7  : Domain keyword found in the description (first 2000 chars) —
+    0.7  : Domain keyword found in the description (first _DESCRIPTION_WINDOW chars) —
            title didn't match, but the job body confirms the domain.
     0.35 : No domain keyword anywhere, but a broad technical role indicator
            is present in the title (engineer, developer, ingénieur, …).
@@ -1222,10 +1235,13 @@ def _score_domain_relevance(
         _domain_keyword_matches(_norm_text(kw), title_norm) for kw in domain_title_kws
     ):
         return 1.0
+    stem_sets = config.get("scoring", {}).get("domain_relevance", {}).get("domain_title_stem_sets")
+    if stem_sets and title_has_stem_set(title or "", stem_sets):
+        return 1.0
 
     domain_desc_kws = _get_keywords(config, "scoring.domain_relevance.domain_description_keywords")
     if domain_desc_kws:
-        desc_norm = _norm_text((description or "")[:2000])
+        desc_norm = _norm_text((description or "")[:_DESCRIPTION_WINDOW])
         if any(_domain_keyword_matches(_norm_text(kw), desc_norm) for kw in domain_desc_kws):
             return 0.7
 
@@ -1580,6 +1596,12 @@ def _score_experience_fit(
     return max(floor, min(1.0, 1.0 - decay * (years - 1)))
 
 
+def _description_is_partial(job: Job) -> bool:
+    """True when the collector could only read an extract of the description (France Travail
+    web listing pages set ``description_complete: false``)."""
+    return isinstance(job.raw_payload, dict) and job.raw_payload.get("description_complete") is False
+
+
 def _score_skills_match(
     job: Job, config: dict[str, Any], domain_relevance: float | None = None
 ) -> float:
@@ -1675,7 +1697,7 @@ def _score_skills_match(
     if job.skills:
         desc_parts.append(_norm_text(" ".join(job.skills)))
     if job.description:
-        desc_parts.append(_norm_text(job.description[:2000]))
+        desc_parts.append(_norm_text(job.description[:_DESCRIPTION_WINDOW]))
     desc_norm = " ".join(desc_parts)
 
     if not title_norm and not desc_norm:
@@ -1703,6 +1725,11 @@ def _score_skills_match(
 
         if matched:
             matches += 1
+
+    if matches == 0 and _description_is_partial(job):
+        # Only an extract was readable (Phase B B5-F, from #189): its silence says nothing
+        # about the skills, so the factor is neutral (unknown), not a mismatch.
+        return 0.5
 
     if matches == 0:
         if domain_relevance is not None:

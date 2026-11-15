@@ -80,8 +80,10 @@ class _StopAfter(Exception):
 
 @dataclass(frozen=True)
 class Scope:
-    keep_tracker: bool = False        # "Conserver mon suivi de candidatures"
-    erase_calibration: bool = True    # calibration labels go with the activity (ticked by default)
+    # Defaults keep the tracker and the calibration answers (owner decision D6, 2026-11-14): the user
+    # ticks them to delete them.
+    keep_tracker: bool = True         # "Conserver mon suivi de candidatures"
+    erase_calibration: bool = False   # calibration labels are deleted only when ticked
     purge_lab: bool = False           # "Effacer aussi les données du laboratoire" (separately confirmed)
 
 

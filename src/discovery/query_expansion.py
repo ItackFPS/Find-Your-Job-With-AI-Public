@@ -26,6 +26,7 @@ from src.discovery.adaptive import QueryYieldStats, prioritize_queries
 from src.discovery.presets import (
     DiscoveryPreset,
     load_neutral,
+    load_domain_keywords,
     load_presets,
     matching_presets,
     normalize_domain,
@@ -128,8 +129,7 @@ class DiscoveryQueryExpander:
         """Return discovery queries for all supported source types.
 
         Returns a dict mapping source_type → list[query_string].
-        Expands for france_travail, indeed and eures (FR keywords), jobicy (EN industry
-        slugs) and remoteok (EN tags).
+        Expands for france_travail, indeed and eures (FR keywords).
 
         ``yield_history_by_source``, if given, maps source_type -> the
         per-query yield history for that source (see
@@ -143,14 +143,6 @@ class DiscoveryQueryExpander:
             "france_travail": self.expand(
                 profile, source="france_travail", language="fr",
                 yield_history=yield_history_by_source.get("france_travail"),
-            ),
-            "jobicy": self.expand(
-                profile, source="jobicy", language="en",
-                yield_history=yield_history_by_source.get("jobicy"),
-            ),
-            "remoteok": self.expand(
-                profile, source="remoteok", language="en",
-                yield_history=yield_history_by_source.get("remoteok"),
             ),
             "indeed": self.expand(
                 profile, source="indeed", language="fr",
@@ -288,7 +280,13 @@ class DiscoveryQueryExpander:
     # ------------------------------------------------------------------
 
     def _presets_for(self, profile: "JobSearchProfile") -> list[DiscoveryPreset]:
-        return matching_presets(load_presets(self._config_dir), list(profile.target_domains))
+        return matching_presets(load_presets(self._config_dir), self._domains(profile))
+
+    def _domains(self, profile: "JobSearchProfile") -> list[str]:
+        """The profile's domains plus the vocabulary keys typed labels resolve to."""
+        from src.pipeline.domain_vocabulary import effective_domains  # src.pipeline imports discovery
+
+        return effective_domains(profile, load_domain_keywords(self._config_dir))
 
     def _profile_queries(
         self,
@@ -322,7 +320,7 @@ class DiscoveryQueryExpander:
                     extra.extend(f"{term} {domain}" for domain in custom)
             for preset in presets:
                 by_domain = preset.domain_queries.get(source, {})
-                for domain in profile.target_domains:
+                for domain in self._domains(profile):
                     extra.extend(by_domain.get(normalize_domain(domain), []))
                 for contract in profile.contract_types:
                     extra.extend(preset.contract_queries.get(source, {}).get(contract, []))
@@ -333,19 +331,6 @@ class DiscoveryQueryExpander:
                     skill = skill.strip()
                     if skill and 2 <= len(skill) <= 25:
                         extra.append(skill)
-
-        elif source == "jobicy":
-            # Jobicy industry slugs only exist for the presets that map them.
-            for preset in presets:
-                for domain in profile.target_domains:
-                    extra.extend(preset.jobicy_industries.get(normalize_domain(domain), []))
-
-        elif source == "remoteok":
-            # RemoteOK tags: short lowercase skills from the profile.
-            for skill in profile.target_skills:
-                skill = skill.strip().lower()
-                if skill and 2 <= len(skill) <= 20:
-                    extra.append(skill)
 
         return extra
 

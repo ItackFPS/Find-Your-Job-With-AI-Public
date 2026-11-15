@@ -24,7 +24,7 @@ from typing import Any
 from src.evaluation.export import open_readonly
 from src.evaluation.sampling import wilson
 
-API_SOURCE = "france_travail"
+API_SOURCE = "france-travail"     # the stored source name (sources.yaml), not the collector type (P-019)
 WEB_SOURCE = "france-travail-web"
 WINDOW_DAYS = 7
 

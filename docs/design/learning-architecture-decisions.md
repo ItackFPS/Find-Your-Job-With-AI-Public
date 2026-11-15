@@ -1410,7 +1410,7 @@ Lane sizes and the automatic shrink rule are unapproved.
 | `personalization_score_cache`, legacy `job_feedback`, legacy `outcome_events` | kept | cleared | deleted | deleted |
 | `job_scores.personal_*` columns | kept | kept as history only; **never read for ranking** after the reset (AD-3 "Reset and stored personal scores") | **set to NULL** | deleted |
 | Disagreement items holding a user stance (ADR 0010) | kept | kept | stance fields deleted | deleted |
-| Calibration labels (Quality › Calibration) | kept | kept; tuning answers ignored before the marker | deleted (option shown, ticked by default) | deleted |
+| Calibration labels (Quality › Calibration) | kept | kept; tuning answers ignored before the marker | kept unless the user ticks the option (owner decision D6, 2026-11-14) | deleted |
 | Flow-4 ops metrics (derived from signals) | kept | kept | **deleted** | deleted |
 | Other `ops_*` (runs, sources, extraction) | kept | kept | kept (not personal) | deleted |
 | `market_*` | kept | kept | kept (built from collected offers, never from actions) | deleted |

@@ -1,8 +1,9 @@
 """Build the career Skill Graph from the jobs the pipeline kept and the user's profile.
 
-* **Nodes** — technologies tagged on stored jobs (``jobs.skills``), restricted to the vocabulary the
-  requirements gate and the Stats page already use (``KNOWN_TECHNOLOGIES``) so source noise such as
-  task descriptions never becomes a "skill". Each node counts its demand among all jobs in the window
+* **Nodes** — skills tagged on stored jobs (``jobs.skills``), kept by the rule the Stats page uses
+  (``is_skill_label``): known technology names for a profile whose preset limits skills to them (IT),
+  otherwise any value that is not sentence-like (Phase B B10, P-018), so source noise such as task
+  descriptions never becomes a "skill". Each node counts its demand among all jobs in the window
   and among **relevant** jobs: a latest final score at or above ``relevant_score``, or a job the user
   marked ``interested`` / acted on (application status other than ``withdrawn``).
 * **Edges** — co-occurrence: two skills tagged on the same job; weight = number of such jobs (only pairs
@@ -24,7 +25,7 @@ from itertools import combinations
 from pathlib import Path
 from typing import Any
 
-from src.requirements.principal_skill import KNOWN_TECHNOLOGIES
+from src.requirements.principal_skill import is_skill_label
 
 ACTED_STATUSES = ("to_apply", "applied", "waiting", "interview", "accepted")   # legacy values; not "withdrawn"
 SMALL_SAMPLE = 20
@@ -48,17 +49,18 @@ def _rows(conn: sqlite3.Connection, sql: str, params: tuple[Any, ...] = ()) -> l
         raise
 
 
-def _skills(raw: Any) -> set[str]:
+def _skills(raw: Any, technologies_only: bool = True) -> set[str]:
     try:
         values = json.loads(raw) if isinstance(raw, str) else (raw or [])
     except json.JSONDecodeError:
         return set()
-    return {str(v).strip().lower() for v in values if str(v).strip().lower() in KNOWN_TECHNOLOGIES}
+    return {v for v in (str(x).strip().lower() for x in values) if is_skill_label(v, technologies_only=technologies_only)}
 
 
 def build_skill_graph(
     db_path: str | Path, target_skills: list[str], *, days: int = 90, relevant_score: float = 0.65,
     min_support: int = 2, max_edges_per_skill: int = 5, max_nodes: int = 60, now: datetime | None = None,
+    technologies_only: bool = True,
 ) -> dict[str, Any]:
     now = now or datetime.now(UTC)
     cutoff = (now - timedelta(days=days)).isoformat()
@@ -89,7 +91,7 @@ def build_skill_graph(
     finally:
         conn.close()
 
-    tagged = [(j["id"], j["title"] or "", _skills(j["skills"])) for j in jobs]
+    tagged = [(j["id"], j["title"] or "", _skills(j["skills"], technologies_only)) for j in jobs]
     tagged = [t for t in tagged if t[2]]
     acted = {j["id"] for j in jobs if (j["application_status"] or "") in ACTED_STATUSES}
     relevant = {jid for jid, _, _ in tagged

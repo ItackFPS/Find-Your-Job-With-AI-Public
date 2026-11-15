@@ -1,5 +1,7 @@
 """API_SAME_USER_ONLY: the local API serves only processes of the OS account that runs it (ADR 0011).
 
+On by default since owner decision D5 (Phase B B10, P-033); ``API_SAME_USER_ONLY=0`` turns it off.
+
 A lab agent under its own account must not be able to make the API — which runs as the human — write
 production state for it. The guard asks the OS who owns the client end of each loopback connection and
 fails closed on anything it cannot attribute to the server's own account.
@@ -43,15 +45,42 @@ def _owner_is(owner):
     return owner_of
 
 
-def test_disabled_by_default_serves_everyone():
+def test_the_middleware_left_disabled_serves_everyone():
     app, calls = _app()
     assert TestClient(app).put("/api/profile").status_code == 200 and calls == ["profile"]
 
 
-@pytest.mark.parametrize("value, on", [("1", True), ("true", True), ("ON", True), ("", False), ("0", False),
-                                       ("no", False)])
-def test_the_switch_is_explicit(value, on):
+@pytest.mark.parametrize("value, on", [("1", True), ("true", True), ("ON", True), ("", True), ("0", False),
+                                       ("no", False), ("off", False), (" False ", False)])
+def test_on_unless_turned_off_explicitly(value, on):
     assert enabled_from_env({"API_SAME_USER_ONLY": value}) is on
+
+
+def test_on_when_the_variable_is_not_set():
+    assert enabled_from_env({}) is True
+
+
+@pytest.mark.parametrize("owner, client, headers, reason", [
+    ("S-1-5-21-lab-agent", "127.0.0.1", {}, "another account"),
+    (None, "127.0.0.1", {}, "could not be identified"),
+    ("S-1-5-21-human", "192.168.1.20", {}, "does not come from this computer"),
+    ("S-1-5-21-human", "127.0.0.1", {"X-Forwarded-For": "127.0.0.1:1"}, "forwarding header"),
+])
+def test_a_refusal_says_why(owner, client, headers, reason, caplog):  # noqa: ANN001
+    app, _ = _app(enabled=True, owner_of=_owner_is(owner), self_owner="S-1-5-21-human")
+    with caplog.at_level("WARNING", logger="src.api.peer_guard"):
+        resp = TestClient(app, client=(client, 50000)).put("/api/profile", headers=headers)
+    assert resp.status_code == 403 and reason in resp.json()["reason"]
+    assert any(reason in r.getMessage() and "API_SAME_USER_ONLY=0" in r.getMessage() for r in caplog.records)
+
+
+def test_refusals_are_logged_at_most_once_a_minute_per_reason(caplog):  # noqa: ANN001
+    app, _ = _app(enabled=True, owner_of=_owner_is("S-1-5-21-lab-agent"), self_owner="S-1-5-21-human")
+    client = TestClient(app, client=("127.0.0.1", 50000))
+    with caplog.at_level("WARNING", logger="src.api.peer_guard"):
+        for _ in range(5):
+            assert client.put("/api/profile").status_code == 403
+    assert len([r for r in caplog.records if "another account" in r.getMessage()]) == 1
 
 
 @pytest.mark.parametrize("owner, allowed", [("S-1-5-21-human", True), ("S-1-5-21-lab-agent", False),
@@ -85,7 +114,10 @@ def test_the_dev_server_origins_are_allowed_only_in_dev_mode():
 
     assert allowed_web_origins(False, dev_server=True) == DEV_WEB_ORIGINS
     assert allowed_web_origins(False) == ()                       # installed app: no dev server
-    assert allowed_web_origins(True, dev_server=True) == ()       # API_SAME_USER_ONLY
+    # with the guard on (the default, D5) dev mode still works: the dev server runs as you, and its port
+    # must not be reachable by another account (docs/development.md)
+    assert allowed_web_origins(True, dev_server=True) == DEV_WEB_ORIGINS
+    assert allowed_web_origins(True) == ()
     assert dev_server_from_env({"FYJ_DEV_SERVER": "1"}) and not dev_server_from_env({})
     assert ALLOWED_WEB_ORIGINS == allowed_web_origins(enabled_from_env(), dev_server_from_env())
 

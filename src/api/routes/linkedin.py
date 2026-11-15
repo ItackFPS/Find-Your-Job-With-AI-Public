@@ -21,6 +21,8 @@ from src.scan_control import resume_scan, status_fields
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/linkedin", tags=["linkedin"])
+# Plain ``def`` routes: they call synchronous SQLite storage, so FastAPI runs them in its thread
+# pool instead of on the event loop, where they would stop every other request (Phase B B10, P-012).
 
 
 # ---------------------------------------------------------------------------
@@ -95,7 +97,7 @@ def _scan_row_to_out(row: dict[str, Any]) -> ScanRunOut:
 # ---------------------------------------------------------------------------
 
 @router.get("/status", response_model=LinkedInStatusOut)
-async def get_status(request: Request) -> LinkedInStatusOut:
+def get_status(request: Request) -> LinkedInStatusOut:
     """Return LinkedIn scanner status, waiting job count, and last scan info."""
     return _build_status(request)
 
@@ -143,7 +145,7 @@ def _require_scanner(request: Request) -> Any:
 
 
 @router.post("/pause", response_model=LinkedInStatusOut, status_code=202)
-async def pause_scan(request: Request) -> LinkedInStatusOut:
+def pause_scan(request: Request) -> LinkedInStatusOut:
     """Ask the running scan to pause at its next checkpoint (cooperative).
 
     Idempotent: pausing when nothing is running (or twice) changes nothing.
@@ -157,11 +159,14 @@ async def pause_scan(request: Request) -> LinkedInStatusOut:
 
 
 @router.post("/resume", response_model=ScanResumedOut, status_code=202)
-async def resume_scan_route(request: Request) -> ScanResumedOut:
+def resume_scan_route(request: Request) -> ScanResumedOut:
     """Resume from the persisted checkpoint (a normal scan if there is none).
 
     Returns 409 if a scan is already running or the backend is shutting down.
     """
+    from src.api.routes.collection import refuse_frozen
+
+    refuse_frozen(request, "linkedin")
     from src.api.routes.settings import refuse_while_cleaning
 
     refuse_while_cleaning()
@@ -177,12 +182,15 @@ async def resume_scan_route(request: Request) -> ScanResumedOut:
 
 
 @router.post("/scan", response_model=ScanStartedOut, status_code=202)
-async def trigger_scan(request: Request) -> ScanStartedOut:
+def trigger_scan(request: Request) -> ScanStartedOut:
     """Trigger an immediate LinkedIn scan in the background.
 
     Returns 409 if a scan is already running.
     Returns 503 if LinkedIn is disabled or the scanner is not configured.
     """
+    from src.api.routes.collection import refuse_frozen
+
+    refuse_frozen(request, "linkedin")
     from src.api.routes.settings import refuse_while_cleaning
 
     refuse_while_cleaning()
@@ -207,7 +215,7 @@ async def trigger_scan(request: Request) -> ScanStartedOut:
 
 
 @router.get("/scans", response_model=list[ScanRunOut])
-async def list_scans(request: Request, limit: int = 20) -> list[ScanRunOut]:
+def list_scans(request: Request, limit: int = 20) -> list[ScanRunOut]:
     """Return recent LinkedIn scan run history."""
     config = getattr(request.app.state, "linkedin_config", None)
     if config is None or not config.enabled:
