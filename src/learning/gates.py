@@ -16,6 +16,14 @@ Vocabulary:
 
 The posterior is a descriptive measure of agreement with observed choices under an independence
 assumption, not causal proof (ADR 0019 wording rule).
+
+**G3 is a sequential test** (Phase B B9-B, owner decision D2): the rule is evaluated after every
+session, so a fixed posterior threshold is tested again and again (optional stopping) and the L3
+simulator measured up to 21.6 % false activation against ADR 0019's 5 % criterion. G3 now uses an
+anytime-valid e-value (:func:`e_value`): with independent discordant outcomes and a challenger that is
+not better (win rate ≤ ½), the probability that it ever reaches ``1 / g3_alpha`` is at most
+``g3_alpha`` (Ville's inequality), however often it is evaluated. ``g3_alpha`` = 0.05 is ADR 0019's own
+false-activation criterion, not a tuned value.
 """
 
 from __future__ import annotations
@@ -24,6 +32,7 @@ import math
 from fractions import Fraction
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
+from functools import lru_cache
 from datetime import datetime, timedelta
 from typing import Literal
 
@@ -51,14 +60,18 @@ class GateParams:
     min_positives: int = 20
     min_discordant: int = 12
     per_session_cap: int = 3
-    # G3 pooled posterior
+    # G3: "e_process" (anytime-valid, e_value >= 1 / g3_alpha) or the former "posterior" rule
+    # (p_better >= g3_threshold), kept for the simulator's comparison only.
+    g3_rule: str = "e_process"
+    g3_alpha: float = 0.05
     g3_threshold: float = 0.95
-    # G3b contradiction guard: placeholders. The L3 simulator found no values meeting ADR 0019's
-    # criteria (docs/reports/2026-11-05-l3-simulator.md), so none were adopted; activation stays off.
-    n_lb_min: int = 6
-    c_contra: float = 0.80
-    c_het: float = 0.80
-    margin: float = 0.10
+    # G3b contradiction guard, set by the simulator with the e-value G3 (ADR 0033,
+    # docs/reports/2026-11-15-sequential-activation.md): every false-activation criterion met.
+    # c_contra = 0.1: LB must lean towards the challenger, not merely fail to contradict it.
+    n_lb_min: int = 10
+    c_contra: float = 0.10
+    c_het: float = 0.30
+    margin: float = 0.0
     # positive window
     window_days: int = 14
     # EXPERIMENTAL ships disabled (owner decision, 2026-11-05)
@@ -215,6 +228,25 @@ def p_worse(wins: int, discordant: int) -> float:
     return 1.0 - p_better(wins, discordant)
 
 
+@lru_cache(maxsize=100_000)
+def e_value(wins: int, discordant: int) -> float:
+    """Anytime-valid evidence that the challenger wins more than half of the discordant positives.
+
+    The likelihood ratio of a uniform mixture over win rates in (½, 1] against a win rate of ½:
+    ``E = 2 · 2ⁿ · B(w + 1, n − w + 1) · P(Bin(n + 1, ½) ≤ w)``. Under any win rate ≤ ½ it is a
+    nonnegative supermartingale with E₀ = 1, so P(supₙ E ≥ 1/α) ≤ α (Ville's inequality).
+    """
+    losses = discordant - wins
+    log_beta = math.lgamma(wins + 1) + math.lgamma(losses + 1) - math.lgamma(discordant + 2)
+    return 2.0 * math.exp(discordant * math.log(2.0) + log_beta) * p_better(wins, discordant)
+
+
+def g3_pass(wins: int, discordant: int, params: GateParams) -> bool:
+    if params.g3_rule == "posterior":
+        return p_better(wins, discordant) >= params.g3_threshold
+    return e_value(wins, discordant) >= 1.0 / params.g3_alpha
+
+
 _GRID = np.linspace(0.0, 1.0, 4001)
 
 
@@ -257,6 +289,7 @@ class Decision:
     g3b_pass: bool
     state: State
     p_pooled: float
+    e_pooled: float = 0.0
 
 
 def g3b(ev: Evidence, params: GateParams) -> tuple[bool, bool]:
@@ -274,10 +307,11 @@ def decide(current: State, window: Window, ev: Evidence, params: GateParams = Ga
     """The state the rule allows now. ``paused`` evaluates like SHADOW on a fresh window (the caller
     passes that window's evidence)."""
     p = p_better(ev.pooled.wins, ev.pooled.discordant)
+    e = e_value(ev.pooled.wins, ev.pooled.discordant)
     gates = {
         "G1": window.days >= params.min_days and window.sessions >= params.min_sessions,
         "G2": ev.positives >= params.min_positives and ev.pooled.discordant >= params.min_discordant,
-        "G3": p >= params.g3_threshold,
+        "G3": g3_pass(ev.pooled.wins, ev.pooled.discordant, params),
         "G4": window.guardrails_green,
         "G5": not window.pause_condition,
     }
@@ -294,7 +328,7 @@ def decide(current: State, window: Window, ev: Evidence, params: GateParams = Ga
         state = SHADOW if current != ACTIVE else ACTIVE
     if current == ACTIVE and state == SHADOW:
         state = ACTIVE          # leaving ACTIVE is the monitor's job, never the activation rule's
-    return Decision(gates, lb_enough, guard, state, p)
+    return Decision(gates, lb_enough, guard, state, p, e)
 
 
 # -- health monitor -----------------------------------------------------------------------------
