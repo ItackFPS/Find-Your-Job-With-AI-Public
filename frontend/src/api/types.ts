@@ -227,6 +227,8 @@ export interface RunStats {
   // Absent or empty on runs recorded before outcomes existed.
   stored_new?: number | null
   outcome?: '' | 'successful' | 'partial' | 'no_new_offers' | 'no_successful_source' | 'failed' | 'first_run_empty'
+  // Decision journal + expiry after duration_seconds (the internal duration); absent on older runs.
+  post_seconds?: number
 }
 
 export interface PipelineRun {

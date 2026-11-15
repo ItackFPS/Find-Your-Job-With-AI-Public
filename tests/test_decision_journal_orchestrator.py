@@ -76,8 +76,10 @@ def _normalised(result) -> dict:
     stats = result.stats.to_dict()
     for k in ("stage_times", "duration_seconds", "decisions", "stage_progress", "preflight",
               "embedding_cache_hits", "embedding_cache_misses",
-              "personalization_cache_hits", "personalization_cache_misses"):
+              "personalization_cache_hits", "personalization_cache_misses", "post_seconds"):
         stats.pop(k, None)
+    for row in stats.get("by_source", {}).values():   # per-source collection time (B7-B)
+        row.pop("seconds", None)
     return {
         "scored": [(r.job_id, r.final_score, r.deterministic_score, r.semantic_score, r.factors,
                     r.personalization_adjustment) for r in result.scored_jobs],

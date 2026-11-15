@@ -146,6 +146,10 @@ class PipelineStats:
     # (src/pipeline/run_outcome.py, Phase B B7-A; "" until the run ends).
     stored_new: int | None = None
     outcome: str = ""
+    # Post-processing after duration_seconds is taken: the decision journal and expiry (Phase B
+    # B7-B). The run's wall clock is its row's completed_at - started_at, which also covers the
+    # runner's own saving; duration_seconds alone is the pipeline's internal duration.
+    post_seconds: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         # Derived lifecycle counters for clearer funnel accounting.
@@ -218,6 +222,7 @@ class PipelineStats:
             "active_strategy": self.active_strategy,
             "stored_new": self.stored_new,
             "outcome": self.outcome,
+            "post_seconds": self.post_seconds,
         }
 
 
@@ -509,12 +514,15 @@ def run_pipeline(
                 # unparsable timeout) is this source's failure, not the run's
                 # (issue #67).
                 collector = collector_factory(config=merged_cfg)
+                _t_source = time.perf_counter()
                 result = collector.collect()
+                source_seconds = round(time.perf_counter() - _t_source, 3)
                 normalized = normalize_jobs(name, result.jobs)
                 source_stats: dict[str, Any] = {
                     "collected": len(normalized),
                     "accepted": 0,
                     "errors": len(result.errors),
+                    "seconds": source_seconds,   # this source's collection time (B7-B)
                 }
                 if result.metadata.get("per_query_stats"):
                     source_stats["per_query_stats"] = result.metadata["per_query_stats"]
@@ -1436,7 +1444,7 @@ def run_pipeline(
             for r in scored_job_records:
                 r.lane = lanes.get(r.job_id, "main")
         # Journal write time (B1-B, measurement only): runs after duration_seconds is taken.
-        _t_journal = time.perf_counter()
+        _t_post = _t_journal = time.perf_counter()
         recorder.finalize(scored_job_records)
         stats.decisions = recorder.summary()
         stats.stage_times["journal"] = time.perf_counter() - _t_journal
@@ -1446,6 +1454,7 @@ def run_pipeline(
         # that read its whole listing counts a miss for the offers it no longer lists.
         # Applied only once the run completed (P-002): a run that fails after storage must not
         # count misses or expire offers. Never fails the run.
+        _t_expiry = time.perf_counter()
         try:
             expiry = storage.apply_expiry(
                 {job.id for job in all_jobs}, sources_counting_misses(stats.by_source),
@@ -1454,6 +1463,8 @@ def run_pipeline(
             logger.info("Expiry: %s", expiry)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Expiry not applied: %s", exc)
+        stats.stage_times["expiry"] = time.perf_counter() - _t_expiry
+        stats.post_seconds = round(time.perf_counter() - _t_post, 3)
 
         pers_storage.close()
         storage.close()

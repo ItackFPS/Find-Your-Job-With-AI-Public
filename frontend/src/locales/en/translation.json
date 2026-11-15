@@ -980,6 +980,7 @@
       "aiEnabled": "✓ AI (Phase 2) enabled"
     },
     "duration": "Duration: {duration}",
+    "durationDetail": "(pipeline {pipeline}, then decision journal and cleanup {post})",
     "started": "Started: {date}",
     "ended": "Ended: {date}",
     "aiBadge": "✓ AI (Phase 2)",

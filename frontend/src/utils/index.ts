@@ -1,4 +1,4 @@
-export { formatDuration, formatElapsedBetween } from './formatDuration'
+export { formatDuration, formatElapsedBetween, runWallSeconds } from './formatDuration'
 export { formatDateTime, formatTime, daysAgo } from './formatDate'
 export { scoreToTier } from './scoreToTier'
 export type { ScoreTier } from './scoreToTier'
