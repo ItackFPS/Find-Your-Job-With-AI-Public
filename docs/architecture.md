@@ -129,9 +129,6 @@ orchestrator loads collectors dynamically based on the `type` field in
 | Type | File | Status |
 |---|---|---|
 | `france_travail` | `france_travail.py` | Active — OAuth2 REST API, bounded concurrency, exhaustive pagination |
-| `remoteok` | `remoteok.py` | Active — unauthenticated REST API |
-| `jobicy` | `jobicy.py` | Active — unauthenticated REST API |
-| `weworkremotely` | `weworkremotely.py` | Active — RSS/Atom feeds |
 | `indeed` | `indeed.py` | Active — unofficial mobile GraphQL API, cursor-based pagination |
 | `eures` | `eures.py` | Active — public REST API |
 | `bundesagentur` | `bundesagentur.py` | Disabled — Germany-only, fails this project's location filter |

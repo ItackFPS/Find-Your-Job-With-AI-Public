@@ -50,8 +50,7 @@ Then:
 
 1. **Profile** page: your target roles, skills, locations, languages. It is saved to
    `config\profile.local.yaml`.
-2. **Sources.** These work without any account: the France Travail website, EURES, RemoteOK,
-   Jobicy and We Work Remotely. HelloWork, LinkedIn and Indeed are unofficial: they run only if
+2. **Sources.** These work without any account: the France Travail website and EURES. HelloWork, LinkedIn and Indeed are unofficial: they run only if
    you choose them. A run's **Sources** table shows each source as *completed*, *partial*,
    *failed* or *skipped*, with the reason for a skip.
 
@@ -59,8 +58,7 @@ Then:
    put `FRANCE_TRAVAIL_CLIENT_ID` and `FRANCE_TRAVAIL_CLIENT_SECRET` in `.env` in the install
    folder and restart the app.
 
-   Searches are built from your profile, so any line of work can be searched. The remote
-   boards (RemoteOK, Jobicy, We Work Remotely) list mostly digital roles.
+   Searches are built from your profile, so any line of work can be searched.
 3. **Run pipeline** on the Dashboard (or **Scan now** on a scanner card). The first run
    downloads the multilingual embedding model (~470 MB) from Hugging Face once.
 

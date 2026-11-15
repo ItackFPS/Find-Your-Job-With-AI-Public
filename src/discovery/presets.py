@@ -60,7 +60,6 @@ class DiscoveryPreset:
     baseline: dict[str, list[str]] = field(default_factory=dict)
     domain_queries: dict[str, dict[str, list[str]]] = field(default_factory=dict)
     contract_queries: dict[str, dict[str, list[str]]] = field(default_factory=dict)
-    jobicy_industries: dict[str, list[str]] = field(default_factory=dict)
     partition_vocabulary: list[str] = field(default_factory=list)
     partition_affinity: dict[str, list[str]] = field(default_factory=dict)
     noisy_replacements: dict[str, str | None] = field(default_factory=dict)
@@ -132,7 +131,6 @@ def _parse_preset(path: Path, raw: dict[str, Any]) -> DiscoveryPreset | None:
         baseline=_list_map(d.get("baseline")),
         domain_queries=_nested_list_map(d.get("domain_queries")),
         contract_queries=_nested_list_map(d.get("contract_queries")),
-        jobicy_industries=_list_map(d.get("jobicy_industries")),
         partition_vocabulary=_str_list(d.get("partition_vocabulary")),
         partition_affinity=_list_map(d.get("partition_affinity")),
         noisy_replacements=noisy,

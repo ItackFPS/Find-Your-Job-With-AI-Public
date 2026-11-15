@@ -16,8 +16,8 @@ export const runStats: RunStats = {
   llm_eligibility_input: 640, llm_eligibility_passed: 640, llm_eligibility_rejected: 0,
   scored: 640, semantically_matched: 640, personalized: 640, duration_seconds: 312,
   by_source: {
-    remoteok: { collected: 300, accepted: 120, errors: 0, status: 'completed', reason: null },
-    jobicy: { collected: 200, accepted: 90, errors: 2, status: 'partial', reason: 'HTTP 429 on page 3' },
+    bundesagentur: { collected: 300, accepted: 120, errors: 0, status: 'completed', reason: null },
+    arbetsformedlingen: { collected: 200, accepted: 90, errors: 2, status: 'partial', reason: 'HTTP 429 on page 3' },
     'france-travail': { collected: 0, accepted: 0, errors: 0, status: 'skipped', reason: 'No credentials set' },
     eures: { collected: 740, accepted: 430, errors: 0, status: 'completed', reason: null },
   },
@@ -37,7 +37,7 @@ export const dashboard: Dashboard = {
 }
 
 export const job: Job = {
-  id: 'job-1', source: 'remoteok', title: 'Développeur Python', company: 'Acme', location: 'Toulon, France',
+  id: 'job-1', source: 'eures', title: 'Développeur Python', company: 'Acme', location: 'Toulon, France',
   department: '83', countries: ['France'], remote: false, work_mode: 'hybrid', employment_type: 'CDI',
   salary_min: 42000, salary_max: 52000, salary_currency: 'EUR', published_at: '2026-10-18T00:00:00+00:00',
   discovered_at: NOW, skills: ['Python', 'SQL', 'Docker'], canonical_url: 'https://example.com/job/1',
@@ -78,7 +78,7 @@ export const decision: DecisionRecord = {
   conflicts: [], stage_trace: [{ stage: 'hard_filter', result: 'passed', detail: null }],
   exposure: { rank: 3, tier: 'excellent', final_score: 0.76 },
   summary: { supporting: 1, against: 0, unknown: 1, conflicts: 0, headline: 'Good match' },
-  job: { title: 'Développeur Python', company: 'Acme', source: 'remoteok', location: 'Toulon' },
+  job: { title: 'Développeur Python', company: 'Acme', source: 'eures', location: 'Toulon' },
 }
 
 export const feedbackVocabulary: FeedbackVocabulary = {

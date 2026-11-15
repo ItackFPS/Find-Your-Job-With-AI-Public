@@ -9,7 +9,6 @@
 # discovery.baseline            queries always sent to a source while the preset applies
 # discovery.domain_queries      extra France Travail / APEC queries per selected domain
 # discovery.contract_queries    extra queries per contract type
-# discovery.jobicy_industries   Jobicy industry slugs per selected domain
 # discovery.partition_*         terms used to split a saturated France Travail query
 # discovery.noisy_replacements  query -> safer query (null rejects the query)
 # discovery.collector_config    per source type: collector config keys (queries, categories,
@@ -49,15 +48,6 @@ discovery:
     - intelligence artificielle
     - test logiciel
     - alternance informatique
-    jobicy:
-    - engineering
-    - cybersecurity
-    - admin
-    remoteok:
-    - python
-    - javascript
-    - devops
-    - react
   domain_queries:
     france_travail:
       web_development:
@@ -76,11 +66,6 @@ discovery:
     france_travail:
       internship:
       - stage informatique
-  jobicy_industries:
-    web_development:
-    - web-app-design
-    qa_testing:
-    - qa-testing
   partition_vocabulary:
   - développeur
   - logiciel
@@ -215,14 +200,6 @@ discovery:
         - be
         - lu
         - ch
-    weworkremotely:
-      categories:
-      - remote-programming-jobs
-      - remote-full-stack-programming-jobs
-      - remote-back-end-programming-jobs
-      - remote-front-end-programming-jobs
-      - remote-devops-sysadmin-jobs
-      - remote-design-jobs
     france_travail_web:
       occupations:
         software_development:
