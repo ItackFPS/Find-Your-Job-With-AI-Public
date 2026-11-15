@@ -271,8 +271,12 @@ class TestExperienceContrastPairs:
         gate = _gate(years=3)
         passing, results = gate_jobs([job], {job.id: reqs}, gate)
         result = results[job.id]
-        # Gate hard-rejects: MANDATORY experience > profile max → VIOLATED
-        assert not result.passes, "MANDATORY experience > max is a hard gate rejection"
+        # Owner decision D12: within one year above the max → kept with a lower score
+        assert result.passes and result.experience_penalty > 0
+        # more than max + 1 years, mandatory → VIOLATED (hard reject)
+        passing, results = gate_jobs([job], {job.id: reqs}, _gate(years=2))
+        result = results[job.id]
+        assert not result.passes, "MANDATORY experience > max + 1 is a hard gate rejection"
         assert any(r.type == "experience" for r in result.reasons)
 
 

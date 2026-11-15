@@ -10,6 +10,7 @@ import {
 import { Button, Card, Chip, LoadingState, useToast } from '../components'
 import { SaveHideButtons } from '../components/SaveHideButtons'
 import { daysAgo, formatDateTime, httpUrl } from '../utils'
+import { provenanceOf, type Provenance } from './decisionProvenance'
 
 function OverallScore({ score }: { score: number }) {
   const { t } = useTranslation()
@@ -338,7 +339,7 @@ function FeedbackSection({ jobId, decisionId }: { jobId: string; decisionId?: st
   const { mutateAsync, isPending } = useMutation({
     // pin the decision the user is looking at, so the feedback is attributed to it even if a newer run lands meanwhile
     mutationFn: (body: { type: string; reasons: string[]; note?: string }) =>
-      postJobFeedback(jobId, { ...body, decision_id: decisionId }),
+      postJobFeedback(jobId, { ...body, decision_id: decisionId, context: { surface: 'job_detail' } }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['job-feedback', jobId] }),
   })
   if (isError) return <Card title={t('jobDetail.feedback.title')} style={{ marginBottom: 'var(--space-4)' }}><div style={{ fontSize: '0.85rem', color: 'var(--color-muted)' }}>{t('jobDetail.feedback.unavailable')}</div></Card>
@@ -348,6 +349,15 @@ function FeedbackSection({ jobId, decisionId }: { jobId: string; decisionId?: st
 
 // Presentational: the decision record for a job — what supports it, what argues against it, what is
 // UNKNOWN, what conflicts — straight from the journal (nothing recomputed in the browser).
+// Literal keys keep the catalogue check able to see them.
+function provenanceLabel(t: (key: string) => string, p: Provenance): string {
+  switch (p) {
+    case 'structured': return t('jobDetail.decision.provenance.structured')
+    case 'text': return t('jobDetail.decision.provenance.text')
+    default: return t('jobDetail.decision.provenance.unknown')
+  }
+}
+
 export function DecisionPanel({ decision }: { decision: DecisionRecord }) {
   const { t } = useTranslation()
   const assessment = decision.signals?.assessment
@@ -364,6 +374,11 @@ export function DecisionPanel({ decision }: { decision: DecisionRecord }) {
             <li key={`${e.source.rule_id}-${i}`} style={{ fontSize: '0.82rem', padding: '0.15rem 0' }}>
               <span style={{ color: 'var(--color-muted)' }}>[{e.dimension}]</span> {e.message}
               {e.span && e.span.text && <span style={{ color: 'var(--color-muted)' }}> — “{e.span.text}”</span>}
+              {provenanceOf(e) && (
+                <span data-testid="evidence-provenance" style={{ color: 'var(--color-muted)', fontSize: '0.75rem' }}>
+                  {' '}({provenanceLabel(t, provenanceOf(e) as Provenance)})
+                </span>
+              )}
             </li>
           ))}
         </ul>

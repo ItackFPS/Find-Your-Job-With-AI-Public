@@ -5,6 +5,7 @@ PUT  /api/privacy/learning/pause  — {"paused": true}: pause or resume learning
 POST /api/privacy/learning/reset  — {"confirm": true}: set the reset marker, clear derived state
 GET  /api/privacy/learning/status — personal ranking state and its wording key (ADR 0019, v5 L4.4)
 POST /api/privacy/learning/resume — "Reprendre" after a pause: back to observation (guarded)
+GET  /api/privacy/recorded        — what was recorded: events, surfaces, exposures (read only, B9-A)
 GET  /api/privacy/erase           — the latest erasure job (state, counts, checks; no content)
 POST /api/privacy/erase           — {"confirm": true, "keep_tracker": bool, "erase_calibration": bool}
 POST /api/privacy/erase/retry     — resume a BLOCKED erasure from its last completed step
@@ -117,12 +118,21 @@ def resume_learning(request: Request) -> LearningStatusOut:
     return learning_status(request)
 
 
+@router.get("/recorded")
+def recorded(request: Request) -> dict[str, Any]:
+    """What was recorded about the user's actions, read only (Phase B B9-A; ``src/privacy/recorded.py``)."""
+    from src.privacy.recorded import summary
+
+    return summary(request.app.state.db_path)
+
+
 # -- Erase my activity (ADR 0015) ----------------------------------------------------------------
 
 class EraseIn(BaseModel):
     confirm: bool = False
-    keep_tracker: bool = False
-    erase_calibration: bool = True
+    # Owner decision D6: a default erase keeps the tracker and the calibration answers.
+    keep_tracker: bool = True
+    erase_calibration: bool = False
     purge_lab: bool = False
     confirm_lab: bool = False         # the lab purge is confirmed separately (ADR 0015)
 

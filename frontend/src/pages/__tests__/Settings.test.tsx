@@ -236,16 +236,30 @@ describe('Settings › Sources and background', () => {
     expect(calls).toContainEqual({ method: 'POST', url: '/privacy/learning/reset', body: { confirm: true } })
   })
 
+  it('keeps the tracker and the calibration answers by default (owner decision D6)', async () => {
+    renderPage()
+    expect(await screen.findByRole('checkbox', { name: 'Keep my application tracker' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Also erase my calibration answers' })).not.toBeChecked()
+    await userEvent.click(screen.getByRole('button', { name: 'Erase my activity' }))
+    const dialog = screen.getByRole('alertdialog', { name: 'Erase my activity' })
+    routes['GET /privacy/erase'] = routes['POST /privacy/erase']
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Erase' }))
+    expect(calls).toContainEqual({
+      method: 'POST', url: '/privacy/erase', body: { confirm: true, keep_tracker: true, erase_calibration: false },
+    })
+  })
+
   it('erases activity only after a confirmation, with the chosen options', async () => {
     renderPage()
     await userEvent.click(await screen.findByRole('checkbox', { name: 'Keep my application tracker' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Also erase my calibration answers' }))
     await userEvent.click(screen.getByRole('button', { name: 'Erase my activity' }))
     expect(calls.some(c => c.method === 'POST' && c.url === '/privacy/erase')).toBe(false)
     const dialog = screen.getByRole('alertdialog', { name: 'Erase my activity' })
     routes['GET /privacy/erase'] = routes['POST /privacy/erase']
     await userEvent.click(within(dialog).getByRole('button', { name: 'Erase' }))
     expect(calls).toContainEqual({
-      method: 'POST', url: '/privacy/erase', body: { confirm: true, keep_tracker: true, erase_calibration: true },
+      method: 'POST', url: '/privacy/erase', body: { confirm: true, keep_tracker: false, erase_calibration: true },
     })
     expect(await screen.findByText(/Erasure complete/)).toBeInTheDocument()
   })
@@ -271,7 +285,7 @@ describe('Settings › Sources and background', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Erase' }))
     expect(calls).toContainEqual({
       method: 'POST', url: '/privacy/erase',
-      body: { confirm: true, keep_tracker: false, erase_calibration: true, purge_lab: true, confirm_lab: true },
+      body: { confirm: true, keep_tracker: true, erase_calibration: false, purge_lab: true, confirm_lab: true },
     })
   })
 

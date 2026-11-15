@@ -694,6 +694,35 @@ def _is_range_gap(text: str, lower: EducationRequirement, upper: EducationRequir
     )
 
 
+def _examples_of_range(
+    text: str,
+    upper: EducationRequirement,
+    found: list[EducationRequirement],
+    held: list[int],
+    dropped: set[int],
+) -> set[int]:
+    """Mentions in the parenthesis that illustrates a range: "Bac à Bac+2 (BTS, DUT)".
+
+    They name diplomas within the range, so they are not a separate, higher requirement
+    (Phase B B5-G, from #189). Only mentions no higher than the range's top are taken; the
+    parenthesis must open right after the range, within the same clause.
+    """
+    assert upper.span is not None
+    opening = re.match(r"[^().;\n]{0,40}\(", text[upper.span.end:])
+    if opening is None:
+        return set()
+    start = upper.span.end + opening.end()
+    close = text.find(")", start)
+    end = close if close != -1 else start + 80
+    return {
+        i for i in held
+        if i not in dropped
+        and (mention := found[i]).span is not None
+        and start <= mention.span.start < end
+        and mention.level_bac_plus <= upper.level_bac_plus
+    }
+
+
 def _merge_held_ranges(
     text: str, found: list[EducationRequirement], cues: list[re.Match[str] | None]
 ) -> None:
@@ -728,6 +757,7 @@ def _merge_held_ranges(
             lower.is_experience_alternative or upper.is_experience_alternative
         )
         dropped.add(b)
+        dropped.update(_examples_of_range(text, upper, found, held, set(dropped)))
     for i in sorted(dropped, reverse=True):
         del found[i]
         del cues[i]
@@ -879,3 +909,29 @@ def candidate_education(profile: object) -> tuple[int | None, str | None, int | 
     raw = getattr(profile, "max_education", None)
     level = parse_education_level(raw) if raw else None
     return level, None, level
+
+
+def candidate_education_in_progress(profile: object) -> tuple[int | None, str | None]:
+    """``(max Bac+N, display label)`` of the highest qualification being prepared, when it
+    is above every held one; ``(None, None)`` otherwise.
+
+    Preparing a level is not holding it, and it is not evidence of falling short of it
+    either: the gate lets an offer asking that level through with the doubt recorded
+    instead of rejecting it. A v1 profile has no in-progress entry.
+    """
+    from src.models.levels import level_to_max_bac_plus
+
+    if int(getattr(profile, "profile_version", 1) or 1) < 2:
+        return None, None
+    entries = [e for e in (getattr(profile, "education", None) or [])
+               if getattr(e, "level", None) is not None]
+    preparing = [e for e in entries if getattr(e, "in_progress", False)]
+    if not preparing:
+        return None, None
+    top = max(preparing, key=lambda e: e.level)
+    held = [e.level for e in entries if not getattr(e, "in_progress", False)]
+    if held and max(held) >= top.level:
+        return None, None
+    name = (top.qualification or "").strip()
+    label = f"level {top.level}" + (f" ({name})" if name else "")
+    return level_to_max_bac_plus(top.level), label

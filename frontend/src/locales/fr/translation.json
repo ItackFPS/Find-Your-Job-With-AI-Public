@@ -123,24 +123,29 @@
     "pipelineRunning": "⟳ Pipeline en cours…",
     "today": {
       "title": "Aujourd’hui",
-      "lastRun": "Dernière recherche : {date}. {count, number} offres correspondent à votre profil.",
+      "lastRun": "Dernière recherche : {date}. {count, number} offres sont pertinentes ou mieux pour votre profil.",
+      "lastRunDate": "Dernière recherche : {date}.",
       "noRun": "Aucune recherche pour le moment.",
       "nextRun": "Prochaine recherche : {date}.",
       "problems": "{count, plural, one {# source a eu} other {# sources ont eu}} un problème lors de la dernière recherche",
       "offline": "Aucune source n'a répondu lors de la dernière recherche. Vérifiez votre connexion internet ; la prochaine recherche réessaiera.",
       "top": "Meilleures correspondances",
       "untitled": "Offre sans titre",
-      "noMatch": "Aucune correspondance forte lors de la dernière recherche."
+      "noMatch": "Aucune correspondance forte lors de la dernière recherche.",
+      "keptPrevious": "Aucune source n’a abouti lors de la dernière recherche : les listes montrent toujours la recherche précédente.",
+      "nothingNew": "Rien de nouveau depuis la recherche précédente.",
+      "firstEmpty": "La première recherche n’a trouvé aucune offre pour votre profil. Vérifiez votre métier et vos lieux dans Profil ; la prochaine recherche réessaiera."
     },
     "run": {
       "alreadyRunning": "Une recherche est déjà en cours.",
       "failed": "La recherche n’a pas pu démarrer. Réessayez.",
       "start": "Lancer le pipeline",
       "starting": "Démarrage…",
-      "running": "En cours…"
+      "running": "En cours…",
+      "paused": "Collecte en pause"
     },
     "noRuns": "Aucune exécution du pipeline pour l’instant. <run>Lancez le pipeline</run> pour voir les résultats ici.",
-    "browseMatched": "Parcourir les {count, number} offres retenues →",
+    "browseMatched": "Parcourir les {count, number} offres pertinentes →",
     "backendError": "Impossible de joindre le serveur local. Relancez l’application avec son raccourci <app>Find Your Job With AI</app> (ou <cmd/>) ; si elle ne démarre pas, sa fenêtre en indique la raison, et le détail se trouve dans <log/> dans le dossier de l’application.",
     "liveRun": "Exécution en direct",
     "latestRun": "Dernière exécution",
@@ -387,7 +392,12 @@
       "against": "EN DÉFAVEUR ({count, number})",
       "unknown": "INCONNU ({count, number})",
       "conflicts": "CONFLITS ({count, number})",
-      "ids": "Décision {decision} · exécution {run}"
+      "ids": "Décision {decision} · exécution {run}",
+      "provenance": {
+        "structured": "d’après un champ de la source",
+        "text": "lu dans le texte de l’offre",
+        "unknown": "non indiqué dans l’offre"
+      }
     },
     "header": {
       "noTitle": "(sans titre)",
@@ -429,7 +439,7 @@
   },
   "stats": {
     "title": "Statistiques",
-    "subtitle": "Ce que demande le marché, sur {count, number} offres collectées",
+    "subtitle": "Ce que demande le marché, sur les {count, number} offres retenues après les filtres",
     "notEnoughData": "Pas encore assez de données.",
     "noDataYet": "Pas encore de données",
     "noDataYetDot": "Pas encore de données.",
@@ -971,6 +981,7 @@
       "aiEnabled": "✓ IA (phase 2) activée"
     },
     "duration": "Durée : {duration}",
+    "durationDetail": "(pipeline {pipeline}, puis journal des décisions et nettoyage {post})",
     "started": "Début : {date}",
     "ended": "Fin : {date}",
     "aiBadge": "✓ IA (phase 2)",
@@ -1052,7 +1063,8 @@
       "curated": "Sélection",
       "placeholder": "Rechercher un domaine ou un métier (p. ex. développement logiciel, vendeur, agent d’entretien)…",
       "addCustomHint": "Aucun résultat ? Appuyez sur Entrée pour ajouter « {value} » comme domaine personnalisé",
-      "noMatch": "Aucun résultat pour « {value} » — appuyez sur Entrée pour l’ajouter comme domaine personnalisé."
+      "noMatch": "Aucun résultat pour « {value} » — appuyez sur Entrée pour l’ajouter comme domaine personnalisé.",
+      "unresolved": "Absents du vocabulaire intégré : {labels}. La recherche utilise ces mots tels quels, sans synonymes."
     },
     "location": {
       "statusLabel": "Priorité de ce lieu",
@@ -1390,14 +1402,43 @@
       "title": "Apprentissage",
       "subtitle": "Comment l’application apprend de vos actions. Vos actions restent toujours sur cet ordinateur.",
       "pause": "Mettre l’apprentissage en pause",
-      "pauseHelp": "Vos actions sont toujours enregistrées, mais le classement cesse de s’y adapter jusqu’à la reprise.",
+      "pauseHelp": "Pendant la pause, le classement cesse de s’adapter à vous et aucune comparaison avec un classement personnel n’est faite. Vos actions, les offres qui vous sont montrées et les tirages Découverte restent enregistrés sur cet ordinateur ; l’effacement les supprime.",
       "reset": "Réinitialiser l’apprentissage",
       "resetHelp": "L’apprentissage repart de vos prochaines actions. Vos offres enregistrées et masquées et votre suivi de candidatures sont conservés.",
       "confirm": "Réinitialiser l’apprentissage ? Ce qu’il a appris jusqu’ici est effacé.",
       "confirmYes": "Réinitialiser",
       "resetDone": "L’apprentissage a été réinitialisé.",
       "lastReset": "Dernière réinitialisation : {date}",
-      "failed": "La modification n’a pas pu être enregistrée."
+      "failed": "La modification n’a pas pu être enregistrée.",
+      "recorded": {
+        "title": "Ce qui a été enregistré",
+        "intro": "Tout ce qui suit est stocké sur cet ordinateur uniquement. Cette vue ne modifie rien ; « Effacer mon activité » le supprime.",
+        "loading": "Chargement…",
+        "unavailable": "Ce qui a été enregistré ne peut pas être affiché pour le moment.",
+        "none": "Rien n’a encore été enregistré.",
+        "colType": "Action",
+        "colCount": "Enregistrées",
+        "colCounted": "Comptables par l’apprentissage",
+        "colLast": "Dernière fois",
+        "eventSurfaces": "Où vos actions ont été faites",
+        "exposuresBySurface": "{count, plural, one {# offre affichée, par liste} other {# offres affichées, par liste}}",
+        "exposuresBySource": "Offres affichées, par source",
+        "retention": "Les offres affichées sont résumées après {compact} jours et supprimées après {keep} jours.",
+        "repeatedViews": "Rouvrir la même offre est enregistré, mais l’apprentissage ne compte qu’une fois les ouvertures d’une offre. Les actions antérieures à la dernière réinitialisation sont conservées mais ne comptent plus.",
+        "types": {
+          "interested": "Intéressé",
+          "not_interested": "Pas pour moi",
+          "ranking_feedback": "Mal classée",
+          "unsure": "Je ne sais pas",
+          "viewed": "Offre ouverte",
+          "apply_link_opened": "Lien de candidature ouvert",
+          "application_status_changed": "Statut de candidature modifié",
+          "saved": "Enregistrée",
+          "unsaved": "Retirée des enregistrées",
+          "hidden": "Masquée",
+          "unhidden": "Réaffichée"
+        }
+      }
     },
     "deleteAll": {
       "title": "Supprimer toutes les données de l’application",
@@ -1487,6 +1528,12 @@
         "PF": "listes triées par pertinence",
         "IM": "autres"
       }
+    }
+  },
+  "collection": {
+    "frozen": {
+      "title": "Collecte en pause",
+      "body": "Aucun site d’offres n’est consulté pour l’instant, le temps de vérifier chaque source. Vos offres enregistrées, vos offres sauvegardées et vos candidatures sont conservées. Une source ne revient qu’après avoir passé ses vérifications et que vous l’avez réactivée."
     }
   }
 }

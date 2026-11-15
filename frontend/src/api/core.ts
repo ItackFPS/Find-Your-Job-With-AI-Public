@@ -54,11 +54,26 @@ export const updateProfile = (p: Profile) => api.put<Profile>('/profile', p).the
 export const confirmProfileReview = (review: ProfileReview) =>
   api.put<Profile>('/profile', { review: { ...review, pending: false } }).then(r => r.data)
 
+// How many offers the Jobs list shows for these filters, all pages together (Phase B B7-C).
+export const countJobs = (params: { min_tier?: string } = {}): Promise<number> =>
+  api.get<{ count: number }>('/jobs/count', { params }).then(r => r.data.count)
+
 export const searchEscoSkills = (q: string, lang: 'en' | 'fr' = 'en', limit = 8): Promise<EscoSuggestion[]> =>
   api.get<EscoSuggestion[]>('/esco/skills', { params: { q, lang, limit } }).then(r => r.data)
 
 export const searchEscoOccupations = (q: string, lang: 'en' | 'fr' = 'en', limit = 8): Promise<EscoSuggestion[]> =>
   api.get<EscoSuggestion[]>('/esco/occupations', { params: { q, lang, limit } }).then(r => r.data)
+
+// Mirrors src/api/schemas.py DomainResolutionOut: how the search reads a line-of-work label
+// (Phase B B5-C). Nothing is saved.
+export interface DomainResolution {
+  label: string
+  status: 'known' | 'resolved' | 'unresolved'
+  families: string[]
+}
+
+export const resolveProfileDomains = (labels: string[]): Promise<DomainResolution[]> =>
+  api.post<{ labels: DomainResolution[] }>('/profile/domains/resolve', { labels }).then(r => r.data.labels)
 
 export interface FrenchDepartment {
   code: string   // e.g. "83", "2A", "971"

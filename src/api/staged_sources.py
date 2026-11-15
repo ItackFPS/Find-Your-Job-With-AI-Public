@@ -18,9 +18,11 @@ Both sources need the exact same two-step lifecycle around a run:
      success, or reset them all back to 'waiting' on failure so the next run
      retries them.
 
-This module abstracts only that shared shape (StagedSourceAdapter). The
-enablement check and staging schema are genuinely source-specific and stay
-that way: LinkedInStagedSourceAdapter and HelloWorkStagedSourceAdapter are
+This module abstracts only that shared shape (StagedSourceAdapter). Whether
+a source is on is the single rule of src/source_enablement.py (Phase B B4-A):
+a source that is off gives no snapshot and no re-injected offer, so its stored
+offers are not scored (owner decision D1). The staging schema is genuinely
+source-specific: LinkedInStagedSourceAdapter and HelloWorkStagedSourceAdapter are
 separate, independent wrappers around their own staging.py module — this is
 deliberately NOT a merge of LinkedIn/HelloWork domain logic into one module.
 """
@@ -56,7 +58,7 @@ class StagedSourceAdapter(Protocol):
         re-injected previously-active jobs).
 
         Returns ``[]`` and holds no open staging handle when the source is
-        disabled in its own config, or the snapshot itself fails — never
+        off (src/source_enablement.py), or the snapshot itself fails — never
         raises (fail-open, matching the pipeline's other optional stages).
         """
         ...
@@ -84,23 +86,21 @@ class LinkedInStagedSourceAdapter:
 
     name = "linkedin"
 
-    def __init__(self, db_path: str, config_dir: str) -> None:
+    def __init__(self, db_path: str, config_dir: str, settings_path: str | Path | None = None) -> None:
+        from src.source_enablement import settings_path_for
+
         self._db_path = db_path
         self._config_dir = config_dir
+        self._settings_path = Path(settings_path) if settings_path else settings_path_for(db_path)
         self._staging: "LinkedInStagingStorage | None" = None
         self._snapshot_taken = False
 
     def snapshot_for_run(self, run_id: str) -> list["Job"]:
         jobs: list["Job"] = []
         try:
-            import yaml
+            from src.source_enablement import source_enabled
 
-            li_config_path = Path(self._config_dir) / "linkedin.yaml"
-            if not li_config_path.exists():
-                return []
-            with li_config_path.open() as f:
-                li_cfg = yaml.safe_load(f) or {}
-            if not li_cfg.get("enabled", False):
+            if not source_enabled("linkedin", self._config_dir, self._settings_path):
                 return []
 
             from src.linkedin.staging import LinkedInStagingStorage, staging_row_to_job
@@ -190,21 +190,21 @@ class HelloWorkStagedSourceAdapter:
 
     name = "hellowork"
 
-    def __init__(self, db_path: str, config_dir: str) -> None:
+    def __init__(self, db_path: str, config_dir: str, settings_path: str | Path | None = None) -> None:
+        from src.source_enablement import settings_path_for
+
         self._db_path = db_path
         self._config_dir = config_dir
+        self._settings_path = Path(settings_path) if settings_path else settings_path_for(db_path)
         self._staging: "HelloWorkStagingStorage | None" = None
         self._snapshot_taken = False
 
     def snapshot_for_run(self, run_id: str) -> list["Job"]:
         jobs: list["Job"] = []
         try:
-            sources_path = Path(self._config_dir) / "sources.yaml"
-            from src.discovery.registry import SourceRegistry
-            if not (
-                sources_path.exists()
-                and SourceRegistry(config_path=str(sources_path)).get_source("hellowork")
-            ):
+            from src.source_enablement import source_enabled
+
+            if not source_enabled("hellowork", self._config_dir, self._settings_path):
                 return []
 
             from src.hellowork.staging import HelloWorkStagingStorage, staging_row_to_job

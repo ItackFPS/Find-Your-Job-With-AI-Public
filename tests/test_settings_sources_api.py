@@ -50,6 +50,10 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     config_dir = tmp_path / "config"
     config_dir.mkdir()
     (config_dir / "sources.yaml").write_text(SOURCES_YAML, encoding="utf-8")
+    (config_dir / "linkedin.yaml").write_text("enabled: true\n", encoding="utf-8")
+    # LinkedIn: an observed choice (plan rule I1), as the backend stores it at start.
+    (tmp_path / "settings.json").write_text(json.dumps({"unofficial_sources": {"linkedin": True}}),
+                                            encoding="utf-8")
     db_path = str(tmp_path / "jobs.db")
 
     rs = RunStorage(db_path=db_path)
@@ -76,7 +80,6 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         "settings_path": str(tmp_path / "settings.json"),
         "linkedin_config": SimpleNamespace(enabled=True),
         "hellowork_scanner": object(),
-        "source_opted_in": lambda source: source == "linkedin",
     }.items():
         monkeypatch.setitem(app.state._state, key, value)
     return TestClient(app)          # no lifespan: only the routes under test
@@ -104,7 +107,7 @@ def test_overview_lists_each_source_with_its_kind_and_state(client: TestClient) 
     assert rows["indeed"]["access_class"] == "unofficial"
     assert rows["indeed"]["choice"] == {"enabled": False, "chosen_at": None}
     assert rows["indeed"]["collected"] is False
-    # LinkedIn: the choice the scheduler acts on (an observed one counts, plan rule I1).
+    # LinkedIn: the stored choice (an observed one counts, plan rule I1); collected by the single rule.
     assert rows["linkedin"]["choice"]["enabled"] is True
     assert rows["linkedin"]["collected"] is True
     assert rows["hellowork"]["available"] is True
@@ -121,7 +124,7 @@ def test_a_choice_is_recorded_with_its_date(client: TestClient, tmp_path: Path) 
     assert row["choice"] == {"enabled": True, "chosen_at": chosen_at}
     assert row["collected"] is True
     stored = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
-    assert stored["unofficial_sources"] == {"indeed": True}
+    assert stored["unofficial_sources"] == {"indeed": True, "linkedin": True}
 
     assert client.put("/api/sources/eures/choice", json={"enabled": True}).status_code == 404
     assert client.put("/api/sources/indeed/choice", json={"enabled": "yes"}).status_code == 422

@@ -16,8 +16,8 @@ const row = { display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }
 const ongoing = (s?: ErasureStatus) => !!s && s.pending && s.state !== 'BLOCKED'
 
 /**
- * Settings › Erase my activity (ADR 0015): deletes your actions, what was learned from them, older
- * backups and (by default) calibration answers. "Erasure complete" appears only once the job
+ * Settings › Erase my activity (ADR 0015): deletes your actions, what was learned from them and older
+ * backups. The application tracker and the calibration answers are kept unless ticked (owner decision D6). "Erasure complete" appears only once the job
  * reached COMPLETE, i.e. after its checks passed.
  */
 export function EraseCard() {
@@ -25,8 +25,9 @@ export function EraseCard() {
   const toast = useToast()
   const queryClient = useQueryClient()
   const [confirming, setConfirming] = useState(false)
-  const [keepTracker, setKeepTracker] = useState(false)
-  const [eraseCalibration, setEraseCalibration] = useState(true)
+  // Owner decision D6: by default the tracker and the calibration answers are kept.
+  const [keepTracker, setKeepTracker] = useState(true)
+  const [eraseCalibration, setEraseCalibration] = useState(false)
   const [purgeLab, setPurgeLab] = useState(false)
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ERASURE_QUERY_KEY,

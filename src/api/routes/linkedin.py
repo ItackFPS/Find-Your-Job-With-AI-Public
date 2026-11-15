@@ -162,6 +162,9 @@ async def resume_scan_route(request: Request) -> ScanResumedOut:
 
     Returns 409 if a scan is already running or the backend is shutting down.
     """
+    from src.api.routes.collection import refuse_frozen
+
+    refuse_frozen(request, "linkedin")
     from src.api.routes.settings import refuse_while_cleaning
 
     refuse_while_cleaning()
@@ -183,6 +186,9 @@ async def trigger_scan(request: Request) -> ScanStartedOut:
     Returns 409 if a scan is already running.
     Returns 503 if LinkedIn is disabled or the scanner is not configured.
     """
+    from src.api.routes.collection import refuse_frozen
+
+    refuse_frozen(request, "linkedin")
     from src.api.routes.settings import refuse_while_cleaning
 
     refuse_while_cleaning()

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  getProfile, updateProfile, confirmProfileReview, searchEscoSkills, searchEscoOccupations,
+  getProfile, updateProfile, confirmProfileReview, searchEscoSkills, searchEscoOccupations, resolveProfileDomains,
   getAllDepartments, searchPlaces,
   type Profile, type EscoEntry, type EscoSuggestion, type FrenchDepartment, type LocationPreference,
   type HomePlace, type PlaceSuggestion, type RemotePolicy, type CareerLevel,
@@ -437,6 +437,9 @@ function AutocompleteTagList({ state, onChange, lang = 'en' }: AutocompleteTagLi
 // (same fallback target_skills already get — see build_filter_config()).
 // An ESCO match is also recorded as a target occupation (with its French label), which
 // job-board discovery searches by name; removing the chip removes both.
+// Typed labels are checked with the search's own resolver (POST /api/profile/domains/resolve,
+// Phase B B5-C): a label the vocabulary does not know gets a dashed chip and a note, because
+// the search then uses its words as typed, without synonyms. Nothing is changed or saved.
 // Either way, this stays a pure search box: nothing is pinned/always-visible.
 // ---------------------------------------------------------------------------
 
@@ -485,6 +488,24 @@ export function DomainPicker({ values, onChange, occupations = [], onOccupations
   onOccupationsChange?: (v: EscoEntry[]) => void
 }) {
   const { t } = useTranslation()
+  const [unresolved, setUnresolved] = useState<string[]>([])
+  const typedKey = values.filter(v => !CURATED_DOMAINS.has(v)).join('\u0000')
+
+  useEffect(() => {
+    const typed = typedKey ? typedKey.split('\u0000') : []
+    if (typed.length === 0) {
+      setUnresolved([])
+      return
+    }
+    let cancelled = false
+    const timer = setTimeout(() => {
+      resolveProfileDomains(typed)
+        .then(rows => { if (!cancelled) setUnresolved(rows.filter(r => r.status === 'unresolved').map(r => r.label)) })
+        .catch(() => { if (!cancelled) setUnresolved([]) })  // no note rather than a wrong one
+    }, 300)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [typedKey])
+  const isUnresolved = (v: string) => unresolved.includes(v.trim())
   const [query, setQuery] = useState('')
   const trimmedQuery = query.trim()
   const [escoResults, setEscoResults] = useState<EscoSuggestion[]>([])
@@ -592,14 +613,14 @@ export function DomainPicker({ values, onChange, occupations = [], onOccupations
         {values.map(v => (
           <span key={v} style={{
             background: 'var(--color-surface-elevated)',
-            border: `1px solid ${domainLabel(v) ? 'color-mix(in srgb, var(--color-accent) 40%, transparent)' : 'var(--color-border)'}`,
+            border: `1px ${isUnresolved(v) ? 'dashed' : 'solid'} ${domainLabel(v) ? 'color-mix(in srgb, var(--color-accent) 40%, transparent)' : 'var(--color-border)'}`,
             borderRadius: '7px',
             padding: '0.35rem 0.45rem 0.35rem 0.8rem',
             fontSize: '0.86rem',
             display: 'flex',
             alignItems: 'center',
             gap: '0.5rem',
-          }}>
+          }} data-unresolved={isUnresolved(v) || undefined}>
             {domainLabel(v) ?? v}
             <button onClick={() => removeValue(v)} aria-label={t('profile.remove', { item: v })} style={chipRemoveStyle}>×</button>
           </span>
@@ -666,6 +687,11 @@ export function DomainPicker({ values, onChange, occupations = [], onOccupations
           </div>
         )}
       </div>
+      {unresolved.length > 0 && (
+        <p data-testid="domains-unresolved" style={{ margin: '0.4rem 0 0', fontSize: '0.8rem', color: 'var(--color-muted)' }}>
+          {t('profile.domains.unresolved', { labels: unresolved.join(', ') })}
+        </p>
+      )}
     </div>
   )
 }

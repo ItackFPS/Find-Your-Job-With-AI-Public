@@ -282,7 +282,7 @@ def list_jobs(
         # Scope to the latest completed run so the Jobs page reflects current
         # results rather than all historical accumulation.  If no run exists yet
         # (fresh install or CLI-only use), fall back to showing all stored jobs.
-        latest_run = rs.get_latest_completed_run()
+        latest_run = rs.get_latest_visible_run()
         latest_run_id = latest_run["id"] if latest_run else None
 
         run_job_ids: list[str] | None = None
@@ -331,7 +331,8 @@ def list_jobs(
             in_run = [j for j in (run_job_ids or []) if j in saved]
             run_job_ids = in_run + sorted(saved - set(in_run))
         exclude_hashes = set() if include_hidden else s.get_content_hashes(sorted(hidden_ids))
-        exclude_ids = set() if include_hidden else hidden_ids
+        exclude_ids = set() if include_hidden else set(hidden_ids)
+        exclude_ids |= _switched_off_ids(request, s, list_state)
 
         if q:
             # FTS prefix search: fetch up to 2000 matches then apply all
@@ -455,12 +456,13 @@ def list_decouverte(request: Request) -> list[JobDetailOut]:
 
     s, rs = _get_storages(request)
     try:
-        latest_run = rs.get_latest_completed_run()
+        latest_run = rs.get_latest_visible_run()
         if not latest_run:
             return []
         ids = [d["job_id"] for d in drawn_for_run(request.app.state.db_path, latest_run["id"])]
         list_state = _list_state(request)
-        ids = [j for j in ids if not list_state.get(j, {}).get("hidden")]
+        off = _switched_off_ids(request, s, list_state)
+        ids = [j for j in ids if not list_state.get(j, {}).get("hidden") and j not in off]
         scores_by_id = rs.get_latest_scores_for_jobs(ids) if ids else {}
         jobs_by_id = s.get_jobs_by_ids(ids) if ids else {}
         result: list[JobDetailOut] = []
@@ -491,7 +493,7 @@ def list_outside_criteria(request: Request) -> list[JobDetailOut]:
 
     s, rs = _get_storages(request)
     try:
-        latest_run = rs.get_latest_completed_run()
+        latest_run = rs.get_latest_visible_run()
         if not latest_run:
             return []
         rows = rs.get_jobs_for_run(latest_run["id"], limit=-1)        # -1: every row of the run
@@ -499,9 +501,11 @@ def list_outside_criteria(request: Request) -> list[JobDetailOut]:
         lanes = assign_lanes(((r["job_id"], float(r.get("final_score") or 0.0), r.get("score_breakdown"))
                               for r in rows), load_lane_params(config_dir / "scoring.yaml"))
         list_state = _list_state(request)
+        off = _switched_off_ids(request, s, list_state)
         score = {r["job_id"]: float(r.get("final_score") or 0.0) for r in rows}
         ids = sorted((j for j, lane in lanes.items() if lane == OUTSIDE
-                      and not list_state.get(j, {}).get("hidden")), key=lambda j: (-score[j], j))
+                      and not list_state.get(j, {}).get("hidden") and j not in off),
+                     key=lambda j: (-score[j], j))
         scores_by_id = rs.get_latest_scores_for_jobs(ids) if ids else {}
         jobs_by_id = s.get_jobs_by_ids(ids) if ids else {}
         result: list[JobDetailOut] = []
@@ -520,6 +524,36 @@ def list_outside_criteria(request: Request) -> list[JobDetailOut]:
         rs.close()
 
 
+class JobCountOut(BaseModel):
+    count: int
+
+
+@router.get("/count", response_model=JobCountOut)
+def count_jobs(
+    request: Request,
+    source: str | None = Query(default=None),
+    country: str | None = Query(default=None),
+    department: str | None = Query(default=None),
+    remote: bool | None = Query(default=None),
+    q: str | None = Query(default=None),
+    min_tier: str | None = Query(default=None),
+    include_expired: bool = Query(default=False),
+    include_hidden: bool = Query(default=False),
+    saved_only: bool = Query(default=False),
+) -> JobCountOut:
+    """How many offers ``GET /api/jobs`` lists for the same filters, all pages together (Phase B
+    B7-C, P-017): the number a headline may announce is the number the list shows."""
+    total, offset, page = 0, 0, 500
+    while True:
+        rows = list_jobs(request, source=source, country=country, department=department, remote=remote, q=q,
+                         min_tier=min_tier, include_expired=include_expired, include_hidden=include_hidden,
+                         saved_only=saved_only, limit=page, offset=offset)
+        total += len(rows)
+        if len(rows) < page:
+            return JobCountOut(count=total)
+        offset += page
+
+
 @router.get("/countries", response_model=CountriesOut)
 def get_job_countries(request: Request) -> CountriesOut:
     """Return job counts grouped by country, scoped to the latest completed run.
@@ -532,7 +566,7 @@ def get_job_countries(request: Request) -> CountriesOut:
     """
     s, rs = _get_storages(request)
     try:
-        latest_run = rs.get_latest_completed_run()
+        latest_run = rs.get_latest_visible_run()
         latest_run_id = latest_run["id"] if latest_run else None
         run_job_ids: list[str] | None = None
         if latest_run_id:
@@ -604,7 +638,7 @@ def compute_job_stats(
     (e.g. France Travail's ROME task/activity descriptions) never shows up
     as a "skill".
     """
-    latest_run = rs.get_latest_completed_run()
+    latest_run = rs.get_latest_visible_run()
     latest_run_id = latest_run["id"] if latest_run else None
     run_job_ids: list[str] | None = None
     if latest_run_id:
@@ -637,11 +671,11 @@ def compute_job_stats(
         title_rows = conn.execute("SELECT title FROM jobs").fetchall()
         total_jobs = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
 
-    from src.discovery.presets import load_presets, matching_presets
+    from src.discovery.presets import load_domain_keywords, load_presets, matching_presets
+    from src.pipeline.domain_vocabulary import effective_domains
 
-    presets = matching_presets(
-        load_presets(), list(profile.target_domains) if profile is not None else []
-    )
+    presets = matching_presets(load_presets(), effective_domains(profile, load_domain_keywords())
+                               if profile is not None else [])
     skills, tools = _aggregate_tech_facets(skill_rows, presets)
 
     score_tiers: list[ScoreTierFacet] = []
@@ -740,7 +774,7 @@ def get_job_explanation(job_id: str, request: Request) -> JobExplanationOut:
             raise HTTPException(status_code=404, detail="Job not found")
 
         # Determine filter result from the latest run's rejection records.
-        latest_run = rs.get_latest_completed_run()
+        latest_run = rs.get_latest_visible_run()
         rejection_detail: str | None = None
         filter_result = "passed"
 
@@ -1030,6 +1064,27 @@ def _list_state(request: Request, job_ids: list[str] | None = None) -> dict[str,
         return {}
     finally:
         store.close()
+
+
+def _switched_off_ids(request: Request, storage: Storage, list_state: dict[str, dict[str, bool]]) -> set[str]:
+    """Offers of a source the user turned off, hidden from every list while it is off (owner
+    decision D1, Phase B B4-A). Never deleted; an offer the user saved or tracks
+    (``application_status``) stays listed."""
+    from src.source_enablement import settings_path_for, switched_off_sources
+
+    state = request.app.state
+    settings = getattr(state, "settings_path", None) or settings_path_for(state.db_path)
+    try:
+        off = switched_off_sources(getattr(state, "config_dir", "config"), settings)
+    except Exception as exc:  # noqa: BLE001 — listing offers never fails on the settings
+        logger.warning("Source switches unavailable: %s", exc)
+        return set()
+    if not off:
+        return set()
+    rows = storage._get_conn().execute(  # noqa: SLF001
+        f"SELECT id FROM jobs WHERE source IN ({','.join('?' * len(off))}) "
+        "AND (application_status IS NULL OR application_status = '')", sorted(off)).fetchall()
+    return {r[0] for r in rows if not list_state.get(r[0], {}).get("saved")}
 
 
 def _get_jobs_filtered(

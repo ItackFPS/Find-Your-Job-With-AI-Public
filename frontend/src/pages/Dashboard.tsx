@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  getDashboard, startRun, getLinkedInStatus, triggerLinkedInScan, listLinkedInScans,
+  countJobs, getDashboard, startRun, getLinkedInStatus, triggerLinkedInScan, listLinkedInScans,
   pauseLinkedInScan, resumeLinkedInScan,
   getHelloWorkStatus, triggerHelloWorkScan, listHelloWorkScans,
   pauseHelloWorkScan, resumeHelloWorkScan,
@@ -10,11 +10,12 @@ import {
 import { Link } from 'react-router-dom'
 import { Trans, useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
-import { Card, StatTile, StatusBadge, SourceStatus, Chip, ProgressBar, EmptyState, LoadingState, DataTable, GettingStarted, TodayCard, type DataTableColumn } from '../components'
+import { Card, StatTile, StatusBadge, SourceStatus, Chip, ProgressBar, EmptyState, LoadingState, DataTable, GettingStarted, TodayCard, CollectionFreezeNotice, type DataTableColumn } from '../components'
+import { useCollectionFrozen } from '../hooks/useCollectionFrozen'
 import { PIPELINE_STAGES, type PipelineStageDef } from '../config/pipelineStages'
 import { usePipelineEvents, stageLabel, type ConnectionState, type ActivityEntry } from '../hooks/usePipelineEvents'
 import {
-  formatDuration, formatDateTime, scannerControl, scannerProgressLabel, scannerWorkEstimate,
+  formatDuration, formatDateTime, runWallSeconds, scannerControl, scannerProgressLabel, scannerWorkEstimate,
   startHoldEnded, type StartHold,
 } from '../utils'
 
@@ -298,6 +299,7 @@ interface CurrentRun {
   stats: RunStats
   error: string | null
   startedAt: string | null
+  completedAt?: string | null
 }
 
 function CurrentRunCard({ run, activity, isLive }: { run: CurrentRun; activity: ActivityEntry[]; isLive: boolean }) {
@@ -308,7 +310,7 @@ function CurrentRunCard({ run, activity, isLive }: { run: CurrentRun; activity: 
     <Card
       style={{ marginBottom: 'var(--space-5)', borderColor: run.status === 'running' ? 'var(--color-accent)' : 'var(--color-border)' }}
       title={isLive ? t('dashboard.liveRun') : t('dashboard.latestRun')}
-      subtitle={!isLive && run.startedAt ? `${formatDateTime(run.startedAt)} · ${formatDuration(s.duration_seconds)}` : undefined}
+      subtitle={!isLive && run.startedAt ? `${formatDateTime(run.startedAt)} · ${formatDuration(runWallSeconds({ started_at: run.startedAt, completed_at: run.completedAt, stats: s }))}` : undefined}
       actions={
         <>
           {s.model_name && <Chip>{s.model_name}</Chip>}
@@ -493,6 +495,7 @@ function ActivityLog({ entries }: { entries: ActivityEntry[] }) {
 
 export default function Dashboard() {
   const { t } = useTranslation()
+  const collectionFrozen = useCollectionFrozen()
   const queryClient = useQueryClient()
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard'],
@@ -509,6 +512,8 @@ export default function Dashboard() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
   })
 
+  // What the Jobs page lists by default (relevant or better): the link announces that number (P-017).
+  const listed = useQuery({ queryKey: ['default-list-count', data?.latest_run?.id ?? null], queryFn: () => countJobs({ min_tier: 'relevant' }) })
   if (isLoading) return <LoadingState />
   if (error) {
     return (
@@ -529,9 +534,9 @@ export default function Dashboard() {
   const currentRun: CurrentRun | null = liveEvent
     ? { status: liveEvent.status, stage: liveEvent.stage, stats: liveEvent.stats, error: liveEvent.error, startedAt: null }
     : d.latest_run
-      ? { status: d.latest_run.status, stage: d.latest_run.stats.current_stage || '', stats: d.latest_run.stats, error: d.latest_run.error, startedAt: d.latest_run.started_at }
+      ? { status: d.latest_run.status, stage: d.latest_run.stats.current_stage || '', stats: d.latest_run.stats, error: d.latest_run.error, startedAt: d.latest_run.started_at, completedAt: d.latest_run.completed_at }
       : null
-  const matchedCount = currentRun?.stats.personalized ?? 0
+  const matchedCount = listed.data ?? 0
   const isAlreadyRunning = currentRun?.status === 'running' || d.is_running
 
   return (
@@ -556,22 +561,25 @@ export default function Dashboard() {
           )}
           <button
             onClick={() => triggerRun()}
-            disabled={runPending || isAlreadyRunning}
+            disabled={runPending || isAlreadyRunning || collectionFrozen === true}
             style={{
-              background: (runPending || isAlreadyRunning) ? 'var(--color-border)' : 'var(--color-accent)',
+              background: (runPending || isAlreadyRunning || collectionFrozen === true) ? 'var(--color-border)' : 'var(--color-accent)',
               color: 'var(--color-on-accent)',
               border: 'none',
               borderRadius: 'var(--radius-md)',
               padding: '0.45rem 1rem',
               fontSize: 'var(--font-size-base)',
               fontWeight: 'var(--font-weight-semibold)',
-              cursor: (runPending || isAlreadyRunning) ? 'not-allowed' : 'pointer',
+              cursor: (runPending || isAlreadyRunning || collectionFrozen === true) ? 'not-allowed' : 'pointer',
             }}
           >
-            {runPending ? t('dashboard.run.starting') : isAlreadyRunning ? t('dashboard.run.running') : t('dashboard.run.start')}
+            {runPending ? t('dashboard.run.starting') : isAlreadyRunning ? t('dashboard.run.running')
+              : collectionFrozen === true ? t('dashboard.run.paused') : t('dashboard.run.start')}
           </button>
         </div>
       </div>
+
+      <CollectionFreezeNotice />
 
       {!currentRun && d.total_jobs_in_db === 0 ? <GettingStarted /> : <TodayCard dashboard={d} />}
 

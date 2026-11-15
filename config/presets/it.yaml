@@ -264,6 +264,18 @@ discovery:
         - s28m2
         - s28m3
         - s28m1
+        # The French vocabulary keys (config/filters.yaml) a typed label can resolve to: the
+        # same codes as their English counterparts (Phase B B5-B).
+        systèmes:
+        - s28m11
+        - s28m23
+        - s6m3
+        réseaux:
+        - s28m11
+        - s28m19
+        cybersécurité:
+        - s28m25
+        - s6m3
     linkedin:
       queries:
       - search_term: cloud engineer

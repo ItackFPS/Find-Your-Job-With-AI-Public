@@ -101,6 +101,29 @@ class CareerTargetsIn(BaseModel):
     years_override: float | None = Field(default=None, ge=0, le=60)
 
 
+class DomainResolveIn(BaseModel):
+    """Labels to explain (POST /api/profile/domains/resolve). Nothing is saved."""
+
+    labels: list[str] = Field(default_factory=list, max_length=200)
+
+
+class DomainResolutionOut(BaseModel):
+    """How the search reads one line-of-work label (src/pipeline/domain_vocabulary.py).
+
+    ``known``: a vocabulary key. ``resolved``: typed text that names one or more vocabulary
+    families. ``unresolved``: typed text the vocabulary does not know; the search still uses it,
+    by its own words only (in a title, any order or inflection).
+    """
+
+    label: str
+    status: Literal["known", "resolved", "unresolved"]
+    families: list[str] = Field(default_factory=list)
+
+
+class DomainResolveOut(BaseModel):
+    labels: list[DomainResolutionOut]
+
+
 class ProfileReviewIn(BaseModel):
     """Mirrors ``src.models.profile.ProfileReview`` — the one-time review screen."""
     pending: bool = True
@@ -246,6 +269,14 @@ class RunStats(BaseModel):
     # semantic, phase2, personalize) uniformly — see PipelineStats.stage_progress
     # in src/pipeline/orchestrator.py. Empty between updates/when idle.
     stage_progress: dict[str, Any] = {}
+    # Offers stored for the first time, and what the run achieved (src/pipeline/run_outcome.py):
+    # successful | partial | no_new_offers | no_successful_source | failed | first_run_empty.
+    # Empty on runs recorded before outcomes existed.
+    stored_new: int | None = None
+    outcome: str = ""
+    # Decision journal + expiry, after duration_seconds (the internal duration) is taken. The run's
+    # wall clock is completed_at - started_at (Phase B B7-B).
+    post_seconds: float = 0.0
 
 
 class PipelineRunOut(BaseModel):
