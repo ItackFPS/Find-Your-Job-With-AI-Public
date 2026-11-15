@@ -123,7 +123,8 @@
     "pipelineRunning": "⟳ Pipeline running…",
     "today": {
       "title": "Today",
-      "lastRun": "Last search: {date}. {count, number} offers matched your profile.",
+      "lastRun": "Last search: {date}. {count, number} offers are relevant or better for your profile.",
+      "lastRunDate": "Last search: {date}.",
       "noRun": "No search yet.",
       "nextRun": "Next search: {date}.",
       "problems": "{count, plural, one {# source} other {# sources}} had a problem in the last search",
@@ -144,7 +145,7 @@
       "paused": "Collection paused"
     },
     "noRuns": "No pipeline runs yet. <run>Run the pipeline</run> to see results here.",
-    "browseMatched": "Browse {count, number} matched jobs →",
+    "browseMatched": "Browse {count, number} relevant offers →",
     "backendError": "Could not reach the backend. Start the app again with its <app>Find Your Job With AI</app> shortcut (or <cmd/>); if it does not start, its window shows why, and the details are in <log/> in the application folder.",
     "liveRun": "Live run",
     "latestRun": "Latest run",
@@ -154,7 +155,7 @@
       "deduplicated": "Deduplicated",
       "filtered": "Filtered",
       "scored": "Scored",
-      "matched": "Matched",
+      "matched": "Kept after filters",
       "errors": "Errors"
     },
     "sections": {
@@ -438,7 +439,7 @@
   },
   "stats": {
     "title": "Stats",
-    "subtitle": "What the market is asking for, across {count, number} collected jobs",
+    "subtitle": "What the market is asking for, across the {count, number} offers kept after the filters",
     "notEnoughData": "Not enough data yet.",
     "noDataYet": "No data yet",
     "noDataYetDot": "No data yet.",

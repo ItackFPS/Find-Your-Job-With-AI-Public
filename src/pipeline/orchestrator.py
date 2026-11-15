@@ -960,7 +960,8 @@ def run_pipeline(
         stats.filtered = len(filtered_jobs)
         stats.llm_eligibility_passed = len(filtered_jobs)
         stats.llm_eligibility_rejected = elig_result.rejected
-        stats.llm_eligibility = elig_result.stats
+        # "ran" tells a skipped stage (AI off) from one that passed everything (P-016, Phase B B7-C).
+        stats.llm_eligibility = {**elig_result.stats, "ran": bool(elig_result.ran)}
 
         stats.stage_times["llm_eligibility"] = time.perf_counter() - _t_eligibility
         _notify(progress_callback, "llm_eligibility", stats)

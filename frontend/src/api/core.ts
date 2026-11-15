@@ -54,6 +54,10 @@ export const updateProfile = (p: Profile) => api.put<Profile>('/profile', p).the
 export const confirmProfileReview = (review: ProfileReview) =>
   api.put<Profile>('/profile', { review: { ...review, pending: false } }).then(r => r.data)
 
+// How many offers the Jobs list shows for these filters, all pages together (Phase B B7-C).
+export const countJobs = (params: { min_tier?: string } = {}): Promise<number> =>
+  api.get<{ count: number }>('/jobs/count', { params }).then(r => r.data.count)
+
 export const searchEscoSkills = (q: string, lang: 'en' | 'fr' = 'en', limit = 8): Promise<EscoSuggestion[]> =>
   api.get<EscoSuggestion[]>('/esco/skills', { params: { q, lang, limit } }).then(r => r.data)
 

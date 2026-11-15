@@ -187,6 +187,8 @@ export interface RunStats {
     cached?: number
     time_seconds?: number
     error?: string
+    // false when the stage was skipped (AI off); absent on runs recorded before Phase B B7-C
+    ran?: boolean
   }
   scored: number
   semantically_matched: number
