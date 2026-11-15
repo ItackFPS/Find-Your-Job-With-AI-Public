@@ -56,6 +56,31 @@ describe('TodayCard', () => {
     expect(screen.queryByRole('link', { name: /2 sources/ })).not.toBeInTheDocument()
   })
 
+  it('names the sources that failed (OQ-3)', async () => {
+    const stats = { ...dashboard.latest_run!.stats, outcome: 'partial' as const, by_source: {
+      eures: { collected: 0, accepted: 0, errors: 1, status: 'failed' },
+      hellowork: { collected: 3, accepted: 1, errors: 1, status: 'partial' },
+      jobicy: { collected: 4, accepted: 2, errors: 0, status: 'completed' } } }
+    show({ ...dashboard, latest_run: { ...dashboard.latest_run!, stats } })
+    expect(await screen.findByTestId('failed-sources')).toHaveTextContent('eures, hellowork')
+  })
+
+  it.each([
+    ['no_successful_source', /previous search/],
+    ['no_new_offers', /Nothing new/],
+    ['first_run_empty', /first search found no offer/],
+  ] as const)('says what a %s run means for the list', async (outcome, text) => {
+    const stats = { ...dashboard.latest_run!.stats, outcome }
+    show({ ...dashboard, latest_run: { ...dashboard.latest_run!, stats } })
+    expect(await screen.findByTestId('run-outcome')).toHaveTextContent(text)
+  })
+
+  it('adds nothing for a successful run or one recorded before outcomes', async () => {
+    show(dashboard)
+    await screen.findByText(/Next search/)
+    expect(screen.queryByTestId('run-outcome')).toBeNull()
+  })
+
   it('says so before any search', async () => {
     show({ ...dashboard, latest_run: null })
     expect(await screen.findByText(/No search yet/)).toBeInTheDocument()

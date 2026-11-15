@@ -223,6 +223,10 @@ export interface RunStats {
     processed?: number
     total?: number
   }
+  // Offers stored for the first time, and what the run achieved (src/pipeline/run_outcome.py).
+  // Absent or empty on runs recorded before outcomes existed.
+  stored_new?: number | null
+  outcome?: '' | 'successful' | 'partial' | 'no_new_offers' | 'no_successful_source' | 'failed' | 'first_run_empty'
 }
 
 export interface PipelineRun {
