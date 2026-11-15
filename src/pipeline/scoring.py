@@ -1588,6 +1588,12 @@ def _score_experience_fit(
     return max(floor, min(1.0, 1.0 - decay * (years - 1)))
 
 
+def _description_is_partial(job: Job) -> bool:
+    """True when the collector could only read an extract of the description (France Travail
+    web listing pages set ``description_complete: false``)."""
+    return isinstance(job.raw_payload, dict) and job.raw_payload.get("description_complete") is False
+
+
 def _score_skills_match(
     job: Job, config: dict[str, Any], domain_relevance: float | None = None
 ) -> float:
@@ -1711,6 +1717,11 @@ def _score_skills_match(
 
         if matched:
             matches += 1
+
+    if matches == 0 and _description_is_partial(job):
+        # Only an extract was readable (Phase B B5-F, from #189): its silence says nothing
+        # about the skills, so the factor is neutral (unknown), not a mismatch.
+        return 0.5
 
     if matches == 0:
         if domain_relevance is not None:
