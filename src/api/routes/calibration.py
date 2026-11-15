@@ -4,6 +4,7 @@ GET  /api/quality/calibration                    — imported datasets with prog
 POST /api/quality/calibration/import             — copy an export folder {source} (the original is only read)
 GET  /api/quality/calibration/{id}/next?n=10     — the next offers to label, blind, in the representative order
 POST /api/quality/calibration/{id}/answers       — save one answer {job_id, answer, reason?} at once
+POST /api/quality/calibration/{id}/answers/undo  — take back one answer not saved yet {job_id}
 POST /api/quality/calibration/{id}/save          — write the session's answers as a new dataset version
 POST /api/quality/calibration/{id}/extend        — "label 100 more"
 
@@ -34,7 +35,7 @@ router = APIRouter(prefix="/api/quality/calibration", tags=["quality"])
 CALIBRATION_DIR = "calibration"       # under the data folder, beside jobs.db
 MAX_SESSION = 30
 _TIMEOUT_SECONDS = 120
-_STATUS = {"not_found": 404, "already_imported": 409, "already_labelled": 409}
+_STATUS = {"not_found": 404, "already_imported": 409, "already_labelled": 409, "not_pending": 409}
 
 
 class ImportIn(BaseModel):
@@ -47,6 +48,11 @@ class AnswerIn(BaseModel):
     job_id: str = Field(min_length=1, max_length=128)
     answer: Literal["relevant", "not_relevant", "not_sure"]
     reason: str | None = Field(default=None, max_length=32)   # one of the tool's reasons, checked there
+
+
+class UndoIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    job_id: str = Field(min_length=1, max_length=128)
 
 
 def _data_dir(request: Request) -> Path:
@@ -102,6 +108,11 @@ def next_items(dataset_id: str, request: Request, n: int = Query(default=10, ge=
 def answer(dataset_id: str, request: Request, body: AnswerIn = Body(...)) -> dict[str, Any]:
     return _call(request, "answer", _arg(dataset_id), _arg(body.job_id), body.answer,
                  *(["--reason", _arg(body.reason)] if body.reason is not None else []))
+
+
+@router.post("/{dataset_id}/answers/undo")
+def undo(dataset_id: str, request: Request, body: UndoIn = Body(...)) -> dict[str, Any]:
+    return _call(request, "undo", _arg(dataset_id), _arg(body.job_id))
 
 
 @router.post("/{dataset_id}/save")

@@ -100,6 +100,8 @@ export const nextCalibrationItems = (id: string, n: number) =>
   api.get<{ items: CalibrationItem[] }>(`/quality/calibration/${encodeURIComponent(id)}/next?n=${n}`).then(r => r.data.items)
 export const answerCalibration = (id: string, job_id: string, answer: CalibrationAnswer, reason: string | null) =>
   api.post<CalibrationDataset>(`/quality/calibration/${encodeURIComponent(id)}/answers`, { job_id, answer, reason }).then(r => r.data)
+export const undoCalibrationAnswer = (id: string, job_id: string) =>
+  api.post<CalibrationDataset>(`/quality/calibration/${encodeURIComponent(id)}/answers/undo`, { job_id }).then(r => r.data)
 export const saveCalibration = (id: string) =>
   api.post<CalibrationDataset & { changed: number }>(`/quality/calibration/${encodeURIComponent(id)}/save`).then(r => r.data)
 export const extendCalibration = (id: string) =>
