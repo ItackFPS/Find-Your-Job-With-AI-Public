@@ -26,6 +26,8 @@ from src.scan_control import resume_scan, status_fields
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/hellowork", tags=["hellowork"])
+# Plain ``def`` routes: they call synchronous SQLite storage, so FastAPI runs them in its thread
+# pool instead of on the event loop, where they would stop every other request (Phase B B10, P-012).
 
 
 # ---------------------------------------------------------------------------
@@ -96,7 +98,7 @@ def _scan_row_to_out(row: dict[str, Any]) -> ScanRunOut:
 # ---------------------------------------------------------------------------
 
 @router.get("/status", response_model=HelloWorkStatusOut)
-async def get_status(request: Request) -> HelloWorkStatusOut:
+def get_status(request: Request) -> HelloWorkStatusOut:
     """Return HelloWork scanner status, waiting job count, and last scan info."""
     scanner = getattr(request.app.state, "hellowork_scanner", None)
     staging = getattr(request.app.state, "hellowork_staging", None)
@@ -126,7 +128,7 @@ def _require_scanner(request: Request) -> Any:
 
 
 @router.post("/pause", response_model=HelloWorkStatusOut, status_code=202)
-async def pause_scan(request: Request) -> HelloWorkStatusOut:
+def pause_scan(request: Request) -> HelloWorkStatusOut:
     """Ask the running scan to pause at its next checkpoint (cooperative).
 
     Idempotent: pausing when nothing is running (or twice) changes nothing.
@@ -136,11 +138,11 @@ async def pause_scan(request: Request) -> HelloWorkStatusOut:
     scanner = _require_scanner(request)
     if scanner.request_pause():
         logger.info("HelloWork pause requested via API.")
-    return await get_status(request)
+    return get_status(request)
 
 
 @router.post("/resume", response_model=ScanResumedOut, status_code=202)
-async def resume_scan_route(request: Request) -> ScanResumedOut:
+def resume_scan_route(request: Request) -> ScanResumedOut:
     """Resume from the persisted checkpoint (a normal scan if there is none).
 
     Returns 409 if a scan is already running or the backend is shutting down.
@@ -163,7 +165,7 @@ async def resume_scan_route(request: Request) -> ScanResumedOut:
 
 
 @router.post("/scan", response_model=ScanStartedOut, status_code=202)
-async def trigger_scan(request: Request) -> ScanStartedOut:
+def trigger_scan(request: Request) -> ScanStartedOut:
     """Trigger an immediate HelloWork scan in the background.
 
     Returns 409 if a scan is already running.
@@ -194,7 +196,7 @@ async def trigger_scan(request: Request) -> ScanStartedOut:
 
 
 @router.get("/scans", response_model=list[ScanRunOut])
-async def list_scans(request: Request, limit: int = 20) -> list[ScanRunOut]:
+def list_scans(request: Request, limit: int = 20) -> list[ScanRunOut]:
     """Return recent HelloWork scan run history."""
     staging = getattr(request.app.state, "hellowork_staging", None)
     if staging is None:
