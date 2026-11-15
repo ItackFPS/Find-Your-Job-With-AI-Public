@@ -6,9 +6,18 @@ It supports both manual configuration (via YAML) and future automated discovery.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import yaml
+
+logger = logging.getLogger(__name__)
+
+# Source types removed from the application (owner decision D10, Phase B B8-D). An installed
+# sources.yaml that the user edited, or one from a release the upgrade does not recognise,
+# can still list them: such an entry is set aside, so no run reports it as a failed source.
+# It stays in the file (``save`` writes it back); offers already collected from it are kept.
+RETIRED_SOURCE_TYPES = frozenset({"remoteok", "jobicy", "weworkremotely"})
 
 
 def _validate_source_entry(src: object, *, index: int, path: str) -> None:
@@ -45,6 +54,7 @@ class SourceRegistry:
 
     def __init__(self, config_path: str = "config/sources.yaml"):
         self._sources: dict[str, dict] = {}
+        self._retired: list[dict] = []   # entries of RETIRED_SOURCE_TYPES, kept for save()
         self._load(config_path)
 
     def _load(self, path: str) -> None:
@@ -64,13 +74,18 @@ class SourceRegistry:
             )
         for i, src in enumerate(entries):
             _validate_source_entry(src, index=i, path=path)
+            if src.get("type") in RETIRED_SOURCE_TYPES:
+                logger.info("%s: source '%s' (type %s) was removed from the application; ignored.",
+                            path, src["name"], src.get("type"))
+                self._retired.append(src)
+                continue
             self._sources[src["name"]] = src
 
     def save(self, path: str) -> None:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             yaml.safe_dump(
-                {"sources": list(self._sources.values())},
+                {"sources": [*self._sources.values(), *self._retired]},
                 f,
                 sort_keys=False,
                 allow_unicode=True,
