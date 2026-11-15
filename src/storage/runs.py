@@ -352,6 +352,24 @@ class RunStorage:
             return None
         return _parse_run_row(dict(row))
 
+    def get_latest_visible_run(self, exclude: str | None = None) -> dict[str, Any] | None:
+        """The completed run whose offers the lists show (Phase B B7-A): the latest one, unless no
+        source succeeded in it, in which case the previous list is kept. A run recorded before
+        outcomes existed counts as visible. ``exclude``: a run id to leave out (the current run)."""
+        from src.pipeline.run_outcome import KEEPS_PREVIOUS_LIST
+
+        conn = self._get_conn()
+        for row in conn.execute(
+            "SELECT * FROM pipeline_runs WHERE status = 'completed' ORDER BY started_at DESC"
+        ):
+            run = _parse_run_row(dict(row))
+            if run.get("id") == exclude:
+                continue
+            if (run.get("stats") or {}).get("outcome") in KEEPS_PREVIOUS_LIST:
+                continue
+            return run
+        return None
+
     def get_current_running_run(self) -> dict[str, Any] | None:
         conn = self._get_conn()
         row = conn.execute(

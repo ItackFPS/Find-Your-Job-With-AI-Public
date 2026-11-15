@@ -269,6 +269,11 @@ class RunStats(BaseModel):
     # semantic, phase2, personalize) uniformly — see PipelineStats.stage_progress
     # in src/pipeline/orchestrator.py. Empty between updates/when idle.
     stage_progress: dict[str, Any] = {}
+    # Offers stored for the first time, and what the run achieved (src/pipeline/run_outcome.py):
+    # successful | partial | no_new_offers | no_successful_source | failed | first_run_empty.
+    # Empty on runs recorded before outcomes existed.
+    stored_new: int | None = None
+    outcome: str = ""
 
 
 class PipelineRunOut(BaseModel):

@@ -22,6 +22,10 @@ export function TodayCard({ dashboard }: { dashboard: Dashboard }) {
   const sources = Object.values(run?.stats.by_source ?? {})
   const problems = sources.filter(s => s.status === 'failed').length
   const offline = sources.some(s => s.network_outage)
+  // Phase B B7-A: what the run achieved, and the sources to name when some failed (OQ-3).
+  const outcome = run?.stats.outcome ?? ''
+  const failedNames = Object.entries(run?.stats.by_source ?? {})
+    .filter(([, s]) => s.status === 'failed' || s.status === 'partial').map(([name]) => name).sort()
 
   return (
     <Card title={t('dashboard.today.title')} style={{ marginBottom: 'var(--space-4)' }}>
@@ -36,8 +40,12 @@ export function TodayCard({ dashboard }: { dashboard: Dashboard }) {
         {problems > 0 && !offline && (
           <p style={line}>
             <Link to="/settings" style={{ color: 'var(--color-warning)' }}>{t('dashboard.today.problems', { count: problems })}</Link>
+            {failedNames.length > 0 && <span data-testid="failed-sources" style={{ color: 'var(--color-muted)' }}> ({failedNames.join(', ')})</span>}
           </p>
         )}
+        {outcome === 'no_successful_source' && <p style={line} data-testid="run-outcome">{t('dashboard.today.keptPrevious')}</p>}
+        {outcome === 'no_new_offers' && <p style={{ ...line, color: 'var(--color-muted)' }} data-testid="run-outcome">{t('dashboard.today.nothingNew')}</p>}
+        {outcome === 'first_run_empty' && <p style={line} data-testid="run-outcome">{t('dashboard.today.firstEmpty')}</p>}
         {matches.data && matches.data.length > 0 && (
           <>
             <h3 style={{ margin: 'var(--space-2) 0 0', fontSize: 'var(--font-size-base)' }}>{t('dashboard.today.top')}</h3>

@@ -282,7 +282,7 @@ def list_jobs(
         # Scope to the latest completed run so the Jobs page reflects current
         # results rather than all historical accumulation.  If no run exists yet
         # (fresh install or CLI-only use), fall back to showing all stored jobs.
-        latest_run = rs.get_latest_completed_run()
+        latest_run = rs.get_latest_visible_run()
         latest_run_id = latest_run["id"] if latest_run else None
 
         run_job_ids: list[str] | None = None
@@ -456,7 +456,7 @@ def list_decouverte(request: Request) -> list[JobDetailOut]:
 
     s, rs = _get_storages(request)
     try:
-        latest_run = rs.get_latest_completed_run()
+        latest_run = rs.get_latest_visible_run()
         if not latest_run:
             return []
         ids = [d["job_id"] for d in drawn_for_run(request.app.state.db_path, latest_run["id"])]
@@ -493,7 +493,7 @@ def list_outside_criteria(request: Request) -> list[JobDetailOut]:
 
     s, rs = _get_storages(request)
     try:
-        latest_run = rs.get_latest_completed_run()
+        latest_run = rs.get_latest_visible_run()
         if not latest_run:
             return []
         rows = rs.get_jobs_for_run(latest_run["id"], limit=-1)        # -1: every row of the run
@@ -536,7 +536,7 @@ def get_job_countries(request: Request) -> CountriesOut:
     """
     s, rs = _get_storages(request)
     try:
-        latest_run = rs.get_latest_completed_run()
+        latest_run = rs.get_latest_visible_run()
         latest_run_id = latest_run["id"] if latest_run else None
         run_job_ids: list[str] | None = None
         if latest_run_id:
@@ -608,7 +608,7 @@ def compute_job_stats(
     (e.g. France Travail's ROME task/activity descriptions) never shows up
     as a "skill".
     """
-    latest_run = rs.get_latest_completed_run()
+    latest_run = rs.get_latest_visible_run()
     latest_run_id = latest_run["id"] if latest_run else None
     run_job_ids: list[str] | None = None
     if latest_run_id:
@@ -744,7 +744,7 @@ def get_job_explanation(job_id: str, request: Request) -> JobExplanationOut:
             raise HTTPException(status_code=404, detail="Job not found")
 
         # Determine filter result from the latest run's rejection records.
-        latest_run = rs.get_latest_completed_run()
+        latest_run = rs.get_latest_visible_run()
         rejection_detail: str | None = None
         filter_result = "passed"
 
