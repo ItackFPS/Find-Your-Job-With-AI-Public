@@ -24,8 +24,7 @@ is a single-user, single-machine app, not a hosted service, and it has no login.
 **Any line of work:** searches are built from your profile (target domains, occupations and
 skills), not from a fixed list, so any occupation can be searched. Vocabulary for one line of
 work lives in an editable preset (`config/presets/`; the IT preset ships, see
-[Lines of work and presets](#lines-of-work-and-presets)). The remote boards (RemoteOK, Jobicy,
-We Work Remotely) list mostly digital roles. Live results for non-IT occupations have not been
+[Lines of work and presets](#lines-of-work-and-presets)). Live results for non-IT occupations have not been
 measured yet; the [decision record](docs/adr/0029-profession-agnostic-discovery.md) says what is
 and is not verified.
 
@@ -65,7 +64,6 @@ feedback, evaluation, lab) · [ADRs](docs/adr/README.md) · [Windows app](docs/w
 | Experiment lab with human-approved promotion ([ADR 0011](docs/adr/0011-experiment-lab.md)) | 🧪 experimental; the lab agent is OS-isolated only when you run it in its sandbox (`python -m src.lab sandbox`, Windows AppContainer) |
 | Greenhouse, Lever, SmartRecruiters, WorkingNomads collectors | ⚙️ implemented, no source configured |
 | macOS / Linux | ⚠️ backend, CLI and tests run (CI is Linux); the launcher and startup scripts are Windows-only |
-| Docker | ⚠️ the image runs the CLI pipeline only, not the web UI |
 | Windows installer: per-user, bundled Python, desktop + Start Menu shortcuts ([docs](docs/windows-installer.md)) | ✅ 1.0.0 released, 2.0 in qualification; not code-signed |
 | First-run setup: language, your search, sources, matching model, daily search | ✅ no terminal, resumable |
 
@@ -206,9 +204,6 @@ cd frontend && npm run dev          # or, on Windows: FindYourJob.cmd dev
 # CLI: one pipeline run, summary in the terminal
 python src/main.py                  # deterministic pipeline
 python src/main.py --ai             # + local-LLM stages (needs LM Studio/Ollama)
-
-# Docker: CLI pipeline only
-docker compose up --build
 ```
 
 Do not run the backend with `--reload` unattended: a reload restarts the process and
@@ -264,7 +259,7 @@ the internet):
 
 | Outbound connection | When | What is sent |
 |---|---|---|
-| Job sources — France Travail (its public occupation pages, robots.txt respected; the API when you have credentials), RemoteOK, Jobicy, We Work Remotely, Indeed (its mobile app's API), EURES; LinkedIn (via `python-jobspy`) and HelloWork scanners | pipeline runs, scheduled scans | search queries built from your profile (keywords, locations); never your profile file, feedback or database |
+| Job sources — France Travail (its public occupation pages, robots.txt respected; the API when you have credentials), Indeed (its mobile app's API), EURES; LinkedIn (via `python-jobspy`) and HelloWork scanners | pipeline runs, scheduled scans | search queries built from your profile (keywords, locations); never your profile file, feedback or database |
 | Hugging Face Hub | first use of the embedding model; each later model load checks for updates unless `HF_HUB_OFFLINE=1` | model file requests (Hub telemetry is turned off) |
 | `PHASE2_LLM_ENDPOINT` (default `http://localhost:1234`); `--llm-endpoint` of the evaluation/lab tools | only AI-enabled runs, or those tools when you pass the flag | job text and profile summary. It is whatever you configure — keep it local; the launcher warns if it is not (its `status` check sends only a `GET /v1/models`) |
 | ESCO API (European Commission) | only when you run `scripts/setup_esco.py` | skill search terms |
@@ -290,9 +285,9 @@ embeddings and every collected job (`data/`), logs (`logs/`) and secrets (`.env`
 these are git-ignored.
 
 **Exposure:** the backend listens on `127.0.0.1` only and refuses foreign `Host` headers
-and cross-site writes, but it has **no login**: any program running on this computer can
-use it. Set `API_SAME_USER_ONLY=1` to serve only your Windows account's processes. Never
-expose port 8000 to a network. See [SECURITY.md](SECURITY.md).
+and cross-site writes, but it has **no login**. By default it serves only the programs of
+your Windows account; programs of other accounts on this computer are refused
+(`API_SAME_USER_ONLY=0` turns that off). Never expose port 8000 to a network. See [SECURITY.md](SECURITY.md).
 
 ---
 
@@ -347,7 +342,7 @@ Nothing in `src/` assumes a profession. Each run builds its searches from the pr
   matched by name against France Travail's published occupation pages. Contract types add
   words such as "stage" or "alternance" (`config/discovery.yaml`).
 - **A preset** (`config/presets/<name>.yaml`) holds the vocabulary of one line of work: baseline
-  queries, per-source settings (Indeed and EURES queries, We Work Remotely categories,
+  queries, per-source settings (Indeed and EURES queries,
   France Travail occupation codes, LinkedIn queries, HelloWork domains), a scoring hint and the
   Stats page groupings. It applies when the profile's `target_domains` contains one of its
   `applies_to_domains`. `it.yaml` ships; to add your own line of work, copy it, change
@@ -371,7 +366,7 @@ Copy `.env.example` to `.env`; every variable is optional.
 | `FRANCE_TRAVAIL_CLIENT_ID` / `FRANCE_TRAVAIL_CLIENT_SECRET` | the France Travail collector ([developer.francetravail.fr](https://developer.francetravail.fr), scope `o2dsoffre api_offresdemploiv2`) |
 | `PHASE2_LLM_PROVIDER`, `PHASE2_LLM_ENDPOINT`, `PHASE2_LLM_MODEL_NAME`, … | local LLM, see [Local AI](#local-ai) |
 | `API_ALLOWED_HOSTS` | extra `Host` names the backend accepts (e.g. `host.docker.internal`) |
-| `API_SAME_USER_ONLY` | `1` serves only processes of the account running the backend |
+| `API_SAME_USER_ONLY` | on by default: serves only processes of the account running the backend; `0` serves every local account |
 | `FYJ_PORT` | fixed backend port for the launcher (default: a free port chosen at each start; `dev` mode: 8000) |
 | `HF_HUB_OFFLINE` | `1` once the model is cached: no Hugging Face requests at all |
 
@@ -454,7 +449,6 @@ issue for a security problem.
   they collected before stay in your history. A `config/sources.yaml` from 1.x that still
   lists `apec` or `wttj` is skipped with that reason on each run; delete those entries.
 - Several registered collectors have no configured source.
-- The Docker image runs the CLI pipeline only.
 - The lab agent is OS-isolated only when it runs in the lab sandbox (Windows AppContainer:
   `python -m src.lab sandbox grant --apply`, then `sandbox run -- …`; see
   [docs/development.md](docs/development.md#sandboxed-lab-agent-windows-appcontainer-no-administrator)).

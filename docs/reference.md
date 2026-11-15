@@ -123,9 +123,6 @@ class. A shared retry/backoff/rate-limit layer lives in `src/collectors/base.py`
 | Source | Type | Method | Auth | Status |
 |---|---|---|---|---|
 | France Travail | `france_travail` | Official REST API (OAuth2) | `FRANCE_TRAVAIL_CLIENT_ID`/`SECRET` | **Active** — exhaustive pagination, bounded concurrency (`max_workers`, default 4) |
-| RemoteOK | `remoteok` | REST API | None | **Active** |
-| Jobicy | `jobicy` | REST API | None | **Active** |
-| We Work Remotely | `weworkremotely` | RSS/Atom | None | **Active** |
 | Indeed | `indeed` | Unofficial (Indeed's mobile API, read through python-jobspy) | none; opt-in: `unofficial_sources.indeed` in `data/settings.json` (an older `INDEED_API_KEY` counts as opted in) | **Active when chosen** — jobspy pages each query |
 | EURES | `eures` | Public REST API | None | **Active** |
 | Bundesagentur für Arbeit | `bundesagentur` | REST API | None | Disabled — Germany-only; every result fails this project's location filter |
@@ -277,6 +274,23 @@ grouped by route module in `src/api/routes/`:
 - **quality** — `GET /api/quality/health`, `POST /api/quality/jobs` (`{kind: self_check | evaluation}`, one at a
   time, 409 while one runs), `GET /api/quality/jobs`, `GET /api/quality/jobs/{id}`, `POST /api/quality/jobs/{id}/cancel`
 - **health** — `GET /api/health` (no database access; used by the launcher)
+
+### Developer API (no screen)
+
+These endpoints have no caller in the frontend (Phase B B10, P-011; checked 2026-11-15). They are kept
+as a developer and diagnostic API, each covered by tests, and may change without a UI notice:
+
+| Endpoint | What it gives |
+|---|---|
+| `GET /api/scheduler/executions` | recent scheduler execution records |
+| `POST /api/scheduler/pause`, `POST /api/scheduler/resume` | stop or restart scheduled dispatches (running scans stop at their next checkpoint) |
+| `GET /api/pipeline/runs/{id}/decisions` | the decision journal of one run |
+| `GET /api/esco/status` | whether the local ESCO index holds concepts, and how many |
+| `GET /api/jobs/feedback/list-state` | the ids of saved and hidden offers |
+| `GET /api/sources/breakers` | each source's circuit-breaker state |
+| `GET`/`PUT /api/settings/notifications` | stored notification categories; **nothing reads them** (the notification channels they served were removed) |
+
+The local AI routes without a screen are kept on purpose for 2.1 (ADR 0028).
 
 At startup, `src/api/app.py` initializes/recovers the databases, seeds the bundled ESCO
 data if missing, starts the scheduler, and serves

@@ -155,6 +155,9 @@ class BaseCollector(ABC):
     access_class: ClassVar[AccessClass | None] = None
     robots_policy: ClassVar[bool] = False
     rate_policy: ClassVar[RatePolicy] = RatePolicy()
+    # Whether every request goes through _before_request, so health()["requests"] is the number
+    # sent (Phase B B8-A). A collector with its own HTTP client sets False: its count is unknown.
+    counts_requests: ClassVar[bool] = True
     # Product token matched against robots.txt groups, and the User-Agent robots.txt is
     # fetched with (a collector sending its own User-Agent sets both to match it).
     robots_agent: ClassVar[str] = DEFAULT_ROBOTS_AGENT

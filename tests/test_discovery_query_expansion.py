@@ -563,7 +563,7 @@ class TestExpandAll:
         assert "architecture microservices" in queries
 
     def test_llm_called_once_per_source(self) -> None:
-        # expand_all expands 5 sources (france_travail, jobicy, remoteok, indeed, eures),
+        # expand_all expands 3 sources (france_travail, indeed, eures),
         # each of which calls the LLM endpoint once.
         expander = DiscoveryQueryExpander(
             llm_endpoint="http://localhost:1234",
@@ -574,7 +574,7 @@ class TestExpandAll:
         with patch("requests.post", return_value=resp) as mock_post:
             expander.expand_all(_FULL_PROFILE)
 
-        assert mock_post.call_count == 5
+        assert mock_post.call_count == 3
 
     # --- New sources added by Phase 2 ---
 
@@ -584,51 +584,10 @@ class TestExpandAll:
         result = expander.expand_all(_FULL_PROFILE)
         assert "apec" not in result
 
-    def test_expand_all_returns_jobicy_key(self) -> None:
-        expander = DiscoveryQueryExpander(llm_endpoint=None)
-        result = expander.expand_all(_FULL_PROFILE)
-        assert "jobicy" in result
-
-    def test_expand_all_returns_remoteok_key(self) -> None:
-        expander = DiscoveryQueryExpander(llm_endpoint=None)
-        result = expander.expand_all(_FULL_PROFILE)
-        assert "remoteok" in result
-
-    def test_expand_all_jobicy_baseline_non_empty(self) -> None:
-        expander = DiscoveryQueryExpander(llm_endpoint=None)
-        result = expander.expand_all(_IT_PROFILE)
-        assert len(result["jobicy"]) > 0
-
-    def test_expand_all_remoteok_baseline_non_empty(self) -> None:
-        expander = DiscoveryQueryExpander(llm_endpoint=None)
-        result = expander.expand_all(_IT_PROFILE)
-        assert len(result["remoteok"]) > 0
-
-    def test_expand_all_jobicy_includes_baseline_slugs(self) -> None:
-        _JOBICY_BASELINE = ["engineering", "cybersecurity", "admin"]  # data-science removed (returns 0 jobs)
-        expander = DiscoveryQueryExpander(llm_endpoint=None)
-        result = expander.expand_all(_IT_PROFILE)
-        for slug in _JOBICY_BASELINE:
-            assert slug in result["jobicy"]
-
-    def test_expand_all_remoteok_includes_baseline_tags(self) -> None:
-        _REMOTEOK_BASELINE = ["python", "javascript", "devops", "react"]
-        expander = DiscoveryQueryExpander(llm_endpoint=None)
-        result = expander.expand_all(_IT_PROFILE)
-        for tag in _REMOTEOK_BASELINE:
-            assert tag in result["remoteok"]
-
     def test_expand_all_returns_all_three_keys(self) -> None:
         expander = DiscoveryQueryExpander(llm_endpoint=None)
         result = expander.expand_all(_IT_PROFILE)
-        assert set(result.keys()) >= {"france_travail", "jobicy", "remoteok"}
-
-    def test_expand_all_remoteok_adds_skill_tags_from_profile(self) -> None:
-        profile = _make_profile(skills=["golang", "rust"])
-        expander = DiscoveryQueryExpander(llm_endpoint=None, max_queries=20)
-        result = expander.expand_all(profile)
-        assert "golang" in result["remoteok"]
-        assert "rust" in result["remoteok"]
+        assert set(result.keys()) >= {"france_travail", "indeed", "eures"}
 
     def test_expand_all_no_duplicates_in_any_source(self) -> None:
         expander = DiscoveryQueryExpander(llm_endpoint=None, max_queries=20)
@@ -748,8 +707,6 @@ class TestAdaptiveReorderingWiring:
         }
         result = expander.expand_all(_IT_PROFILE, yield_history_by_source=history_by_source)
         assert result["france_travail"][0] == "data"
-        # jobicy/remoteok had no history entry -> unaffected, original order.
-        assert result["jobicy"] == _IT_PRESET.baseline["jobicy"]
 
     def test_adaptive_promoted_is_recorded_in_expansion_metadata(self) -> None:
         from src.discovery.adaptive import QueryYieldStats
@@ -807,11 +764,6 @@ class TestProfessionNeutralDiscovery:
         assert "alternance électricien" in electrician
         accountant = self._expander().expand(_ACCOUNTANT_PROFILE, source="france_travail")
         assert "stage comptable" in accountant
-
-    def test_no_it_preset_means_no_jobicy_industry_and_no_it_tags(self) -> None:
-        result = self._expander().expand_all(_NURSE_PROFILE)
-        assert result["jobicy"] == []
-        assert result["remoteok"] == ["soins infirmiers"]
 
     def test_mixed_profile_keeps_it_baseline_and_adds_custom_domain(self) -> None:
         profile = _make_profile(domains=["software_development", "infirmier"])
@@ -894,20 +846,18 @@ class TestOccupationsAndCollectorConfig:
         assert result["indeed"] == ["infirmier"]
         assert result["eures"] == ["infirmier"]
 
-    def test_it_preset_supplies_indeed_eures_and_wework_config(self) -> None:
+    def test_it_preset_supplies_indeed_and_eures_config(self) -> None:
         expander = self._expander()
         indeed = expander.collector_config(_IT_PROFILE, "indeed")
         assert len(indeed["queries"]) == 23
         assert {"keyword": "devops engineer", "location": "France"} in indeed["queries"]
         eures = expander.collector_config(_IT_PROFILE, "eures")
         assert {"keyword": "software engineer", "location_codes": ["be", "lu", "ch"]} in eures["queries"]
-        assert "remote-programming-jobs" in expander.collector_config(
-            _IT_PROFILE, "weworkremotely")["categories"]
         assert "web_development" in expander.collector_config(
             _IT_PROFILE, "france_travail_web")["occupations"]
 
     def test_no_preset_means_no_collector_config(self) -> None:
-        for source in ("indeed", "eures", "weworkremotely", "france_travail_web"):
+        for source in ("indeed", "eures", "france_travail_web"):
             assert self._expander().collector_config(_NURSE_PROFILE, source) == {}
 
     def test_collector_config_of_several_presets_is_merged(self, tmp_path) -> None:
@@ -916,10 +866,10 @@ class TestOccupationsAndCollectorConfig:
         for name, domain, slug in (("a", "alpha", "x"), ("b", "beta", "y")):
             (presets / f"{name}.yaml").write_text(
                 f"name: {name}\napplies_to_domains: [{domain}]\n"
-                f"discovery:\n  collector_config:\n    weworkremotely:\n      categories: [{slug}, shared]\n",
+                f"discovery:\n  collector_config:\n    workingnomads:\n      categories: [{slug}, shared]\n",
                 encoding="utf-8",
             )
         expander = DiscoveryQueryExpander(llm_endpoint=None, config_dir=tmp_path)
         profile = _make_profile(domains=["alpha", "beta"])
-        assert expander.collector_config(profile, "weworkremotely") == {
+        assert expander.collector_config(profile, "workingnomads") == {
             "categories": ["x", "shared", "y"]}

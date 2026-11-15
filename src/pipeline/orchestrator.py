@@ -420,7 +420,7 @@ def run_pipeline(
                         recent_runs = _hist_rs.list_runs(limit=10)
                     finally:
                         _hist_rs.close()
-                    for src_type in ("france_travail", "jobicy", "remoteok"):
+                    for src_type in ("france_travail",):
                         history = compute_query_yield_history(recent_runs, src_type)
                         if history:
                             yield_history_by_source[src_type] = history
@@ -1011,9 +1011,10 @@ def run_pipeline(
         recorder.observe_gate_results(gate_results)
         recorder.observe_scores(scored_with_breakdown, scoring_config=scoring_config)
         storage_stats = storage.upsert_jobs_batch(
-            [job for job, _, _ in scored_with_breakdown]
+            [job for job, _, _ in scored_with_breakdown], return_inserted_ids=True,
         )
         stats.stored_new = int(storage_stats.get("inserted", 0))
+        new_ids = set(storage_stats.get("inserted_ids") or ())
         logger.info(
             "Storage: %d inserted, %d updated, %d unchanged",
             storage_stats["inserted"],
@@ -1395,7 +1396,9 @@ def run_pipeline(
         all_countries: list[str] = []
         remote_count = 0
 
-        for job, _ in personalized_ranked:
+        from src.pipeline.counts import is_useful
+
+        for job, final_score in personalized_ranked:
             all_countries.extend(job.countries or [])
             if job.remote:
                 remote_count += 1
@@ -1403,6 +1406,12 @@ def run_pipeline(
                 stats.by_source[job.source]["accepted"] += 1
             else:
                 stats.by_source[job.source] = {"collected": 0, "accepted": 1, "errors": 0}
+            # B8-A counts (src/pipeline/counts.py): newly discovered, useful, both
+            row = stats.by_source[job.source]
+            useful, new = is_useful(final_score), job.id in new_ids
+            row["new"] = row.get("new", 0) + int(new)
+            row["useful"] = row.get("useful", 0) + int(useful)
+            row["new_useful"] = row.get("new_useful", 0) + int(new and useful)
 
         stats.by_country = dict(Counter(all_countries))
         stats.by_work_mode = {
@@ -1542,6 +1551,8 @@ def _apply_source_contract(
     try:
         source_stats["access_class"] = collector.access_class
         health = collector.health()
+        if getattr(collector, "counts_requests", False):
+            source_stats["requests"] = int(health.get("requests") or 0)   # B8-A
         if health.get("request_cap_reached"):
             source_stats["request_cap_reached"] = True
         if health.get("network_errors") and not health.get("responses"):

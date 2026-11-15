@@ -133,10 +133,10 @@ class TestMissingMetadata:
         """A source can legitimately collect zero jobs in a clean run (no
         matching postings today) — that is still success, not failure."""
         rs.record_source_checkpoint_success(
-            source="remoteok", run_id="run-1", collected_count=0,
+            source="eures", run_id="run-1", collected_count=0,
             new_count=0, known_count=0, timestamp="2026-09-13T00:00:00+00:00",
         )
-        checkpoint = rs.get_source_checkpoint("remoteok")
+        checkpoint = rs.get_source_checkpoint("eures")
         assert checkpoint["last_collected_count"] == 0
         assert checkpoint["last_new_count"] == 0
 

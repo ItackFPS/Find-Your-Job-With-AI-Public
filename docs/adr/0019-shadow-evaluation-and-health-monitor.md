@@ -1,6 +1,7 @@
 # 0019 — Personal ranking activates only on positive shadow evidence and pauses itself more easily than it activates
 
-Status: accepted (2026-11-05). Not implemented yet (simulator in stage L3, activation in L4). Rules,
+Status: accepted (2026-11-05). Implemented: the rule, the health monitor and the simulator
+(`src/learning/gates.py`, `health.py`, `simulator.py`); activation is off by release flag. Rules,
 arithmetic, schema and simulator scenarios:
 `docs/design/learning-architecture-decisions.md` §4.5 (AD-5).
 

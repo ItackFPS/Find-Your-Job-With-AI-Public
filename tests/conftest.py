@@ -17,6 +17,10 @@ import pytest
 os.environ["API_ALLOWED_HOSTS"] = ",".join(
     filter(None, [os.environ.get("API_ALLOWED_HOSTS", ""), "testserver"])
 )
+# The same-account guard (on by default, owner decision D5) refuses TestClient's
+# "testclient" peer, which is not a loopback address. Tests of the app turn it off here;
+# tests/test_api_peer_guard.py exercises the guard itself, on real loopback connections.
+os.environ.setdefault("API_SAME_USER_ONLY", "0")
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _REAL_CONFIG_DIR = _REPO_ROOT / "config"

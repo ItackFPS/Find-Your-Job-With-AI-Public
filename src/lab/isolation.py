@@ -15,7 +15,7 @@ File permissions are not the whole boundary, so the full check also probes:
 * secrets (``.env*`` except ``.env.example``, ``config/*.local.*``): a readable one is the account's
   too — ``.env`` can hold API keys and tokens that call services as the human;
 * the application's API port: the API runs as the human and writes production state for any caller, so
-  it must refuse this account (``API_SAME_USER_ONLY=1``, ``src/api/peer_guard.py``). Nothing listening
+  it must refuse this account (the default guard, ``src/api/peer_guard.py``; not ``API_SAME_USER_ONLY=0``). Nothing listening
   proves nothing (the server may start later without the guard, or this account could take the port),
   so it counts as unverified;
 * relay ports (the Vite dev server; an n8n a pre-2.0 install may have left running): services of the
@@ -169,10 +169,10 @@ def check_network(api_ports: tuple[int, ...] = API_PORTS,
             continue
         if state == "reachable":
             problems.append(f"API port {port} serves this account: it can make the API write production state "
-                            "(start the API with API_SAME_USER_ONLY=1)")
+                            "(start the API without API_SAME_USER_ONLY=0)")
         elif state != "refused":
             problems.append(f"API port {port}: {state.replace('_', ' ')} - cannot verify that the API refuses "
-                            "this account (start it with API_SAME_USER_ONLY=1, then re-check)")
+                            "this account (start it without API_SAME_USER_ONLY=0, then re-check)")
     for port in relay_ports:
         results[str(port)] = state = probe(port)
         if state not in ("not_listening", "refused", "blocked"):
