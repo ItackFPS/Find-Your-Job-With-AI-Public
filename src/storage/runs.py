@@ -194,10 +194,9 @@ class RunStorage:
         # unconditionally stale (same as the old blanket behavior) since
         # there is no PID/heartbeat evidence to say otherwise.
         ensure_columns(conn, "pipeline_runs", {"pid": "INTEGER", "heartbeat_at": "TEXT"})
-        # Personal model in shadow (ADR 0018, stage L3): the adjustment it would have applied and the
-        # model version. History only; readers filter on the current model version and reset marker.
+        # Columns of the removed personal learning module (#250): no longer written or read. They stay
+        # so that every database has the same shape and "Erase my activity" can clear old values.
         ensure_columns(conn, "job_scores", {"personal_adjustment": "REAL", "personal_model_version": "TEXT"})
-        # Visible position when the personal ranking is ACTIVE (stage L4.2); NULL = production order.
         ensure_columns(conn, "job_scores", {"visible_position": "INTEGER"})
 
         conn.commit()
@@ -402,9 +401,8 @@ class RunStorage:
         conn = self._get_conn()
         conn.executemany(
             """INSERT OR REPLACE INTO job_scores
-               (id, run_id, job_id, deterministic_score, semantic_score, final_score, score_breakdown_json,
-                personal_adjustment, personal_model_version, visible_position)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               (id, run_id, job_id, deterministic_score, semantic_score, final_score, score_breakdown_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
             [
                 (
                     str(uuid.uuid4()),
@@ -414,9 +412,6 @@ class RunStorage:
                     s.get("semantic_score"),
                     s.get("final_score"),
                     json.dumps(s.get("score_breakdown", {})),
-                    s.get("personal_adjustment"),
-                    s.get("personal_model_version"),
-                    s.get("visible_position"),
                 )
                 for s in scores
             ],
@@ -492,11 +487,11 @@ class RunStorage:
         return result
 
     def get_job_ids_for_run(self, run_id: str) -> list[str]:
-        """Return job IDs scored in this run in visible order (personal positions, else final_score DESC)."""
+        """Return job IDs scored in this run, final_score DESC."""
         conn = self._get_conn()
         rows = conn.execute(
             """SELECT job_id FROM job_scores WHERE run_id = ?
-               ORDER BY visible_position IS NULL, visible_position, final_score DESC NULLS LAST""",
+               ORDER BY final_score DESC NULLS LAST""",
             (run_id,),
         ).fetchall()
         return [r["job_id"] for r in rows]
@@ -511,7 +506,7 @@ class RunStorage:
         conn = self._get_conn()
         rows = conn.execute(
             """SELECT * FROM job_scores WHERE run_id = ?
-               ORDER BY visible_position IS NULL, visible_position, final_score DESC NULLS LAST
+               ORDER BY final_score DESC NULLS LAST
                LIMIT ? OFFSET ?""",
             (run_id, limit, offset),
         ).fetchall()

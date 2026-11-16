@@ -126,17 +126,6 @@ export const setLearningPaused = (paused: boolean) =>
 export const resetLearning = () =>
   api.post<LearningState & { cleared: Record<string, number> }>('/privacy/learning/reset', { confirm: true }).then(r => r.data)
 // Personal ranking state (ADR 0019, v5 L4.4). `strata` is for the Quality page only.
-export interface LearningStatus {
-  state: 'shadow' | 'experimental_unconfirmed' | 'active' | 'paused'
-  wording_key: string
-  activation_enabled: boolean
-  paused_notice: boolean
-  state_since: string | null
-  last_event: string | null
-  strata: Record<string, { discordant: number; challenger_wins: number }>
-}
-export const getLearningStatus = () => api.get<LearningStatus>('/privacy/learning/status').then(r => r.data)
-export const resumeLearning = () => api.post<LearningStatus>('/privacy/learning/resume').then(r => r.data)
 // What was recorded (Phase B B9-A): read only.
 export interface RecordedEventRow { type: string; signal_class: string; count: number; counted: number; last_at: string | null }
 export interface RecordedActivity {
@@ -150,17 +139,6 @@ export interface RecordedActivity {
   repeated_views: string
 }
 export const getRecordedActivity = () => api.get<RecordedActivity>('/privacy/recorded').then(r => r.data)
-// Offline learning curve (v5 L3.5): counts only. Runs in a child process, so it is fetched on demand.
-export interface LearningCurve {
-  status: 'no_positives' | 'no_anchored_positives' | 'measured'
-  positives: number
-  anchored: number
-  discordant: number
-  challenger_wins: number
-  production_wins: number
-  wording: { key: string; n: number; x: number }
-}
-export const getLearningCurve = () => api.get<LearningCurve>('/quality/learning-curve').then(r => r.data)
 
 /** Erase my activity (ADR 0015): the latest erasure job; counts and checks only, never content. */
 export interface ErasureStatus {

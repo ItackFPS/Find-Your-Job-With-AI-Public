@@ -2,10 +2,9 @@
 
 * **Pause** is a reversible switch in ``app_state``. Its meaning is owner decision D2 part 2
   (2026-11-14, Phase B B9-A), and the Settings text says exactly this: while paused, the pipeline
-  applies no personal reordering (the personalization stage passes the ranking through unchanged)
-  and computes no shadow comparison (no personal-model challenger, no ``ranking_shadow`` row).
+  applies no personal reordering (the personalization stage passes the ranking through unchanged).
   Behaviour evidence keeps being recorded locally and stays erasable: explicit answers, Save /
-  Hide, views, visible exposures and the Découverte draw.
+  Hide, views and visible exposures.
 * **Reset** is a non-destructive marker: ``app_state.learning_reset_at`` is set, learning ignores
   every signal recorded before it, and the derived learned state is cleared
   (``RESET_CLEARED_TABLES``). The journal, the exposure log, hidden offers, the application tracker

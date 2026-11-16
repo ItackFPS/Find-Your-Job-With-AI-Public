@@ -36,11 +36,13 @@ JOBS_DB_TABLES: dict[str, DataClass] = {
     "exposure_log": "personal",             # visible exposures (ADR 0016)
     # -- derived from personal data
     "personalization_score_cache": "derived",
-    "personal_model_state": "derived",      # personal model summary (ADR 0018), rebuilt from the journal
+    # Tables of the removed personal learning module (#250). No longer created or written; an older
+    # database may still hold them, so erasure and "Reset learning" keep clearing them.
+    "personal_model_state": "derived",      # personal model summary (ADR 0018)
     "ranking_shadow": "derived",            # production vs challenger positions per run (ADR 0019)
-    "shadow_positive": "derived",           # one anchored positive per offer, written once (ADR 0019)
+    "shadow_positive": "derived",           # one anchored positive per offer (ADR 0019)
     "personal_health": "derived",           # activation state, decision and monitor (ADR 0019)
-    "s4_draw": "derived",                   # Découverte draw per run: seed, pool size, pi, slot (ADR 0019)
+    "s4_draw": "derived",                   # Découverte draw per run (ADR 0019)
     # -- control
     "db_migrations": "control",
     "app_versions": "control",
@@ -84,7 +86,7 @@ JOBS_DB_TABLES: dict[str, DataClass] = {
 # ``jobs.application_status`` is the application tracker; the user may choose to keep it.
 PERSONAL_COLUMNS: dict[str, tuple[str, ...]] = {
     "jobs": ("application_status",),
-    # what the personal model (in shadow) would have applied, derived from the journal (ADR 0018)
+    # left by the removed personal learning module (#250); no longer written
     "job_scores": ("personal_adjustment", "personal_model_version", "visible_position"),
 }
 
