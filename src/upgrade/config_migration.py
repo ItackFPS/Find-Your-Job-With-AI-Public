@@ -374,8 +374,9 @@ def migrate_config(config_dir: Path, data_dir: Path, version: str,
     if backup.folder.is_dir():
         report.backup_dir = str(backup.folder)
     logger.info(
-        "Upgrade to %s: configuration replaced=%s entries_added=%s archived=%s kept=%s failed=%s",
-        version, report.replaced, report.entries_added, report.archived, report.kept, report.failed,
+        "Upgrade to %s: configuration replaced=%s entries_added=%s entries_removed=%s archived=%s kept=%s "
+        "failed=%s", version, report.replaced, report.entries_added, report.entries_removed, report.archived,
+        report.kept, report.failed,
     )
     if not report.failed:
         try:
