@@ -80,7 +80,7 @@ _AREAS: dict[str, str] = {
     "chile": "CL", "peru": "PE", "uruguay": "UY", "costa rica": "CR", "middle east": "ME",
     "uae": "AE", "united arab emirates": "AE", "saudi arabia": "SA",
 }
-# "Headquarters: Remote (United States)" (We Work Remotely) describes the company,
+# "Headquarters: Remote (United States)" (job-board RSS feeds) describes the company,
 # not who may apply: removed before the restriction/openness patterns run.
 _HEADQUARTERS_RE = re.compile(r"headquarters\s*:\s*[^\n]{0,60}?(?:\)|(?=\s{2,})|$|(?=\s+URL:))", re.I | re.M)
 _AREA_ALT = "|".join(sorted((re.escape(a) for a in _AREAS), key=len, reverse=True))

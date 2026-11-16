@@ -8,7 +8,7 @@ import type { ListStatus } from '../../api/client'
 const base: ListStatus = {
   visible_run_id: 'r1', visible_run_completed_at: null, latest_run_id: 'r1', latest_run_status: 'completed',
   latest_run_outcome: 'successful', previous_list_kept: false, incomplete_sources: {}, carried_by_source: {},
-  listed: 10, hidden_by_user: 0, decouverte: 2, outside_criteria: 0, source_off: {}, expired: {},
+  listed: 10, hidden_by_user: 0, outside_criteria: 0, source_off: {}, expired: {},
 }
 const show = (s: ListStatus | null) => render(<MemoryRouter><ListStatusNotice status={s} /></MemoryRouter>)
 

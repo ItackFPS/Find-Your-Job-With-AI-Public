@@ -24,7 +24,7 @@ vi.mock('axios', () => {
         return Promise.resolve({ data: {
           visible_run_id: 'r1', visible_run_completed_at: null, latest_run_id: 'r1', latest_run_status: 'completed',
           latest_run_outcome: 'partial', previous_list_kept: false, incomplete_sources: { eures: 'suspect_empty' },
-          carried_by_source: { eures: 12 }, listed: 50, hidden_by_user: 0, decouverte: 0, outside_criteria: 0,
+          carried_by_source: { eures: 12 }, listed: 50, hidden_by_user: 0, outside_criteria: 0,
           source_off: {}, expired: {},
         } })
       }

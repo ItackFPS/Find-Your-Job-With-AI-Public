@@ -63,7 +63,7 @@ describe('TodayCard', () => {
     const stats = { ...dashboard.latest_run!.stats, outcome: 'partial' as const, by_source: {
       eures: { collected: 0, accepted: 0, errors: 1, status: 'failed' },
       hellowork: { collected: 3, accepted: 1, errors: 1, status: 'partial' },
-      jobicy: { collected: 4, accepted: 2, errors: 0, status: 'completed' } } }
+      indeed: { collected: 4, accepted: 2, errors: 0, status: 'completed' } } }
     show({ ...dashboard, latest_run: { ...dashboard.latest_run!, stats } })
     expect(await screen.findByTestId('failed-sources')).toHaveTextContent('eures, hellowork')
   })

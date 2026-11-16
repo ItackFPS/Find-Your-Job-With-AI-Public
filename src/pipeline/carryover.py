@@ -39,7 +39,7 @@ def load_carryover(storage: Storage, config_dir: str | Path, settings_path: str 
     this run collected), and their count per source. Sources in a stable (sorted) order.
 
     ``stale_before``: an offer last collected before it is not carried; the run's expiry marks it
-    ``stale`` (``Storage.apply_expiry``), so it never shows in this run's list or Découverte."""
+    ``stale`` (``Storage.apply_expiry``), so it never shows in this run's list."""
     from src.source_enablement import enabled_sources
 
     jobs: list[Job] = []

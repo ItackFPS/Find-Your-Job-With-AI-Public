@@ -202,9 +202,6 @@ class PipelineRunner:
                     "final_score": rec.final_score,
                     "score_breakdown": ({**rec.factors, "weak_flags": rec.weak_flags, "weak_penalty": rec.weak_penalty}
                                         if rec.weak_flags else rec.factors),
-                    "personal_adjustment": rec.personal_adjustment,
-                    "personal_model_version": rec.personal_model_version,
-                    "visible_position": rec.visible_position,
                 }
                 for rec in result.scored_jobs
             ]

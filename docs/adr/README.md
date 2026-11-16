@@ -24,8 +24,8 @@ is the source of truth and the ADR must be updated or superseded.
 | [0015](0015-privacy-retention-and-erasure.md) | Personal data has four in-app actions; erasure is a resumable job verified before success (supersedes 0009's owner-side erasure) |
 | [0016](0016-signal-capture-and-delivery.md) | Only visible exposure is logged; durable actions go through an acknowledged, ordered outbox |
 | [0017](0017-validity-constraints-and-hiding.md) | Offer validity is operational; only strong user constraints reject; weak ones rank; Hide is list management |
-| [0018](0018-personal-preference-model.md) | Personal preferences are a bounded Bayesian model that only reorders accepted offers |
-| [0019](0019-shadow-evaluation-and-health-monitor.md) | Personal ranking activates only on positive shadow evidence and pauses itself more easily than it activates |
+| [0018](0018-personal-preference-model.md) | Personal preferences are a bounded Bayesian model that only reorders accepted offers (superseded by 0034) |
+| [0019](0019-shadow-evaluation-and-health-monitor.md) | Personal ranking activates only on positive shadow evidence and pauses itself more easily than it activates (superseded by 0034) |
 | [0020](0020-two-promotion-regimes.md) | Personal learning updates itself within bounds; global strategy changes still need the lab (amends 0011) |
 | [0021](0021-labels-are-developer-instruments.md) | Labels are developer and release instruments, never a user prerequisite |
 | [0022](0022-knowledge-packs.md) | Shared intelligence travels only in versioned, read-only knowledge packs shipped with releases |
@@ -37,4 +37,5 @@ is the source of truth and the ADR must be updated or superseded.
 | [0028](0028-release-2.0-before-occupation-layers.md) | 2.0 ships after P3, minimum P6 and P7; L6–L8 move to 2.x; a temporary multi-profile gate covers 2.0 |
 | [0029](0029-profession-agnostic-discovery.md) | Discovery, filtering and scoring assume no profession; line-of-work vocabulary lives in presets (amends 0028's IT scope) |
 | [0032](0032-temporary-collection-freeze.md) | Collection is frozen until each collector is validated and turned back on by the user; an update never reactivates one |
-| [0034](0034-persistent-job-list.md) | The job list is persistent: every run carries the stored offers of enabled sources; offers leave only by an explicit rule (expiry incl. a 30-day age cap, source off, hidden, profile) |
+| [0034](0034-remove-personal-learning.md) | The personal learning module (personal model, shadow ranking, activation, Découverte) is removed |
+| [0035](0035-persistent-job-list.md) | The job list is persistent: every run carries the stored offers of enabled sources; offers leave only by an explicit rule (expiry incl. a 30-day age cap, source off, hidden, profile) |

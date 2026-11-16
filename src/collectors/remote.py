@@ -72,7 +72,7 @@ class RemoteCollector(BaseCollector):
     # -- RSS ------------------------------------------------------------------
 
     def _collect_rss(self) -> tuple[list[dict[str, Any]], list[str]]:
-        """Fetch and parse the configured RSS feed (e.g. We Work Remotely)."""
+        """Fetch and parse the configured RSS feed."""
         errors: list[str] = []
         jobs: list[dict[str, Any]] = []
 
@@ -115,7 +115,7 @@ class RemoteCollector(BaseCollector):
         """
         raw_title = str(getattr(entry, "title", "") or "").strip()
 
-        # We Work Remotely (and similar boards) format entry titles as
+        # Many job boards format entry titles as
         # "Company: Job Title". Split it out when that pattern is present;
         # otherwise fall back to using the whole string as the title.
         company = ""

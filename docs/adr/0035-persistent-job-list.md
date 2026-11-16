@@ -1,4 +1,4 @@
-# 0034 — The job list is persistent: offers leave it only by an explicit rule
+# 0035 — The job list is persistent: offers leave it only by an explicit rule
 
 Status: accepted (2026-11-16, owner decisions on issue #253). Supersedes Phase B open question OQ-3
 ("replace the list, mark failed sources") and the "no age-based expiry for staged sources" clause of
@@ -26,7 +26,7 @@ the other hand, never expired.
   2. its source is off (inactive in `sources.yaml`, a removed type, or switched off by the user);
   3. the user hid it;
   4. the current profile rejects it;
-  5. it is shown in Découverte or the outside-criteria lane instead.
+  5. it is shown in the outside-criteria lane instead.
   Expiry is reversible when the offer is collected again. Nothing is deleted.
 - A source that ran is incomplete when it failed, came back partial, reported a network outage,
   or is suspect: it completed with no offer although it returned offers the last time it ran

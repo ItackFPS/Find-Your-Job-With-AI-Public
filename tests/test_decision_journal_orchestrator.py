@@ -71,6 +71,17 @@ def _run(tmp: Path, decisions_yaml: str | None, extra: dict[str, str] | None = N
     return result, db, cfg
 
 
+def _pipeline(db: Path, cfg: Path):
+    """One pipeline run with run id "run" on the synthetic dataset, fake embeddings."""
+    from src.pipeline.orchestrator import run_pipeline
+
+    with patch("src.embeddings.embedding.EmbeddingService", _FakeEmbeddingService):
+        result = run_pipeline(db_path=str(db), config_dir=str(cfg), run_id="run",
+                              prefetched_linkedin_jobs=load_dataset(DS).build_jobs())
+    assert result.status == "completed", result.error
+    return result
+
+
 def _normalised(result) -> dict:
     """Everything a consumer can observe, minus volatile/timing fields and the journal summary."""
     stats = result.stats.to_dict()

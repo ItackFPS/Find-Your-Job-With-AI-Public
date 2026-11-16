@@ -37,7 +37,7 @@ def test_a_new_id_with_stored_content_takes_the_stored_id(tmp_path: Path) -> Non
     try:
         before = st._get_conn().execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
         variant = _job("new-id", "eures", "h1")
-        same_hash_other_source = _job("x", "jobicy", "h1")
+        same_hash_other_source = _job("x", "hellowork", "h1")
         known = _job("other", "eures", "h2")
         fresh = _job("fresh", "eures", "h9")
         aliases = st.align_stored_ids([variant, same_hash_other_source, known, fresh])

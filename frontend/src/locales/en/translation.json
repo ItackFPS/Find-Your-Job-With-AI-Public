@@ -1429,7 +1429,7 @@
       "title": "Learning",
       "subtitle": "How the app learns from what you do. Your actions always stay on this computer.",
       "pause": "Pause learning",
-      "pauseHelp": "While paused, the ranking stops adapting to you and no comparison with a personal ranking is made. Your actions, the offers shown to you and the Découverte picks are still recorded on this computer, and Erase removes them.",
+      "pauseHelp": "While paused, the ranking stops adapting to you. Your actions and the offers shown to you are still recorded on this computer, and Erase removes them.",
       "reset": "Reset learning",
       "resetHelp": "Learning starts over from your next actions. Your saved and hidden offers and your application tracker are kept.",
       "confirm": "Reset learning? What it learned so far is cleared.",
@@ -1501,10 +1501,6 @@
       "failed": "The erasure could not be started."
     }
   },
-  "decouverte": {
-    "title": "Discovery",
-    "hint": "Offers drawn at random among those that meet your strict criteria, ignoring the score. Some will fit you less well: that is intended."
-  },
   "outsideCriteria": {
     "title": "Outside your criteria ({count})",
     "hint": "Good matches that miss one of your criteria on weak evidence (a title word, the offer's age...). Your strict criteria still exclude offers.",
@@ -1545,33 +1541,6 @@
     "erased": "Not recorded: your activity was erased since this page loaded. Reload the page.",
     "rejected": "Not recorded: the server refused this action.",
     "failed": "Not recorded: something went wrong."
-  },
-  "learning": {
-    "status": {
-      "observing": "The app is watching your choices; personalization will turn on once it has proven itself.",
-      "experimental": "A personal ranking is being tried on a small part of the list.",
-      "active": "The ranking takes your choices into account, within a fixed limit.",
-      "paused": "The personal ranking is paused: it no longer matched your recent choices. The list uses the usual ranking.",
-      "resume": "Resume",
-      "resumeHelp": "Personalization goes back to observing and will only apply after proving itself again.",
-      "resumed": "The personal ranking is back to observing.",
-      "resetFromNotice": "Reset"
-    },
-    "curve": {
-      "title": "Personal ranking (offline measure)",
-      "subtitle": "Replays your past choices to compare the usual ranking with the personal ranking. A descriptive measure, not proof.",
-      "run": "Measure",
-      "error": "The measure could not be made.",
-      "none": "Not enough choices to measure yet.",
-      "summary": "Of {n, plural, one {# offer you kept} other {# offers you kept}} that the two rankings placed differently, the personal version would have ranked {x} higher.",
-      "strata": "By kind of list (kept offers ranked differently / higher in the personal version):",
-      "stratum": "{name}: {n} / {x}",
-      "names": {
-        "LB": "lists little shaped by the ranking (Discovery, sorted by date or distance)",
-        "PF": "lists sorted by relevance",
-        "IM": "other"
-      }
-    }
   },
   "collection": {
     "frozen": {
