@@ -201,6 +201,7 @@ def test_a_source_turned_off_is_not_carried(board) -> None:  # noqa: ANN001
     (Path(board.cfg) / "sources.yaml").write_text(_sources_yaml(alpha=False), encoding="utf-8")
     off = board(beta=B)
     assert off["carried_by_source"] == {}
+    assert "alpha" in off["sources_off"]             # recorded: the list can restore alpha at once
     assert _listed(board.db) == {"beta": 1}
     (Path(board.cfg) / "sources.yaml").write_text(_sources_yaml(alpha=True), encoding="utf-8")
     on = board(alpha=[], beta=B)                           # back on, even before alpha returns anything
@@ -251,3 +252,63 @@ def test_the_age_cap_is_read_from_retention_yaml(tmp_path: Path) -> None:
     assert expire_after_days_unseen(tmp_path) == 1
     root = Path(__file__).resolve().parents[1]
     assert expire_after_days_unseen(root / "config") == 30
+
+
+def test_turning_a_source_back_on_lists_its_offers_before_any_run(board, monkeypatch) -> None:  # noqa: ANN001
+    """End to end through the product's run path and the API (#253 review): a run while alpha is
+    off leaves alpha's offers unevaluated; turning alpha on lists them at once, off hides them at
+    once, and the next run evaluates them again."""
+    from fastapi.testclient import TestClient
+
+    from src.api.app import app
+    from src.source_enablement import settings_path_for
+
+    for key, value in {"db_path": board.db, "config_dir": str(board.cfg),
+                       "settings_path": str(settings_path_for(board.db))}.items():
+        monkeypatch.setitem(app.state._state, key, value)
+    client = TestClient(app)
+    # Découverte off: with three offers its random slots would take some of them out of the list.
+    (Path(board.cfg) / "personalization.yaml").write_text(
+        "personal_model:\n  exploration:\n    slots: 0\n", encoding="utf-8")
+
+    def listed() -> list[str]:
+        return sorted(j["source"] for j in client.get("/api/jobs", params={"limit": 500}).json())
+
+    board(alpha=A, beta=B)
+    yaml_path = Path(board.cfg) / "sources.yaml"
+    yaml_path.write_text(_sources_yaml(alpha=False), encoding="utf-8")
+    assert listed() == ["beta"]                                            # off: hidden at once
+    board(beta=B)                                                          # a run while alpha is off
+    assert listed() == ["beta"]
+    yaml_path.write_text(_sources_yaml(alpha=True), encoding="utf-8")
+    assert listed() == ["alpha", "alpha", "beta"]                          # on: back at once, no run
+    assert client.get("/api/jobs/count").json()["count"] == 3
+    assert client.get("/api/jobs/list-status").json()["restored_by_source"] == {"alpha": 2}
+    yaml_path.write_text(_sources_yaml(alpha=False), encoding="utf-8")
+    assert listed() == ["beta"]                                            # off again: hidden at once
+    yaml_path.write_text(_sources_yaml(alpha=True), encoding="utf-8")
+    after = board(alpha=[], beta=B)                                        # next run carries them
+    assert after["carried_by_source"] == {"alpha": 2}
+    assert listed() == ["alpha", "alpha", "beta"]
+    assert client.get("/api/jobs/list-status").json()["restored_by_source"] == {}
+
+
+def test_a_user_reported_offer_stays_expired_when_collected_again(board) -> None:  # noqa: ANN001
+    """The user's "no longer available" wins over a new sighting and over carry-forward; a stale
+    offer collected again is active again (the other half is in the stale test above)."""
+    from src.storage.sqlite import Storage
+
+    board(alpha=A, beta=B)
+    reported = _row(board.db, "alpha-1")["id"]
+    s = Storage(db_path=board.db)
+    s.init_db()
+    assert s.set_reported_expired(reported, True, datetime.now(UTC))
+    s.close()
+
+    board(alpha=A, beta=B)                                # alpha-1 genuinely collected again
+    row = _row(board.db, "alpha-1")
+    assert (row["status"], row["expiry_reason"]) == ("expired", "user_report")
+    assert _listed(board.db) == {"alpha": 1, "beta": 1}
+    carried = board(alpha=[], beta=B)                     # and never carried
+    assert carried["carried_by_source"] == {"alpha": 1}
+    assert _row(board.db, "alpha-1")["expiry_reason"] == "user_report"
