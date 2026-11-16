@@ -143,7 +143,6 @@
       "noMatch": "No strong match in the last search.",
       "keptPrevious": "No source succeeded in the last search, so the lists still show the previous search.",
       "suspect": "{count, plural, one {One source returned no offer} other {# sources returned no offer}} although they found some before ({sources}); their offers stay in the list.",
-      "carried": "{count, plural, one {# offer} other {# offers}} carried over from earlier searches.",
       "nothingNew": "Nothing new since the previous search.",
       "firstEmpty": "The first search found no offer for your profile. Check your line of work and places in Profile; the next search will try again."
     },
@@ -1532,7 +1531,7 @@
     "sourceOff": "{count, plural, one {# offer is} other {# offers are}} hidden because their source is off ({sources}).",
     "restored": "{count, plural, one {# offer is back} other {# offers are back}}: their source was just turned on again ({sources}). They keep their last score until the next search.",
     "settings": "Settings",
-    "expired": "{count, plural, one {# expired offer is} other {# expired offers are}} no longer shown, {stale, number} of them not seen for 30 days. Tick “Include expired offers” to see them."
+    "expired": "{count, plural, one {# expired offer is} other {# expired offers are}} no longer shown{stale, plural, =0 {} other {, # of them not seen for 30 days}}. Tick “Include expired offers” to see them."
   },
   "saveHide": {
     "save": "Save",

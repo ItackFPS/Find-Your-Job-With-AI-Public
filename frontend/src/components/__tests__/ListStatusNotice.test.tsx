@@ -46,4 +46,9 @@ describe('ListStatusNotice', () => {
     show({ ...base, expired: { stale: 4, valid_through: 1 } })
     expect(screen.getByTestId('list-status-expired')).toHaveTextContent('5 expired offers are no longer shown, 4 of them not seen for 30 days')
   })
+
+  it('does not mention stale offers when there are none', () => {
+    show({ ...base, expired: { user_report: 1 } })
+    expect(screen.getByTestId('list-status-expired')).toHaveTextContent('1 expired offer is no longer shown. Tick')
+  })
 })

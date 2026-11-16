@@ -30,7 +30,6 @@ export function TodayCard({ dashboard }: { dashboard: Dashboard }) {
     .filter(([, s]) => s.status === 'failed' || s.status === 'partial').map(([name]) => name).sort()
   const suspect = Object.entries(run?.stats.incomplete_sources ?? {})
     .filter(([, reason]) => reason === 'suspect_empty').map(([name]) => name).sort()
-  const carried = run?.stats.carried ?? 0
 
   return (
     <Card title={t('dashboard.today.title')} style={{ marginBottom: 'var(--space-4)' }}>
@@ -55,9 +54,6 @@ export function TodayCard({ dashboard }: { dashboard: Dashboard }) {
           <p style={{ ...line, color: 'var(--color-warning)' }} data-testid="suspect-sources">
             {t('dashboard.today.suspect', { count: suspect.length, sources: suspect.join(', ') })}
           </p>
-        )}
-        {carried > 0 && (
-          <p style={{ ...line, color: 'var(--color-muted)' }} data-testid="carried">{t('dashboard.today.carried', { count: carried })}</p>
         )}
         {outcome === 'no_successful_source' && <p style={line} data-testid="run-outcome">{t('dashboard.today.keptPrevious')}</p>}
         {outcome === 'no_new_offers' && <p style={{ ...line, color: 'var(--color-muted)' }} data-testid="run-outcome">{t('dashboard.today.nothingNew')}</p>}

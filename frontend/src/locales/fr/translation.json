@@ -143,7 +143,6 @@
       "noMatch": "Aucune correspondance forte lors de la dernière recherche.",
       "keptPrevious": "Aucune source n’a abouti lors de la dernière recherche : les listes montrent toujours la recherche précédente.",
       "suspect": "{count, plural, one {Une source n’a renvoyé aucune offre} other {# sources n’ont renvoyé aucune offre}} alors qu’elles en trouvaient avant ({sources}) : leurs offres restent dans la liste.",
-      "carried": "{count, plural, one {# offre reprise} other {# offres reprises}} des recherches précédentes.",
       "nothingNew": "Rien de nouveau depuis la recherche précédente.",
       "firstEmpty": "La première recherche n’a trouvé aucune offre pour votre profil. Vérifiez votre métier et vos lieux dans Profil ; la prochaine recherche réessaiera."
     },
@@ -1532,7 +1531,7 @@
     "sourceOff": "{count, plural, one {# offre est masquée} other {# offres sont masquées}} parce que leur source est désactivée ({sources}).",
     "restored": "{count, plural, one {# offre réaffichée} other {# offres réaffichées}} : leur source vient d’être réactivée ({sources}). Elles gardent leur dernier score jusqu’à la prochaine recherche.",
     "settings": "Paramètres",
-    "expired": "{count, plural, one {# offre expirée n’est plus affichée} other {# offres expirées ne sont plus affichées}}, dont {stale, number} non vues depuis 30 jours. Cochez « Inclure les offres expirées » pour les voir."
+    "expired": "{count, plural, one {# offre expirée n’est plus affichée} other {# offres expirées ne sont plus affichées}}{stale, plural, =0 {} one {, dont # non vue depuis 30 jours} other {, dont # non vues depuis 30 jours}}. Cochez « Inclure les offres expirées » pour les voir."
   },
   "saveHide": {
     "save": "Enregistrer",
