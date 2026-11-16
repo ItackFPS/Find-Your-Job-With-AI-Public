@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { listJobs, listDecouverte, listOutsideCriteria, getAllDepartments, getJobCountries, getProfile, type Job, type CountryFacet, type LocationPreference } from '../api/client'
+import { listJobs, listOutsideCriteria, getAllDepartments, getJobCountries, getProfile, type Job, type CountryFacet, type LocationPreference } from '../api/client'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Chip, EmptyState, LoadingState, Ring } from '../components'
@@ -164,7 +164,7 @@ const cardLinkStyle: React.CSSProperties = {
   transition: 'border-color 0.15s',
 }
 
-function JobCard({ job, targetSkills, locationPreferences, departmentNames, position, trackRef, surface, randomized }: {
+function JobCard({ job, targetSkills, locationPreferences, departmentNames, position, trackRef, surface }: {
   job: Job
   targetSkills: string[]
   locationPreferences: LocationPreference[]
@@ -173,7 +173,6 @@ function JobCard({ job, targetSkills, locationPreferences, departmentNames, posi
   trackRef: (el: Element | null) => void
   /** The list the card is shown in (ADR 0016 event context), also given to Save / Hide. */
   surface: string
-  randomized?: boolean
 }) {
   const finalScore = job.score?.final_score ?? null
   const tier = job.score?.tier ?? null
@@ -188,7 +187,7 @@ function JobCard({ job, targetSkills, locationPreferences, departmentNames, posi
         <span style={{ fontSize: '0.85rem', color: 'var(--color-muted)' }}>
           {t('saveHide.hiddenCard', { title: job.title || t('jobs.noTitle') })}
         </span>
-        <SaveHideButtons jobId={job.id} saved={job.saved} hidden surface={surface} position={position} randomized={randomized}
+        <SaveHideButtons jobId={job.id} saved={job.saved} hidden surface={surface} position={position}
           onHiddenChange={h => setHiddenNow(h)} />
       </div>
     )
@@ -221,7 +220,7 @@ function JobCard({ job, targetSkills, locationPreferences, departmentNames, posi
       <RelevantSkills job={job} targetSkills={targetSkills} />
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.85rem', gap: '0.5rem', flexWrap: 'wrap' }}>
-        <SaveHideButtons jobId={job.id} saved={job.saved} hidden={false} surface={surface} position={position} randomized={randomized}
+        <SaveHideButtons jobId={job.id} saved={job.saved} hidden={false} surface={surface} position={position}
           onHiddenChange={h => setHiddenNow(h)} />
         <TierBadge tier={tier} />
       </div>
@@ -274,7 +273,6 @@ export default function Jobs() {
   // ranked main list, so their exposures and actions must not be read as if they were.
   const listSurface = savedOnly ? 'saved' : q ? 'search' : 'jobs'
   const track = useVisibleExposure(listSurface)
-  const trackS4 = useVisibleExposure('decouverte', undefined, true)
   const trackOutside = useVisibleExposure('outside_criteria')
   const [inputQ, setInputQ] = useState('') // immediate input value
   const [offset, setOffset] = useState(0)
@@ -332,18 +330,13 @@ export default function Jobs() {
     }),
   })
 
-  // Découverte (S4): its own section above the list, only on the plain first page.
-  const showDecouverte = !q && !savedOnly && offset === 0
-  const { data: decouverte } = useQuery({
-    queryKey: ['jobs-decouverte'],
-    queryFn: listDecouverte,
-    enabled: showDecouverte,
-  })
+  // The outside-criteria lane shows only on the plain first page.
+  const plainFirstPage = !q && !savedOnly && offset === 0
   // Weak-evidence lane (ADR 0019 v5 AD-2b): collapsed, never notifies; empty while every check rejects.
   const { data: outside } = useQuery({
     queryKey: ['jobs-outside-criteria'],
     queryFn: listOutsideCriteria,
-    enabled: showDecouverte,
+    enabled: plainFirstPage,
   })
 
   const filterStyle: React.CSSProperties = {
@@ -485,27 +478,7 @@ export default function Jobs() {
       {isLoading && <LoadingState compact />}
       {error && <div style={{ color: 'var(--color-error)' }}>{t('jobs.loadError')}</div>}
 
-      {showDecouverte && decouverte && decouverte.length > 0 && (
-        <section aria-labelledby="decouverte-title" data-testid="decouverte" style={{ marginBottom: '1.25rem' }}>
-          <h2 id="decouverte-title" style={{ fontSize: '1rem', margin: '0 0 0.25rem' }}>{t('decouverte.title')}</h2>
-          <p style={{ fontSize: '0.82rem', color: 'var(--color-muted)', margin: '0 0 0.6rem' }}>{t('decouverte.hint')}</p>
-          {decouverte.map((job, i) => (
-            <JobCard
-              key={job.id}
-              job={job}
-              position={i}
-              trackRef={trackS4(job.id, i)}
-              surface="decouverte"
-              randomized
-              targetSkills={targetSkills}
-              locationPreferences={locationPreferences}
-              departmentNames={departmentNames}
-            />
-          ))}
-        </section>
-      )}
-
-      {showDecouverte && outside && outside.length > 0 && (
+      {plainFirstPage && outside && outside.length > 0 && (
         <details data-testid="outside-criteria" style={{ marginBottom: '1.25rem' }}>
           <summary style={{ cursor: 'pointer', fontWeight: 600 }}>{t('outsideCriteria.title', { count: outside.length })}</summary>
           <p style={{ fontSize: '0.82rem', color: 'var(--color-muted)', margin: '0.4rem 0 0.6rem' }}>{t('outsideCriteria.hint')}</p>

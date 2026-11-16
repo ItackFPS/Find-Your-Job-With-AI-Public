@@ -17,12 +17,12 @@ from src.pipeline.circuit_breaker import (
 from src.pipeline.source_selection import NETWORK_OUTAGE_ERROR, select_sources, settle_breakers
 
 SOURCES: list[dict[str, Any]] = [
-    {"name": "ok", "type": "jobicy"},
-    {"name": "ok2", "type": "jobicy"},
+    {"name": "ok", "type": "eures"},
+    {"name": "ok2", "type": "eures"},
     {"name": "old", "type": "apec"},
     {"name": "nocred", "type": "france_travail"},
-    {"name": "tripped", "type": "remoteok"},
-    {"name": "off", "type": "jobicy", "active": False},
+    {"name": "tripped", "type": "eures"},
+    {"name": "off", "type": "eures", "active": False},
 ]
 
 
