@@ -414,6 +414,7 @@ class Storage:
 
     def apply_expiry(
         self, seen_ids: set[str], complete_sources: set[str], now: datetime, max_missed: int,
+        stale_before: datetime | None = None,
     ) -> dict[str, int]:
         """Mark offers expired after a run (issue #86), and active again when seen.
 
@@ -424,6 +425,11 @@ class Storage:
         ``expiry_reason``) once its end date (``valid_through``) has passed, or after
         ``max_missed`` missed runs in a row. An offer expired for either reason and seen
         again is active again; an offer the user reported stays expired.
+
+        ``stale_before`` (issue #253): an active offer not seen this run whose last collection
+        (latest ``job_provenance.last_seen_at``, else ``discovered_at``) is older than this expires
+        with reason ``stale``, whatever its source: the list carries stored offers forward, and this
+        is the age cap that keeps it from holding an offer forever.
         """
         conn = self._get_conn()
         when = now.isoformat()
@@ -431,12 +437,13 @@ class Storage:
         conn.execute("DELETE FROM expiry_seen")
         conn.executemany("INSERT OR IGNORE INTO expiry_seen (id) VALUES (?)", [(i,) for i in seen_ids])
         seen = "SELECT id FROM expiry_seen"
-        out = {"reactivated": 0, "missed": 0, "expired_valid_through": 0, "expired_not_seen": 0}
+        out = {"reactivated": 0, "missed": 0, "expired_valid_through": 0, "expired_not_seen": 0,
+               "expired_stale": 0}
         conn.execute(f"UPDATE jobs SET missed_runs = 0 WHERE missed_runs != 0 AND id IN ({seen})")
         out["reactivated"] = conn.execute(
             f"""UPDATE jobs SET status = 'active', expired_at = NULL, expiry_reason = NULL
                 WHERE status = 'expired' AND id IN ({seen})
-                  AND (expiry_reason = 'not_seen'
+                  AND (expiry_reason IN ('not_seen', 'stale')
                        OR (expiry_reason = 'valid_through' AND (valid_through IS NULL OR valid_through >= ?)))""",
             (when,),
         ).rowcount
@@ -458,6 +465,14 @@ class Storage:
                WHERE status = 'active' AND missed_runs >= ?""",
             (when, max_missed),
         ).rowcount
+        if stale_before is not None:
+            out["expired_stale"] = conn.execute(
+                f"""UPDATE jobs SET status = 'expired', expired_at = ?, expiry_reason = 'stale'
+                    WHERE status = 'active' AND id NOT IN ({seen})
+                      AND COALESCE((SELECT MAX(p.last_seen_at) FROM job_provenance p WHERE p.job_id = jobs.id),
+                                   discovered_at) < ?""",
+                (when, stale_before.isoformat()),
+            ).rowcount
         conn.execute("DELETE FROM expiry_seen")
         conn.commit()
         return out

@@ -9,10 +9,10 @@ whatever is waiting there when a pipeline run starts.
 Both sources need the exact same two-step lifecycle around a run:
 
   1. snapshot_for_run(run_id) — atomically lock the waiting staging rows into
-     this run, convert them to Job objects, and re-inject previously stored
-     active jobs from the main jobs table so they remain visible in the API
-     between scans (without this, only newly staged jobs would appear in the
-     latest run's result set, and previously accepted jobs would "disappear").
+     this run and convert them to Job objects. Previously stored active jobs
+     stay visible between scans because the pipeline carries the stored
+     offers of every enabled source into each run (src/pipeline/carryover.py,
+     issue #253); before that, these adapters re-injected them themselves.
   2. finalize(run_id, transferred_ids, succeeded) — after the pipeline
      finishes, mark the snapshotted rows 'transferred'/'processed' on
      success, or reset them all back to 'waiting' on failure so the next run
@@ -20,8 +20,8 @@ Both sources need the exact same two-step lifecycle around a run:
 
 This module abstracts only that shared shape (StagedSourceAdapter). Whether
 a source is on is the single rule of src/source_enablement.py (Phase B B4-A):
-a source that is off gives no snapshot and no re-injected offer, so its stored
-offers are not scored (owner decision D1). The staging schema is genuinely
+a source that is off gives no snapshot, and the pipeline carries no offer of it,
+so its stored offers are not scored (owner decision D1). The staging schema is genuinely
 source-specific: LinkedInStagedSourceAdapter and HelloWorkStagedSourceAdapter are
 separate, independent wrappers around their own staging.py module — this is
 deliberately NOT a merge of LinkedIn/HelloWork domain logic into one module.
@@ -54,8 +54,7 @@ class StagedSourceAdapter(Protocol):
 
     def snapshot_for_run(self, run_id: str) -> list["Job"]:
         """Snapshot this source's waiting rows into ``run_id`` and return
-        every Job this run should see for this source (fresh snapshot plus
-        re-injected previously-active jobs).
+        them as Jobs (the stored offers are carried by the pipeline, #253).
 
         Returns ``[]`` and holds no open staging handle when the source is
         off (src/source_enablement.py), or the snapshot itself fails — never
@@ -104,7 +103,6 @@ class LinkedInStagedSourceAdapter:
                 return []
 
             from src.linkedin.staging import LinkedInStagingStorage, staging_row_to_job
-            from src.storage.sqlite import Storage as _Storage
 
             self._staging = LinkedInStagingStorage(db_path=self._db_path)
             self._staging.init_db()
@@ -117,29 +115,9 @@ class LinkedInStagedSourceAdapter:
                     len(jobs), run_id,
                 )
 
-            # Re-inject previously stored active LinkedIn jobs so they are
-            # re-scored in this run and remain visible in the API. Without
-            # this, only newly staged jobs appear in the latest-run result set,
-            # causing previously accepted jobs to "disappear" from the UI.
-            try:
-                _store = _Storage(db_path=self._db_path)
-                _store.init_db()
-                snapshot_ids = {j.id for j in jobs}
-                existing_li_jobs = _store.get_active_jobs_by_source(
-                    "linkedin", exclude_ids=snapshot_ids
-                )
-                if existing_li_jobs:
-                    jobs.extend(existing_li_jobs)
-                    logger.info(
-                        "LinkedIn: re-injecting %d existing active job(s) into run %s.",
-                        len(existing_li_jobs), run_id,
-                    )
-            except Exception as exc:
-                logger.warning(
-                    "LinkedIn: failed to load existing active jobs — "
-                    "previously stored jobs may not appear in this run: %s", exc,
-                )
-
+            # Stored active LinkedIn offers are carried into every run by the pipeline itself
+            # (src/pipeline/carryover.py, issue #253), like every enabled source's: a carried offer
+            # is not a sighting, so it is no longer mixed into this snapshot.
             return jobs
         except Exception as exc:
             logger.warning(
@@ -208,7 +186,6 @@ class HelloWorkStagedSourceAdapter:
                 return []
 
             from src.hellowork.staging import HelloWorkStagingStorage, staging_row_to_job
-            from src.storage.sqlite import Storage as _Storage
 
             self._staging = HelloWorkStagingStorage(db_path=self._db_path)
             self._staging.init_db()
@@ -221,28 +198,7 @@ class HelloWorkStagedSourceAdapter:
                     len(jobs), run_id,
                 )
 
-            # Re-inject previously stored active HelloWork jobs so they are
-            # re-scored in this run and remain visible in the API (same
-            # reasoning as the LinkedIn re-injection above).
-            try:
-                _store = _Storage(db_path=self._db_path)
-                _store.init_db()
-                snapshot_ids = {j.id for j in jobs}
-                existing_hw_jobs = _store.get_active_jobs_by_source(
-                    "hellowork", exclude_ids=snapshot_ids
-                )
-                if existing_hw_jobs:
-                    jobs.extend(existing_hw_jobs)
-                    logger.info(
-                        "HelloWork: re-injecting %d existing active job(s) into run %s.",
-                        len(existing_hw_jobs), run_id,
-                    )
-            except Exception as exc:
-                logger.warning(
-                    "HelloWork: failed to load existing active jobs — "
-                    "previously stored jobs may not appear in this run: %s", exc,
-                )
-
+            # Stored active HelloWork offers are carried by the pipeline (issue #253), see above.
             return jobs
         except Exception as exc:
             logger.warning(

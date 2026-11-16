@@ -98,6 +98,29 @@ def test_offers_expire_after_missed_runs_or_their_end_date(tmp_path: Path) -> No
     s.close()
 
 
+
+def test_an_offer_not_collected_since_the_cap_expires_as_stale(tmp_path: Path) -> None:
+    """Issue #253: whatever its source, an active offer last collected before ``stale_before`` and
+    not seen this run expires as ``stale``; seen again, it is active again."""
+    s = _storage(tmp_path / "jobs.db")
+    _seed(s)                                            # last collected NOW - 1 day
+    out = s.apply_expiry({"seen"}, set(), NOW, max_missed=3, stale_before=NOW - timedelta(hours=12))
+    assert _status(s, "gone") == ("expired", "stale")
+    assert _status(s, "partial") == ("expired", "stale")  # no complete listing needed
+    assert _status(s, "seen") == ("active", None)          # seen this run
+    assert out["expired_stale"] == 3                       # gone, partial, future ("ended" had its end date)
+    s.apply_expiry({"gone"}, set(), NOW, max_missed=3, stale_before=NOW - timedelta(hours=12))
+    assert _status(s, "gone") == ("active", None)
+    s.close()
+
+
+def test_no_age_cap_without_stale_before(tmp_path: Path) -> None:
+    s = _storage(tmp_path / "jobs.db")
+    _seed(s)
+    out = s.apply_expiry(set(), set(), NOW + timedelta(days=400), max_missed=3)
+    assert out["expired_stale"] == 0 and _status(s, "gone") == ("active", None)
+    s.close()
+
 def test_a_miss_streak_is_reset_by_a_sighting(tmp_path: Path) -> None:
     s = _storage(tmp_path / "jobs.db")
     _seed(s)

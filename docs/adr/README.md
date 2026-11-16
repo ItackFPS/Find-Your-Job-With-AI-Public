@@ -37,3 +37,4 @@ is the source of truth and the ADR must be updated or superseded.
 | [0028](0028-release-2.0-before-occupation-layers.md) | 2.0 ships after P3, minimum P6 and P7; L6–L8 move to 2.x; a temporary multi-profile gate covers 2.0 |
 | [0029](0029-profession-agnostic-discovery.md) | Discovery, filtering and scoring assume no profession; line-of-work vocabulary lives in presets (amends 0028's IT scope) |
 | [0032](0032-temporary-collection-freeze.md) | Collection is frozen until each collector is validated and turned back on by the user; an update never reactivates one |
+| [0034](0034-persistent-job-list.md) | The job list is persistent: every run carries the stored offers of enabled sources; offers leave only by an explicit rule (expiry incl. a 30-day age cap, source off, hidden, profile) |

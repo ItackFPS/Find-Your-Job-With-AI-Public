@@ -24,3 +24,9 @@ keep_min_runs: 100
 # listed in recent searches"). It is hidden from the default lists, never deleted here,
 # and active again if seen again. LinkedIn and HelloWork scans never count a miss.
 expire_after_missed_runs: 3
+
+# Age cap (issue #253): every run carries the stored active offers of enabled sources forward, so an
+# offer leaves the list only by a rule. An active offer that no source collected for this many days
+# is marked expired ("stale": not seen in recent searches), whatever its source, LinkedIn and
+# HelloWork included. Hidden from the default lists, never deleted, active again if seen again.
+expire_after_days_unseen: 30
