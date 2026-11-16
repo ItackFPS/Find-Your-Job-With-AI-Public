@@ -306,6 +306,12 @@ def list_jobs(
                             if has_weak_flags(r.get("score_breakdown"))}
                 if weak_ids:
                     run_job_ids = [j for j in run_job_ids if j not in weak_ids]
+            # A source turned back on since the visible run shows its offers at once (#253): the
+            # run did not evaluate them because the source was off, so they are restored from
+            # their last completed score until the next run evaluates them again.
+            restored = _restored_ids(s, rs, latest_run, run_job_ids, _disabled_sources(request))
+            if restored:
+                run_job_ids = _merge_by_score(rs, latest_run_id, run_job_ids, restored)
 
         # Reduce the run's job-id scope by tier BEFORE any pagination happens
         # below, so every downstream branch (FTS intersect, Python-paginated
@@ -625,6 +631,9 @@ class ListStatusOut(BaseModel):
     # network_outage, suspect_empty), and the stored offers the visible run carried, per source.
     incomplete_sources: dict[str, str] = {}
     carried_by_source: dict[str, int] = {}
+    # Offers of a source turned back on since the visible run, shown from their last score until
+    # the next run evaluates them again.
+    restored_by_source: dict[str, int] = {}
     listed: int = 0
     hidden_by_user: int = 0
     decouverte: int = 0
@@ -665,6 +674,13 @@ def list_status(request: Request) -> ListStatusOut:
             hidden_by_user=sum(1 for st in list_state.values() if st["hidden"]),
         )
         if visible:
+            run_ids = rs.get_job_ids_for_run(visible["id"])
+            restored = _restored_ids(s, rs, visible, run_ids, off_sources)
+            if restored:
+                for source, n in conn.execute(
+                        f"SELECT source, COUNT(*) FROM jobs WHERE id IN ({','.join('?' * len(restored))}) "
+                        "GROUP BY source", restored):
+                    out.restored_by_source[source] = int(n)
             out.decouverte = len(drawn_for_run(request.app.state.db_path, visible["id"]))
             out.outside_criteria = sum(1 for r in rs.get_jobs_for_run(visible["id"], limit=-1)
                                        if has_weak_flags(r.get("score_breakdown")))
@@ -1152,6 +1168,48 @@ def _disabled_sources(request: Request) -> set[str]:
     except Exception as exc:  # noqa: BLE001 — listing offers never fails on the settings
         logger.warning("Source switches unavailable: %s", exc)
         return set()
+
+
+def _restored_ids(storage: Storage, rs: RunStorage, run: dict[str, Any], run_ids: list[str],
+                  off_now: set[str]) -> list[str]:
+    """Offers of a source that was off when ``run`` ran (``stats.sources_off``) and is on now:
+    active, scored in an earlier completed run, not in ``run_ids``, not an exact duplicate (same
+    content hash) of an offer of the run, and with no weak-evidence flag. Best score first."""
+    from src.pipeline.lanes import has_weak_flags
+
+    back_on = set((run.get("stats") or {}).get("sources_off") or []) - off_now
+    if not back_on:
+        return []
+    conn = storage._get_conn()  # noqa: SLF001
+    in_run = set(run_ids)
+    run_hashes = storage.get_content_hashes(run_ids)
+    marks = ",".join("?" * len(back_on))
+    candidates = [r[0] for r in conn.execute(
+        f"SELECT id, content_hash FROM jobs WHERE status = 'active' AND source IN ({marks})", sorted(back_on))
+        if r[0] not in in_run and not (r[1] and r[1] in run_hashes)]
+    scores = rs.get_latest_scores_for_jobs(candidates, completed_only=True)
+    kept = [j for j in candidates if j in scores and not has_weak_flags(scores[j].get("score_breakdown"))]
+    return sorted(kept, key=lambda j: (-float(scores[j].get("final_score") or 0.0), j))
+
+
+def _merge_by_score(rs: RunStorage, run_id: str, run_ids: list[str], restored: list[str]) -> list[str]:
+    """``run_ids`` in their order with ``restored`` (best first) merged in by final score: a
+    restored offer goes before the first run offer that scores lower."""
+    scores = rs.get_scores_for_list(run_ids + restored, run_id)
+
+    def score(j: str) -> float:
+        return float((scores.get(j) or {}).get("final_score") or 0.0)
+
+    out: list[str] = []
+    i = k = 0
+    while i < len(run_ids) and k < len(restored):
+        if score(restored[k]) > score(run_ids[i]):
+            out.append(restored[k])
+            k += 1
+        else:
+            out.append(run_ids[i])
+            i += 1
+    return out + run_ids[i:] + restored[k:]
 
 
 def _tracked_ids(storage: Storage) -> set[str]:

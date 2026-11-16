@@ -159,3 +159,58 @@ def test_turning_a_source_off_and_on_acts_at_once(api) -> None:  # noqa: ANN001
     assert client.get("/api/jobs/list-status").json()["source_off"] == {"beta": 2}
     _sources(cfg, beta=True)
     assert [j["id"] for j in client.get("/api/jobs").json()] == ["a1", "b1", "b2"]
+
+
+def test_a_source_turned_back_on_shows_its_offers_without_a_run(api) -> None:  # noqa: ANN001
+    """#253 review: offers of a source that was off during the visible run come back the moment
+    the source is on again, from their last completed score, merged by score."""
+    client, db = api
+    cfg = Path(client.app.state.config_dir)
+    _jobs(db, [("a1", "alpha", ["France"]), ("a2", "alpha", []), ("b1", "beta", ["France"]), ("b2", "beta", [])])
+    _run(db, "r0", {"a1": 0.9, "a2": 0.5, "b1": 0.7, "b2": 0.3})          # both sources on
+    _sources(cfg, beta=False)
+    _run(db, "r1", {"a1": 0.9, "a2": 0.5}, stats={"sources_off": ["beta", "jobicy"]})  # beta not evaluated
+    assert [j["id"] for j in client.get("/api/jobs").json()] == ["a1", "a2"]
+
+    _sources(cfg, beta=True)                                               # no run in between
+    listed = client.get("/api/jobs").json()
+    assert [j["id"] for j in listed] == ["a1", "b1", "a2", "b2"]           # merged by score
+    assert {j["id"]: j["score"]["final_score"] for j in listed}["b1"] == pytest.approx(0.7)
+    assert client.get("/api/jobs/count").json()["count"] == 4
+    assert client.get("/api/jobs/countries").json()["total"] == 4
+    assert client.get("/api/dashboard").json()["listed_total"] == 4
+    status = client.get("/api/jobs/list-status").json()
+    assert status["restored_by_source"] == {"beta": 2} and status["listed"] == 4
+    assert [j["id"] for j in client.get("/api/jobs", params={"min_tier": "strong"}).json()] \
+        == [j["id"] for j in listed if j["score"]["final_score"] >= 0.7]
+
+    _sources(cfg, beta=False)                                              # and off again, at once
+    assert [j["id"] for j in client.get("/api/jobs").json()] == ["a1", "a2"]
+    assert client.get("/api/jobs/list-status").json()["restored_by_source"] == {}
+
+
+def test_only_offers_the_run_did_not_evaluate_are_restored(api) -> None:  # noqa: ANN001
+    client, db = api
+    cfg = Path(client.app.state.config_dir)
+    _jobs(db, [("a1", "alpha", []), ("a9", "alpha", []), ("b1", "beta", []), ("b2", "beta", []), ("b3", "beta", [])])
+    s = Storage(db_path=db)
+    s.init_db()
+    conn = s._get_conn()
+    conn.execute("UPDATE jobs SET content_hash = 'same' WHERE id IN ('a1', 'b2')")   # b2 duplicates a1
+    conn.commit()
+    s.set_reported_expired("b3", True, datetime.now(UTC))
+    s.close()
+    _run(db, "r0", {"a1": 0.9, "a9": 0.8, "b1": 0.7, "b2": 0.6, "b3": 0.5})
+    _sources(cfg, beta=False)
+    # alpha was on: the run evaluated a9 and dropped it (the profile rejects it now)
+    _run(db, "r1", {"a1": 0.9}, stats={"sources_off": ["beta"]})
+    _sources(cfg, beta=True)
+    assert [j["id"] for j in client.get("/api/jobs").json()] == ["a1", "b1"]   # not a9, b2 (duplicate), b3 (expired)
+
+
+def test_a_run_recorded_without_sources_off_restores_nothing(api) -> None:  # noqa: ANN001
+    client, db = api
+    _jobs(db, [("a1", "alpha", []), ("b1", "beta", [])])
+    _run(db, "r0", {"a1": 0.9, "b1": 0.7})
+    _run(db, "r1", {"a1": 0.9})                                            # older run: no sources_off
+    assert [j["id"] for j in client.get("/api/jobs").json()] == ["a1"]
