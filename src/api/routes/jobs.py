@@ -281,6 +281,7 @@ def list_jobs(
     # are listed in those views, with their status.
     personal_view = saved_only or tracked_only
     include_expired = include_expired or personal_view
+    off_sources = _disabled_sources(request)
     s, rs = _get_storages(request)
     try:
         # Scope to the latest completed run so the Jobs page reflects current
@@ -309,7 +310,7 @@ def list_jobs(
             # A source turned back on since the visible run shows its offers at once (#253): the
             # run did not evaluate them because the source was off, so they are restored from
             # their last completed score until the next run evaluates them again.
-            restored = _restored_ids(s, rs, latest_run, run_job_ids, _disabled_sources(request))
+            restored = _restored_ids(s, rs, latest_run, run_job_ids, off_sources)
             if restored:
                 run_job_ids = _merge_by_score(rs, latest_run_id, run_job_ids, restored)
 
@@ -348,7 +349,6 @@ def list_jobs(
             run_job_ids = in_run + sorted(wanted - set(in_run))
         exclude_hashes = set() if include_hidden else s.get_content_hashes(sorted(hidden_ids))
         exclude_ids = set() if include_hidden else set(hidden_ids)
-        off_sources = _disabled_sources(request)
         exclude_ids |= _switched_off_ids(request, s, list_state, off_sources)
 
         if q:
@@ -1188,8 +1188,27 @@ def _restored_ids(storage: Storage, rs: RunStorage, run: dict[str, Any], run_ids
         f"SELECT id, content_hash FROM jobs WHERE status = 'active' AND source IN ({marks})", sorted(back_on))
         if r[0] not in in_run and not (r[1] and r[1] in run_hashes)]
     scores = rs.get_latest_scores_for_jobs(candidates, completed_only=True)
-    kept = [j for j in candidates if j in scores and not has_weak_flags(scores[j].get("score_breakdown"))]
+    # Only an offer whose latest evaluation accepted it: a later completed run that rejected it
+    # (the profile changed since) wins over an older score.
+    rejected_at = _latest_rejection_times(rs, [j for j in candidates if j in scores])
+    kept = [j for j in candidates if j in scores
+            and str(scores[j].get("run_started_at") or "") > rejected_at.get(j, "")
+            and not has_weak_flags(scores[j].get("score_breakdown"))]
     return sorted(kept, key=lambda j: (-float(scores[j].get("final_score") or 0.0), j))
+
+
+def _latest_rejection_times(rs: RunStorage, job_ids: list[str]) -> dict[str, str]:
+    """For each job, the start time of the latest completed run that rejected it."""
+    out: dict[str, str] = {}
+    conn = rs._get_conn()  # noqa: SLF001
+    for i in range(0, len(job_ids), 500):
+        chunk = job_ids[i:i + 500]
+        for job_id, started in conn.execute(
+                f"""SELECT r.job_id, MAX(p.started_at) FROM job_rejections r JOIN pipeline_runs p ON p.id = r.run_id
+                    WHERE p.status = 'completed' AND r.job_id IN ({','.join('?' * len(chunk))})
+                    GROUP BY r.job_id""", chunk):
+            out[job_id] = str(started or "")
+    return out
 
 
 def _merge_by_score(rs: RunStorage, run_id: str, run_ids: list[str], restored: list[str]) -> list[str]:
