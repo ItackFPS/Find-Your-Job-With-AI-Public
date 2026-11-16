@@ -256,3 +256,20 @@ def test_list_status_counts_carried_offers_among_the_listed_ones(api) -> None:  
     status = client.get("/api/jobs/list-status").json()
     assert status["listed"] == 3
     assert status["carried_by_source"] == {"alpha": 1, "beta": 1}           # a2, b1; not the run's 49
+
+
+def test_the_dashboard_and_run_api_carry_the_run_outcome(api) -> None:  # noqa: ANN001
+    """The run's outcome, incomplete sources and carried counts reach the screens (they were
+    declared on RunStats but never copied, so the Today card never showed an outcome)."""
+    client, db = api
+    _jobs(db, [("a1", "alpha", [])])
+    stats = {"outcome": "partial", "stored_new": 0, "post_seconds": 1.5, "carried": 3,
+             "carried_by_source": {"alpha": 3}, "incomplete_sources": {"beta": "suspect_empty"},
+             "sources_off": ["jobicy"], "by_source": {"beta": {"status": "completed", "collected": 0,
+                                                              "accepted": 0, "errors": 0, "suspect_empty": True}}}
+    _run(db, "r1", {"a1": 0.9}, stats=stats)
+    run = client.get("/api/dashboard").json()["latest_run"]["stats"]
+    assert run["outcome"] == "partial" and run["stored_new"] == 0 and run["post_seconds"] == 1.5
+    assert run["incomplete_sources"] == {"beta": "suspect_empty"} and run["carried"] == 3
+    assert run["by_source"]["beta"]["suspect_empty"] is True
+    assert client.get("/api/pipeline/runs/r1").json()["stats"]["outcome"] == "partial"
