@@ -1,6 +1,7 @@
 # 0033 — The activation rule's G3 is an anytime-valid sequential test
 
-Status: accepted (2026-11-15, Phase B B9-B, owner decision D2). Amends ADR 0019's G3 and the G3b
+Status: superseded by [ADR 0034](0034-remove-personal-learning.md) (2026-11-16: the personal
+learning module was removed). Was: accepted (2026-11-15, Phase B B9-B, owner decision D2). Amends ADR 0019's G3 and the G3b
 parameters.
 
 ## Context
