@@ -15,16 +15,16 @@ function outboxReturning(...statuses: number[]) {
 }
 
 describe('SaveHideButtons', () => {
-  it('sends where the action was taken: surface, position and the randomized flag (B9-A)', async () => {
+  it('sends where the action was taken: surface and position (B9-A)', async () => {
     const sent: unknown[] = []
     const outbox = new Outbox({
       store: new MemoryStore(), instanceId: 'i', nextSeq: (() => { let s = 0; return () => ++s })(),
       transport: entry => { sent.push(entry.body); return Promise.resolve({ status: 201 }) }, schedule: () => {},
     })
-    render(<SaveHideButtons jobId="j1" surface="decouverte" position={2} randomized outbox={Promise.resolve(outbox)} />)
+    render(<SaveHideButtons jobId="j1" surface="jobs" position={2} outbox={Promise.resolve(outbox)} />)
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(sent).toHaveLength(1))
-    expect(sent[0]).toMatchObject({ type: 'saved', context: { surface: 'decouverte', position: 2, randomized: true } })
+    expect(sent[0]).toMatchObject({ type: 'saved', context: { surface: 'jobs', position: 2 } })
   })
 
   it('shows "Saved" only after the server acknowledged', async () => {
