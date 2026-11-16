@@ -51,11 +51,6 @@ class ScoredJobRecord:
     semantic_score: float
     factors: dict[str, float]
     personalization_adjustment: float
-    # Personal model in shadow (ADR 0018, stage L3): journaled, never applied to final_score.
-    personal_adjustment: float | None = None
-    personal_model_version: str | None = None
-    # Visible position when the personal ranking is ACTIVE (stage L4.2); None means the production order.
-    visible_position: int | None = None
     # WEAK hard-filter violations that ranked instead of rejecting (ADR 0019 v5 AD-2b, stage L5.2).
     weak_flags: list[dict[str, Any]] = field(default_factory=list)
     weak_penalty: float = 0.0
@@ -977,20 +972,6 @@ def run_pipeline(
         # branch below) so the PERSONALIZATION stage further down can safely
         # read scoring.domain_relevance.confirmed_wrong_score from it via
         # cap_personalization_at_gates.
-        # Découverte (S4; ADR 0019, stage L4.3): drawn BEFORE ranking, from the ids of the offers that
-        # reached scoring only, so it never depends on either ranking. It is evidence gathering, not a
-        # personal reordering, so it keeps running while learning is paused (owner decision D2 part 2,
-        # Phase B B9-A). Fail-open.
-        s4_draw = None
-        try:
-            from src.learning.exploration import draw as draw_s4
-            from src.learning.exploration import load_slots
-
-            s4_draw = draw_s4(db_path, run_id, [job.id for job in filtered_jobs],
-                              slots=load_slots(Path(config_dir) / "personalization.yaml"))
-        except Exception:  # noqa: BLE001 - Découverte never affects the run
-            logger.exception("Découverte draw failed; the run has no Découverte slots")
-            s4_draw = None
         scoring_config: dict[str, Any] = {}
         if scoring_path.exists():
             scoring_config = load_scoring_config(str(scoring_path))
@@ -1218,7 +1199,6 @@ def run_pipeline(
         stats.model_name = semantic_config.get("embedding", {}).get("model_name", "")
 
         sem_scores_by_job: dict[str, float] = {}
-        embedding_model_id = ""            # the personal model reads vectors stored under this id
         final_ranked = scored_jobs
 
         _t_semantic = time.perf_counter()
@@ -1231,7 +1211,6 @@ def run_pipeline(
                     device=semantic_config["embedding"].get("device", "auto"),
                 )
 
-                embedding_model_id = embedding_service.cache_model_id
                 profile_embedding = build_profile_embedding(
                     profile.to_semantic_info(),
                     embedding_service,
@@ -1321,62 +1300,6 @@ def run_pipeline(
             final_ranked, personalized_ranked, factors_by_job_id, scoring_config,
         )
 
-        # Personal model in shadow (ADR 0018, ADR 0019; stage L3): fitted on the journal, the challenger
-        # ranking is journaled in ranking_shadow. Never applied: personalized_ranked, final_score and the
-        # deterministic score are unchanged. Skipped while learning is paused. Fail-open.
-        _t_shadow = time.perf_counter()
-        shadow_adjustments: dict[str, float] = {}
-        shadow_version: str | None = None
-        visible_positions: dict[str, int] = {}
-        if not is_paused(db_path):
-            try:
-                from src.learning.shadow import compute_shadow
-
-                shadow_adjustments, shadow_version = compute_shadow(
-                    db_path, run_id, personalized_ranked, factors_by_job_id,
-                    lambda prod, chal: cap_personalization_at_gates(prod, chal, factors_by_job_id, scoring_config),
-                    embedding_model=embedding_model_id, started_at=started_at,
-                    config_path=Path(config_dir) / "personalization.yaml",
-                )
-            except Exception:  # noqa: BLE001 - the shadow path never affects the run
-                logger.exception("Personal model shadow failed; the run keeps its ranking")
-                shadow_adjustments, shadow_version = {}, None
-            if shadow_version and s4_draw is not None:
-                try:
-                    from src.learning.exploration import record_in_shadow
-
-                    record_in_shadow(db_path, s4_draw)
-                except Exception:  # noqa: BLE001 - the S4 journal never affects the run
-                    logger.exception("Recording the Découverte draw in ranking_shadow failed")
-            if shadow_version:
-                # Live AD-5 counting (stage L4.1): records positives and the health state. Activation is
-                # behind a release flag that is off, so this changes nothing the user sees. Fail-open.
-                try:
-                    from src.learning.health import update_health
-
-                    health_record = update_health(db_path, run_id,
-                                                  config_path=Path(config_dir) / "personalization.yaml")
-                except Exception:  # noqa: BLE001 - the health record never affects the run
-                    logger.exception("Personal health update failed; the run keeps its ranking")
-                    health_record = None
-                # Personal ranking (stage L4.2): only an ACTIVE record with the release flag on changes
-                # the visible order; stored scores stay the production ones. A guardrail failure pauses.
-                if health_record:
-                    from src.learning.health import pause, visible_ranking
-
-                    try:
-                        visible = visible_ranking(
-                            personalized_ranked, shadow_adjustments, health_record,
-                            lambda prod, chal: cap_personalization_at_gates(prod, chal, factors_by_job_id,
-                                                                            scoring_config))
-                    except Exception:  # noqa: BLE001 - fail to production and pause
-                        logger.exception("Personal ranking failed a guardrail; pausing, production is used")
-                        pause(db_path, "guardrail")
-                        visible = None
-                    if visible is not None:
-                        visible_positions = {job.id: i for i, (job, _) in enumerate(visible, start=1)}
-        stats.stage_times["shadow"] = time.perf_counter() - _t_shadow
-
         stats.personalized = len(personalized_ranked)
         stats.personalization_cache_hits = int(_pers_timing.get("pers_cache_hits", 0))
         stats.personalization_cache_misses = int(_pers_timing.get("pers_cache_misses", 0))
@@ -1439,9 +1362,6 @@ def run_pipeline(
                 semantic_score=sem_scores_by_job.get(job.id, 0.0),
                 factors=breakdown_by_job.get(job.id, {}),
                 personalization_adjustment=exp.clamped_adjustment if exp else 0.0,
-                personal_adjustment=shadow_adjustments.get(job.id) if shadow_version else None,
-                personal_model_version=shadow_version,
-                visible_position=visible_positions.get(job.id),
                 weak_flags=[f.as_dict() for f in weak_flags_by_job.get(job.id, [])],
                 weak_penalty=weak_penalties.get(job.id, 0.0),
             ))

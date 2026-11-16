@@ -58,8 +58,7 @@ def _rows(db: Path, sql: str, *args) -> int:
 
 def test_pause_stops_exactly_what_the_settings_text_says(tmp_path):
     """Owner decision D2 part 2 (Phase B B9-A), one assertion per component of the Settings text:
-    stopped = personal reordering, shadow comparison; not stopped = recording of answers, Save /
-    Hide, exposures and the Découverte draw."""
+    stopped = personal reordering; not stopped = recording of answers, Save / Hide and exposures."""
     from src.feedback.exposure import ExposureItem, ExposureStorage
     from src.storage import app_state
 
@@ -69,10 +68,6 @@ def test_pause_stops_exactly_what_the_settings_text_says(tmp_path):
     paused = _pipeline(db, cfg)
     # stopped: personal reordering
     assert all(s.personalization_adjustment == 0 for s in paused.scored_jobs)
-    # stopped: shadow comparison
-    assert _rows(db, "SELECT COUNT(*) FROM ranking_shadow WHERE run_id = ?", paused.run_id) == 0
-    # not stopped: the Découverte draw (evidence gathering)
-    assert _rows(db, "SELECT COUNT(*) FROM s4_draw WHERE run_id = ?", paused.run_id) > 0
     # not stopped: answers and list actions
     n = _count(db, "feedback_events")
     service = FeedbackService(str(db), config_dir=str(cfg))
@@ -87,10 +82,6 @@ def test_pause_stops_exactly_what_the_settings_text_says(tmp_path):
                                   [ExposureItem(before.scored_jobs[0].job_id, "jobs", position=0)]) == 1
     finally:
         store.close()
-    # resumed: the shadow comparison runs again
-    learning.set_paused(str(db), False)
-    resumed = _pipeline(db, cfg)
-    assert _rows(db, "SELECT COUNT(*) FROM ranking_shadow WHERE run_id = ?", resumed.run_id) > 0
 
 
 def test_the_settings_text_names_what_pause_stops_and_keeps():
@@ -99,11 +90,15 @@ def test_the_settings_text_names_what_pause_stops_and_keeps():
     root = Path(__file__).resolve().parents[1] / "frontend" / "src" / "locales"
     en = json.loads((root / "en" / "translation.json").read_text(encoding="utf-8"))["settings"]["learning"]["pauseHelp"]
     fr = json.loads((root / "fr" / "translation.json").read_text(encoding="utf-8"))["settings"]["learning"]["pauseHelp"]
-    for word in ("ranking stops adapting", "comparison with a personal ranking", "still recorded", "Découverte", "Erase"):
+    for word in ("ranking stops adapting", "still recorded", "Erase"):
         assert word in en, word
-    for word in ("cesse de s’adapter", "comparaison avec un classement personnel", "restent enregistrés", "Découverte",
-                 "effacement"):
+    for word in ("cesse de s’adapter", "restent enregistrées", "effacement"):
         assert word in fr, word
+    # the personal learning module was removed (#250): nothing it did is promised any more
+    for gone in ("personal ranking", "Découverte"):
+        assert gone not in en, gone
+    for gone in ("classement personnel", "Découverte"):
+        assert gone not in fr, gone
 
 
 def test_reset_clears_derived_state_keeps_signals_and_hidden(tmp_path):
