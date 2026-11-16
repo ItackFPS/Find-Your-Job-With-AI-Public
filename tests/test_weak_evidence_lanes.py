@@ -64,7 +64,7 @@ def test_params_from_scoring_yaml(tmp_path):
 def test_pipeline_journals_lanes(tmp_path):
     from tests.test_decision_journal_orchestrator import _config_dir
     from tests.test_filter_weak_evidence_mode import _rank_all_filters
-    from tests.test_learning_model_shadow import _pipeline
+    from tests.test_decision_journal_orchestrator import _pipeline
 
     cfg = _config_dir(tmp_path, None)
     _rank_all_filters(cfg)

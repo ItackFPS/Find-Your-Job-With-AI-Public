@@ -1420,7 +1420,7 @@
       "title": "Apprentissage",
       "subtitle": "Comment l’application apprend de vos actions. Vos actions restent toujours sur cet ordinateur.",
       "pause": "Mettre l’apprentissage en pause",
-      "pauseHelp": "Pendant la pause, le classement cesse de s’adapter à vous et aucune comparaison avec un classement personnel n’est faite. Vos actions, les offres qui vous sont montrées et les tirages Découverte restent enregistrés sur cet ordinateur ; l’effacement les supprime.",
+      "pauseHelp": "Pendant la pause, le classement cesse de s’adapter à vous. Vos actions et les offres qui vous sont montrées restent enregistrées sur cet ordinateur ; l’effacement les supprime.",
       "reset": "Réinitialiser l’apprentissage",
       "resetHelp": "L’apprentissage repart de vos prochaines actions. Vos offres enregistrées et masquées et votre suivi de candidatures sont conservés.",
       "confirm": "Réinitialiser l’apprentissage ? Ce qu’il a appris jusqu’ici est effacé.",

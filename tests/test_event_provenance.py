@@ -13,18 +13,8 @@ import sqlite3
 from fastapi.testclient import TestClient
 
 from src.feedback.exposure import ExposureStorage
-from src.learning import health as H
 from src.models.job import Job
 from src.storage.sqlite import Storage
-
-
-def test_each_list_surface_maps_to_its_stratum() -> None:
-    # The Jobs page sends "outside_criteria" for the lane: it is S3, not unknown.
-    assert H.surface_code("outside_criteria") == "S3"
-    assert H.surface_code("search") == "S2"
-    # Recorded with their surface, never counted as evidence of a ranking.
-    for surface in ("saved", "review", "job_detail"):
-        assert H.surface_code(surface) == "S0", surface
 
 
 def _seed(db: str) -> None:
