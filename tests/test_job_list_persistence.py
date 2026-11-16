@@ -267,9 +267,6 @@ def test_turning_a_source_back_on_lists_its_offers_before_any_run(board, monkeyp
                        "settings_path": str(settings_path_for(board.db))}.items():
         monkeypatch.setitem(app.state._state, key, value)
     client = TestClient(app)
-    # Découverte off: with three offers its random slots would take some of them out of the list.
-    (Path(board.cfg) / "personalization.yaml").write_text(
-        "personal_model:\n  exploration:\n    slots: 0\n", encoding="utf-8")
 
     def listed() -> list[str]:
         return sorted(j["source"] for j in client.get("/api/jobs", params={"limit": 500}).json())

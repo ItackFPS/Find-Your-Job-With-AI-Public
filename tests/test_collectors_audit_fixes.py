@@ -19,7 +19,7 @@ from src.pipeline.orchestrator import _build_collector_config
 SAMPLE_RSS_FEED = """<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
 <channel>
-<title>We Work Remotely</title>
+<title>Example Jobs</title>
 <link>https://jobs.example.com</link>
 <item>
 <title>Acme Corp: Senior Backend Engineer</title>

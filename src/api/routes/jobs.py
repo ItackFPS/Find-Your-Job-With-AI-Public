@@ -294,11 +294,6 @@ def list_jobs(
         if latest_run_id:
             run_job_ids = rs.get_job_ids_for_run(latest_run_id)
             if not q and not personal_view:
-                # Découverte (S4) offers have their own section; the main list never duplicates them.
-                from src.learning.exploration import drawn_for_run
-
-                s4_ids = {d["job_id"] for d in drawn_for_run(request.app.state.db_path, latest_run_id)}
-                run_job_ids = [j for j in run_job_ids if j not in s4_ids]
                 # Weak-evidence offers (ADR 0019 v5 AD-2b) never enter the main list: the best of
                 # them have their own collapsed lane (/outside-criteria), the rest stays unshown.
                 from src.pipeline.lanes import has_weak_flags
@@ -464,41 +459,6 @@ def list_jobs(
         rs.close()
 
 
-@router.get("/decouverte", response_model=list[JobDetailOut])
-def list_decouverte(request: Request) -> list[JobDetailOut]:
-    """The Découverte (S4) slots of the latest completed run, in slot order (ADR 0019).
-
-    A uniform random draw independent of every ranking: no score floor, so some offers are poor
-    matches by design. Hidden offers are left out."""
-    from src.learning.exploration import drawn_for_run
-
-    s, rs = _get_storages(request)
-    try:
-        latest_run = rs.get_latest_visible_run()
-        if not latest_run:
-            return []
-        ids = [d["job_id"] for d in drawn_for_run(request.app.state.db_path, latest_run["id"])]
-        list_state = _list_state(request)
-        off = _switched_off_ids(request, s, list_state)
-        ids = [j for j in ids if not list_state.get(j, {}).get("hidden") and j not in off]
-        scores_by_id = rs.get_scores_for_list(ids, latest_run["id"]) if ids else {}
-        jobs_by_id = s.get_jobs_by_ids(ids) if ids else {}
-        result: list[JobDetailOut] = []
-        for job_id in ids:
-            job = jobs_by_id.get(job_id)
-            if job is None:
-                continue
-            job_out = _job_to_job_detail_out(job, scores_by_id.get(job_id))
-            st = list_state.get(job_id)
-            if st:
-                job_out.saved, job_out.hidden = st["saved"], st["hidden"]
-            result.append(job_out)
-        return result
-    finally:
-        s.close()
-        rs.close()
-
-
 @router.get("/outside-criteria", response_model=list[JobDetailOut])
 def list_outside_criteria(request: Request) -> list[JobDetailOut]:
     """The "outside your criteria" lane of the latest completed run (ADR 0019 v5 AD-2b; L5.3).
@@ -637,7 +597,6 @@ class ListStatusOut(BaseModel):
     restored_by_source: dict[str, int] = {}
     listed: int = 0
     hidden_by_user: int = 0
-    decouverte: int = 0
     outside_criteria: int = 0
     source_off: dict[str, int] = {}
     expired: dict[str, int] = {}
@@ -647,9 +606,8 @@ class ListStatusOut(BaseModel):
 def list_status(request: Request) -> ListStatusOut:
     """What the main list holds and what it leaves out, by reason: the run it shows, whether the
     latest run kept the previous list, incomplete sources, carried offers, and the offers left out
-    because the user hid them, they are in Découverte or the outside-criteria lane, their source is
+    because the user hid them, they are in the outside-criteria lane, their source is
     off, or they expired. Every number is a count over stored data; nothing here filters."""
-    from src.learning.exploration import drawn_for_run
     from src.pipeline.lanes import has_weak_flags
 
     s, rs = _get_storages(request)
@@ -683,7 +641,6 @@ def list_status(request: Request) -> ListStatusOut:
                         f"SELECT source, COUNT(*) FROM jobs WHERE id IN ({','.join('?' * len(restored))}) "
                         "GROUP BY source", restored):
                     out.restored_by_source[source] = int(n)
-            out.decouverte = len(drawn_for_run(request.app.state.db_path, visible["id"]))
             out.outside_criteria = sum(1 for r in rs.get_jobs_for_run(visible["id"], limit=-1)
                                        if has_weak_flags(r.get("score_breakdown")))
         if off_sources:

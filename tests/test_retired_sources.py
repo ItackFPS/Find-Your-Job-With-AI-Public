@@ -32,7 +32,7 @@ def test_a_v1_sources_file_loads_without_the_removed_boards() -> None:
     assert names and not names & RETIRED_SOURCE_TYPES
 
 
-def test_an_edited_file_keeps_its_removed_entries_when_saved(tmp_path: Path) -> None:
+def test_a_saved_file_no_longer_lists_the_removed_boards(tmp_path: Path) -> None:
     path = tmp_path / "sources.yaml"
     path.write_text(_EDITED, encoding="utf-8")
     reg = SourceRegistry(config_path=str(path))
@@ -40,8 +40,7 @@ def test_an_edited_file_keeps_its_removed_entries_when_saved(tmp_path: Path) -> 
     assert reg.get_source("remoteok") is None
     reg.save(str(path))
     saved = yaml.safe_load(path.read_text(encoding="utf-8"))["sources"]
-    assert [s["name"] for s in saved] == ["src", "remoteok", "jobicy", "weworkremotely"]
-    assert saved[1]["config"] == {"tags": ["python"]}          # the user's entry is unchanged
+    assert [s["name"] for s in saved] == ["src"]
 
 
 class _Source(BaseCollector):

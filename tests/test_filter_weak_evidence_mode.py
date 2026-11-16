@@ -121,7 +121,7 @@ def test_pipeline_default_has_no_weak_flags_and_rank_scores_more(tmp_path):
     import sqlite3
 
     from tests.test_decision_journal_orchestrator import _config_dir
-    from tests.test_learning_model_shadow import _pipeline
+    from tests.test_decision_journal_orchestrator import _pipeline
 
     a, b = tmp_path / "a", tmp_path / "b"
     a.mkdir()
