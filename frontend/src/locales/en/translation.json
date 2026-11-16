@@ -1530,6 +1530,7 @@
     },
     "carried": "{count, plural, one {# offer in the list comes} other {# offers in the list come}} from earlier searches: their source did not return them this time.",
     "sourceOff": "{count, plural, one {# offer is} other {# offers are}} hidden because their source is off ({sources}).",
+    "restored": "{count, plural, one {# offer is back} other {# offers are back}}: their source was just turned on again ({sources}). They keep their last score until the next search.",
     "settings": "Settings",
     "expired": "{count, plural, one {# expired offer is} other {# expired offers are}} no longer shown, {stale, number} of them not seen for 30 days. Tick “Include expired offers” to see them."
   },

@@ -1530,6 +1530,7 @@
     },
     "carried": "{count, plural, one {# offre de la liste vient} other {# offres de la liste viennent}} des recherches précédentes : leur source ne les a pas renvoyées cette fois.",
     "sourceOff": "{count, plural, one {# offre est masquée} other {# offres sont masquées}} parce que leur source est désactivée ({sources}).",
+    "restored": "{count, plural, one {# offre réaffichée} other {# offres réaffichées}} : leur source vient d’être réactivée ({sources}). Elles gardent leur dernier score jusqu’à la prochaine recherche.",
     "settings": "Paramètres",
     "expired": "{count, plural, one {# offre expirée n’est plus affichée} other {# offres expirées ne sont plus affichées}}, dont {stale, number} non vues depuis 30 jours. Cochez « Inclure les offres expirées » pour les voir."
   },

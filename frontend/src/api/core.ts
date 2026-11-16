@@ -81,6 +81,8 @@ export interface ListStatus {
   previous_list_kept: boolean
   incomplete_sources: Record<string, string>
   carried_by_source: Record<string, number>
+  // Offers of a source turned back on since the last search, shown until the next one evaluates them.
+  restored_by_source?: Record<string, number>
   listed: number
   hidden_by_user: number
   decouverte: number

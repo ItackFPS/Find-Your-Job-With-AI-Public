@@ -23,11 +23,14 @@ export function ListStatusNotice({ status }: { status: ListStatus | null | undef
   if (!status) return null
   const incomplete = Object.entries(status.incomplete_sources ?? {})
   const carried = Object.values(status.carried_by_source ?? {}).reduce((a, b) => a + b, 0)
+  const restored = Object.entries(status.restored_by_source ?? {})
+  const restoredTotal = restored.reduce((a, [, n]) => a + n, 0)
   const off = Object.entries(status.source_off ?? {})
   const offTotal = off.reduce((a, [, n]) => a + n, 0)
   const expired = Object.values(status.expired ?? {}).reduce((a, b) => a + b, 0)
   const stale = status.expired?.stale ?? 0
-  if (!status.previous_list_kept && incomplete.length === 0 && carried === 0 && offTotal === 0 && expired === 0) return null
+  if (!status.previous_list_kept && incomplete.length === 0 && carried === 0 && restoredTotal === 0 && offTotal === 0
+    && expired === 0) return null
   return (
     <div
       role="status"
@@ -52,6 +55,11 @@ export function ListStatusNotice({ status }: { status: ListStatus | null | undef
       {carried > 0 && (
         <p style={{ ...line, color: 'var(--color-muted)' }} data-testid="list-status-carried">
           {t('listStatus.carried', { count: carried })}
+        </p>
+      )}
+      {restoredTotal > 0 && (
+        <p style={{ ...line, color: 'var(--color-muted)' }} data-testid="list-status-restored">
+          {t('listStatus.restored', { count: restoredTotal, sources: restored.map(([name]) => name).join(', ') })}
         </p>
       )}
       {offTotal > 0 && (

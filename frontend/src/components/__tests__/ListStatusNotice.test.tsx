@@ -37,6 +37,11 @@ describe('ListStatusNotice', () => {
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings')
   })
 
+  it('says which offers came back with their source, before any new search', () => {
+    show({ ...base, restored_by_source: { indeed: 3 } })
+    expect(screen.getByTestId('list-status-restored')).toHaveTextContent('3 offers are back: their source was just turned on again (indeed)')
+  })
+
   it('counts expired offers, stale ones apart', () => {
     show({ ...base, expired: { stale: 4, valid_through: 1 } })
     expect(screen.getByTestId('list-status-expired')).toHaveTextContent('5 expired offers are no longer shown, 4 of them not seen for 30 days')
