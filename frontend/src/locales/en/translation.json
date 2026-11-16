@@ -128,6 +128,7 @@
   "dashboard": {
     "title": "Dashboard",
     "jobsInDb": "{count, number} jobs in DB",
+    "listedTotal": "{count, plural, one {# offer listed} other {# offers listed}}",
     "pipelineRunning": "⟳ Pipeline running…",
     "today": {
       "title": "Today",
@@ -141,6 +142,8 @@
       "untitled": "Untitled offer",
       "noMatch": "No strong match in the last search.",
       "keptPrevious": "No source succeeded in the last search, so the lists still show the previous search.",
+      "suspect": "{count, plural, one {One source returned no offer} other {# sources returned no offer}} although they found some before ({sources}); their offers stay in the list.",
+      "carried": "{count, plural, one {# offer} other {# offers}} carried over from earlier searches.",
       "nothingNew": "Nothing new since the previous search.",
       "firstEmpty": "The first search found no offer for your profile. Check your line of work and places in Profile; the next search will try again."
     },
@@ -311,7 +314,14 @@
     "empty": "No jobs found. Try adjusting your filters or running the pipeline.",
     "prev": "← Prev",
     "next": "Next →",
-    "includeExpired": "Include expired offers"
+    "includeExpired": "Include expired offers",
+    "trackedOnly": "Tracked applications only",
+    "emptyTracked": "No offer in the application tracker.",
+    "emptySaved": "No saved offer.",
+    "emptyFiltered": "No offer matches these filters. Clear them to see everything.",
+    "emptyNoRun": "No search has completed yet: start one from the dashboard.",
+    "emptySourcesOff": "Nothing to show: {count, plural, one {# offer is} other {# offers are}} hidden because their source is off (Settings).",
+    "badge": { "expired": "Expired", "stale": "Expired: not seen for 30 days", "sourceOff": "Source off" }
   },
   "jobDetail": {
     "overallMatch": "Overall match",
@@ -1507,6 +1517,21 @@
     "work_mode": "work mode may not match",
     "distance": "beyond your distance",
     "other": "one of your criteria"
+  },
+  "listStatus": {
+    "keptFailed": "The last search failed, so the list still shows the previous search.",
+    "keptNoSource": "No source succeeded in the last search, so the list still shows the previous search.",
+    "incomplete": "Incomplete search: {sources}. Offers already found stay in the list.",
+    "reason": {
+      "failed": "{name} failed",
+      "partial": "{name} answered only in part",
+      "network_outage": "{name} could not be reached",
+      "suspect_empty": "{name} returned no offer"
+    },
+    "carried": "{count, plural, one {# offer in the list comes} other {# offers in the list come}} from earlier searches: their source did not return them this time.",
+    "sourceOff": "{count, plural, one {# offer is} other {# offers are}} hidden because their source is off ({sources}).",
+    "settings": "Settings",
+    "expired": "{count, plural, one {# expired offer is} other {# expired offers are}} no longer shown, {stale, number} of them not seen for 30 days. Tick “Include expired offers” to see them."
   },
   "saveHide": {
     "save": "Save",

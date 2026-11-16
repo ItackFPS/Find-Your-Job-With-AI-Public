@@ -90,6 +90,14 @@ describe('TodayCard', () => {
     expect(countJobs).toHaveBeenCalledWith({ min_tier: 'relevant' })
   })
 
+  it('names a source that came back empty after returning offers, and the carried offers (issue #253)', async () => {
+    const stats = { ...dashboard.latest_run!.stats, outcome: 'partial' as const, carried: 42,
+      incomplete_sources: { indeed: 'suspect_empty' as const, eures: 'suspect_empty' as const } }
+    show({ ...dashboard, latest_run: { ...dashboard.latest_run!, stats } })
+    expect(await screen.findByTestId('suspect-sources')).toHaveTextContent('2 sources returned no offer although they found some before (eures, indeed)')
+    expect(screen.getByTestId('carried')).toHaveTextContent('42 offers carried over from earlier searches')
+  })
+
   it('says so before any search', async () => {
     show({ ...dashboard, latest_run: null })
     expect(await screen.findByText(/No search yet/)).toBeInTheDocument()

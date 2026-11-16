@@ -128,6 +128,7 @@
   "dashboard": {
     "title": "Tableau de bord",
     "jobsInDb": "{count, number} offres en base",
+    "listedTotal": "{count, plural, one {# offre listée} other {# offres listées}}",
     "pipelineRunning": "⟳ Recherche en cours…",
     "today": {
       "title": "Aujourd’hui",
@@ -141,6 +142,8 @@
       "untitled": "Offre sans titre",
       "noMatch": "Aucune correspondance forte lors de la dernière recherche.",
       "keptPrevious": "Aucune source n’a abouti lors de la dernière recherche : les listes montrent toujours la recherche précédente.",
+      "suspect": "{count, plural, one {Une source n’a renvoyé aucune offre} other {# sources n’ont renvoyé aucune offre}} alors qu’elles en trouvaient avant ({sources}) : leurs offres restent dans la liste.",
+      "carried": "{count, plural, one {# offre reprise} other {# offres reprises}} des recherches précédentes.",
       "nothingNew": "Rien de nouveau depuis la recherche précédente.",
       "firstEmpty": "La première recherche n’a trouvé aucune offre pour votre profil. Vérifiez votre métier et vos lieux dans Profil ; la prochaine recherche réessaiera."
     },
@@ -311,7 +314,14 @@
     "empty": "Aucune offre trouvée. Modifiez vos filtres ou lancez la recherche.",
     "prev": "← Précédent",
     "next": "Suivant →",
-    "includeExpired": "Inclure les offres expirées"
+    "includeExpired": "Inclure les offres expirées",
+    "trackedOnly": "Candidatures suivies uniquement",
+    "emptyTracked": "Aucune offre dans le suivi des candidatures.",
+    "emptySaved": "Aucune offre enregistrée.",
+    "emptyFiltered": "Aucune offre ne correspond à ces filtres. Effacez-les pour tout voir.",
+    "emptyNoRun": "Aucune recherche n’a encore abouti : lancez la recherche depuis le tableau de bord.",
+    "emptySourcesOff": "Aucune offre à afficher : {count, plural, one {# offre est masquée} other {# offres sont masquées}} parce que leur source est désactivée (Paramètres).",
+    "badge": { "expired": "Expirée", "stale": "Expirée : non vue depuis 30 jours", "sourceOff": "Source désactivée" }
   },
   "jobDetail": {
     "overallMatch": "Correspondance globale",
@@ -1507,6 +1517,21 @@
     "work_mode": "mode de travail peut-être différent",
     "distance": "au-delà de votre distance",
     "other": "l'un de vos critères"
+  },
+  "listStatus": {
+    "keptFailed": "La dernière recherche a échoué : la liste montre toujours la recherche précédente.",
+    "keptNoSource": "Aucune source n’a abouti lors de la dernière recherche : la liste montre toujours la recherche précédente.",
+    "incomplete": "Recherche incomplète : {sources}. Les offres déjà trouvées restent dans la liste.",
+    "reason": {
+      "failed": "{name} a échoué",
+      "partial": "{name} n’a répondu qu’en partie",
+      "network_outage": "{name} était injoignable",
+      "suspect_empty": "{name} n’a renvoyé aucune offre"
+    },
+    "carried": "{count, plural, one {# offre de la liste vient} other {# offres de la liste viennent}} des recherches précédentes : leur source ne les a pas renvoyées cette fois.",
+    "sourceOff": "{count, plural, one {# offre est masquée} other {# offres sont masquées}} parce que leur source est désactivée ({sources}).",
+    "settings": "Paramètres",
+    "expired": "{count, plural, one {# offre expirée n’est plus affichée} other {# offres expirées ne sont plus affichées}}, dont {stale, number} non vues depuis 30 jours. Cochez « Inclure les offres expirées » pour les voir."
   },
   "saveHide": {
     "save": "Enregistrer",

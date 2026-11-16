@@ -54,9 +54,43 @@ export const updateProfile = (p: Profile) => api.put<Profile>('/profile', p).the
 export const confirmProfileReview = (review: ProfileReview) =>
   api.put<Profile>('/profile', { review: { ...review, pending: false } }).then(r => r.data)
 
+// The filters the Jobs list, its count and its country facets share (issue #253).
+export interface JobListFilters {
+  source?: string
+  country?: string
+  department?: string
+  remote?: boolean
+  q?: string
+  min_tier?: string
+  include_expired?: boolean
+  saved_only?: boolean
+  tracked_only?: boolean
+}
+
 // How many offers the Jobs list shows for these filters, all pages together (Phase B B7-C).
-export const countJobs = (params: { min_tier?: string } = {}): Promise<number> =>
+export const countJobs = (params: JobListFilters = {}): Promise<number> =>
   api.get<{ count: number }>('/jobs/count', { params }).then(r => r.data.count)
+
+// Mirrors src/api/routes/jobs.py ListStatusOut: why the main list holds what it holds (issue #253).
+export interface ListStatus {
+  visible_run_id: string | null
+  visible_run_completed_at: string | null
+  latest_run_id: string | null
+  latest_run_status: string | null
+  latest_run_outcome: string | null
+  previous_list_kept: boolean
+  incomplete_sources: Record<string, string>
+  carried_by_source: Record<string, number>
+  listed: number
+  hidden_by_user: number
+  decouverte: number
+  outside_criteria: number
+  source_off: Record<string, number>
+  expired: Record<string, number>
+}
+
+export const getListStatus = (): Promise<ListStatus | null> =>
+  api.get<ListStatus | null>('/jobs/list-status').then(r => r.data)
 
 export const searchEscoSkills = (q: string, lang: 'en' | 'fr' = 'en', limit = 8): Promise<EscoSuggestion[]> =>
   api.get<EscoSuggestion[]>('/esco/skills', { params: { q, lang, limit } }).then(r => r.data)
@@ -102,8 +136,9 @@ export const searchPlaces = (q: string, limit = 8): Promise<PlaceSuggestion[]> =
 export interface CountryFacet { name: string; count: number }
 export interface CountriesResponse { total: number; facets: CountryFacet[] }
 
-export const getJobCountries = (): Promise<CountriesResponse> =>
-  api.get<CountriesResponse>('/jobs/countries').then(r => r.data)
+// Counts over exactly the offers the list shows for the same filters, the country aside (issue #253).
+export const getJobCountries = (params: Omit<JobListFilters, 'country' | 'department'> = {}): Promise<CountriesResponse> =>
+  api.get<CountriesResponse>('/jobs/countries', { params }).then(r => r.data)
 
 // ---- Stats page ------------------------------------------------------------
 // Mirrors src/api/routes/jobs.py::JobStatsOut — real, DB-derived facets
@@ -163,6 +198,8 @@ export const listJobs = (params?: {
   // Hide (ADR 0017): hidden offers are left out unless asked for; saved_only lists saved offers.
   include_hidden?: boolean
   saved_only?: boolean
+  // Offers in the application tracker, whatever the run (issue #253).
+  tracked_only?: boolean
   limit?: number
   offset?: number
 }) => api.get<Job[]>('/jobs', { params }).then(r => r.data)

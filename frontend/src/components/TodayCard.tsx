@@ -28,6 +28,9 @@ export function TodayCard({ dashboard }: { dashboard: Dashboard }) {
   const outcome = run?.stats.outcome ?? ''
   const failedNames = Object.entries(run?.stats.by_source ?? {})
     .filter(([, s]) => s.status === 'failed' || s.status === 'partial').map(([name]) => name).sort()
+  const suspect = Object.entries(run?.stats.incomplete_sources ?? {})
+    .filter(([, reason]) => reason === 'suspect_empty').map(([name]) => name).sort()
+  const carried = run?.stats.carried ?? 0
 
   return (
     <Card title={t('dashboard.today.title')} style={{ marginBottom: 'var(--space-4)' }}>
@@ -46,6 +49,15 @@ export function TodayCard({ dashboard }: { dashboard: Dashboard }) {
             <Link to="/settings" style={{ color: 'var(--color-warning)' }}>{t('dashboard.today.problems', { count: problems })}</Link>
             {failedNames.length > 0 && <span data-testid="failed-sources" style={{ color: 'var(--color-muted)' }}> ({failedNames.join(', ')})</span>}
           </p>
+        )}
+        {/* Issue #253: a source that came back empty after returning offers is named too. */}
+        {suspect.length > 0 && (
+          <p style={{ ...line, color: 'var(--color-warning)' }} data-testid="suspect-sources">
+            {t('dashboard.today.suspect', { count: suspect.length, sources: suspect.join(', ') })}
+          </p>
+        )}
+        {carried > 0 && (
+          <p style={{ ...line, color: 'var(--color-muted)' }} data-testid="carried">{t('dashboard.today.carried', { count: carried })}</p>
         )}
         {outcome === 'no_successful_source' && <p style={line} data-testid="run-outcome">{t('dashboard.today.keptPrevious')}</p>}
         {outcome === 'no_new_offers' && <p style={{ ...line, color: 'var(--color-muted)' }} data-testid="run-outcome">{t('dashboard.today.nothingNew')}</p>}

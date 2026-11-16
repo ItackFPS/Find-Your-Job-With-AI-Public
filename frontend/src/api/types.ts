@@ -233,6 +233,11 @@ export interface RunStats {
   outcome?: '' | 'successful' | 'partial' | 'no_new_offers' | 'no_successful_source' | 'failed' | 'first_run_empty'
   // Decision journal + expiry after duration_seconds (the internal duration); absent on older runs.
   post_seconds?: number
+  // Issue #253: stored offers of enabled sources the run did not collect but scored again, and the
+  // sources that ran but are incomplete, with the reason. Absent on older runs.
+  carried?: number
+  carried_by_source?: Record<string, number>
+  incomplete_sources?: Record<string, 'failed' | 'partial' | 'network_outage' | 'suspect_empty'>
 }
 
 export interface PipelineRun {
@@ -278,7 +283,7 @@ export interface Job {
   // Expiry (issue #86): the source's end date; when and why the offer was marked expired.
   valid_through?: string | null
   expired_at?: string | null
-  expiry_reason?: 'valid_through' | 'not_seen' | 'user_report' | null
+  expiry_reason?: 'valid_through' | 'not_seen' | 'stale' | 'user_report' | null
   source: string
   title: string | null
   company: string | null
@@ -308,10 +313,15 @@ export interface Job {
   // List management (ADR 0016, ADR 0017): the user saved / hides this offer.
   saved?: boolean
   hidden?: boolean
+  // Issue #253: its source is off now (the saved and tracked views still list it).
+  source_off?: boolean
 }
 
 export interface Dashboard {
   latest_run: PipelineRun | null
+  // Issue #253: the run the lists show, and how many offers the main list holds without filters.
+  visible_run?: PipelineRun | null
+  listed_total?: number
   total_jobs_in_db: number
   is_running: boolean
   current_run_id: string | null
