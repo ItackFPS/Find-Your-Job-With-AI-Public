@@ -214,3 +214,21 @@ def test_a_run_recorded_without_sources_off_restores_nothing(api) -> None:  # no
     _run(db, "r0", {"a1": 0.9, "b1": 0.7})
     _run(db, "r1", {"a1": 0.9})                                            # older run: no sources_off
     assert [j["id"] for j in client.get("/api/jobs").json()] == ["a1"]
+
+
+def test_an_offer_rejected_after_its_last_score_is_not_restored(api) -> None:  # noqa: ANN001
+    """An offer scored long ago, then rejected by a later run (the profile changed), stays out
+    when its source comes back: its latest evaluation is the rejection."""
+    client, db = api
+    cfg = Path(client.app.state.config_dir)
+    _jobs(db, [("a1", "alpha", []), ("b1", "beta", []), ("b2", "beta", [])])
+    _run(db, "r0", {"a1": 0.9, "b1": 0.7, "b2": 0.6})
+    _run(db, "r1", {"a1": 0.9, "b1": 0.7})                                 # b2 rejected in r1
+    rs = RunStorage(db_path=db)
+    rs.store_rejections("r1", [{"job_id": "b2", "rejection_stage": "filter", "rejection_detail": "seniority",
+                                "title": "", "company": "", "location": "", "source": "beta"}])
+    rs.close()
+    _sources(cfg, beta=False)
+    _run(db, "r2", {"a1": 0.9}, stats={"sources_off": ["beta"]})
+    _sources(cfg, beta=True)
+    assert [j["id"] for j in client.get("/api/jobs").json()] == ["a1", "b1"]
