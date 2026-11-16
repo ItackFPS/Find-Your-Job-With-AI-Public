@@ -152,6 +152,9 @@ class PipelineStats:
     carried: int = 0
     carried_by_source: dict[str, int] = field(default_factory=dict)
     incomplete_sources: dict[str, str] = field(default_factory=dict)
+    # Sources that were off when this run carried offers: their stored offers were not evaluated,
+    # so a source turned back on later can show them until the next run (issue #253).
+    sources_off: list[str] = field(default_factory=list)
     # Post-processing after duration_seconds is taken: the decision journal and expiry (Phase B
     # B7-B). The run's wall clock is its row's completed_at - started_at, which also covers the
     # runner's own saving; duration_seconds alone is the pipeline's internal duration.
@@ -232,6 +235,7 @@ class PipelineStats:
             "carried": self.carried,
             "carried_by_source": self.carried_by_source,
             "incomplete_sources": self.incomplete_sources,
+            "sources_off": self.sources_off,
             "post_seconds": self.post_seconds,
         }
 
@@ -669,7 +673,9 @@ def run_pipeline(
         carried_ids: set[str] = set()
         try:
             from src.pipeline.carryover import load_carryover
-            from src.source_enablement import settings_path_for
+            from src.source_enablement import disabled_sources, settings_path_for
+
+            stats.sources_off = sorted(disabled_sources(config_dir, settings_path_for(db_path)))
 
             carried_jobs, stats.carried_by_source = load_carryover(
                 storage, config_dir, settings_path_for(db_path), exclude_ids=collected_ids,

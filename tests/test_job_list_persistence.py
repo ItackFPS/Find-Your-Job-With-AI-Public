@@ -201,6 +201,7 @@ def test_a_source_turned_off_is_not_carried(board) -> None:  # noqa: ANN001
     (Path(board.cfg) / "sources.yaml").write_text(_sources_yaml(alpha=False), encoding="utf-8")
     off = board(beta=B)
     assert off["carried_by_source"] == {}
+    assert "alpha" in off["sources_off"]             # recorded: the list can restore alpha at once
     assert _listed(board.db) == {"beta": 1}
     (Path(board.cfg) / "sources.yaml").write_text(_sources_yaml(alpha=True), encoding="utf-8")
     on = board(alpha=[], beta=B)                           # back on, even before alpha returns anything

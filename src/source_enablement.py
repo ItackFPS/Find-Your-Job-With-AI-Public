@@ -136,6 +136,20 @@ def enabled_sources(config_dir: str | Path, settings_path: str | Path | None) ->
     return {s for s in _known_sources(config_dir) - removed if source_enabled(s, config_dir, settings_path)}
 
 
+def disabled_sources(config_dir: str | Path, settings_path: str | Path | None) -> set[str]:
+    """The sources that are off now, whatever the reason (issue #253): a known source that is not
+    on (inactive in ``sources.yaml``, a user-switchable source switched off or not configured), a
+    ``sources.yaml`` entry of a removed type, and the retired types (RemoteOK, Jobicy, We Work
+    Remotely). Their stored offers are hidden from the lists, except saved or tracked ones. A name
+    the configuration does not know at all is not counted: its offers are never carried into a run,
+    so they reach no list but the saved and tracked views."""
+    from src.discovery.registry import RETIRED_SOURCE_TYPES
+
+    known = _known_sources(config_dir)
+    return (known - enabled_sources(config_dir, settings_path)) | set(RETIRED_SOURCE_TYPES) \
+        | _removed_type_sources(config_dir)
+
+
 def switched_off_sources(config_dir: str | Path, settings_path: str | Path | None) -> set[str]:
     """The user-switchable sources that are off now: their stored offers are hidden (D1).
 
