@@ -291,3 +291,24 @@ def test_turning_a_source_back_on_lists_its_offers_before_any_run(board, monkeyp
     assert after["carried_by_source"] == {"alpha": 2}
     assert listed() == ["alpha", "alpha", "beta"]
     assert client.get("/api/jobs/list-status").json()["restored_by_source"] == {}
+
+
+def test_a_user_reported_offer_stays_expired_when_collected_again(board) -> None:  # noqa: ANN001
+    """The user's "no longer available" wins over a new sighting and over carry-forward; a stale
+    offer collected again is active again (the other half is in the stale test above)."""
+    from src.storage.sqlite import Storage
+
+    board(alpha=A, beta=B)
+    reported = _row(board.db, "alpha-1")["id"]
+    s = Storage(db_path=board.db)
+    s.init_db()
+    assert s.set_reported_expired(reported, True, datetime.now(UTC))
+    s.close()
+
+    board(alpha=A, beta=B)                                # alpha-1 genuinely collected again
+    row = _row(board.db, "alpha-1")
+    assert (row["status"], row["expiry_reason"]) == ("expired", "user_report")
+    assert _listed(board.db) == {"alpha": 1, "beta": 1}
+    carried = board(alpha=[], beta=B)                     # and never carried
+    assert carried["carried_by_source"] == {"alpha": 1}
+    assert _row(board.db, "alpha-1")["expiry_reason"] == "user_report"
