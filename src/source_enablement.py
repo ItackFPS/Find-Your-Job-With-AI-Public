@@ -27,7 +27,7 @@ source that returns nothing no longer empties its part of the list (this replace
 the list"); and an offer not collected for ``expire_after_days_unseen`` days expires, LinkedIn and
 HelloWork included (this replaces D1's "no age-based expiry for staged sources"). A source that is
 off for any reason (inactive in ``sources.yaml``, a removed type, the user's switch) has its stored
-offers hidden by the same rule (:func:`switched_off_sources`).
+offers hidden by the same rule (:func:`disabled_sources`).
 
 The collection freeze (``src/collectors/freeze.py``, D7) is a separate, temporary switch: it stops
 every contact with a source but keeps its offers visible, so it is deliberately not part of this rule.
