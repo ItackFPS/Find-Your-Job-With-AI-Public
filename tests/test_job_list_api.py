@@ -232,3 +232,27 @@ def test_an_offer_rejected_after_its_last_score_is_not_restored(api) -> None:  #
     _run(db, "r2", {"a1": 0.9}, stats={"sources_off": ["beta"]})
     _sources(cfg, beta=True)
     assert [j["id"] for j in client.get("/api/jobs").json()] == ["a1", "b1"]
+
+
+def test_list_status_counts_carried_offers_among_the_listed_ones(api) -> None:  # noqa: ANN001
+    """Carried = listed now but not collected during the visible run (last sighting older than
+    it), not every offer the run took in (most of which the filters may have dropped)."""
+    client, db = api
+    _jobs(db, [("a1", "alpha", []), ("a2", "alpha", []), ("b1", "beta", [])])
+    s = Storage(db_path=db)
+    s.init_db()
+    s.record_provenance([s.get_job_by_id("a2"), s.get_job_by_id("b1")], datetime(2026, 1, 1, tzinfo=UTC))
+    s.close()
+    rs = RunStorage(db_path=db)
+    rs.init_db()
+    rs.create_run("r1")
+    rs.store_job_scores("r1", [{"job_id": j, "deterministic_score": .5, "semantic_score": .5, "final_score": v,
+                                "score_breakdown": {}} for j, v in (("a1", .9), ("a2", .8), ("b1", .7))])
+    s = Storage(db_path=db)
+    s.record_provenance([s.get_job_by_id("a1")], datetime.now(UTC))       # a1 collected during r1
+    s.close()
+    rs.complete_run("r1", {"carried_by_source": {"alpha": 40, "beta": 9}})  # what entered the run
+    rs.close()
+    status = client.get("/api/jobs/list-status").json()
+    assert status["listed"] == 3
+    assert status["carried_by_source"] == {"alpha": 1, "beta": 1}           # a2, b1; not the run's 49

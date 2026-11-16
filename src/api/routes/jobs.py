@@ -628,7 +628,8 @@ class ListStatusOut(BaseModel):
     # The latest run did not replace the list (it failed, or no source succeeded in it).
     previous_list_kept: bool = False
     # Sources of the latest completed run that are incomplete, with the reason (failed, partial,
-    # network_outage, suspect_empty), and the stored offers the visible run carried, per source.
+    # network_outage, suspect_empty); and, per source, the listed offers the visible run carried
+    # (scored again without being collected in it), restored offers apart.
     incomplete_sources: dict[str, str] = {}
     carried_by_source: dict[str, int] = {}
     # Offers of a source turned back on since the visible run, shown from their last score until
@@ -670,12 +671,13 @@ def list_status(request: Request) -> ListStatusOut:
             previous_list_kept=bool(visible and latest and latest["id"] != visible["id"]
                                     and latest.get("status") in ("completed", "failed")),
             incomplete_sources=dict(((latest_completed or {}).get("stats") or {}).get("incomplete_sources") or {}),
-            carried_by_source=dict(((visible or {}).get("stats") or {}).get("carried_by_source") or {}),
             hidden_by_user=sum(1 for st in list_state.values() if st["hidden"]),
         )
+        restored_set: set[str] = set()
         if visible:
             run_ids = rs.get_job_ids_for_run(visible["id"])
             restored = _restored_ids(s, rs, visible, run_ids, off_sources)
+            restored_set = set(restored)
             if restored:
                 for source, n in conn.execute(
                         f"SELECT source, COUNT(*) FROM jobs WHERE id IN ({','.join('?' * len(restored))}) "
@@ -697,7 +699,24 @@ def list_status(request: Request) -> ListStatusOut:
     finally:
         s.close()
         rs.close()
-    out.listed = len(_all_listed(request))
+    listed = _all_listed(request)
+    out.listed = len(listed)
+    if visible and visible.get("started_at"):
+        # Carried = listed now, but not collected during the visible run: its last sighting
+        # (latest provenance) is older than the run. Restored offers are counted apart.
+        ids = [j.id for j in listed if j.id not in restored_set]
+        s2 = Storage(db_path=request.app.state.db_path)
+        try:
+            conn2 = s2._get_conn()  # noqa: SLF001
+            for i in range(0, len(ids), 500):
+                chunk = ids[i:i + 500]
+                for source, n in conn2.execute(
+                        f"""SELECT j.source, COUNT(*) FROM jobs j WHERE j.id IN ({','.join('?' * len(chunk))})
+                            AND COALESCE((SELECT MAX(p.last_seen_at) FROM job_provenance p WHERE p.job_id = j.id),
+                                         j.discovered_at) < ? GROUP BY j.source""", [*chunk, visible["started_at"]]):
+                    out.carried_by_source[source] = out.carried_by_source.get(source, 0) + int(n)
+        finally:
+            s2.close()
     return out
 
 
