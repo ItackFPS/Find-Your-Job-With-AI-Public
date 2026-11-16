@@ -1,5 +1,5 @@
 // Phase B B9-A: every page that lists offers records its own surface and position (ADR 0016), so
-// the saved list, a search, Découverte, the outside-criteria lane and Review are never read as the
+// the saved list, a search, the outside-criteria lane and Review are never read as the
 // ranked main list.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
@@ -10,11 +10,11 @@ import { ToastProvider } from '../../components'
 import Jobs from '../Jobs'
 import Review from '../Review'
 
-const tracked: Array<{ surface: string; randomized: boolean; jobId: string; position: number }> = []
+const tracked: Array<{ surface: string; jobId: string; position: number }> = []
 vi.mock('../../hooks/useVisibleExposure', () => ({
-  useVisibleExposure: (surface: string, _sortKey?: string, randomized = false) =>
+  useVisibleExposure: (surface: string) =>
     (jobId: string, position: number) => (el: Element | null) => {
-      if (el) tracked.push({ surface, randomized, jobId, position })
+      if (el) tracked.push({ surface, jobId, position })
     },
 }))
 
@@ -26,7 +26,6 @@ const posts: Array<{ url: string; body: Record<string, unknown> }> = []
 vi.mock('axios', () => {
   const client = {
     get: (url: string) => {
-      if (url === '/jobs/decouverte') return Promise.resolve({ data: [job('s1', 'Tirée au hasard')] })
       if (url === '/jobs/outside-criteria') return Promise.resolve({ data: [job('o1', 'Hors critères')] })
       if (url === '/jobs') return Promise.resolve({ data: [job('m1', 'Liste principale')] })
       if (url === '/decisions/review-queue') {
@@ -69,14 +68,12 @@ function wrap(node: React.ReactNode) {
 beforeEach(() => { tracked.length = 0; posts.length = 0 })
 
 describe('list surfaces (B9-A)', () => {
-  it('records the main list, Découverte (randomized) and the outside-criteria lane under their own surface', async () => {
+  it('records the main list and the outside-criteria lane under their own surface', async () => {
     wrap(<Jobs />)
     await screen.findByText('Liste principale')
-    await screen.findByText('Tirée au hasard')
     await waitFor(() => expect(tracked.some(t => t.jobId === 'o1')).toBe(true))
-    expect(tracked).toContainEqual({ surface: 'jobs', randomized: false, jobId: 'm1', position: 0 })
-    expect(tracked).toContainEqual({ surface: 'decouverte', randomized: true, jobId: 's1', position: 0 })
-    expect(tracked).toContainEqual({ surface: 'outside_criteria', randomized: false, jobId: 'o1', position: 0 })
+    expect(tracked).toContainEqual({ surface: 'jobs', jobId: 'm1', position: 0 })
+    expect(tracked).toContainEqual({ surface: 'outside_criteria', jobId: 'o1', position: 0 })
   })
 
   it('records the saved list as "saved", not as the ranked list', async () => {
@@ -91,7 +88,7 @@ describe('list surfaces (B9-A)', () => {
   it('records Review cards with their position and sends the answer with that provenance', async () => {
     wrap(<Review />)
     await screen.findByText('Technicien support')
-    expect(tracked).toContainEqual({ surface: 'review', randomized: false, jobId: 'j1', position: 0 })
+    expect(tracked).toContainEqual({ surface: 'review', jobId: 'j1', position: 0 })
     await userEvent.click(screen.getByRole('button', { name: 'Not for me' }))
     await waitFor(() => expect(posts.length).toBe(1))
     expect(posts[0].url).toBe('/jobs/j1/feedback')
