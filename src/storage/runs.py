@@ -463,7 +463,29 @@ class RunStorage:
             result[d["job_id"]] = d
         return result
 
-    def get_latest_scores_for_jobs(self, job_ids: list[str]) -> dict[str, dict[str, Any]]:
+    def get_scores_for_list(self, job_ids: list[str], run_id: str | None) -> dict[str, dict[str, Any]]:
+        """The score row a list shows for each job (issue #253): the one of ``run_id`` (the visible
+        run that orders the list) when the job was scored in it, else its latest score from a
+        completed run. Never a score of a running run, or of a run whose list was not kept."""
+        if not job_ids:
+            return {}
+        out = self.get_latest_scores_for_jobs(job_ids, completed_only=True)
+        if run_id:
+            conn = self._get_conn()
+            for i in range(0, len(job_ids), 500):
+                chunk = job_ids[i:i + 500]
+                rows = conn.execute(
+                    f"""SELECT js.*, pr.started_at AS run_started_at FROM job_scores js
+                        JOIN pipeline_runs pr ON js.run_id = pr.id
+                        WHERE js.run_id = ? AND js.job_id IN ({','.join('?' * len(chunk))})""",
+                    [run_id, *chunk]).fetchall()
+                for row in rows:
+                    d = dict(row)
+                    d["score_breakdown"] = json.loads(d.pop("score_breakdown_json", "{}"))
+                    out[d["job_id"]] = d
+        return out
+
+    def get_latest_scores_for_jobs(self, job_ids: list[str], completed_only: bool = False) -> dict[str, dict[str, Any]]:
         """Return the most-recent score row for each job_id in one query.
 
         Returns a dict mapping job_id → score row (same shape as
@@ -478,7 +500,7 @@ class RunStorage:
             f"""SELECT js.*, pr.started_at as run_started_at
                 FROM job_scores js
                 JOIN pipeline_runs pr ON js.run_id = pr.id
-                WHERE js.job_id IN ({placeholders})
+                WHERE js.job_id IN ({placeholders}){" AND pr.status = 'completed'" if completed_only else ""}
                 ORDER BY pr.started_at DESC""",
             job_ids,
         ).fetchall()
@@ -496,7 +518,7 @@ class RunStorage:
         conn = self._get_conn()
         rows = conn.execute(
             """SELECT job_id FROM job_scores WHERE run_id = ?
-               ORDER BY visible_position IS NULL, visible_position, final_score DESC NULLS LAST""",
+               ORDER BY visible_position IS NULL, visible_position, final_score DESC NULLS LAST, job_id""",
             (run_id,),
         ).fetchall()
         return [r["job_id"] for r in rows]
@@ -511,7 +533,7 @@ class RunStorage:
         conn = self._get_conn()
         rows = conn.execute(
             """SELECT * FROM job_scores WHERE run_id = ?
-               ORDER BY visible_position IS NULL, visible_position, final_score DESC NULLS LAST
+               ORDER BY visible_position IS NULL, visible_position, final_score DESC NULLS LAST, job_id
                LIMIT ? OFFSET ?""",
             (run_id, limit, offset),
         ).fetchall()

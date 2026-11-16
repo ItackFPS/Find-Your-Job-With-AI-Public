@@ -404,6 +404,8 @@ class JobDetailOut(JobOut):
     # List management (ADR 0016, ADR 0017): the user saved / hides this offer.
     saved: bool = False
     hidden: bool = False
+    # Issue #253: its source is off now (the saved and tracked views still list it).
+    source_off: bool = False
 
 
 class ExplanationSignal(BaseModel):
@@ -443,6 +445,10 @@ class JobExplanationOut(BaseModel):
 
 class DashboardOut(BaseModel):
     latest_run: PipelineRunOut | None = None
+    # Issue #253: the run the lists show (the latest one unless its list was not kept) and how many
+    # offers the main list holds without filters (the number GET /api/jobs/count gives).
+    visible_run: PipelineRunOut | None = None
+    listed_total: int = 0
     total_jobs_in_db: int = 0
     is_running: bool = False
     current_run_id: str | None = None
