@@ -120,7 +120,49 @@ def test_an_edited_sources_file_gains_france_travail_web(install: Path):
     new = after["sources"][0]
     assert new["name"] == "france-travail-web" and new["active"] is True
     assert new["config"] == {"max_pages": 60, "rate_limit_delay": 1.0}
-    assert after["sources"][1:] == yaml.safe_load(edited)["sources"]
+    retired = {"remoteok", "jobicy", "weworkremotely"}
+    assert after["sources"][1:] == [s for s in yaml.safe_load(edited)["sources"] if s["type"] not in retired]
+
+
+def test_an_edited_sources_file_loses_the_removed_boards_and_keeps_the_rest(install: Path):
+    path = install / "config" / "sources.yaml"
+    edited = path.read_text(encoding="utf-8").replace("count: 200", "count: 150")
+    path.write_text(edited, encoding="utf-8")
+    report = run(install)
+    assert report.entries_removed == ["sources.yaml:remoteok", "sources.yaml:jobicy",
+                                      "sources.yaml:weworkremotely"]
+    text = path.read_text(encoding="utf-8")
+    assert "remoteok" not in text and "jobicy" not in text and "weworkremotely" not in text
+    assert "\n\n\n" not in text
+    kept = [ln for ln in edited.splitlines() if "Audited 2026-08-27: Germany-only" in ln]
+    assert kept and kept[0] in text                       # other entries keep their comments
+    assert (Path(report.backup_dir) / "sources.yaml").read_text(encoding="utf-8") == edited
+
+
+def test_flow_style_and_crlf_entries_are_removed(install: Path):
+    path = install / "config" / "sources.yaml"
+    text = ("sources:\r\n  - {name: mine, type: indeed, active: true}  # keep\r\n"
+            "  - {name: rok, type: remoteok, active: true}\r\n"
+            "  - name: wwr\r\n    # mine\r\n    type: weworkremotely\r\n"
+            "other: 1\r\n")
+    path.write_bytes(text.encode("utf-8"))
+    report = run(install)
+    assert report.entries_removed == ["sources.yaml:rok", "sources.yaml:wwr"]
+    data = path.read_bytes()
+    assert data.count(b"\n") == data.count(b"\r\n")
+    after = _load(path)
+    assert after["other"] == 1
+    assert [s["name"] for s in after["sources"]] == ["france-travail-web", "mine"]
+    assert b"# keep" in data
+
+
+def test_a_sources_file_the_removal_cannot_handle_is_kept_unchanged(install: Path):
+    path = install / "config" / "sources.yaml"
+    content = "sources: [{name: rok, type: remoteok}, {name: france-travail-web, type: x}]\n"
+    path.write_text(content, encoding="utf-8")
+    report = run(install)
+    assert path.read_text(encoding="utf-8") == content
+    assert report.entries_removed == [] and "sources.yaml" in report.kept and not report.failed
 
 
 def test_crlf_edited_file_stays_crlf(install: Path):

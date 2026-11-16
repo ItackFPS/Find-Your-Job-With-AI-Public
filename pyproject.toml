@@ -106,7 +106,7 @@ module = ["pystray.*", "PIL.*", "webview.*"]
 ignore_missing_imports = true
 
 # feedparser ships no py.typed marker / stubs either. Used only in
-# src/collectors/remote.py to parse RSS feeds (e.g. We Work Remotely).
+# src/collectors/remote.py to parse RSS feeds.
 [[tool.mypy.overrides]]
 module = "feedparser.*"
 ignore_missing_imports = true
