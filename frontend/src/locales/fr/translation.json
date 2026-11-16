@@ -142,7 +142,7 @@
       "untitled": "Offre sans titre",
       "noMatch": "Aucune correspondance forte lors de la dernière recherche.",
       "keptPrevious": "Aucune source n’a abouti lors de la dernière recherche : les listes montrent toujours la recherche précédente.",
-      "suspect": "{count, plural, one {Une source n’a renvoyé aucune offre} other {# sources n’ont renvoyé aucune offre}} alors qu’elles en trouvaient avant ({sources}) : leurs offres restent dans la liste.",
+      "suspect": "{count, plural, one {Une source n’a renvoyé aucune offre alors qu’elle en trouvait avant ({sources}) : ses offres restent dans la liste.} other {# sources n’ont renvoyé aucune offre alors qu’elles en trouvaient avant ({sources}) : leurs offres restent dans la liste.}}",
       "nothingNew": "Rien de nouveau depuis la recherche précédente.",
       "firstEmpty": "La première recherche n’a trouvé aucune offre pour votre profil. Vérifiez votre métier et vos lieux dans Profil ; la prochaine recherche réessaiera."
     },

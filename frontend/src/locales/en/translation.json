@@ -142,7 +142,7 @@
       "untitled": "Untitled offer",
       "noMatch": "No strong match in the last search.",
       "keptPrevious": "No source succeeded in the last search, so the lists still show the previous search.",
-      "suspect": "{count, plural, one {One source returned no offer} other {# sources returned no offer}} although they found some before ({sources}); their offers stay in the list.",
+      "suspect": "{count, plural, one {One source returned no offer although it found some before ({sources}); its offers stay in the list.} other {# sources returned no offer although they found some before ({sources}); their offers stay in the list.}}",
       "nothingNew": "Nothing new since the previous search.",
       "firstEmpty": "The first search found no offer for your profile. Check your line of work and places in Profile; the next search will try again."
     },
