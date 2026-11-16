@@ -8,7 +8,8 @@ this, file by file:
 
 * a file still byte-identical to a default of an earlier release is replaced by the new default;
 * a file the user edited is kept. Only the entries a new version cannot work without are added to
-  it (``ENTRIES_TO_ADD``), as text, so the user's comments and values survive;
+  it (``ENTRIES_TO_ADD``), and only the entries naming something the application no longer has are
+  deleted from it (``ENTRIES_TO_REMOVE``), as text, so the user's comments and values survive;
 * a file removed from the defaults is archived if unedited, and left alone otherwise.
 
 Every file changed is copied to ``data/backups/config-<UTC time>/`` first (that folder is covered
@@ -30,6 +31,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+from src.discovery.registry import RETIRED_SOURCE_TYPES
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +77,23 @@ ENTRIES_TO_ADD: dict[str, tuple[EntryToAdd, ...]] = {
 }
 
 
+@dataclass(frozen=True)
+class EntriesToRemove:
+    """List items an edited file must lose: ``<list_key>: [{<match_key>: <one of values>, ...}]``.
+    Each removed item is reported by its ``name_key`` value."""
+
+    list_key: str
+    match_key: str
+    values: frozenset[str]
+    name_key: str
+
+
+ENTRIES_TO_REMOVE: dict[str, tuple[EntriesToRemove, ...]] = {
+    # RemoteOK, Jobicy and We Work Remotely were removed (owner decision D10, issue #249).
+    "sources.yaml": (EntriesToRemove("sources", "type", RETIRED_SOURCE_TYPES, "name"),),
+}
+
+
 @dataclass
 class ConfigMigrationReport:
     """What one migration did. ``failed`` files are retried at the next start."""
@@ -81,6 +101,7 @@ class ConfigMigrationReport:
     version: str
     replaced: list[str] = field(default_factory=list)
     entries_added: list[str] = field(default_factory=list)
+    entries_removed: list[str] = field(default_factory=list)
     archived: list[str] = field(default_factory=list)
     kept: list[str] = field(default_factory=list)
     failed: list[str] = field(default_factory=list)
@@ -180,6 +201,75 @@ def _with_required_entries(name: str, text: str, default_text: str) -> tuple[str
     return current, added
 
 
+def _without_removed_entries(name: str, text: str) -> tuple[str, list[str]] | None:
+    """``text`` minus each list item ``ENTRIES_TO_REMOVE`` names, and what was removed; None if
+    that cannot be done safely. Every other line, comments included, stays as it was."""
+    try:
+        before = yaml.safe_load(text) or {}
+    except yaml.YAMLError:
+        return None
+    if not isinstance(before, dict):
+        return None
+    newline = "\r\n" if "\r\n" in text else "\n"
+    lines = text.splitlines()
+    expected: dict[str, Any] = dict(before)
+    removed: list[str] = []
+    for rule in ENTRIES_TO_REMOVE.get(name, ()):
+        items = expected.get(rule.list_key)
+        if not isinstance(items, list):
+            continue
+        gone = [it for it in items if isinstance(it, dict) and it.get(rule.match_key) in rule.values]
+        if not gone:
+            continue
+        key_re = re.compile(rf"^{re.escape(rule.list_key)}:\s*(#.*)?$")
+        key_at = next((i for i, line in enumerate(lines) if key_re.match(line)), None)
+        if key_at is None:
+            return None
+        # Each block-style item runs from its "- " line to the next line indented no deeper.
+        i, kept = key_at + 1, lines[:key_at + 1]
+        while i < len(lines):
+            line = lines[i]
+            stripped, indent = line.strip(), len(line) - len(line.lstrip())
+            if stripped and indent == 0 and not stripped.startswith(("- ", "#")):
+                break  # the next top-level key
+            if not stripped.startswith("- "):
+                kept.append(line)
+                i += 1
+                continue
+            end = i + 1
+            while end < len(lines):
+                nxt = lines[end]
+                if nxt.strip() and len(nxt) - len(nxt.lstrip()) <= indent:
+                    break  # a comment this shallow belongs to what follows
+                end += 1
+            while end > i + 1 and not lines[end - 1].strip():
+                end -= 1  # blank lines after the item stay
+            try:
+                item = yaml.safe_load("\n".join(ln[indent:] for ln in lines[i:end]))
+            except yaml.YAMLError:
+                return None
+            entry = item[0] if isinstance(item, list) and len(item) == 1 else None
+            if isinstance(entry, dict) and entry.get(rule.match_key) in rule.values:
+                removed.append(f"{name}:{entry.get(rule.name_key)}")
+                if kept and not kept[-1].strip() and end < len(lines) and not lines[end].strip():
+                    end += 1  # no double blank line where the item was
+            else:
+                kept.extend(lines[i:end])
+            i = end
+        lines = kept + lines[i:]
+        expected[rule.list_key] = [it for it in items if it not in gone]
+    if not removed:
+        return text, []
+    current = newline.join(lines) + (newline if text.endswith(("\n", "\r")) else "")
+    # The edit is textual: accept it only if it parses to exactly the user's data minus the items.
+    try:
+        if yaml.safe_load(current) != expected:
+            return None
+    except yaml.YAMLError:
+        return None
+    return current, removed
+
+
 class _Backup:
     """Copies files into one timestamped folder, created on first use."""
 
@@ -232,18 +322,28 @@ def _migrate_file(name: str, path: Path, default_path: Path | None, backup: _Bac
         _atomic_write(path, default)
         report.replaced.append(name)
         return
-    if name not in ENTRIES_TO_ADD:
+    if name not in ENTRIES_TO_ADD and name not in ENTRIES_TO_REMOVE:
         report.kept.append(name)
         return
-    changed = _with_required_entries(name, current.decode("utf-8"), default.decode("utf-8"))
-    if changed is None:
-        logger.warning("Upgrade: could not add the new entries to the edited %s; it is unchanged.", name)
-        report.kept.append(name)
-        return
-    text, added = changed
-    if added:
+    original = current.decode("utf-8")
+    text, removed = original, []
+    if name in ENTRIES_TO_REMOVE:
+        pruned = _without_removed_entries(name, text)
+        if pruned is None:
+            logger.warning("Upgrade: could not remove the retired entries from the edited %s.", name)
+        else:
+            text, removed = pruned
+    added: list[str] = []
+    if name in ENTRIES_TO_ADD:
+        changed = _with_required_entries(name, text, default.decode("utf-8"))
+        if changed is None:
+            logger.warning("Upgrade: could not add the new entries to the edited %s.", name)
+        else:
+            text, added = changed
+    if text != original:
         backup.keep(path)
         _atomic_write(path, text.encode("utf-8"))
+        report.entries_removed.extend(removed)
         report.entries_added.extend(added)
     report.kept.append(name)
 

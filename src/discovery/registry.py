@@ -15,8 +15,9 @@ logger = logging.getLogger(__name__)
 
 # Source types removed from the application (owner decision D10, Phase B B8-D). An installed
 # sources.yaml that the user edited, or one from a release the upgrade does not recognise,
-# can still list them: such an entry is set aside, so no run reports it as a failed source.
-# It stays in the file (``save`` writes it back); offers already collected from it are kept.
+# can still list them: such an entry is dropped when the file is loaded, so no run reports it
+# as a failed source, and ``save`` does not write it back. The upgrade deletes these entries from
+# an installed file (src/upgrade/config_migration.py). Offers already collected are kept.
 RETIRED_SOURCE_TYPES = frozenset({"remoteok", "jobicy", "weworkremotely"})
 
 
@@ -54,7 +55,6 @@ class SourceRegistry:
 
     def __init__(self, config_path: str = "config/sources.yaml"):
         self._sources: dict[str, dict] = {}
-        self._retired: list[dict] = []   # entries of RETIRED_SOURCE_TYPES, kept for save()
         self._load(config_path)
 
     def _load(self, path: str) -> None:
@@ -77,7 +77,6 @@ class SourceRegistry:
             if src.get("type") in RETIRED_SOURCE_TYPES:
                 logger.info("%s: source '%s' (type %s) was removed from the application; ignored.",
                             path, src["name"], src.get("type"))
-                self._retired.append(src)
                 continue
             self._sources[src["name"]] = src
 
@@ -85,7 +84,7 @@ class SourceRegistry:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             yaml.safe_dump(
-                {"sources": [*self._sources.values(), *self._retired]},
+                {"sources": list(self._sources.values())},
                 f,
                 sort_keys=False,
                 allow_unicode=True,
