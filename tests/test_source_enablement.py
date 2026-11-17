@@ -117,11 +117,23 @@ def _store(tmp_path: Path) -> str:
 
 
 def _adapter_jobs(adapter_cls, db: str, cfg: Path) -> list[str]:
+    """What a run sees of the adapter's source: its staging snapshot plus the stored offers the
+    pipeline carries (issue #253, ``src/pipeline/carryover.py``)."""
+    from src.pipeline.carryover import load_carryover
+    from src.source_enablement import settings_path_for
+    from src.storage.sqlite import Storage
+
     adapter = adapter_cls(db_path=db, config_dir=str(cfg))
     try:
-        return sorted(j.id for j in adapter.snapshot_for_run("run-x"))
+        ids = {j.id for j in adapter.snapshot_for_run("run-x")}
     finally:
         adapter.close()
+    store = Storage(db_path=db)
+    try:
+        carried, _ = load_carryover(store, cfg, settings_path_for(db), exclude_ids=ids)
+    finally:
+        store.close()
+    return sorted(ids | {j.id for j in carried if j.source == adapter.name})
 
 
 @pytest.mark.parametrize("configured,chosen", list(itertools.product([True, False], [True, False])))

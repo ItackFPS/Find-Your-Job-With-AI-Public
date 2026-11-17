@@ -18,7 +18,7 @@ import time
 import uuid
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, cast
 
@@ -141,6 +141,15 @@ class PipelineStats:
     # (src/pipeline/run_outcome.py, Phase B B7-A; "" until the run ends).
     stored_new: int | None = None
     outcome: str = ""
+    # Issue #253: stored active offers of enabled sources this run did not collect but scored again
+    # (src/pipeline/carryover.py), in total and per source; and the sources that ran but are
+    # incomplete (failed, partial, network outage, suspect empty), with the reason.
+    carried: int = 0
+    carried_by_source: dict[str, int] = field(default_factory=dict)
+    incomplete_sources: dict[str, str] = field(default_factory=dict)
+    # Sources that were off when this run carried offers: their stored offers were not evaluated,
+    # so a source turned back on later can show them until the next run (issue #253).
+    sources_off: list[str] = field(default_factory=list)
     # Post-processing after duration_seconds is taken: the decision journal and expiry (Phase B
     # B7-B). The run's wall clock is its row's completed_at - started_at, which also covers the
     # runner's own saving; duration_seconds alone is the pipeline's internal duration.
@@ -151,7 +160,8 @@ class PipelineStats:
         # These supplement (never replace) the existing fields so consumers
         # that already use collected / validated / deduplicated / filtered / scored
         # continue to work without change.
-        validation_rejected = self.collected - self.validated
+        # Carried offers (issue #253) enter validation too, without being collected.
+        validation_rejected = self.collected + self.carried - self.validated
         deduplication_removed = self.validated - self.deduplicated
         filter_rejected = self.deduplicated - self.filtered
         return {
@@ -217,6 +227,10 @@ class PipelineStats:
             "active_strategy": self.active_strategy,
             "stored_new": self.stored_new,
             "outcome": self.outcome,
+            "carried": self.carried,
+            "carried_by_source": self.carried_by_source,
+            "incomplete_sources": self.incomplete_sources,
+            "sources_off": self.sources_off,
             "post_seconds": self.post_seconds,
         }
 
@@ -618,6 +632,11 @@ def run_pipeline(
             finally:
                 _health_rs.close()
             annotate_yield_anomalies(stats.by_source, _history)
+            # Issue #253: a source that completed empty although it returned offers last time is
+            # named as incomplete (run_outcome), not counted as "nothing new".
+            from src.pipeline.carryover import mark_suspect_empty
+
+            mark_suspect_empty(stats.by_source, _history)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Source yield check failed (non-fatal): %s", exc)
 
@@ -641,7 +660,32 @@ def run_pipeline(
         except Exception as exc:  # noqa: BLE001
             logger.warning("Stored-id alignment skipped (non-fatal): %s", exc)
 
-        stats.collected = len(all_jobs)
+        # Issue #253: carry the stored active offers of every enabled source that this run did not
+        # collect, so a source that returns nothing, fails or is skipped never empties its part of
+        # the list. They come after the collected offers: a collected copy of the same offer wins
+        # deduplication. A carried offer was not seen (no expiry reset, no provenance, not rewritten).
+        collected_ids = {job.id for job in all_jobs}
+        carried_ids: set[str] = set()
+        try:
+            from src.pipeline.carryover import load_carryover
+            from src.source_enablement import disabled_sources, settings_path_for
+
+            stats.sources_off = sorted(disabled_sources(config_dir, settings_path_for(db_path)))
+
+            carried_jobs, stats.carried_by_source = load_carryover(
+                storage, config_dir, settings_path_for(db_path), exclude_ids=collected_ids,
+                stale_before=datetime.now(UTC) - timedelta(days=expire_after_days_unseen(config_dir)))
+            all_jobs.extend(carried_jobs)
+            carried_ids = {job.id for job in carried_jobs}
+            stats.carried = len(carried_jobs)
+            if carried_jobs:
+                logger.info("Carried %d stored offer(s) of enabled sources: %s",
+                            len(carried_jobs), stats.carried_by_source)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Carry-forward skipped (non-fatal): the list holds only collected offers: %s", exc)
+
+        # ``collected`` stays what the sources returned; ``carried`` is reported apart (issue #253).
+        stats.collected = len(all_jobs) - stats.carried
         stats.stage_times["collect"] = time.perf_counter() - _t_collect
         _notify(progress_callback, "collect", stats)
 
@@ -678,7 +722,9 @@ def run_pipeline(
         # to the next, so its id and provenance stay stable (issue #86). Stable sort: each
         # source's own order is kept.
         source_rank = {cfg["name"]: i for i, cfg in enumerate(source_registry.all_sources)}
-        valid_jobs = sorted(valid_jobs, key=lambda j: source_rank.get(j.source, len(source_rank)))
+        # Carried offers (issue #253) after every collected one, so a collected copy is the one kept.
+        valid_jobs = sorted(valid_jobs, key=lambda j: (j.id in carried_ids,
+                                                       source_rank.get(j.source, len(source_rank))))
         deduped_jobs, duplicates_removed = deduplicate_jobs(
             valid_jobs, progress_callback=lambda p, _t: _dedup_reporter(p)
         )
@@ -991,9 +1037,10 @@ def run_pipeline(
 
         recorder.observe_gate_results(gate_results)
         recorder.observe_scores(scored_with_breakdown, scoring_config=scoring_config)
-        storage_stats = storage.upsert_jobs_batch(
-            [job for job, _, _ in scored_with_breakdown], return_inserted_ids=True,
-        )
+        # A carried offer (issue #253) is already stored and was not seen: it is not rewritten, so
+        # its miss streak and expiry state survive the run.
+        seen_scored = [job for job, _, _ in scored_with_breakdown if job.id not in carried_ids]
+        storage_stats = storage.upsert_jobs_batch(seen_scored, return_inserted_ids=True)
         stats.stored_new = int(storage_stats.get("inserted", 0))
         new_ids = set(storage_stats.get("inserted_ids") or ())
         logger.info(
@@ -1005,7 +1052,7 @@ def run_pipeline(
         # Where each stored offer was seen, merged duplicates included (issue #86).
         # Bookkeeping: a failure is logged, never fails the run.
         try:
-            storage.record_provenance([job for job, _, _ in scored_with_breakdown], datetime.now(UTC))
+            storage.record_provenance(seen_scored, datetime.now(UTC))
         except Exception as exc:  # noqa: BLE001
             logger.warning("Provenance not recorded: %s", exc)
         # Phase NEXT / I11: incremental-collection INFRASTRUCTURE only — record
@@ -1386,9 +1433,12 @@ def run_pipeline(
         # count misses or expire offers. Never fails the run.
         _t_expiry = time.perf_counter()
         try:
+            _now = datetime.now(UTC)
             expiry = storage.apply_expiry(
-                {job.id for job in all_jobs}, sources_counting_misses(stats.by_source),
-                datetime.now(UTC), expire_after_missed_runs(config_dir),
+                {job.id for job in all_jobs if job.id not in carried_ids},
+                sources_counting_misses(stats.by_source),
+                _now, expire_after_missed_runs(config_dir),
+                stale_before=_now - timedelta(days=expire_after_days_unseen(config_dir)),
             )
             logger.info("Expiry: %s", expiry)
         except Exception as exc:  # noqa: BLE001
@@ -1411,6 +1461,9 @@ def run_pipeline(
                 outcome_rs.close()
             stats.outcome = run_outcome("completed", stats.by_source, accepted=stats.personalized,
                                         stored_new=stats.stored_new, has_previous_list=has_previous)
+            from src.pipeline.run_outcome import incomplete_sources
+
+            stats.incomplete_sources = incomplete_sources(stats.by_source)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Run outcome not computed: %s", exc)
 
@@ -1594,6 +1647,7 @@ def _stage_reporter(
 # listing: a missing offer proves nothing, so they never count a miss (issue #86).
 EXPIRY_EXCLUDED_SOURCES = frozenset({"linkedin", "hellowork"})
 DEFAULT_EXPIRE_AFTER_MISSED_RUNS = 3
+DEFAULT_EXPIRE_AFTER_DAYS_UNSEEN = 30
 
 
 def sources_counting_misses(by_source: dict[str, dict[str, Any]]) -> set[str]:
@@ -1611,6 +1665,19 @@ def sources_counting_misses(by_source: dict[str, dict[str, Any]]) -> set[str]:
         and (row.get("collected") or 0) > 0
         and name not in EXPIRY_EXCLUDED_SOURCES
     }
+
+
+def expire_after_days_unseen(config_dir: str | Path) -> int:
+    """``expire_after_days_unseen`` from config/retention.yaml (at least 1), else 30 (issue #253):
+    an active offer no source collected for this many days expires (``stale``)."""
+    import yaml
+
+    try:
+        data = yaml.safe_load((Path(config_dir) / "retention.yaml").read_text(encoding="utf-8")) or {}
+        value = int(data.get("expire_after_days_unseen", DEFAULT_EXPIRE_AFTER_DAYS_UNSEEN))
+    except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError):
+        return DEFAULT_EXPIRE_AFTER_DAYS_UNSEEN
+    return max(1, value)
 
 
 def expire_after_missed_runs(config_dir: str | Path) -> int:

@@ -18,7 +18,16 @@ The rule, for every source:
 Owner decision D1 (2026-11-14): while a user-switchable source is off, its stored offers are hidden.
 They are not re-injected into a run, not scored and not listed. Nothing is deleted, and an offer the
 user saved or has in the application tracker (``jobs.application_status``) stays listed. Turning
-the source back on brings the stored offers back. There is no age-based expiry for staged sources.
+the source back on brings the stored offers back.
+
+Issue #253 (owner decisions 2026-11-16) extends this to every source and supersedes two earlier
+clauses: every run carries forward the stored active offers of every source that is on
+(:func:`enabled_sources`, ``src/pipeline/carryover.py``), not only LinkedIn's and HelloWork's, so a
+source that returns nothing no longer empties its part of the list (this replaces OQ-3's "replace
+the list"); and an offer not collected for ``expire_after_days_unseen`` days expires, LinkedIn and
+HelloWork included (this replaces D1's "no age-based expiry for staged sources"). A source that is
+off for any reason (inactive in ``sources.yaml``, a removed type, the user's switch) has its stored
+offers hidden by the same rule (:func:`disabled_sources`).
 
 The collection freeze (``src/collectors/freeze.py``, D7) is a separate, temporary switch: it stops
 every contact with a source but keeps its offers visible, so it is deliberately not part of this rule.
@@ -89,11 +98,64 @@ def source_enabled(source: str, config_dir: str | Path, settings_path: str | Pat
     return unofficial_source_enabled(Path(settings_path) if settings_path else None, source)
 
 
+def _known_sources(config_dir: str | Path) -> set[str]:
+    """Every source name the configuration knows: the ``sources.yaml`` entries (retired types are
+    set aside by the registry) plus the user-switchable sources, whatever their state."""
+    from src.app_settings import UNOFFICIAL_CHOICE_SOURCES
+    from src.discovery.registry import SourceRegistry
+
+    names = set(UNOFFICIAL_CHOICE_SOURCES)
+    path = Path(config_dir) / "sources.yaml"
+    if path.exists():
+        try:
+            names |= {str(e["name"]) for e in SourceRegistry(config_path=str(path)).all_sources}
+        except Exception as exc:  # noqa: BLE001 — reading the config must never raise here
+            logger.warning("Source enablement: could not read %s: %s", path, exc)
+    return names
+
+
+def _removed_type_sources(config_dir: str | Path) -> set[str]:
+    """``sources.yaml`` entries of a type removed in 2.0 (``REMOVED_SOURCE_TYPES``): never on."""
+    from src.collectors.registry import REMOVED_SOURCE_TYPES
+    from src.discovery.registry import SourceRegistry
+
+    path = Path(config_dir) / "sources.yaml"
+    if not path.exists():
+        return set()
+    try:
+        return {str(e["name"]) for e in SourceRegistry(config_path=str(path)).all_sources
+                if e.get("type") in REMOVED_SOURCE_TYPES}
+    except Exception:  # noqa: BLE001
+        return set()
+
+
+def enabled_sources(config_dir: str | Path, settings_path: str | Path | None) -> set[str]:
+    """The sources that are on now (issue #253): their stored active offers are carried into every
+    run. Stored offers carry the source's name (``jobs.source``)."""
+    removed = _removed_type_sources(config_dir)
+    return {s for s in _known_sources(config_dir) - removed if source_enabled(s, config_dir, settings_path)}
+
+
+def disabled_sources(config_dir: str | Path, settings_path: str | Path | None) -> set[str]:
+    """The sources that are off now, whatever the reason (issue #253): a known source that is not
+    on (inactive in ``sources.yaml``, a user-switchable source switched off or not configured), a
+    ``sources.yaml`` entry of a removed type, and the retired types (RemoteOK, Jobicy, We Work
+    Remotely). Their stored offers are hidden from the lists, except saved or tracked ones. A name
+    the configuration does not know at all is not counted: its offers are never carried into a run,
+    so they reach no list but the saved and tracked views."""
+    from src.discovery.registry import RETIRED_SOURCE_TYPES
+
+    known = _known_sources(config_dir)
+    return (known - enabled_sources(config_dir, settings_path)) | set(RETIRED_SOURCE_TYPES) \
+        | _removed_type_sources(config_dir)
+
+
 def switched_off_sources(config_dir: str | Path, settings_path: str | Path | None) -> set[str]:
     """The user-switchable sources that are off now: their stored offers are hidden (D1).
 
     Stored offers carry the source's name (``jobs.source``), which for these sources is the same
-    string as the switch (``linkedin``, ``hellowork``, ``indeed``)."""
+    string as the switch (``linkedin``, ``hellowork``, ``indeed``). The list itself hides the offers
+    of every source outside :func:`enabled_sources` (issue #253)."""
     from src.app_settings import UNOFFICIAL_CHOICE_SOURCES
 
     return {s for s in UNOFFICIAL_CHOICE_SOURCES if not source_enabled(s, config_dir, settings_path)}

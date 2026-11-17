@@ -159,7 +159,9 @@ class TestLinkedInStagedSourceAdapter:
         assert jobs == []
         assert fake_staging.snapshot_calls == []
 
-    def test_enabled_snapshots_waiting_rows_and_reinjects_active(self, tmp_path: Path, monkeypatch):
+    def test_enabled_snapshots_waiting_rows_only(self, tmp_path: Path, monkeypatch):
+        """Issue #253: the snapshot holds the newly staged rows only. Stored active offers are
+        carried by the pipeline (src/pipeline/carryover.py), so the adapter no longer reads them."""
         self._enable_linkedin(tmp_path, enabled=True)
         fake_staging = FakeStaging("x")
         fake_staging.snapshot_rows = [_staging_row("new-1"), _staging_row("new-2")]
@@ -171,27 +173,22 @@ class TestLinkedInStagedSourceAdapter:
         jobs = adapter.snapshot_for_run("run-1")
 
         ids = {j.id for j in jobs}
-        assert ids == {"new-1", "new-2", "existing-1"}
+        assert ids == {"new-1", "new-2"}
         assert fake_staging.init_db_called is True
         assert fake_staging.snapshot_calls == ["run-1"]
-        # exclude_ids passed to the re-injection query must be the fresh snapshot's IDs.
-        assert fake_job_store.calls == [("linkedin", {"new-1", "new-2"})]
+        assert fake_job_store.calls == []
 
-    def test_active_job_already_in_snapshot_is_not_duplicated(self, tmp_path: Path, monkeypatch):
-        """get_active_jobs_by_source is called with exclude_ids covering the
-        snapshot — a real store would already dedupe on that, but the fake
-        wiring here specifically proves the adapter passes the right set."""
+    def test_the_run_carries_stored_offers_except_the_snapshot(self, tmp_path: Path):
+        """The carry-over the pipeline adds after the snapshot excludes the ids it already holds."""
+        from src.pipeline.carryover import load_carryover
+
         self._enable_linkedin(tmp_path, enabled=True)
-        fake_staging = FakeStaging("x")
-        fake_staging.snapshot_rows = [_staging_row("dup-1")]
-        fake_job_store = FakeJobStore("x")
-        fake_job_store.active_jobs = [_job("dup-1")]  # would be excluded by a real store
-        self._patch_stores(monkeypatch, fake_staging, fake_job_store)
+        store = FakeJobStore("x")
+        store.active_jobs = [_job("dup-1"), _job("existing-1")]
+        jobs, _ = load_carryover(store, tmp_path, _chosen(tmp_path), exclude_ids={"dup-1"})  # type: ignore[arg-type]
 
-        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
-        adapter.snapshot_for_run("run-1")
-
-        assert fake_job_store.calls[0][1] == {"dup-1"}
+        assert ("linkedin", {"dup-1"}) in store.calls
+        assert "dup-1" not in {j.id for j in jobs}
 
     def test_finalize_noop_when_no_snapshot_was_taken(self, tmp_path: Path, monkeypatch):
         """Disabled (or nothing waiting) -> finalize must not touch anything,
@@ -325,7 +322,8 @@ class TestHelloWorkStagedSourceAdapter:
         assert jobs == []
         assert fake_staging.snapshot_calls == []
 
-    def test_enabled_snapshots_waiting_rows_and_reinjects_active(self, tmp_path: Path, monkeypatch):
+    def test_enabled_snapshots_waiting_rows_only(self, tmp_path: Path, monkeypatch):
+        """Issue #253: stored active offers are carried by the pipeline, not the adapter."""
         self._write_sources_yaml(tmp_path)
         fake_staging = FakeStaging("x")
         fake_staging.snapshot_rows = [_staging_row("hw-new-1")]
@@ -337,8 +335,8 @@ class TestHelloWorkStagedSourceAdapter:
         jobs = adapter.snapshot_for_run("run-1")
 
         ids = {j.id for j in jobs}
-        assert ids == {"hw-new-1", "hw-existing-1"}
-        assert fake_job_store.calls == [("hellowork", {"hw-new-1"})]
+        assert ids == {"hw-new-1"}
+        assert fake_job_store.calls == []
 
     def test_finalize_on_success_marks_transferred_and_processed(self, tmp_path: Path, monkeypatch):
         self._write_sources_yaml(tmp_path)

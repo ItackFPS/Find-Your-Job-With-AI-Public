@@ -36,6 +36,42 @@ def test_the_six_outcomes(status, by_source, accepted, new, previous, expected) 
     assert run_outcome(status, by_source, accepted=accepted, stored_new=new, has_previous_list=previous) == expected
 
 
+@pytest.mark.parametrize(("by_source", "accepted", "new", "expected"), [
+    # issue #253: a source that came back empty after returning offers is incomplete, not "nothing new"
+    ({"a": OK, "b": {"status": "completed", "suspect_empty": True}}, 5, 0, "partial"),
+    ({"a": {"status": "completed", "suspect_empty": True}}, 0, 0, "no_successful_source"),
+    ({"a": OK, "b": {"status": "completed", "network_outage": True}}, 5, 1, "partial"),
+    # a source that is empty and was empty before is complete
+    ({"a": OK, "b": {"status": "completed", "collected": 0}}, 5, 0, "no_new_offers"),
+])
+def test_suspect_and_offline_sources_are_incomplete(by_source, accepted, new, expected) -> None:  # noqa: ANN001
+    assert run_outcome("completed", by_source, accepted=accepted, stored_new=new, has_previous_list=True) == expected
+
+
+def test_incomplete_sources_are_named_with_their_reason() -> None:
+    from src.pipeline.run_outcome import incomplete_sources
+
+    assert incomplete_sources({
+        "a": OK, "b": DOWN, "c": {"status": "partial"}, "d": {"status": "completed", "suspect_empty": True},
+        "e": {"status": "failed", "network_outage": True}, "f": {"status": "skipped"}, "g": {"status": "paused"},
+    }) == {"b": "failed", "c": "partial", "d": "suspect_empty", "e": "network_outage"}
+
+
+def test_a_source_is_suspect_only_after_returning_offers() -> None:
+    from src.pipeline.carryover import mark_suspect_empty
+
+    history = [{"stats": {"by_source": {"a": {"status": "completed", "collected": 4},
+                                        "b": {"status": "completed", "collected": 0},
+                                        "c": {"status": "skipped", "collected": 0}}}},
+               {"stats": {"by_source": {"c": {"status": "completed", "collected": 9}}}}]
+    rows = {"a": {"status": "completed", "collected": 0}, "b": {"status": "completed", "collected": 0},
+            "c": {"status": "completed", "collected": 0}, "d": {"status": "completed", "collected": 0},
+            "e": {"status": "completed", "collected": 0, "from_staging": True},
+            "f": {"status": "failed", "collected": 0}}
+    assert mark_suspect_empty(rows, history) == ["a", "c"]   # c: its last real run returned 9
+    assert "suspect_empty" not in rows["b"] and "suspect_empty" not in rows["d"]
+
+
 def test_failed_sources_are_named() -> None:
     assert failed_sources({"b": DOWN, "a": {"status": "partial"}, "c": OK, "d": {"status": "skipped"}}) == ["a", "b"]
 

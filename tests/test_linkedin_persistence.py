@@ -187,7 +187,7 @@ class TestRunnerLinkedInPersistence:
         run_called = threading.Event()
 
         def fake_run_pipeline(**kwargs):
-            captured.append(kwargs.get("prefetched_linkedin_jobs", []))
+            captured.append(_what_the_run_sees(kwargs, "linkedin", tmp_db))
             run_called.set()
             # Return a minimal failed result to avoid DB writes
             from src.pipeline.orchestrator import PipelineResult, PipelineStats
@@ -310,6 +310,24 @@ def _fake_pipeline_result(status: str = "failed"):
     )
 
 
+def _what_the_run_sees(kwargs: dict[str, Any], source: str, db_path: str) -> list[Any]:
+    """The linkedin offers a run receives: the staging snapshot (``prefetched_linkedin_jobs``) plus the
+    stored active offers the pipeline carries (issue #253, ``src/pipeline/carryover.py``; before
+    it the adapter re-injected them into the snapshot)."""
+    from src.pipeline.carryover import load_carryover
+    from src.source_enablement import settings_path_for
+    from src.storage.sqlite import Storage
+
+    prefetched = list(kwargs.get("prefetched_linkedin_jobs") or [])
+    store = Storage(db_path=db_path)
+    try:
+        carried, _ = load_carryover(store, kwargs.get("config_dir", "config"), settings_path_for(db_path),
+                                    exclude_ids={j.id for j in prefetched})
+    finally:
+        store.close()
+    return prefetched + [j for j in carried if j.source == source]
+
+
 def _run_with_capture(tmp_db: str, run_id: str = "test-run-001") -> list[Any]:
     """Invoke PipelineRunner._execute synchronously and capture prefetched_linkedin_jobs."""
     import src.api.runner as runner_mod
@@ -319,7 +337,7 @@ def _run_with_capture(tmp_db: str, run_id: str = "test-run-001") -> list[Any]:
     captured: list[list] = []
 
     def fake_run_pipeline(**kwargs):
-        captured.append(list(kwargs.get("prefetched_linkedin_jobs") or []))
+        captured.append(_what_the_run_sees(kwargs, "linkedin", tmp_db))
         return _fake_pipeline_result("failed")
 
     original = runner_mod.run_pipeline

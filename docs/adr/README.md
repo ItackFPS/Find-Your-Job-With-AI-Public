@@ -38,3 +38,4 @@ is the source of truth and the ADR must be updated or superseded.
 | [0029](0029-profession-agnostic-discovery.md) | Discovery, filtering and scoring assume no profession; line-of-work vocabulary lives in presets (amends 0028's IT scope) |
 | [0032](0032-temporary-collection-freeze.md) | Collection is frozen until each collector is validated and turned back on by the user; an update never reactivates one |
 | [0034](0034-remove-personal-learning.md) | The personal learning module (personal model, shadow ranking, activation, Découverte) is removed |
+| [0035](0035-persistent-job-list.md) | The job list is persistent: every run carries the stored offers of enabled sources; offers leave only by an explicit rule (expiry incl. a 30-day age cap, source off, hidden, profile) |
