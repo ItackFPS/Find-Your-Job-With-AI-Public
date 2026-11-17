@@ -217,6 +217,8 @@ class SourceStats(BaseModel):
     # sudden drop of the source's yield: severity (zero | drop), current_yield,
     # baseline_yield, baseline_run_count, is_new (src/pipeline/source_health.py)
     yield_anomaly: dict[str, Any] | None = None
+    # Issue #253: completed with no offer although it returned offers the last time it ran.
+    suspect_empty: bool | None = None
 
 
 class RunStats(BaseModel):
@@ -277,6 +279,12 @@ class RunStats(BaseModel):
     # Decision journal + expiry, after duration_seconds (the internal duration) is taken. The run's
     # wall clock is completed_at - started_at (Phase B B7-B).
     post_seconds: float = 0.0
+    # Issue #253: stored offers carried into the run, the sources that ran but are incomplete
+    # (with the reason), and the sources that were off when the run carried offers.
+    carried: int = 0
+    carried_by_source: dict[str, int] = {}
+    incomplete_sources: dict[str, str] = {}
+    sources_off: list[str] = []
 
 
 class PipelineRunOut(BaseModel):
@@ -404,6 +412,8 @@ class JobDetailOut(JobOut):
     # List management (ADR 0016, ADR 0017): the user saved / hides this offer.
     saved: bool = False
     hidden: bool = False
+    # Issue #253: its source is off now (the saved and tracked views still list it).
+    source_off: bool = False
 
 
 class ExplanationSignal(BaseModel):
@@ -443,6 +453,10 @@ class JobExplanationOut(BaseModel):
 
 class DashboardOut(BaseModel):
     latest_run: PipelineRunOut | None = None
+    # Issue #253: the run the lists show (the latest one unless its list was not kept) and how many
+    # offers the main list holds without filters (the number GET /api/jobs/count gives).
+    visible_run: PipelineRunOut | None = None
+    listed_total: int = 0
     total_jobs_in_db: int = 0
     is_running: bool = False
     current_run_id: str | None = None

@@ -287,6 +287,15 @@ def _build_run_stats(stats_raw: dict) -> RunStats:
         use_ai=stats_raw.get("use_ai", False),
         phase2=stats_raw.get("phase2", {}),
         stage_progress=stats_raw.get("stage_progress", {}),
+        # These were declared on RunStats but never copied, so the screens never saw a run's
+        # outcome (Phase B B7-A) — found in the #253 browser validation.
+        stored_new=stats_raw.get("stored_new"),
+        outcome=stats_raw.get("outcome") or "",
+        post_seconds=stats_raw.get("post_seconds") or 0.0,
+        carried=stats_raw.get("carried") or 0,
+        carried_by_source=stats_raw.get("carried_by_source") or {},
+        incomplete_sources=stats_raw.get("incomplete_sources") or {},
+        sources_off=stats_raw.get("sources_off") or [],
     )
 
 

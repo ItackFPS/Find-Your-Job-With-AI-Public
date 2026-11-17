@@ -28,6 +28,8 @@ def get_dashboard(request: Request) -> DashboardOut:
     try:
         latest_run_row = rs.get_latest_completed_run()
         latest_run_out = _row_to_run_out(latest_run_row) if latest_run_row else None
+        visible_row = rs.get_latest_visible_run()
+        visible_out = _row_to_run_out(visible_row) if visible_row else None
         total_jobs = s.count_jobs()
         is_running = runner.is_running()
         current_run_id = runner.current_run_id()
@@ -35,8 +37,13 @@ def get_dashboard(request: Request) -> DashboardOut:
         rs.close()
         s.close()
 
+    # Issue #253: the number the main list shows, computed by the list itself.
+    from src.api.routes.jobs import _all_listed
+
     return DashboardOut(
         latest_run=latest_run_out,
+        visible_run=visible_out,
+        listed_total=len(_all_listed(request)),
         total_jobs_in_db=total_jobs,
         is_running=is_running,
         current_run_id=current_run_id,

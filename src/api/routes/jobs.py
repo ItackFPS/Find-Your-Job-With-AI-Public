@@ -271,9 +271,17 @@ def list_jobs(
         default=False, description="Also list offers the user hides (ADR 0017); left out by default.",
     ),
     saved_only: bool = Query(default=False, description="Only the offers the user saved, whatever the run."),
+    tracked_only: bool = Query(
+        default=False, description="Only the offers in the application tracker, whatever the run (issue #253).",
+    ),
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> list[JobDetailOut]:
+    # Saved and tracked offers stay reachable whatever happened to them (issue #253): expired ones
+    # are listed in those views, with their status.
+    personal_view = saved_only or tracked_only
+    include_expired = include_expired or personal_view
+    off_sources = _disabled_sources(request)
     s, rs = _get_storages(request)
     try:
         # Scope to the latest completed run so the Jobs page reflects current
@@ -285,7 +293,7 @@ def list_jobs(
         run_job_ids: list[str] | None = None
         if latest_run_id:
             run_job_ids = rs.get_job_ids_for_run(latest_run_id)
-            if not q and not saved_only:
+            if not q and not personal_view:
                 # Weak-evidence offers (ADR 0019 v5 AD-2b) never enter the main list: the best of
                 # them have their own collapsed lane (/outside-criteria), the rest stays unshown.
                 from src.pipeline.lanes import has_weak_flags
@@ -294,6 +302,12 @@ def list_jobs(
                             if has_weak_flags(r.get("score_breakdown"))}
                 if weak_ids:
                     run_job_ids = [j for j in run_job_ids if j not in weak_ids]
+            # A source turned back on since the visible run shows its offers at once (#253): the
+            # run did not evaluate them because the source was off, so they are restored from
+            # their last completed score until the next run evaluates them again.
+            restored = _restored_ids(s, rs, latest_run, run_job_ids, off_sources)
+            if restored:
+                run_job_ids = _merge_by_score(rs, latest_run_id, run_job_ids, restored)
 
         # Reduce the run's job-id scope by tier BEFORE any pagination happens
         # below, so every downstream branch (FTS intersect, Python-paginated
@@ -304,7 +318,7 @@ def list_jobs(
         if min_tier and run_job_ids:
             from src.pipeline.scoring import score_to_tier, tier_meets_minimum
 
-            run_scores = rs.get_latest_scores_for_jobs(run_job_ids)
+            run_scores = rs.get_scores_for_list(run_job_ids, latest_run_id)
             run_job_ids = [
                 jid for jid in run_job_ids
                 if tier_meets_minimum(
@@ -318,13 +332,19 @@ def list_jobs(
         # duplicates (same content hash); the saved view lists saved offers from any run.
         list_state = _list_state(request)
         hidden_ids = {j for j, st in list_state.items() if st["hidden"]}
-        if saved_only:
-            saved = {j for j, st in list_state.items() if st["saved"]}
-            in_run = [j for j in (run_job_ids or []) if j in saved]
-            run_job_ids = in_run + sorted(saved - set(in_run))
+        if personal_view:
+            wanted: set[str] | None = None
+            if saved_only:
+                wanted = {j for j, st in list_state.items() if st["saved"]}
+            if tracked_only:
+                tracked = _tracked_ids(s)
+                wanted = tracked if wanted is None else wanted & tracked
+            wanted = wanted or set()
+            in_run = [j for j in (run_job_ids or []) if j in wanted]
+            run_job_ids = in_run + sorted(wanted - set(in_run))
         exclude_hashes = set() if include_hidden else s.get_content_hashes(sorted(hidden_ids))
         exclude_ids = set() if include_hidden else set(hidden_ids)
-        exclude_ids |= _switched_off_ids(request, s, list_state)
+        exclude_ids |= _switched_off_ids(request, s, list_state, off_sources)
 
         if q:
             # FTS prefix search: fetch up to 2000 matches then apply all
@@ -413,7 +433,7 @@ def list_jobs(
 
         # Batch-fetch scores in one query instead of N individual lookups.
         job_id_list = [job.id for job in jobs]
-        scores_by_id = rs.get_latest_scores_for_jobs(job_id_list) if latest_run_id and job_id_list else {}
+        scores_by_id = rs.get_scores_for_list(job_id_list, latest_run_id) if latest_run_id and job_id_list else {}
 
         result: list[JobDetailOut] = []
         for job in jobs:
@@ -421,6 +441,7 @@ def list_jobs(
             st = list_state.get(job.id)
             if st:
                 job_out.saved, job_out.hidden = st["saved"], st["hidden"]
+            job_out.source_off = job.source in off_sources
             result.append(job_out)
 
         # When a text search is active, preserve FTS BM25 relevance order.
@@ -463,7 +484,7 @@ def list_outside_criteria(request: Request) -> list[JobDetailOut]:
         ids = sorted((j for j, lane in lanes.items() if lane == OUTSIDE
                       and not list_state.get(j, {}).get("hidden") and j not in off),
                      key=lambda j: (-score[j], j))
-        scores_by_id = rs.get_latest_scores_for_jobs(ids) if ids else {}
+        scores_by_id = rs.get_scores_for_list(ids, latest_run["id"]) if ids else {}
         jobs_by_id = s.get_jobs_by_ids(ids) if ids else {}
         result: list[JobDetailOut] = []
         for job_id in ids:
@@ -497,75 +518,163 @@ def count_jobs(
     include_expired: bool = Query(default=False),
     include_hidden: bool = Query(default=False),
     saved_only: bool = Query(default=False),
+    tracked_only: bool = Query(default=False),
 ) -> JobCountOut:
     """How many offers ``GET /api/jobs`` lists for the same filters, all pages together (Phase B
     B7-C, P-017): the number a headline may announce is the number the list shows."""
-    total, offset, page = 0, 0, 500
+    return JobCountOut(count=len(_all_listed(
+        request, source=source, country=country, department=department, remote=remote, q=q, min_tier=min_tier,
+        include_expired=include_expired, include_hidden=include_hidden, saved_only=saved_only,
+        tracked_only=tracked_only)))
+
+
+def _all_listed(request: Request, **filters: Any) -> list[JobDetailOut]:
+    """Every offer ``GET /api/jobs`` lists for ``filters``, all pages together, in list order: the
+    one set that counts, facets and status are computed from (issue #253)."""
+    params: dict[str, Any] = {"source": None, "country": None, "department": None, "remote": None, "q": None,
+                              "min_tier": None, "include_expired": False, "include_hidden": False,
+                              "saved_only": False, "tracked_only": False, **filters}
+    out: list[JobDetailOut] = []
+    offset, page = 0, 500
     while True:
-        rows = list_jobs(request, source=source, country=country, department=department, remote=remote, q=q,
-                         min_tier=min_tier, include_expired=include_expired, include_hidden=include_hidden,
-                         saved_only=saved_only, limit=page, offset=offset)
-        total += len(rows)
+        rows = list_jobs(request, **params, limit=page, offset=offset)
+        out.extend(rows)
         if len(rows) < page:
-            return JobCountOut(count=total)
+            return out
         offset += page
 
 
 @router.get("/countries", response_model=CountriesOut)
-def get_job_countries(request: Request) -> CountriesOut:
-    """Return job counts grouped by country, scoped to the latest completed run.
+def get_job_countries(
+    request: Request,
+    source: str | None = Query(default=None),
+    remote: bool | None = Query(default=None),
+    q: str | None = Query(default=None),
+    min_tier: str | None = Query(default=None),
+    include_expired: bool = Query(default=False),
+    saved_only: bool = Query(default=False),
+    tracked_only: bool = Query(default=False),
+) -> CountriesOut:
+    """Offer counts per country over exactly the offers ``GET /api/jobs`` lists for the same
+    filters, the country filter aside (issue #253: before, the total counted every offer of the run,
+    Découverte, hidden and switched-off ones included, so it did not match the list).
 
-    The response includes:
-    - ``total``: true count of all scored jobs in the latest run (may exceed
-      the sum of facets because jobs with no country are not bucketed).
-    - ``facets``: per-country counts, plus a synthetic ``_worldwide`` entry for
-      jobs that carry no country (remote-only listings from global job boards).
+    - ``total``: how many offers the list holds (may exceed the sum of facets: an offer with
+      several countries counts in each, one with none in ``_worldwide``).
+    - ``facets``: per-country counts, plus ``_worldwide`` for offers that carry no country.
     """
+    rows = _all_listed(request, source=source, remote=remote, q=q, min_tier=min_tier,
+                       include_expired=include_expired, saved_only=saved_only, tracked_only=tracked_only)
+    counts: dict[str, int] = {}
+    no_country = 0
+    for job in rows:
+        if not job.countries:
+            no_country += 1
+        for c in dict.fromkeys(job.countries):
+            counts[c] = counts.get(c, 0) + 1
+    facets = [CountryFacet(name=n, count=c) for n, c in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
+    if no_country > 0:
+        facets.append(CountryFacet(name="_worldwide", count=no_country))
+    return CountriesOut(total=len(rows), facets=facets)
+
+
+class ListStatusOut(BaseModel):
+    """Why the main list holds what it holds (issue #253). Counts, never offers."""
+    visible_run_id: str | None = None
+    visible_run_completed_at: str | None = None
+    latest_run_id: str | None = None
+    latest_run_status: str | None = None
+    latest_run_outcome: str | None = None
+    # The latest run did not replace the list (it failed, or no source succeeded in it).
+    previous_list_kept: bool = False
+    # Sources of the latest completed run that are incomplete, with the reason (failed, partial,
+    # network_outage, suspect_empty); and, per source, the listed offers the visible run carried
+    # (scored again without being collected in it), restored offers apart.
+    incomplete_sources: dict[str, str] = {}
+    carried_by_source: dict[str, int] = {}
+    # Offers of a source turned back on since the visible run, shown from their last score until
+    # the next run evaluates them again.
+    restored_by_source: dict[str, int] = {}
+    listed: int = 0
+    hidden_by_user: int = 0
+    outside_criteria: int = 0
+    source_off: dict[str, int] = {}
+    expired: dict[str, int] = {}
+
+
+@router.get("/list-status", response_model=ListStatusOut)
+def list_status(request: Request) -> ListStatusOut:
+    """What the main list holds and what it leaves out, by reason: the run it shows, whether the
+    latest run kept the previous list, incomplete sources, carried offers, and the offers left out
+    because the user hid them, they are in the outside-criteria lane, their source is
+    off, or they expired. Every number is a count over stored data; nothing here filters."""
+    from src.pipeline.lanes import has_weak_flags
+
     s, rs = _get_storages(request)
     try:
-        latest_run = rs.get_latest_visible_run()
-        latest_run_id = latest_run["id"] if latest_run else None
-        run_job_ids: list[str] | None = None
-        if latest_run_id:
-            run_job_ids = rs.get_job_ids_for_run(latest_run_id)
-
+        visible = rs.get_latest_visible_run()
+        latest_rows = rs.list_runs(limit=1)
+        latest = latest_rows[0] if latest_rows else None
+        latest_completed = rs.get_latest_completed_run()
+        list_state = _list_state(request)
+        off_sources = _disabled_sources(request)
         conn = s._get_conn()  # noqa: SLF001
-        if run_job_ids is not None:
-            if not run_job_ids:
-                return CountriesOut(total=0, facets=[])
-            placeholders = ",".join("?" * len(run_job_ids))
-            rows = conn.execute(
-                f"""SELECT value AS name, COUNT(*) AS count
-                    FROM jobs, json_each(jobs.countries)
-                    WHERE jobs.id IN ({placeholders})
-                    GROUP BY value ORDER BY count DESC""",
-                run_job_ids,
-            ).fetchall()
-            no_country = conn.execute(
-                f"""SELECT COUNT(*) FROM jobs
-                    WHERE id IN ({placeholders})
-                      AND (countries = '[]' OR countries IS NULL)""",
-                run_job_ids,
-            ).fetchone()[0]
-            total = len(run_job_ids)
-        else:
-            rows = conn.execute(
-                """SELECT value AS name, COUNT(*) AS count
-                   FROM jobs, json_each(jobs.countries)
-                   GROUP BY value ORDER BY count DESC"""
-            ).fetchall()
-            no_country = conn.execute(
-                "SELECT COUNT(*) FROM jobs WHERE countries = '[]' OR countries IS NULL"
-            ).fetchone()[0]
-            total = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
-
-        facets = [CountryFacet(name=r["name"], count=r["count"]) for r in rows]
-        if no_country > 0:
-            facets.append(CountryFacet(name="_worldwide", count=no_country))
-        return CountriesOut(total=total, facets=facets)
+        out = ListStatusOut(
+            visible_run_id=visible["id"] if visible else None,
+            visible_run_completed_at=(str(visible.get("completed_at")) if visible and visible.get("completed_at")
+                                      else None),
+            latest_run_id=latest["id"] if latest else None,
+            latest_run_status=latest.get("status") if latest else None,
+            latest_run_outcome=((latest.get("stats") or {}).get("outcome") or None) if latest else None,
+            previous_list_kept=bool(visible and latest and latest["id"] != visible["id"]
+                                    and latest.get("status") in ("completed", "failed")),
+            incomplete_sources=dict(((latest_completed or {}).get("stats") or {}).get("incomplete_sources") or {}),
+            hidden_by_user=sum(1 for st in list_state.values() if st["hidden"]),
+        )
+        restored_set: set[str] = set()
+        if visible:
+            run_ids = rs.get_job_ids_for_run(visible["id"])
+            restored = _restored_ids(s, rs, visible, run_ids, off_sources)
+            restored_set = set(restored)
+            if restored:
+                for source, n in conn.execute(
+                        f"SELECT source, COUNT(*) FROM jobs WHERE id IN ({','.join('?' * len(restored))}) "
+                        "GROUP BY source", restored):
+                    out.restored_by_source[source] = int(n)
+            out.outside_criteria = sum(1 for r in rs.get_jobs_for_run(visible["id"], limit=-1)
+                                       if has_weak_flags(r.get("score_breakdown")))
+        if off_sources:
+            kept = {j for j, st in list_state.items() if st["saved"]}
+            marks = ",".join("?" * len(off_sources))
+            for source, job_id in conn.execute(
+                    f"SELECT source, id FROM jobs WHERE status = 'active' AND source IN ({marks}) "
+                    "AND (application_status IS NULL OR application_status = '')", sorted(off_sources)):
+                if job_id not in kept:
+                    out.source_off[source] = out.source_off.get(source, 0) + 1
+        out.expired = {str(r[0] or "unknown"): int(r[1]) for r in conn.execute(
+            "SELECT expiry_reason, COUNT(*) FROM jobs WHERE status = 'expired' GROUP BY expiry_reason")}
     finally:
         s.close()
         rs.close()
+    listed = _all_listed(request)
+    out.listed = len(listed)
+    if visible and visible.get("started_at"):
+        # Carried = listed now, but not collected during the visible run: its last sighting
+        # (latest provenance) is older than the run. Restored offers are counted apart.
+        ids = [j.id for j in listed if j.id not in restored_set]
+        s2 = Storage(db_path=request.app.state.db_path)
+        try:
+            conn2 = s2._get_conn()  # noqa: SLF001
+            for i in range(0, len(ids), 500):
+                chunk = ids[i:i + 500]
+                for source, n in conn2.execute(
+                        f"""SELECT j.source, COUNT(*) FROM jobs j WHERE j.id IN ({','.join('?' * len(chunk))})
+                            AND COALESCE((SELECT MAX(p.last_seen_at) FROM job_provenance p WHERE p.job_id = j.id),
+                                         j.discovered_at) < ? GROUP BY j.source""", [*chunk, visible["started_at"]]):
+                    out.carried_by_source[source] = out.carried_by_source.get(source, 0) + int(n)
+        finally:
+            s2.close()
+    return out
 
 
 @router.get("/stats", response_model=JobStatsOut)
@@ -1023,19 +1132,95 @@ def _list_state(request: Request, job_ids: list[str] | None = None) -> dict[str,
         store.close()
 
 
-def _switched_off_ids(request: Request, storage: Storage, list_state: dict[str, dict[str, bool]]) -> set[str]:
-    """Offers of a source the user turned off, hidden from every list while it is off (owner
-    decision D1, Phase B B4-A). Never deleted; an offer the user saved or tracks
-    (``application_status``) stays listed."""
-    from src.source_enablement import settings_path_for, switched_off_sources
+def _disabled_sources(request: Request) -> set[str]:
+    """The sources that are off now, for every reason (``src.source_enablement.disabled_sources``,
+    issue #253); empty (never an error) when the configuration cannot be read."""
+    from src.source_enablement import disabled_sources, settings_path_for
 
     state = request.app.state
     settings = getattr(state, "settings_path", None) or settings_path_for(state.db_path)
     try:
-        off = switched_off_sources(getattr(state, "config_dir", "config"), settings)
+        return disabled_sources(getattr(state, "config_dir", "config"), settings)
     except Exception as exc:  # noqa: BLE001 — listing offers never fails on the settings
         logger.warning("Source switches unavailable: %s", exc)
         return set()
+
+
+def _restored_ids(storage: Storage, rs: RunStorage, run: dict[str, Any], run_ids: list[str],
+                  off_now: set[str]) -> list[str]:
+    """Offers of a source that was off when ``run`` ran (``stats.sources_off``) and is on now:
+    active, scored in an earlier completed run, not in ``run_ids``, not an exact duplicate (same
+    content hash) of an offer of the run, and with no weak-evidence flag. Best score first."""
+    from src.pipeline.lanes import has_weak_flags
+
+    back_on = set((run.get("stats") or {}).get("sources_off") or []) - off_now
+    if not back_on:
+        return []
+    conn = storage._get_conn()  # noqa: SLF001
+    in_run = set(run_ids)
+    run_hashes = storage.get_content_hashes(run_ids)
+    marks = ",".join("?" * len(back_on))
+    candidates = [r[0] for r in conn.execute(
+        f"SELECT id, content_hash FROM jobs WHERE status = 'active' AND source IN ({marks})", sorted(back_on))
+        if r[0] not in in_run and not (r[1] and r[1] in run_hashes)]
+    scores = rs.get_latest_scores_for_jobs(candidates, completed_only=True)
+    # Only an offer whose latest evaluation accepted it: a later completed run that rejected it
+    # (the profile changed since) wins over an older score.
+    rejected_at = _latest_rejection_times(rs, [j for j in candidates if j in scores])
+    kept = [j for j in candidates if j in scores
+            and str(scores[j].get("run_started_at") or "") > rejected_at.get(j, "")
+            and not has_weak_flags(scores[j].get("score_breakdown"))]
+    return sorted(kept, key=lambda j: (-float(scores[j].get("final_score") or 0.0), j))
+
+
+def _latest_rejection_times(rs: RunStorage, job_ids: list[str]) -> dict[str, str]:
+    """For each job, the start time of the latest completed run that rejected it."""
+    out: dict[str, str] = {}
+    conn = rs._get_conn()  # noqa: SLF001
+    for i in range(0, len(job_ids), 500):
+        chunk = job_ids[i:i + 500]
+        for job_id, started in conn.execute(
+                f"""SELECT r.job_id, MAX(p.started_at) FROM job_rejections r JOIN pipeline_runs p ON p.id = r.run_id
+                    WHERE p.status = 'completed' AND r.job_id IN ({','.join('?' * len(chunk))})
+                    GROUP BY r.job_id""", chunk):
+            out[job_id] = str(started or "")
+    return out
+
+
+def _merge_by_score(rs: RunStorage, run_id: str, run_ids: list[str], restored: list[str]) -> list[str]:
+    """``run_ids`` in their order with ``restored`` (best first) merged in by final score: a
+    restored offer goes before the first run offer that scores lower."""
+    scores = rs.get_scores_for_list(run_ids + restored, run_id)
+
+    def score(j: str) -> float:
+        return float((scores.get(j) or {}).get("final_score") or 0.0)
+
+    out: list[str] = []
+    i = k = 0
+    while i < len(run_ids) and k < len(restored):
+        if score(restored[k]) > score(run_ids[i]):
+            out.append(restored[k])
+            k += 1
+        else:
+            out.append(run_ids[i])
+            i += 1
+    return out + run_ids[i:] + restored[k:]
+
+
+def _tracked_ids(storage: Storage) -> set[str]:
+    """Offers in the application tracker (``jobs.application_status`` set)."""
+    rows = storage._get_conn().execute(  # noqa: SLF001
+        "SELECT id FROM jobs WHERE application_status IS NOT NULL AND application_status != ''").fetchall()
+    return {r[0] for r in rows}
+
+
+def _switched_off_ids(request: Request, storage: Storage, list_state: dict[str, dict[str, bool]],
+                      off: set[str] | None = None) -> set[str]:
+    """Offers of a source that is off, hidden from every list while it is off (owner decision D1,
+    Phase B B4-A; since issue #253 every source that is off, not only the user-switchable ones).
+    Never deleted; an offer the user saved or tracks (``application_status``) stays listed."""
+    if off is None:
+        off = _disabled_sources(request)
     if not off:
         return set()
     rows = storage._get_conn().execute(  # noqa: SLF001

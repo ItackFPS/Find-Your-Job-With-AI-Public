@@ -794,13 +794,14 @@ class Storage:
         return Job.from_dict(dict(row)) if row is not None else None
 
     def get_content_hashes(self, job_ids: list[str]) -> set[str]:
-        """Content hashes of these offers (exact-duplicate detection, ADR 0017)."""
+        """Content hashes of these offers (exact-duplicate detection, ADR 0017). An empty hash is no
+        hash: hiding an offer stored without one must not hide every other such offer (#253)."""
         out: set[str] = set()
         conn = self._get_conn()
         for i in range(0, len(job_ids), 500):
             chunk = job_ids[i : i + 500]
             out.update(r[0] for r in conn.execute(
-                f"SELECT content_hash FROM jobs WHERE id IN ({','.join('?' * len(chunk))}) AND content_hash IS NOT NULL",
+                f"SELECT content_hash FROM jobs WHERE id IN ({','.join('?' * len(chunk))}) AND content_hash IS NOT NULL AND content_hash != ''",
                 chunk))
         return out
 
