@@ -90,6 +90,21 @@ describe('TodayCard', () => {
     expect(countJobs).toHaveBeenCalledWith({ min_tier: 'relevant' })
   })
 
+  it('names a source that came back empty after returning offers (issue #253)', async () => {
+    const stats = { ...dashboard.latest_run!.stats, outcome: 'partial' as const, carried: 42,
+      incomplete_sources: { indeed: 'suspect_empty' as const, eures: 'suspect_empty' as const } }
+    show({ ...dashboard, latest_run: { ...dashboard.latest_run!, stats } })
+    expect(await screen.findByTestId('suspect-sources')).toHaveTextContent('2 sources returned no offer although they found some before (eures, indeed)')
+    // what entered the run is not what the list holds: the Jobs notice counts carried offers
+    expect(screen.queryByTestId('carried')).not.toBeInTheDocument()
+  })
+
+  it('words a single suspect source in the singular', async () => {
+    const stats = { ...dashboard.latest_run!.stats, outcome: 'partial' as const, incomplete_sources: { eures: 'suspect_empty' as const } }
+    show({ ...dashboard, latest_run: { ...dashboard.latest_run!, stats } })
+    expect(await screen.findByTestId('suspect-sources')).toHaveTextContent('One source returned no offer although it found some before (eures); its offers stay in the list.')
+  })
+
   it('says so before any search', async () => {
     show({ ...dashboard, latest_run: null })
     expect(await screen.findByText(/No search yet/)).toBeInTheDocument()

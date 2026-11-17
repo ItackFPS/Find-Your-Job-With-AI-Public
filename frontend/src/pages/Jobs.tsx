@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { listJobs, listOutsideCriteria, getAllDepartments, getJobCountries, getProfile, type Job, type CountryFacet, type LocationPreference } from '../api/client'
+import { listJobs, listOutsideCriteria, getAllDepartments, getJobCountries, getProfile, countJobs, getListStatus, type Job, type CountryFacet, type LocationPreference } from '../api/client'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Chip, EmptyState, LoadingState, Ring } from '../components'
+import { Chip, EmptyState, ListStatusNotice, LoadingState, Ring } from '../components'
 import { SaveHideButtons } from '../components/SaveHideButtons'
 import { useVisibleExposure } from '../hooks/useVisibleExposure'
 import { daysAgo, getSourceBadge, locationBadge } from '../utils'
@@ -222,7 +222,20 @@ function JobCard({ job, targetSkills, locationPreferences, departmentNames, posi
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.85rem', gap: '0.5rem', flexWrap: 'wrap' }}>
         <SaveHideButtons jobId={job.id} saved={job.saved} hidden={false} surface={surface} position={position}
           onHiddenChange={h => setHiddenNow(h)} />
-        <TierBadge tier={tier} />
+        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Issue #253: the saved and tracked views list offers that left the main list, and say why. */}
+          {job.status === 'expired' && (
+            <span data-testid="badge-expired" style={{ fontSize: '0.75rem', color: 'var(--color-warning)' }}>
+              {job.expiry_reason === 'stale' ? t('jobs.badge.stale') : t('jobs.badge.expired')}
+            </span>
+          )}
+          {job.source_off && (
+            <span data-testid="badge-source-off" style={{ fontSize: '0.75rem', color: 'var(--color-muted)' }}>
+              {t('jobs.badge.sourceOff')}
+            </span>
+          )}
+          <TierBadge tier={tier} />
+        </div>
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
@@ -267,11 +280,13 @@ export default function Jobs() {
   const [includeExpired, setIncludeExpired] = useState(false)
   // Saved offers (ADR 0016), whatever the run.
   const [savedOnly, setSavedOnly] = useState(false)
+  // Offers in the application tracker, whatever the run (issue #253).
+  const [trackedOnly, setTrackedOnly] = useState(false)
   const [minTier, setMinTier] = useState(DEFAULT_MIN_TIER)
   const [q, setQ] = useState('')         // debounced value sent to API
   // Each list records its own surface (Phase B B9-A): the saved list and a search are not the
   // ranked main list, so their exposures and actions must not be read as if they were.
-  const listSurface = savedOnly ? 'saved' : q ? 'search' : 'jobs'
+  const listSurface = trackedOnly ? 'tracked' : savedOnly ? 'saved' : q ? 'search' : 'jobs'
   const track = useVisibleExposure(listSurface)
   const trackOutside = useVisibleExposure('outside_criteria')
   const [inputQ, setInputQ] = useState('') // immediate input value
@@ -298,10 +313,19 @@ export default function Jobs() {
     staleTime: Infinity,
   })
 
-  // Load country facets (job counts per country) from the latest run.
+  // The filters the list, its count and its country facets share (issue #253): every number on
+  // this page counts exactly the offers the list shows.
+  const filters = {
+    remote,
+    min_tier: minTier !== 'low_priority' ? minTier : undefined,
+    q: q || undefined,
+    include_expired: includeExpired || undefined,
+    saved_only: savedOnly || undefined,
+    tracked_only: trackedOnly || undefined,
+  }
   const { data: countriesData } = useQuery({
-    queryKey: ['job-countries'],
-    queryFn: getJobCountries,
+    queryKey: ['job-countries', filters],
+    queryFn: () => getJobCountries(filters),
     staleTime: 60_000,
   })
   const totalJobCount = countriesData?.total ?? null
@@ -315,23 +339,26 @@ export default function Jobs() {
     (allDepartments ?? []).map(d => [d.code, d.name])
   )
 
+  const listFilters = {
+    ...filters,
+    country: country || undefined,
+    department: (isFrance && department) ? department : undefined,
+  }
   const { data: jobs, isLoading, error } = useQuery({
-    queryKey: ['jobs', country, isFrance ? department : '', remote, minTier, q, includeExpired, savedOnly, offset],
-    queryFn: () => listJobs({
-      country: country || undefined,
-      department: (isFrance && department) ? department : undefined,
-      remote,
-      min_tier: minTier !== 'low_priority' ? minTier : undefined,
-      q: q || undefined,
-      include_expired: includeExpired || undefined,
-      saved_only: savedOnly || undefined,
-      limit: PAGE,
-      offset,
-    }),
+    queryKey: ['jobs', listFilters, offset],
+    queryFn: () => listJobs({ ...listFilters, limit: PAGE, offset }),
   })
+  // All pages together, so "Suivant" stops at the last page (issue #253).
+  const { data: listTotal } = useQuery({
+    queryKey: ['jobs-count', listFilters],
+    queryFn: () => countJobs(listFilters),
+  })
+  // Why the main list holds what it holds (issue #253): kept list, incomplete sources, carried,
+  // switched-off and expired offers.
+  const { data: listStatus } = useQuery({ queryKey: ['jobs-list-status'], queryFn: getListStatus })
 
   // The outside-criteria lane shows only on the plain first page.
-  const plainFirstPage = !q && !savedOnly && offset === 0
+  const plainFirstPage = !q && !savedOnly && !trackedOnly && offset === 0
   // Weak-evidence lane (ADR 0019 v5 AD-2b): collapsed, never notifies; empty while every check rejects.
   const { data: outside } = useQuery({
     queryKey: ['jobs-outside-criteria'],
@@ -351,7 +378,17 @@ export default function Jobs() {
 
   const hasActiveFilter = !!(
     country || remote !== undefined || q || (isFrance && department) || minTier !== DEFAULT_MIN_TIER || includeExpired || savedOnly
+    || trackedOnly
   )
+  const switchedOff = Object.values(listStatus?.source_off ?? {}).reduce((a, b) => a + b, 0)
+  // An empty list says why (issue #253).
+  const emptyMessage = trackedOnly ? t('jobs.emptyTracked')
+    : savedOnly ? t('jobs.emptySaved')
+      : hasActiveFilter ? t('jobs.emptyFiltered')
+        : listStatus && !listStatus.visible_run_id ? t('jobs.emptyNoRun')
+          : switchedOff > 0 ? t('jobs.emptySourcesOff', { count: switchedOff })
+            : t('jobs.empty')
+  const hasNext = typeof listTotal === 'number' ? offset + PAGE < listTotal : !!jobs && jobs.length === PAGE
 
   return (
     <div>
@@ -455,6 +492,15 @@ export default function Jobs() {
           {t('saveHide.savedOnly')}
         </label>
 
+        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', fontSize: '0.85rem', color: 'var(--color-muted)' }}>
+          <input
+            type="checkbox"
+            checked={trackedOnly}
+            onChange={e => { setTrackedOnly(e.target.checked); setOffset(0) }}
+          />
+          {t('jobs.trackedOnly')}
+        </label>
+
         {hasActiveFilter && (
           <button
             onClick={() => {
@@ -466,6 +512,7 @@ export default function Jobs() {
               setMinTier(DEFAULT_MIN_TIER)
               setIncludeExpired(false)
               setSavedOnly(false)
+              setTrackedOnly(false)
               setOffset(0)
             }}
             style={{ ...filterStyle, cursor: 'pointer', color: 'var(--color-muted)' }}
@@ -474,6 +521,8 @@ export default function Jobs() {
           </button>
         )}
       </div>
+
+      {!savedOnly && !trackedOnly && <ListStatusNotice status={listStatus} />}
 
       {isLoading && <LoadingState compact />}
       {error && <div style={{ color: 'var(--color-error)' }}>{t('jobs.loadError')}</div>}
@@ -504,7 +553,7 @@ export default function Jobs() {
       )}
 
       {jobs && jobs.length === 0 && (
-        <EmptyState message={t('jobs.empty')} />
+        <EmptyState message={emptyMessage} />
       )}
 
       {jobs && jobs.map((job, i) => (
@@ -520,7 +569,7 @@ export default function Jobs() {
         />
       ))}
 
-      {jobs && (jobs.length === PAGE || offset > 0) && (
+      {jobs && (hasNext || offset > 0) && (
         <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', marginTop: '1rem' }}>
           <button
             onClick={() => setOffset(Math.max(0, offset - PAGE))}
@@ -538,18 +587,18 @@ export default function Jobs() {
             {t('jobs.prev')}
           </button>
           <span style={{ lineHeight: '2rem', fontSize: '0.82rem', color: 'var(--color-muted)' }}>
-            {offset + 1}–{offset + (jobs?.length || 0)}
+            {offset + 1}–{offset + (jobs?.length || 0)}{typeof listTotal === 'number' ? ` / ${listTotal}` : ''}
           </span>
           <button
             onClick={() => setOffset(offset + PAGE)}
-            disabled={!jobs || jobs.length < PAGE}
+            disabled={!hasNext}
             style={{
               background: 'var(--color-surface)',
               border: '1px solid var(--color-border)',
               borderRadius: 'var(--radius-sm)',
               padding: '0.4rem 1rem',
-              color: (!jobs || jobs.length < PAGE) ? 'var(--color-border)' : 'var(--color-text)',
-              cursor: (!jobs || jobs.length < PAGE) ? 'not-allowed' : 'pointer',
+              color: !hasNext ? 'var(--color-border)' : 'var(--color-text)',
+              cursor: !hasNext ? 'not-allowed' : 'pointer',
               fontSize: '0.85rem',
             }}
           >

@@ -547,6 +547,7 @@ export default function Dashboard() {
         <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
           <ConnectionBadge connection={connection} />
           <span style={{ color: 'var(--color-muted)', fontSize: 'var(--font-size-sm)' }}>
+            {typeof d.listed_total === 'number' && `${t('dashboard.listedTotal', { count: d.listed_total })} · `}
             {t('dashboard.jobsInDb', { count: d.total_jobs_in_db })}
           </span>
           {!liveEvent && d.is_running && (
