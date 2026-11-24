@@ -103,6 +103,16 @@ logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://www.hellowork.com"
 _METIER_URL = _BASE_URL + "/fr-fr/emploi/metier_{slug}.html"
+# A metier's region facet page (#307): robots-allowed (no query string), same ItemList JSON-LD,
+# 20 other offers of that metier in the region (2026-11-24: 14-20 new per region page).
+_METIER_REGION_URL = _BASE_URL + "/fr-fr/emploi/metier_{slug}-region_{region}.html"
+# HelloWork's region slugs by INSEE region code (2016 regions), all 13 checked live 2026-11-24.
+HELLOWORK_REGION_SLUGS: dict[str, str] = {
+    "11": "ile-de-france", "84": "auvergne-rhone-alpes", "32": "hauts-de-france",
+    "93": "provence-alpes-cote-d-azur", "75": "nouvelle-aquitaine", "76": "occitanie",
+    "44": "grand-est", "53": "bretagne", "28": "normandie", "52": "pays-de-la-loire",
+    "24": "centre-val-de-loire", "27": "bourgogne-franche-comte", "94": "corse",
+}
 _DOMAIN_INDEX_URL = _BASE_URL + "/fr-fr/emploi/index-domaine_{domain}.html"
 _HEADERS = {
     "Accept": "text/html",
@@ -114,6 +124,19 @@ _JOB_ID_RE = re.compile(r"/emplois/([A-Za-z0-9]+)\.html")
 # which describe/paginate a single metier rather than listing jobs).
 _METIER_SLUG_RE = re.compile(r'href="/fr-fr/emploi/metier_([a-z0-9-]+)\.html"')
 _FIXTURE_URL = _BASE_URL + "/fr-fr/emplois/00000001.html"
+
+
+def regions_for_departments(codes: list[str]) -> list[str]:
+    """HelloWork region slugs of these départements, in first-seen order (#307)."""
+    from src.geo.places import department_place
+
+    slugs: list[str] = []
+    for code in codes:
+        place = department_place(str(code))
+        slug = HELLOWORK_REGION_SLUGS.get(place.region or "") if place else None
+        if slug and slug not in slugs:
+            slugs.append(slug)
+    return slugs
 
 
 def parse_job_page(html: str, job_url: str = _FIXTURE_URL) -> list[dict[str, Any]]:
@@ -139,6 +162,9 @@ class HelloWorkCollector(BaseCollector):
                                slugs; breadth of roles touched matters more than depth
                                per role for discovery, and depth is cheap to raise later).
         max_jobs               Optional total unique jobs across all slugs (default: unlimited).
+        regions                HelloWork region slugs (HELLOWORK_REGION_SLUGS values): each metier
+                               is also read on these region facet pages; max_jobs_per_slug then
+                               applies to each listing page (default: none).
         rate_limit_delay       Seconds between requests (default: 1.0 -- robots.txt sets no
                                crawl-delay; still well within polite-scraping norms).
         timeout                Per-request timeout in seconds (default: 20).
@@ -154,7 +180,8 @@ class HelloWorkCollector(BaseCollector):
     robots_user_agent = _HEADERS["User-Agent"]
     # >= 1 s between requests; the full ~430-slug taxonomy at 3 jobs per slug is ~1,700
     # requests, so 3,000 only stops a runaway configuration.
-    rate_policy = RatePolicy(min_delay_seconds=1.0, max_requests_per_run=3000)
+    # Region facets (#307) add one listing page and its detail pages per metier and region.
+    rate_policy = RatePolicy(min_delay_seconds=1.0, max_requests_per_run=8000)
 
     def fixture(self) -> RecordedFixture:
         return RecordedFixture("hellowork_job_page.html", self._load_fixture("hellowork_job_page.html"),
@@ -171,6 +198,8 @@ class HelloWorkCollector(BaseCollector):
         self.explicit_metier_slugs: list[str] = list(cfg.get("metier_slugs") or [])
         self.max_jobs_per_slug: int = int(cfg.get("max_jobs_per_slug", 3))
         self.max_jobs: int | None = cfg.get("max_jobs")
+        known = set(HELLOWORK_REGION_SLUGS.values())
+        self.regions: list[str] = [str(r) for r in (cfg.get("regions") or []) if str(r) in known]
         # Set when a background scan (stop_on_rate_limit) meets a 429 (see collect()).
         self.rate_limited: str | None = None
 
@@ -213,6 +242,8 @@ class HelloWorkCollector(BaseCollector):
         jobs: list[dict[str, Any]] = []
         seen_ids: set[str] = set()
         unreadable_listings = 0
+        job_urls_found = 0
+        self._jobposting_missing = 0
         skip_slugs = skip_slugs or set()
         # Set when a background scan (stop_on_rate_limit) meets a 429: collection stops at
         # once and the slug in progress is not checked off, so the resume re-fetches it.
@@ -243,73 +274,47 @@ class HelloWorkCollector(BaseCollector):
             if slug in skip_slugs:
                 continue
 
-            listing_url = _METIER_URL.format(slug=slug)
-            try:
-                self._enforce_rate_limit()
-                response = self._fetch_with_retry(listing_url, headers=_HEADERS)
-                job_urls = extract_itemlist_urls(response.text)
-            except RateLimited as exc:
-                self.rate_limited = str(exc)
-                break
-            except (httpx.HTTPError, RuntimeError) as exc:
-                errors.append(f"HelloWork: failed to list jobs for metier '{slug}': {exc}")
-                continue
-            if not job_urls and not has_itemlist(response.text):
-                # "no jobs" and "a page we can no longer read" both yield 0 URLs: only the second has no list
-                # Not checked off (no on_slug_done), like a failed fetch: a resume retries it.
-                unreadable_listings += 1
-                logger.warning("HelloWork: no ItemList JSON-LD on the listing page for metier '%s'", slug)
-                continue
-            if not job_urls:
-                self._note_empty_result()  # the list is there and empty: no offer for this role today
-
-            logger.info("HelloWork: %d job URLs found for metier '%s'", len(job_urls), slug)
-
+            # The metier page, then its region facet pages (#307); one checkpoint unit.
+            listings = [(None, _METIER_URL.format(slug=slug))] + [
+                (region, _METIER_REGION_URL.format(slug=slug, region=region)) for region in self.regions]
             slug_jobs: list[dict[str, Any]] = []
-            fetched_for_slug = 0
             slug_interrupted = False
-            for job_url in job_urls:
-                if shutdown_event is not None and shutdown_event.is_set():
-                    logger.info(
-                        "HelloWork: shutdown requested — stopping mid metier slug "
-                        "%r after %d/%d job(s); slug will be retried in full on the "
-                        "next scan (not marked complete).",
-                        slug, fetched_for_slug, len(job_urls),
-                    )
-                    slug_interrupted = True
-                    break
-                if fetched_for_slug >= self.max_jobs_per_slug:
-                    break
-                if self.max_jobs is not None and len(jobs) >= self.max_jobs:
-                    break
-
-                job_id_match = _JOB_ID_RE.search(job_url)
-                job_id = job_id_match.group(1) if job_id_match else None
-                if job_id and job_id in seen_ids:
-                    continue
-
+            slug_unreadable = False
+            for region, listing_url in listings:
+                where = f"metier '{slug}'" + (f" in region '{region}'" if region else "")
                 try:
                     self._enforce_rate_limit()
-                    detail_response = self._fetch_with_retry(job_url, headers=_HEADERS)
+                    response = self._fetch_with_retry(listing_url, headers=_HEADERS)
+                    job_urls = extract_itemlist_urls(response.text)
                 except RateLimited as exc:
                     self.rate_limited = str(exc)
                     slug_interrupted = True
                     break
                 except (httpx.HTTPError, RuntimeError) as exc:
-                    errors.append(f"HelloWork: failed to load {job_url}: {exc}")
+                    errors.append(f"HelloWork: failed to list jobs for {where}: {exc}")
+                    if region is None:
+                        slug_unreadable = True
+                        break
                     continue
-
-                ld = extract_jobposting_ld(detail_response.text)
-                if not ld:
-                    logger.warning("HelloWork: no JobPosting JSON-LD found at %s", job_url)
+                if not job_urls and not has_itemlist(response.text):
+                    # "no jobs" and "a page we can no longer read" both yield 0 URLs: only the second has no list
+                    # Not checked off (no on_slug_done), like a failed fetch: a resume retries it.
+                    unreadable_listings += 1
+                    logger.warning("HelloWork: no ItemList JSON-LD on the listing page for %s", where)
+                    if region is None:
+                        slug_unreadable = True
+                        break
                     continue
+                if not job_urls:
+                    self._note_empty_result()  # the list is there and empty: no offer for this role today
 
-                if job_id:
-                    seen_ids.add(job_id)
-                raw_job = map_jobposting_ld_to_raw(ld, job_url, job_id)
-                jobs.append(raw_job)
-                slug_jobs.append(raw_job)
-                fetched_for_slug += 1
+                logger.info("HelloWork: %d job URLs found for %s", len(job_urls), where)
+                job_urls_found += len(job_urls)
+                if self._read_listing_jobs(job_urls, slug, jobs, slug_jobs, seen_ids, errors, shutdown_event):
+                    slug_interrupted = True
+                    break
+            if slug_unreadable:
+                continue
 
             if slug_interrupted:
                 # Do NOT call on_slug_done — this slug did not actually
@@ -318,11 +323,16 @@ class HelloWorkCollector(BaseCollector):
                 # lose whatever job pages were never reached).
                 break
 
-            # This slug's listing was read and all its detail pages have been
+            # This slug's listings were read and all their detail pages have been
             # attempted (successfully or not) — safe to check off, even with 0 jobs.
             if on_slug_done is not None:
                 on_slug_done(slug, slug_jobs)
 
+        if job_urls_found and not jobs and not self.rate_limited:
+            # The October 2026 failure class: pages answered, offers listed, none could be read.
+            errors.insert(0, f"HelloWork: {job_urls_found} job URL(s) were listed but no offer could be read "
+                             f"({self._jobposting_missing} job page(s) without JobPosting JSON-LD) - the page "
+                             "format may have changed")
         if unreadable_listings:
             # First: the likeliest root cause when many pages fail, and kept by capped error lists
             errors.insert(
@@ -337,8 +347,66 @@ class HelloWorkCollector(BaseCollector):
             jobs=jobs,
             errors=errors,
             duration_seconds=duration,
-            metadata={"metier_slugs_queried": len(metier_slugs)},
+            metadata={"metier_slugs_queried": len(metier_slugs), "regions": list(self.regions),
+                      "job_urls_found": job_urls_found, "jobposting_missing": self._jobposting_missing},
         )
+
+    def _read_listing_jobs(
+        self,
+        job_urls: list[str],
+        slug: str,
+        jobs: list[dict[str, Any]],
+        slug_jobs: list[dict[str, Any]],
+        seen_ids: set[str],
+        errors: list[str],
+        shutdown_event: threading.Event | None,
+    ) -> bool:
+        """Read up to max_jobs_per_slug job pages of one listing page. True when interrupted
+        (shutdown or 429): the slug must not be checked off."""
+        fetched_for_slug = 0
+        for job_url in job_urls:
+            if shutdown_event is not None and shutdown_event.is_set():
+                logger.info(
+                    "HelloWork: shutdown requested — stopping mid metier slug "
+                    "%r after %d/%d job(s); slug will be retried in full on the "
+                    "next scan (not marked complete).",
+                    slug, fetched_for_slug, len(job_urls),
+                )
+                return True
+            if fetched_for_slug >= self.max_jobs_per_slug:
+                break
+            if self.max_jobs is not None and len(jobs) >= self.max_jobs:
+                break
+
+            job_id_match = _JOB_ID_RE.search(job_url)
+            job_id = job_id_match.group(1) if job_id_match else None
+            if job_id and job_id in seen_ids:
+                continue
+
+            try:
+                self._enforce_rate_limit()
+                detail_response = self._fetch_with_retry(job_url, headers=_HEADERS)
+            except RateLimited as exc:
+                self.rate_limited = str(exc)
+                return True
+            except (httpx.HTTPError, RuntimeError) as exc:
+                errors.append(f"HelloWork: failed to load {job_url}: {exc}")
+                continue
+
+            ld = extract_jobposting_ld(detail_response.text)
+            if not ld:
+                # Counted (#307): France Travail offers republished by HelloWork carry none.
+                self._jobposting_missing += 1
+                logger.warning("HelloWork: no JobPosting JSON-LD found at %s", job_url)
+                continue
+
+            if job_id:
+                seen_ids.add(job_id)
+            raw_job = map_jobposting_ld_to_raw(ld, job_url, job_id)
+            jobs.append(raw_job)
+            slug_jobs.append(raw_job)
+            fetched_for_slug += 1
+        return False
 
     def _resolve_metier_slugs(self) -> tuple[list[str], list[str]]:
         """Return the deduplicated metier slug list (domain taxonomy + explicit), and any errors."""

@@ -162,7 +162,23 @@ class TestHelloWorkCollector:
         assert any("timeout" in e for e in result.errors)
 
     @patch("src.collectors.hellowork.HelloWorkCollector._enforce_rate_limit")
-    def test_no_jobposting_ld_on_detail_page_skipped(self, _mock_rl: MagicMock) -> None:
+    def test_no_jobposting_ld_on_detail_page_skipped_and_counted(self, _mock_rl: MagicMock) -> None:
+        """A page without JobPosting (a republished France Travail offer) is skipped, counted (#307)."""
+        urls = ["https://www.hellowork.com/fr-fr/emplois/3.html", "https://www.hellowork.com/fr-fr/emplois/4.html"]
+        with patch(
+            "src.collectors.hellowork.HelloWorkCollector._fetch_with_retry",
+            side_effect=[_html_response(_listing_html(urls)), _html_response("<html></html>"),
+                         _html_response(_detail_html())],
+        ):
+            result = HelloWorkCollector(config={"metier_slugs": ["developpeur"]}).collect()
+        assert len(result.jobs) == 1
+        assert result.errors == []
+        assert result.metadata["jobposting_missing"] == 1
+        assert result.metadata["job_urls_found"] == 2
+
+    @patch("src.collectors.hellowork.HelloWorkCollector._enforce_rate_limit")
+    def test_listed_offers_none_readable_is_an_error_not_a_silent_zero(self, _mock_rl: MagicMock) -> None:
+        """#307: pages answered and listed offers, but none could be read: reported, never "0 found"."""
         job_url = "https://www.hellowork.com/fr-fr/emplois/3.html"
         with patch(
             "src.collectors.hellowork.HelloWorkCollector._fetch_with_retry",
@@ -170,7 +186,55 @@ class TestHelloWorkCollector:
         ):
             result = HelloWorkCollector(config={"metier_slugs": ["developpeur"]}).collect()
         assert result.jobs == []
+        assert len(result.errors) == 1
+        assert "1 job URL(s) were listed but no offer could be read" in result.errors[0]
+
+    @patch("src.collectors.hellowork.HelloWorkCollector._enforce_rate_limit")
+    def test_region_facet_pages_are_read_after_the_metier_page(self, _mock_rl: MagicMock) -> None:
+        """#307: each region facet page adds its own offers; ids already seen are not fetched again."""
+        base = "https://www.hellowork.com/fr-fr/emplois/"
+        fetched: list[str] = []
+        pages = {
+            "https://www.hellowork.com/fr-fr/emploi/metier_comptable.html": [base + "1.html", base + "2.html"],
+            "https://www.hellowork.com/fr-fr/emploi/metier_comptable-region_bretagne.html": [base + "2.html",
+                                                                                           base + "3.html"],
+            "https://www.hellowork.com/fr-fr/emploi/metier_comptable-region_corse.html": [base + "4.html"],
+        }
+
+        def fetch(url: str, **_kw):
+            fetched.append(url)
+            if url in pages:
+                return _html_response(_listing_html(pages[url]))
+            return _html_response(_detail_html(title=url[-6:]))
+
+        with patch("src.collectors.hellowork.HelloWorkCollector._fetch_with_retry", side_effect=fetch):
+            done: list[tuple[str, int]] = []
+            result = HelloWorkCollector(config={
+                "metier_slugs": ["comptable"], "regions": ["bretagne", "corse", "not-a-region"],
+                "max_jobs_per_slug": 5}).collect(on_slug_done=lambda slug, jobs: done.append((slug, len(jobs))))
+        assert sorted(j["source_job_id"] for j in result.jobs) == ["1", "2", "3", "4"]
+        assert fetched.count(base + "2.html") == 1
+        assert result.metadata["regions"] == ["bretagne", "corse"]       # unknown slug dropped
+        assert done == [("comptable", 4)]                                # one checkpoint unit per metier
         assert result.errors == []
+
+    @patch("src.collectors.hellowork.HelloWorkCollector._enforce_rate_limit")
+    def test_a_failed_region_page_is_reported_and_the_metier_still_completes(self, _mock_rl: MagicMock) -> None:
+        base = "https://www.hellowork.com/fr-fr/emplois/"
+
+        def fetch(url: str, **_kw):
+            if url.endswith("metier_comptable.html"):
+                return _html_response(_listing_html([base + "1.html"]))
+            if "region_" in url:
+                raise RuntimeError("HTTP 500")
+            return _html_response(_detail_html())
+
+        with patch("src.collectors.hellowork.HelloWorkCollector._fetch_with_retry", side_effect=fetch):
+            done: list[str] = []
+            result = HelloWorkCollector(config={"metier_slugs": ["comptable"], "regions": ["bretagne"]}).collect(
+                on_slug_done=lambda slug, jobs: done.append(slug))
+        assert len(result.jobs) == 1 and done == ["comptable"]
+        assert result.errors == ["HelloWork: failed to list jobs for metier 'comptable' in region 'bretagne': HTTP 500"]
 
     @patch("src.collectors.hellowork.HelloWorkCollector._enforce_rate_limit")
     def test_max_jobs_per_slug_bounds_detail_fetches(self, _mock_rl: MagicMock) -> None:
@@ -478,3 +542,12 @@ class TestGracefulShutdown:
         # partial jobs staged), and dev-b must never have started.
         assert calls == []
         assert fetch_count == 2  # listing + job A's detail page only, not job B
+
+
+def test_regions_for_departments_maps_insee_regions_to_hellowork_slugs() -> None:
+    """#307: the scanner reads the regions of the profile's search area."""
+    from src.collectors.hellowork import HELLOWORK_REGION_SLUGS, regions_for_departments
+
+    assert regions_for_departments(["63", "03", "42", "23", "2A", "971"]) == [
+        "auvergne-rhone-alpes", "nouvelle-aquitaine", "corse"]          # 971: no metropolitan slug
+    assert len(set(HELLOWORK_REGION_SLUGS.values())) == 13
