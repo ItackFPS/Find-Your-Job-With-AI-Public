@@ -13,7 +13,11 @@ an inactive source is skipped rather than failing the run.
 France Travail with no credentials at all (a fresh install) is not a broken
 connection but one that was never set up: the run goes ahead DEGRADED without
 that source, the skip named in the report and the run's errors. Credentials
-that are present but fail to authenticate still block the run. Indeed is an
+that are present but fail to authenticate do not block the run either (#303): an
+outage or a network error is retried briefly, then France Travail is skipped for
+this run with the failure class named (refused credentials, lost subscription,
+outage, network), the run goes ahead DEGRADED and the other sources (EURES, which
+carries France Travail's own offers, included) still collect. Indeed is an
 unofficial source, off unless the user chose it (``src.app_settings``, plan rule
 I1): when it is off it is skipped with that reason, which is the intended default
 and does not mark the run degraded.
@@ -26,6 +30,7 @@ one that reports a clear failure.
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -44,6 +49,8 @@ class FranceTravailPreflight:
     authentication: str  # OK | FAILED | SKIPPED
     status: str        # READY | CONFIG_MISSING | AUTH_FAILED | SKIPPED
     detail: str | None = None
+    # AUTH_FAILED only: the failure class (src.collectors.france_travail.FT_AUTH_FAILURE_CLASSES).
+    reason_key: str | None = None
 
 
 @dataclass
@@ -70,18 +77,15 @@ class PreflightResult:
         }
 
 
-_READY_LIKE = frozenset({"READY", "SKIPPED"})
-
-
 def run_preflight(config_dir: str = "config", settings_path: str | Path | None = None) -> PreflightResult:
     """Check France Travail connectivity/auth before collection starts.
 
-    France Travail is a collection source: an active source whose credentials
-    cannot authenticate blocks the run entirely (status FAILED) — a partial
-    scan silently missing a configured source is worse than no run at all. An
+    An active France Travail source that cannot authenticate is skipped for this
+    run, visibly: status DEGRADED, the failure class in its skip reason and in the
+    run's errors (#303). One source's login failure never stops the others. An
     active source with no credentials set was never configured: it is skipped
-    for this run, visibly (status DEGRADED), so a fresh install can still
-    collect from the sources that need no account.
+    for this run too (status DEGRADED), without counting as a run error, so a
+    fresh install can still collect from the sources that need no account.
 
     ``settings_path``: the app settings file (``data/settings.json``) holding the user's
     choice of unofficial sources; None reads no file (the legacy setup alone decides).
@@ -104,33 +108,32 @@ def run_preflight(config_dir: str = "config", settings_path: str | Path | None =
     indeed_off = _indeed_not_chosen(config_dir, settings_path)
 
     ft_unconfigured = ft.status == "CONFIG_MISSING"
-    ft_ok = ft.status in _READY_LIKE or ft_unconfigured
+    ft_auth_failed = ft.status == "AUTH_FAILED"
 
-    if not ft_ok:
-        status = "FAILED"
-    elif ft_unconfigured:
-        status = "DEGRADED"
-    else:
-        status = "READY"
-
+    status = "DEGRADED" if (ft_unconfigured or ft_auth_failed) else "READY"
+    # No France Travail state blocks the run any more (#303); FAILED stays a valid status for
+    # callers, unused by this check.
     errors: list[str] = []
-    if not ft_ok and ft.detail:
-        errors.append(f"France Travail: {ft.detail}")
 
     skip_reasons: dict[str, str] = {}
     if ft_unconfigured:
         skip_reasons["france_travail"] = _FT_API_RESTRICTED
+    if ft_auth_failed:
+        skip_reasons["france_travail"] = FT_AUTH_SKIP_REASONS.get(
+            ft.reason_key or "ft_auth_failed", FT_AUTH_SKIP_REASONS["ft_auth_failed"])
     if indeed_off:
         skip_reasons["indeed"] = _INDEED_OFF
     for source_type in frozen:
         skip_reasons[source_type] = freeze.FROZEN_REASON
 
     # An unconfigured France Travail API is the normal state of a new install (D4, ADR 0028): it is
-    # listed as skipped with skip_reasons, and is not an error of the run.
+    # listed as skipped with skip_reasons, and is not an error of the run. A failed login is.
     degraded_errors: list[str] = []
+    if ft_auth_failed and ft.detail:
+        degraded_errors.append(f"France Travail skipped: {ft.detail}")
 
     result = PreflightResult(
-        france_travail=ft, status=status, ready=ft_ok,
+        france_travail=ft, status=status, ready=True,
         errors=errors, degraded_errors=degraded_errors,
         skipped_source_types=list(skip_reasons), skip_reasons=skip_reasons,
     )
@@ -146,6 +149,34 @@ _FT_API_RESTRICTED = (
     "Not required. The France Travail API is restricted and has no access set up here; "
     "the France Travail website and the other sources still run."
 )
+
+# Skip reason per France Travail login failure class (#303); each has a key the interface translates
+# (src.pipeline.source_selection.reason_key).
+FT_AUTH_SKIP_REASONS: dict[str, str] = {
+    "ft_auth_invalid_client": (
+        "France Travail refused the API credentials (invalid_client): check the client ID and "
+        "secret on francetravail.io. France Travail is skipped for this run; the other sources still run."
+    ),
+    "ft_auth_invalid_scope": (
+        "France Travail refused the API subscription (invalid_scope): the application may have lost "
+        "access to the job offers API. France Travail is skipped for this run; the other sources still run."
+    ),
+    "ft_outage": (
+        "France Travail's login service is unavailable (maintenance or server error). France Travail "
+        "is skipped for this run and tried again at the next one; the other sources still run."
+    ),
+    "ft_network": (
+        "France Travail could not be reached (network error). France Travail is skipped for this run "
+        "and tried again at the next one; the other sources still run."
+    ),
+    "ft_auth_failed": (
+        "France Travail authentication failed. France Travail is skipped for this run; the other "
+        "sources still run."
+    ),
+}
+
+# Waits before re-trying a token request that failed for a transient reason (outage, network).
+_TRANSIENT_RETRY_DELAYS: tuple[float, ...] = (5.0, 15.0)
 
 _INDEED_OFF = (
     "Indeed is off. It is an unofficial source (Indeed has no public API), so it only "
@@ -209,21 +240,38 @@ def _check_france_travail(config_dir: str) -> FranceTravailPreflight:
             ),
         )
 
-    try:
-        with httpx.Client(timeout=collector.timeout) as client:
-            collector._get_or_refresh_token(client)
-    except (httpx.HTTPError, RuntimeError) as exc:
-        return FranceTravailPreflight(
-            enabled=True, credentials="FOUND", authentication="FAILED",
-            status="AUTH_FAILED",
-            detail=f"OAuth2 authentication failed: {exc}",
-        )
-    except Exception as exc:  # noqa: BLE001 — preflight must never raise
-        return FranceTravailPreflight(
-            enabled=True, credentials="FOUND", authentication="FAILED",
-            status="AUTH_FAILED",
-            detail=f"Unexpected error during authentication: {exc}",
-        )
+    from src.collectors.france_travail import FT_TRANSIENT_AUTH_FAILURES, FranceTravailAuthError
+
+    delays = list(_TRANSIENT_RETRY_DELAYS)
+    while True:
+        try:
+            with httpx.Client(timeout=collector.timeout) as client:
+                collector._get_or_refresh_token(client)
+            break
+        except FranceTravailAuthError as exc:
+            if exc.reason_key in FT_TRANSIENT_AUTH_FAILURES and delays:
+                delay = delays.pop(0)
+                logger.warning("Preflight: France Travail login failed (%s); retrying in %.0f s",
+                               exc.reason_key, delay)
+                time.sleep(delay)
+                continue
+            return FranceTravailPreflight(
+                enabled=True, credentials="FOUND", authentication="FAILED",
+                status="AUTH_FAILED", reason_key=exc.reason_key,
+                detail=f"OAuth2 authentication failed ({exc.reason_key}): {exc}",
+            )
+        except (httpx.HTTPError, RuntimeError) as exc:
+            return FranceTravailPreflight(
+                enabled=True, credentials="FOUND", authentication="FAILED",
+                status="AUTH_FAILED", reason_key="ft_auth_failed",
+                detail=f"OAuth2 authentication failed: {exc}",
+            )
+        except Exception as exc:  # noqa: BLE001 — preflight must never raise
+            return FranceTravailPreflight(
+                enabled=True, credentials="FOUND", authentication="FAILED",
+                status="AUTH_FAILED", reason_key="ft_auth_failed",
+                detail=f"Unexpected error during authentication: {exc}",
+            )
 
     return FranceTravailPreflight(
         enabled=True, credentials="FOUND", authentication="OK", status="READY",
@@ -267,7 +315,7 @@ def _format_report(result: PreflightResult) -> list[str]:
         if ft.status != "READY" and ft.detail:
             lines.append(f"  → {ft.detail}")
         if ft.status == "AUTH_FAILED":
-            lines.append("  → Collection will not start until the connection is fixed.")
+            lines.append("  → France Travail is skipped for this run; the other sources still run.")
         if ft.status == "CONFIG_MISSING":
             lines.append(
                 "  → France Travail is skipped for this run; the other sources still run. "

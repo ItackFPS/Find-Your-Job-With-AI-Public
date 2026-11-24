@@ -4,7 +4,12 @@
       "ft_api_restricted": "Pas nécessaire. L’API France Travail est réservée et aucun accès n’est configuré ici ; le site France Travail et les autres sources fonctionnent quand même.",
       "indeed_off": "Indeed est désactivé. C’est une source non officielle (Indeed n’a pas d’API publique) : elle ne fonctionne que si vous la choisissez dans Paramètres › Sources ; les autres sources fonctionnent quand même.",
       "frozen": "Collecte en pause le temps de vérifier chaque source (temporaire). Vos offres enregistrées, vos offres sauvegardées et vos candidatures sont conservées. Une source ne revient qu’après avoir passé ses vérifications et que vous l’avez réactivée.",
-      "removed": "Cette source a été retirée de l’application ; elle est ignorée, et les offres qu’elle a trouvées restent enregistrées."
+      "removed": "Cette source a été retirée de l’application ; elle est ignorée, et les offres qu’elle a trouvées restent enregistrées.",
+      "ft_auth_invalid_client": "France Travail a refusé les identifiants de l’API (invalid_client) : vérifiez l’identifiant client et le secret sur francetravail.io. France Travail est ignoré pour cette collecte ; les autres sources fonctionnent quand même.",
+      "ft_auth_invalid_scope": "France Travail a refusé l’abonnement à l’API (invalid_scope) : l’application a peut-être perdu l’accès à l’API des offres. France Travail est ignoré pour cette collecte ; les autres sources fonctionnent quand même.",
+      "ft_outage": "Le service de connexion de France Travail est indisponible (maintenance ou erreur serveur). France Travail est ignoré pour cette collecte et réessayé à la suivante ; les autres sources fonctionnent quand même.",
+      "ft_network": "France Travail est injoignable (erreur réseau). France Travail est ignoré pour cette collecte et réessayé à la suivante ; les autres sources fonctionnent quand même.",
+      "ft_auth_failed": "L’authentification France Travail a échoué. France Travail est ignoré pour cette collecte ; les autres sources fonctionnent quand même."
     }
   },
   "common": {
