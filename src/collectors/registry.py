@@ -73,6 +73,9 @@ class CollectorRegistry:
         # HelloWork: httpx-based, discovers via domain/metier listing pages and
         # extracts via schema.org/JobPosting JSON-LD (no API, no browser needed).
         self._collectors["hellowork"] = HelloWorkCollector
+        # Jooble: official REST API with the user's France key (#312); no key -> nothing requested.
+        from src.collectors.jooble import JoobleCollector
+        self._collectors["jooble"] = JoobleCollector
 
     def register(self, name: str, collector_class: type[BaseCollector]) -> None:
         """Register a new collector class by name."""

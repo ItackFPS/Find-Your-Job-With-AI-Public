@@ -53,7 +53,7 @@ offline evidence yet; **open** = open item.
 | arbetsformedlingen | ok + S | ok | none | ok | **open** | ok | ok | ok |
 
 Not configured (frozen, validation not started): greenhouse, lever, smartrecruiters, workingnomads, remote,
-rss. RemoteOK, Jobicy and We Work Remotely are removed (owner decision D10).
+rss, jooble (official API; needs the user's own France key, `JOOBLE_API_KEY`). RemoteOK, Jobicy and We Work Remotely are removed (owner decision D10).
 
 ### Open items
 

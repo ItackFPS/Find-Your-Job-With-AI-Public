@@ -255,7 +255,7 @@ COLLECTORS: dict[str, CollectorValidation] = {
 }
 
 # Registered collector types no shipped configuration uses: frozen, validation not started.
-for _type in ("greenhouse", "lever", "smartrecruiters", "workingnomads", "remote", "rss"):
+for _type in ("greenhouse", "lever", "smartrecruiters", "workingnomads", "remote", "rss", "jooble"):
     COLLECTORS[_type] = CollectorValidation(_type, False, note="Not configured; validation not started.")
 
 

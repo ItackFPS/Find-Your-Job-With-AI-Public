@@ -1,0 +1,29 @@
+{
+  "totalCount": 2,
+  "jobs": [
+    {
+      "title": "Infirmier <b>diplômé</b> d'État H/F",
+      "location": "Clermont-Ferrand (63)",
+      "snippet": "&nbsp;...Vous rejoignez une équipe pluridisciplinaire en <b>service de médecine</b>...&nbsp;",
+      "salary": "2 100 € - 2 600 € par mois",
+      "source": "example-partner.fr",
+      "type": "CDI",
+      "link": "https://fr.jooble.org/desc/-1111111111111111111",
+      "company": "Centre hospitalier exemple",
+      "updated": "2026-11-20T08:15:00.0000000",
+      "id": -1111111111111111111
+    },
+    {
+      "title": "Comptable fournisseurs",
+      "location": "Lyon (69)",
+      "snippet": "Vous assurez le traitement des factures fournisseurs...",
+      "salary": "",
+      "source": "jooble",
+      "type": "Temps plein",
+      "link": "https://fr.jooble.org/desc/2222222222222222222",
+      "company": "Société exemple",
+      "updated": "2026-11-21T10:00:00",
+      "id": 2222222222222222222
+    }
+  ]
+}
