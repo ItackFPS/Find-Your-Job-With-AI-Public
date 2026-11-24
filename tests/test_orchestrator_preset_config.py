@@ -136,3 +136,24 @@ def test_indeed_gets_the_profile_home_as_its_local_partition(tmp_path, monkeypat
 def test_indeed_without_a_home_gets_no_local_area(tmp_path, monkeypatch) -> None:
     config = _run_indeed(tmp_path, monkeypatch, "target_domains: [infirmier]\n")
     assert "local_area" not in config
+
+
+def test_eures_reads_deeper_while_france_travail_is_skipped(tmp_path, monkeypatch) -> None:
+    """#270: no France Travail credentials -> France Travail skipped -> EURES gets ft_unavailable."""
+    from src.collectors.registry import registry
+    from src.pipeline.orchestrator import run_pipeline
+
+    monkeypatch.delenv("FRANCE_TRAVAIL_CLIENT_ID", raising=False)
+    monkeypatch.delenv("FRANCE_TRAVAIL_CLIENT_SECRET", raising=False)
+    _SEEN.clear()
+    monkeypatch.setattr(registry, "get_collector_class", lambda src_type: _Recorder)
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "profile.yaml").write_text("target_domains: [infirmier]\n", encoding="utf-8")
+    (config_dir / "filters.yaml").write_text("{}\n", encoding="utf-8")
+    (config_dir / "sources.yaml").write_text(
+        "sources:\n  - {name: france-travail, type: france_travail, active: true}\n"
+        "  - {name: eures, type: eures, active: true}\n", encoding="utf-8")
+    result = run_pipeline(db_path=str(tmp_path / "t.db"), config_dir=str(config_dir))
+    assert result.status == "completed", result.error
+    assert _SEEN["config"]["ft_unavailable"] is True

@@ -566,3 +566,39 @@ class TestMultiLocationNotMerged:
         ]
         result = cross_source_deduplicate(jobs)
         assert len(result) == 3
+
+
+# ---------------------------------------------------------------------------
+# Tier 0: the same France Travail offer from the API and from EURES (#270)
+# ---------------------------------------------------------------------------
+
+def _ft_api_copy(**kw) -> Job:
+    return _job(source="france-travail", source_job_id="201JKWB", company="Clinique X", title="Infirmier",
+                location="63 - Clermont-Ferrand", department="63",
+                canonical_url="https://partner.example/offre/1", raw_payload={"ft_offer_id": "201JKWB"}, **kw)
+
+
+def _eures_copy(**kw) -> Job:
+    return _job(source="eures", source_job_id="MjAxSktXQiA5", company="Clinique X", title="Infirmier",
+                location="France", department=None,
+                canonical_url="https://europa.eu/eures/portal/jv-se/jv-details/MjAxSktXQiA5?lang=en",
+                raw_payload={"ft_offer_id": "201JKWB"}, **kw)
+
+
+def test_france_travail_offer_from_api_and_eures_is_kept_once():
+    out = cross_source_deduplicate([_ft_api_copy(), _eures_copy()])
+    assert len(out) == 1
+    assert out[0].source == "france-travail" and out[0].sources == ["france-travail", "eures"]
+
+
+def test_the_copy_with_a_department_wins_whatever_the_order():
+    out = cross_source_deduplicate([_eures_copy(), _ft_api_copy()])
+    assert len(out) == 1
+    assert out[0].source == "france-travail" and out[0].department == "63"
+    assert out[0].sources == ["france-travail", "eures"]
+
+
+def test_different_france_travail_ids_are_not_merged():
+    other = _eures_copy()
+    other.raw_payload = {"ft_offer_id": "999XXXX"}
+    assert len(cross_source_deduplicate([_ft_api_copy(), other])) == 2

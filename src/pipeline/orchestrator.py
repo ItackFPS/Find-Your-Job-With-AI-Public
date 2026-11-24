@@ -485,6 +485,10 @@ def run_pipeline(
                 merged_cfg["discovery_queries"] = all_discovery_queries[src_type]
             if src_type in all_partition_vocabularies:
                 merged_cfg["partition_vocabulary"] = all_partition_vocabularies[src_type]
+            if src_type == "eures" and "france_travail" in skipped_source_types:
+                # EURES carries France Travail's own offers: it reads deeper while the
+                # France Travail API is not collected from this run (#270).
+                merged_cfg.setdefault("ft_unavailable", True)
             if early_profile is not None:
                 # What the profile's line of work (a discovery preset) supplies for this
                 # source; only for keys the source's own config leaves empty.
