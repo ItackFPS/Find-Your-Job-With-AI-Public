@@ -207,6 +207,9 @@ sources:
       # domains: HelloWork's own domain slugs (e.g. "informatique", "sante"). None by
       # default: a line of work with a preset (config/presets/) gets that preset's domains;
       # otherwise list the HelloWork domains to read here.
-      max_jobs_per_slug: 3
+      # regions: HelloWork region slugs (e.g. "bretagne"). Each metier is also read on its
+      # region page (20 other offers, robots-allowed, #307). Set from your home and maximum
+      # distance when the profile has a home; list them here to override.
+      max_jobs_per_slug: 3          # per listing page (the metier page and each region page)
       rate_limit_delay: 1.0
       timeout: 20
