@@ -910,6 +910,8 @@ class FranceTravailCollector(BaseCollector):
         return {
             # Generic normalizer contract fields
             "source_job_id": job_id,
+            # The offer's France Travail id, shared with its EURES copy (cross-source dedup, #270).
+            "ft_offer_id": job_id or None,
             "title": title,
             "company": company,
             "description": description,

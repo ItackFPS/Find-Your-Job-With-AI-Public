@@ -10,6 +10,10 @@ Intra-source (same ``source`` value):
   3. Neither available         — keep the job; do not collapse on title or company.
 
 Cross-source (across different ``source`` values):
+  0. France Travail offer id   — the same France Travail offer collected from the API and from
+                                 EURES (``raw_payload["ft_offer_id"]``, #270). The copy with a
+                                 département is kept (EURES gives only a country), the other's
+                                 source is merged into its ``sources``.
   1. canonical_url match       — URL is a globally unique identifier.
   2. content_hash match        — identical hashed title+description text.
   3. (company_norm, title_norm, location_norm, employment_type)
@@ -157,6 +161,13 @@ def intra_source_deduplicate(
     return unique
 
 
+def _ft_offer_id(job: Job) -> str | None:
+    """The France Travail offer id a collector recorded for this job (France Travail, EURES)."""
+    payload = job.raw_payload if isinstance(job.raw_payload, dict) else {}
+    value = payload.get("ft_offer_id")
+    return str(value).strip() or None if value else None
+
+
 def cross_source_deduplicate(
     jobs: list[Job],
     progress_callback: Callable[[int, int], None] | None = None,
@@ -179,6 +190,7 @@ def cross_source_deduplicate(
     """
     # Maps from dedup key → index in `unique` list, so we can locate the kept
     # job to merge source attribution.
+    seen_ft: dict[str, int] = {}
     seen_urls: dict[str, int] = {}
     seen_hashes: dict[str, int] = {}
     seen_content: dict[tuple[str, str, str, str], int] = {}
@@ -189,6 +201,13 @@ def cross_source_deduplicate(
         if progress_callback is not None:
             progress_callback(i, total)
         keeper_idx: int | None = None
+        ft_match = False
+
+        # Tier 0: the same France Travail offer from two sources (API and EURES)
+        ft_key = _ft_offer_id(job)
+        if ft_key and ft_key in seen_ft:
+            keeper_idx = seen_ft[ft_key]
+            ft_match = True
 
         # Tier 1: canonical URL
         url_key: str | None = None
@@ -220,7 +239,17 @@ def cross_source_deduplicate(
         if keeper_idx is not None:
             # Merge source attribution into the kept job.
             kept = unique[keeper_idx]
-            if job.source and job.source not in kept.sources:
+            if ft_match and job.department and not kept.department:
+                # The richer copy wins: the France Travail API copy names the département.
+                merged = [job.source] if job.source else []
+                merged += [s for s in kept.sources if s not in merged]
+                job.sources = merged
+                unique[keeper_idx] = job
+                if job.canonical_url:
+                    seen_urls.setdefault(_norm_url(job.canonical_url), keeper_idx)
+                if job.content_hash:
+                    seen_hashes.setdefault(job.content_hash, keeper_idx)
+            elif job.source and job.source not in kept.sources:
                 kept.sources.append(job.source)
         else:
             # New unique job — record its index and initialize sources list.
@@ -230,6 +259,8 @@ def cross_source_deduplicate(
                 job.sources = [job.source] + [s for s in job.sources if s != job.source]
             unique.append(job)
 
+            if ft_key:
+                seen_ft[ft_key] = idx
             if url_key is not None:
                 seen_urls[url_key] = idx
             if job.content_hash:
