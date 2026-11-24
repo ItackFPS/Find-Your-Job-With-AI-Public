@@ -507,3 +507,49 @@ class TestIso2ToCountry:
     ])
     def test_country_mapping(self, code, expected):
         assert _ISO2_TO_COUNTRY[code] == expected
+
+
+# ---------------------------------------------------------------------------
+# Query shape, France Travail bridge and fallback (#270)
+# ---------------------------------------------------------------------------
+
+class TestEURESRelevanceAndBridge:
+    @patch("src.collectors.eures.httpx.post")
+    def test_default_query_is_best_match_on_the_title(self, mock_post):
+        """2026-11-24: MOST_RECENT + EVERYWHERE gave 13-40/50 on-topic titles, BEST_MATCH 50/50."""
+        mock_post.return_value = _mock_post_response(_make_api_response([]))
+        EURESCollector(config={"rate_limit_delay": 0, "discovery_queries": ["infirmier"]}).collect()
+        body = mock_post.call_args.kwargs["json"]
+        assert body["sortSearch"] == "BEST_MATCH"
+        assert body["keywords"] == [{"keyword": "infirmier", "specificSearchCode": "TITLE"}]
+        assert body["publicationPeriod"] is None
+
+    @patch("src.collectors.eures.httpx.post")
+    def test_query_shape_is_configurable_and_validated(self, mock_post):
+        mock_post.return_value = _mock_post_response(_make_api_response([]))
+        EURESCollector(config={"rate_limit_delay": 0, "discovery_queries": ["x"], "sort_search": "most_recent",
+                               "keyword_scope": "nonsense", "publication_period": "last_week"}).collect()
+        body = mock_post.call_args.kwargs["json"]
+        assert (body["sortSearch"], body["keywords"][0]["specificSearchCode"], body["publicationPeriod"]) == (
+            "MOST_RECENT", "TITLE", "LAST_WEEK")
+
+    def test_france_travail_id_is_decoded_from_the_eures_id(self):
+        import base64
+
+        from src.collectors.eures import france_travail_id
+
+        ft_copy = base64.b64encode(b"201JKWB 9").decode()
+        other_point = base64.b64encode(b"ABC123 12").decode()
+        assert france_travail_id(ft_copy) == "201JKWB"
+        assert france_travail_id(ft_copy.rstrip("=")) == "201JKWB"
+        assert france_travail_id(other_point) is None
+        assert france_travail_id("not base64 !") is None
+        assert france_travail_id(None) is None
+        assert _map_job(_make_jv(id_=ft_copy))["ft_offer_id"] == "201JKWB"
+        assert _map_job(_make_jv(id_="ABCD1234"))["ft_offer_id"] is None
+
+    def test_pages_rise_while_france_travail_is_not_collected(self):
+        assert EURESCollector(config={"max_pages_per_query": 5}).max_pages_per_query == 5
+        assert EURESCollector(config={"max_pages_per_query": 5, "ft_unavailable": True}).max_pages_per_query == 10
+        assert EURESCollector(config={"max_pages_per_query": 5, "ft_unavailable": True,
+                                      "fallback_max_pages_per_query": 20}).max_pages_per_query == 20

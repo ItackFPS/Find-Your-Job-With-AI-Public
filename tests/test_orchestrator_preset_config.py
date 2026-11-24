@@ -77,3 +77,24 @@ def test_an_empty_profile_searches_nothing_by_default(tmp_path, monkeypatch, pro
     config = _run(tmp_path, monkeypatch, profile)
     assert "queries" not in config
     assert not config.get("discovery_queries")
+
+
+def test_eures_reads_deeper_while_france_travail_is_skipped(tmp_path, monkeypatch) -> None:
+    """#270: no France Travail credentials -> France Travail skipped -> EURES gets ft_unavailable."""
+    from src.collectors.registry import registry
+    from src.pipeline.orchestrator import run_pipeline
+
+    monkeypatch.delenv("FRANCE_TRAVAIL_CLIENT_ID", raising=False)
+    monkeypatch.delenv("FRANCE_TRAVAIL_CLIENT_SECRET", raising=False)
+    _SEEN.clear()
+    monkeypatch.setattr(registry, "get_collector_class", lambda src_type: _Recorder)
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "profile.yaml").write_text("target_domains: [infirmier]\n", encoding="utf-8")
+    (config_dir / "filters.yaml").write_text("{}\n", encoding="utf-8")
+    (config_dir / "sources.yaml").write_text(
+        "sources:\n  - {name: france-travail, type: france_travail, active: true}\n"
+        "  - {name: eures, type: eures, active: true}\n", encoding="utf-8")
+    result = run_pipeline(db_path=str(tmp_path / "t.db"), config_dir=str(config_dir))
+    assert result.status == "completed", result.error
+    assert _SEEN["config"]["ft_unavailable"] is True

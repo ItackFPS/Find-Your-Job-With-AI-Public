@@ -28,12 +28,30 @@ Work mode: not available in the summary response; left as None.
 Canonical URL: constructed as
 ``https://europa.eu/eures/portal/jv-se/jv-details/{id}?lang=en``
 using the ``id`` field present in every summary response object.
+
+Query shape (#270, measured 2026-11-24 on France, page 1 of 50): ``MOST_RECENT`` with the
+keyword matched ``EVERYWHERE`` returned 13-40 offers out of 50 whose title named the keyword
+(infirmier 17, comptable 16, électricien 40, chauffeur poids lourd 13); ``BEST_MATCH`` returned
+50/50 for every keyword, with the keyword in the title (``TITLE``) or anywhere. The default is
+``BEST_MATCH`` + ``TITLE``: every page stays on topic, so paging deeper adds relevant offers.
+
+France Travail bridge: a French EURES offer's id is base64 of ``"<France Travail id> 9"`` (9 =
+France Travail's connection point; 100/100 decoded and 16/16 found on the France Travail API with
+the same title, 2026-11-24). ``ft_offer_id`` carries that id, so the cross-source deduplication
+recognises the same offer from both sources (src/pipeline/deduplicate.py).
+
+France Travail fallback: when the run skips the France Travail API (its login failed, #303), the
+orchestrator sets ``ft_unavailable`` and EURES, which carries France Travail's own offers, reads up
+to ``fallback_max_pages_per_query`` pages per search instead of ``max_pages_per_query``.
 """
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import logging
+import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -90,6 +108,26 @@ _ISO2_TO_COUNTRY: dict[str, str] = {
     "UK": "United Kingdom",
 }
 
+# France Travail's connection point on EURES (connection-point facet, 2026-11-23: 99.99 % of FR).
+_FT_CONNECTION_POINT = "9"
+_EURES_ID_RE = re.compile(r"(\S+) (\d+)")
+_SORTS = frozenset({"BEST_MATCH", "MOST_RECENT"})
+_KEYWORD_SCOPES = frozenset({"TITLE", "EVERYWHERE"})
+
+
+def france_travail_id(eures_id: str | None) -> str | None:
+    """The France Travail offer id behind a EURES id, or None (not base64 / another connection point)."""
+    text = str(eures_id or "").strip()
+    if not text:
+        return None
+    try:
+        decoded = base64.b64decode(text + "=" * (-len(text) % 4), validate=True).decode("utf-8")
+    except (binascii.Error, UnicodeDecodeError, ValueError):
+        return None
+    m = _EURES_ID_RE.fullmatch(decoded)
+    return m.group(1) if m and m.group(2) == _FT_CONNECTION_POINT else None
+
+
 class EURESCollector(BaseCollector):
     """httpx-based collector for the EURES European job search API.
 
@@ -106,6 +144,11 @@ class EURESCollector(BaseCollector):
         discovery_queries    Keyword strings injected by the orchestrator from the
                              profile; each runs against default_location_codes.
         default_location_codes  Country codes for discovery_queries (default: ["fr"]).
+        sort_search          BEST_MATCH (default) or MOST_RECENT.
+        keyword_scope        TITLE (default) or EVERYWHERE: where the keyword must match.
+        publication_period   Optional EURES period (LAST_DAY, LAST_THREE_DAYS, LAST_WEEK).
+        ft_unavailable       Set by the orchestrator when the France Travail API is skipped.
+        fallback_max_pages_per_query  Pages per search then (default: 10).
                              With neither queries nor discovery_queries nothing is
                              searched: no profession-specific default exists.
         concurrent_queries   How many independent queries to run in parallel
@@ -154,6 +197,15 @@ class EURESCollector(BaseCollector):
             rate_limit_delay=float(cfg.get("rate_limit_delay", 2.0)),
         )
         self.max_pages_per_query: int = int(cfg.get("max_pages_per_query", 3))
+        if cfg.get("ft_unavailable"):
+            self.max_pages_per_query = max(self.max_pages_per_query,
+                                           int(cfg.get("fallback_max_pages_per_query", 10)))
+        sort = str(cfg.get("sort_search") or "BEST_MATCH").upper()
+        self.sort_search: str = sort if sort in _SORTS else "BEST_MATCH"
+        scope = str(cfg.get("keyword_scope") or "TITLE").upper()
+        self.keyword_scope: str = scope if scope in _KEYWORD_SCOPES else "TITLE"
+        period = cfg.get("publication_period")
+        self.publication_period: str | None = str(period).upper() if period else None
         self.results_per_page: int = min(int(cfg.get("results_per_page", 50)), 50)
         self.queries: list[dict[str, Any]] = list(cfg.get("queries") or [])
         self.default_location_codes: list[str] = [
@@ -317,11 +369,12 @@ class EURESCollector(BaseCollector):
         body: dict[str, Any] = {
             "resultsPerPage": self.results_per_page,
             "page": page,
-            "sortSearch": "MOST_RECENT",
+            "sortSearch": self.sort_search,
             "keywords": (
-                [{"keyword": keyword, "specificSearchCode": "EVERYWHERE"}]
+                [{"keyword": keyword, "specificSearchCode": self.keyword_scope}]
                 if keyword else []
             ),
+            "publicationPeriod": self.publication_period,
             "occupationUris": [],
             "skillUris": [],
             "requiredExperienceCodes": [],
@@ -434,6 +487,8 @@ def _map_job(job: dict[str, Any]) -> dict[str, Any]:
         "countries": countries,
         "canonical_url": canonical_url,
         "source_job_id": job_id or None,
+        # The same offer's France Travail id, for cross-source deduplication (#270).
+        "ft_offer_id": france_travail_id(job_id),
         "published_at": published_at,
         # positionOfferingCode values (e.g. "directhire") are not mapped to our
         # employment_type vocabulary — too many unknown codes in the wild.
