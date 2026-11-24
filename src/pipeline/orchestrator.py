@@ -1518,6 +1518,9 @@ def _apply_source_contract(
     its access class, a reached request cap, and the parser canary — a collector that
     returned nothing although its pages were served gets ``canary: "parser_changed"``
     and an error saying so, which makes the source ``failed`` instead of a silent 0.
+    A source that counts its requests and returned nothing, said nothing (no error, no
+    skip reason) and sent no request at all gets ``silent_zero: "no_request"`` and an
+    error too (#314: e.g. a collector left without search terms).
     Never raises: a collector without the contract's state is simply not annotated."""
     from src.collectors.canary import canary_message, parser_canary
 
@@ -1535,6 +1538,15 @@ def _apply_source_contract(
             source_stats["canary"] = canary
             source_stats["errors"] += 1
             errors.insert(0, f"{name}: {canary_message(collector)}")
+        elif (not source_stats["collected"] and not source_stats["errors"]
+              and not source_stats.get("skipped_reason")
+              and getattr(collector, "counts_requests", False)
+              and not int(health.get("requests") or 0) and not health.get("network_errors")
+              and not health.get("request_cap_reached")):
+            source_stats["silent_zero"] = "no_request"
+            source_stats["errors"] += 1
+            errors.insert(0, f"{name}: no_request: the source sent no request and reported no error; "
+                             "check its configuration (search terms, board identifier, API key)")
     except Exception as exc:  # noqa: BLE001
         logger.warning("Source contract check failed for %s (non-fatal): %s", name, exc)
 
