@@ -139,6 +139,24 @@ def regions_for_departments(codes: list[str]) -> list[str]:
     return slugs
 
 
+def metier_slugs_for_terms(terms: list[str]) -> list[str]:
+    """HelloWork metier slugs spelled from profile terms ("Aide-soignant" -> "aide-soignant").
+
+    HelloWork's slugs are the lower-case, unaccented metier names joined by hyphens (checked
+    2026-11-24: infirmier, aide-soignant, comptable, commercial, chauffeur-poids-lourd). A term
+    with no such page answers 404, which the collector reports for that slug only.
+    """
+    import unicodedata
+
+    slugs: list[str] = []
+    for term in terms:
+        plain = unicodedata.normalize("NFKD", str(term)).encode("ascii", "ignore").decode().lower()
+        slug = re.sub(r"[^a-z0-9]+", "-", plain).strip("-")
+        if slug and slug not in slugs:
+            slugs.append(slug)
+    return slugs
+
+
 def parse_job_page(html: str, job_url: str = _FIXTURE_URL) -> list[dict[str, Any]]:
     """The offer on one job page (its JobPosting JSON-LD), as raw dicts; [] when absent."""
     ld = extract_jobposting_ld(html)

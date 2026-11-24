@@ -551,3 +551,12 @@ def test_regions_for_departments_maps_insee_regions_to_hellowork_slugs() -> None
     assert regions_for_departments(["63", "03", "42", "23", "2A", "971"]) == [
         "auvergne-rhone-alpes", "nouvelle-aquitaine", "corse"]          # 971: no metropolitan slug
     assert len(set(HELLOWORK_REGION_SLUGS.values())) == 13
+
+
+def test_profile_terms_become_metier_slugs() -> None:
+    """#307: a line of work without a preset gives HelloWork its own terms as metier slugs."""
+    from src.collectors.hellowork import metier_slugs_for_terms
+
+    assert metier_slugs_for_terms(["Aide-soignant", "infirmier", "Chauffeur poids lourd", "Électricien",
+                                   "infirmier", "  "]) == [
+        "aide-soignant", "infirmier", "chauffeur-poids-lourd", "electricien"]

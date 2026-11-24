@@ -214,9 +214,15 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
                 hw_config = apply_preset_collector_config(hw_config, hw_profile, "hellowork")
                 # The regions of the profile's search area (#307): the same départements as
                 # France Travail web (home + maximum distance); none without a home.
-                from src.collectors.hellowork import regions_for_departments
+                from src.collectors.hellowork import metier_slugs_for_terms, regions_for_departments
                 from src.pipeline.location_distance import distance_config, ft_departments
 
+                if not hw_config.get("domains") and not hw_config.get("metier_slugs"):
+                    # A line of work without a preset (nurse, accountant, ...): its own terms as
+                    # metier slugs, so HelloWork is not left with nothing to read (#307).
+                    hw_config["metier_slugs"] = metier_slugs_for_terms(
+                        list(hw_profile.target_domains)
+                        + [o.label_fr or o.keyword or o.label for o in hw_profile.target_occupations])
                 hw_distance = distance_config(hw_profile)
                 if hw_distance:
                     hw_config.setdefault("regions", regions_for_departments(ft_departments(hw_distance)))
