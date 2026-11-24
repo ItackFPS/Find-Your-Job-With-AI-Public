@@ -58,13 +58,15 @@ def test_missing_state_means_everything_is_frozen(tmp_path: Path) -> None:
     assert freeze.status(settings, cfg)["frozen"] is True
 
 
-def test_no_collector_is_validated_today() -> None:
-    assert freeze.VALIDATED_COLLECTORS == {}
+def test_only_collectors_with_a_validation_record_are_validated() -> None:
+    # #258: supervised runs of 2026-11-24; every other collector stays frozen.
+    assert set(freeze.VALIDATED_COLLECTORS) == {"france_travail", "eures", "indeed", "hellowork"}
+    assert all(ref.startswith("docs/collector-validation.md#") for ref in freeze.VALIDATED_COLLECTORS.values())
 
 
 def test_an_unvalidated_collector_cannot_be_reactivated(tmp_path: Path) -> None:
     with pytest.raises(freeze.CollectorNotValidated):
-        freeze.reactivate(tmp_path / "settings.json", "eures")
+        freeze.reactivate(tmp_path / "settings.json", "linkedin")
     assert not (tmp_path / "settings.json").exists()
 
 
@@ -215,7 +217,7 @@ def test_api_refuses_runs_and_scans_and_reports_the_freeze(isolated_app, tmp_pat
         assert status["frozen"] is True and status["since"]
         assert {c["type"] for c in status["collectors"]} >= {"eures", "france_travail", "linkedin", "hellowork"}
         assert all(not c["allowed"] for c in status["collectors"])
-        r = client.post("/api/collection/eures/reactivate")
+        r = client.post("/api/collection/linkedin/reactivate")   # not validated
         assert r.status_code == 409
     stored = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
     assert stored["collection_freeze"]["since"]               # recorded at start

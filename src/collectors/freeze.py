@@ -9,7 +9,7 @@ in place for offline tests and replays.
 Two conditions turn one collector back on, both required:
 
 1. it is listed in :data:`VALIDATED_COLLECTORS` — shipped with the code, filled in by the change that
-   records the collector's passed validation (empty today: no collector is validated yet);
+   records the collector's passed validation;
 2. the user reactivated it (``POST /api/collection/reactivate``), stored in ``data/settings.json``
    under ``collection_freeze.reactivated``.
 
@@ -34,8 +34,13 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Source type -> where its passed validation is recorded. Empty: no collector is validated yet.
-VALIDATED_COLLECTORS: dict[str, str] = {}
+# Source type -> where its passed validation is recorded (supervised runs of 2026-11-24, #258).
+VALIDATED_COLLECTORS: dict[str, str] = {
+    "france_travail": "docs/collector-validation.md#validation-record-2026-11-24",
+    "eures": "docs/collector-validation.md#validation-record-2026-11-24",
+    "indeed": "docs/collector-validation.md#validation-record-2026-11-24",
+    "hellowork": "docs/collector-validation.md#validation-record-2026-11-24",
+}
 
 # The staged sources scanned outside the pipeline (src/linkedin, src/hellowork).
 STAGED_SOURCE_TYPES: tuple[str, ...] = ("linkedin", "hellowork")
