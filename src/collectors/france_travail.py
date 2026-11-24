@@ -174,8 +174,8 @@ class FranceTravailCollector(BaseCollector):
     Set to 1 to disable concurrency entirely (sequential, deterministic order).
     """
 
-    # Its httpx.Client requests do not pass BaseCollector._before_request (B8-A).
-    counts_requests = False
+    # Its httpx.Client requests are counted through BaseCollector._before_request and
+    # _observe_response (B8-A): the token request and each search page count once.
 
     # official: France Travail's documented Offres d'emploi API (francetravail.io), with the
     # user's own OAuth2 credentials. Its own client-side rate limiter paces requests.
@@ -365,6 +365,7 @@ class FranceTravailCollector(BaseCollector):
         Raises FranceTravailAuthError (a RuntimeError) whose ``reason_key`` is one of
         FT_AUTH_FAILURE_CLASSES. The message never contains the credentials.
         """
+        self._before_request(_TOKEN_URL, check_robots=False)
         try:
             response = client.post(
                 _TOKEN_URL,
@@ -378,6 +379,7 @@ class FranceTravailCollector(BaseCollector):
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
                 timeout=self.timeout,
             )
+            self._observe_response(response, parsed=False)
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             reason = classify_token_failure(exc.response)
@@ -387,6 +389,7 @@ class FranceTravailCollector(BaseCollector):
                 f"(HTTP {exc.response.status_code}, {reason}): {exc.response.text[:300]}",
             ) from exc
         except httpx.RequestError as exc:
+            self._note_network_error()
             raise FranceTravailAuthError(
                 "ft_network", f"France Travail OAuth2 token request failed (network): {exc}"
             ) from exc
@@ -710,21 +713,28 @@ class FranceTravailCollector(BaseCollector):
     def _get_search_page(
         self, client: httpx.Client, token: str, query: str, start: int, end: int
     ) -> httpx.Response:
-        """One rate-limited search request for the range start-end."""
+        """One rate-limited, counted search request for the range start-end."""
         self._rate_limiter.wait()
-        return client.get(
-            _SEARCH_URL,
-            params={
-                "sort": 1,
-                "range": f"{start}-{end}",
-                **self._work_params.get(query, {"motsCles": query}),
-            },
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/json",
-            },
-            timeout=self.timeout,
-        )
+        self._before_request(_SEARCH_URL, check_robots=False)
+        try:
+            response = client.get(
+                _SEARCH_URL,
+                params={
+                    "sort": 1,
+                    "range": f"{start}-{end}",
+                    **self._work_params.get(query, {"motsCles": query}),
+                },
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json",
+                },
+                timeout=self.timeout,
+            )
+        except httpx.RequestError:
+            self._note_network_error()
+            raise
+        self._observe_response(response)
+        return response
 
     def _search_jobs_for_query(
         self,
