@@ -2099,3 +2099,37 @@ class TestFranceTravailDepartmentPartitions:
         ):
             collector.collect()
         assert all("departement" not in c.kwargs["params"] for c in get.call_args_list)
+
+
+class TestFranceTravailRequestCounting:
+    """B8-A: France Travail's own HTTP client requests are counted like every collector's."""
+
+    def _collector(self) -> FranceTravailCollector:
+        return FranceTravailCollector(config={"client_id": "id", "client_secret": "secret", "keywords": "infirmier"})
+
+    def test_token_and_search_requests_are_counted(self) -> None:
+        collector = self._collector()
+        assert collector.counts_requests is True
+        jobs = _mock_httpx_response(_SAMPLE_JOB_RESPONSE)
+
+        with (
+            patch.object(httpx.Client, "post", side_effect=[_token("old"), _token("new")]),
+            patch.object(httpx.Client, "get", side_effect=[_mock_httpx_error_response(401), jobs]),
+        ):
+            collector.collect()
+
+        health = collector.health()
+        assert health["requests"] == 4          # token, rejected page, new token, page
+        assert health["network_errors"] == 0
+
+    def test_a_search_with_no_answer_is_a_network_error(self) -> None:
+        collector = self._collector()
+
+        with (
+            patch.object(httpx.Client, "post", return_value=_token("t")),
+            patch.object(httpx.Client, "get", side_effect=httpx.ConnectError("down")),
+        ):
+            result = collector.collect()
+
+        assert result.errors
+        assert collector.health()["network_errors"] >= 1

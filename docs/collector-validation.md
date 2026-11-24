@@ -43,7 +43,7 @@ offline evidence yet; **open** = open item.
 
 | Collector | coverage | reliability | latency | deduplication | pagination | error handling | enablement | access rules |
 |---|---|---|---|---|---|---|---|---|
-| france_travail | **open** | ok | ok + S | ok | ok | ok | ok | **open** |
+| france_travail | **open** | ok | ok + S | ok | ok | ok | ok | ok + S |
 | france_travail_web | **open** | ok | ok + S | ok | ok | ok | ok | ok |
 | eures | **open** | ok | ok + S | ok | ok | ok | ok | ok |
 | indeed | **open** | ok | ok + S | ok | ok | ok | ok | **open** |
@@ -59,8 +59,6 @@ rss. RemoteOK, Jobicy and We Work Remotely are removed (owner decision D10).
 
 - **france_travail, coverage**: a saturated query (for example "informatique") reaches the API's result
   ceiling and is incomplete (B4-D). A narrower query plan is needed.
-- **france_travail, access rules**: its requests use its own HTTP client and are not counted (B8-A), so no
-  request yield can be computed until they are. API access is restricted and not set up on this installation.
 - **france_travail_web, coverage**: the preset occupation codes are broad. On the 363 replayed offers, 62 pass
   the filter and 1 is useful (B8-A replay). The occupation boost (B5-E) was not shipped for that reason.
 - **eures, coverage**: low yield in the audited run, 1,995 collected and 99 accepted (run `5f38fef7`, P-004).
