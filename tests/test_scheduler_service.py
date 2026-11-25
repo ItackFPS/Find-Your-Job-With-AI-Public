@@ -22,7 +22,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -90,15 +90,15 @@ class TestSchedulerStorage:
         s.close()
 
     def test_upsert_definition_inserts(self, storage) -> None:
-        storage.upsert_definition(_make_definition("li_daily", "linkedin"))
+        storage.upsert_definition(_make_definition("hw_daily", "hellowork"))
         defs = storage.get_enabled_definitions()
         assert len(defs) == 1
-        assert defs[0].id == "li_daily"
-        assert defs[0].source_id == "linkedin"
+        assert defs[0].id == "hw_daily"
+        assert defs[0].source_id == "hellowork"
 
     def test_upsert_definition_updates(self, storage) -> None:
-        storage.upsert_definition(_make_definition("li_daily", "linkedin", enabled=True))
-        storage.upsert_definition({**_make_definition("li_daily", "linkedin"), "enabled": False})
+        storage.upsert_definition(_make_definition("hw_daily", "hellowork", enabled=True))
+        storage.upsert_definition({**_make_definition("hw_daily", "hellowork"), "enabled": False})
         defs = storage.list_all_definitions()
         assert len(defs) == 1
         assert defs[0].enabled is False
@@ -646,7 +646,7 @@ class TestSchedulerService:
             def is_running(self) -> bool:
                 return False
             def dispatch(self) -> str:
-                raise RuntimeError("LinkedIn returned 429")
+                raise RuntimeError("HelloWork returned 429")
 
         from src.scheduler.service import SchedulerService
         svc = SchedulerService(
@@ -668,280 +668,6 @@ class TestSchedulerService:
 
 
 # ---------------------------------------------------------------------------
-# Simulated-restart integration: a real SchedulerService dispatching a real
-# LinkedInScanner against an on-disk SQLite file, interrupted by a shutdown
-# mid-scan, then a completely fresh set of objects opening that same file to
-# verify recovery/resume -- exercises the actual persistence boundary
-# (separate connections, separate objects) rather than reusing in-memory
-# state across "process A" and "process B", per the incident investigation's
-# explicit ask to test this beyond "merely calling a function with an Event."
-# ---------------------------------------------------------------------------
-
-class TestShutdownDuringScanRestartRecovery:
-    def _write_linkedin_schedule(self, config_dir: Path) -> None:
-        (config_dir / "schedules.yaml").write_text(
-            "schedules:\n"
-            "  - id: linkedin_daily\n"
-            "    source_id: linkedin\n"
-            "    label: LinkedIn daily scan\n"
-            "    enabled: true\n"
-            "    startup_policy: run_once_per_day\n"
-            "    retry_max: 0\n"
-            "    retry_delay_seconds: 300\n"
-        )
-
-    def _make_config(self):
-        from src.linkedin.scanner import LinkedInConfig, LinkedInQueryConfig
-        return LinkedInConfig(
-            enabled=True,
-            rate_limit_seconds=0.0,
-            max_pages_per_query=10,
-            max_results_per_query=1,
-            queries=[LinkedInQueryConfig(search_term="engineer", location="France", results_wanted=1)],
-        )
-
-    def test_shutdown_mid_scan_then_restart_resumes_from_checkpoint(self, tmp_path: Path) -> None:
-        from src.linkedin.scanner import LinkedInScanner
-        from src.linkedin.staging import LinkedInStagingStorage
-        from src.scheduler.service import LinkedInHandler, SchedulerService  # gitleaks:allow (import, not a secret)
-        from src.scheduler.storage import SchedulerStorage
-        from tests.test_linkedin_scanner import _make_df_row, _make_mock_df
-
-        db_path = str(tmp_path / "restart_test.db")
-        self._write_linkedin_schedule(tmp_path)
-        cfg = self._make_config()
-
-        # -- "Process A": backend starts, scheduler dispatches, shutdown mid-scan --
-        staging_a = LinkedInStagingStorage(db_path=db_path)
-        staging_a.init_db()
-        staging_a.recover_stale_scans()  # mirrors app.py's lifespan startup step
-
-        event_a = threading.Event()
-        scanner_a = LinkedInScanner(
-            config=cfg, staging=staging_a, config_dir=str(tmp_path), shutdown_event=event_a
-        )
-
-        def scrape_page0(**kwargs):
-            offset = kwargs["offset"]
-            if offset == 0:
-                event_a.set()  # the backend's shutdown handler firing mid-scan
-                return _make_mock_df([_make_df_row("restart0001")])
-            raise AssertionError("must not fetch further pages once shutdown was requested")
-
-        mock_jobspy_a = MagicMock()
-        mock_jobspy_a.scrape_jobs = scrape_page0
-
-        svc_a = SchedulerService(
-            db_path=db_path, config_dir=str(tmp_path),
-            handlers={"linkedin": LinkedInHandler(scanner=scanner_a)},
-        )
-        with patch.dict("sys.modules", {"jobspy": mock_jobspy_a}):
-            svc_a.start()
-            time.sleep(0.8)  # let the startup-triggered dispatch thread run to completion
-        svc_a.stop()
-        staging_a.close()
-
-        # -- Verify on-disk state through brand-new connections (not reused objects) --
-        check_staging = LinkedInStagingStorage(db_path=db_path)
-        check_staging.init_db()
-        last_scan = check_staging.get_last_scan()
-        # Never falsely "completed", and not "failed" either: a resumable
-        # stop, reopened as the same logical scan below (issue #86).
-        assert last_scan["status"] == "interrupted"
-        assert "shutdown" in last_scan["error"].lower()
-        cp = check_staging.get_scan_checkpoint()
-        assert cp is not None  # checkpoint preserved, not lost or cleared
-        assert cp["current_page"] == 1  # page 0 done, resume point is page 1
-        check_staging.close()
-
-        check_sched = SchedulerStorage(db_path=db_path)
-        check_sched.init_db()
-        execs = check_sched.list_executions("linkedin_daily")
-        check_sched.close()
-        assert len(execs) == 1
-        # Fixed regression: dispatch() now returns a DispatchResult whose
-        # `completed` flag comes from the scanner's own last_scan_completed()
-        # (False for a shutdown stop), not merely "dispatch() didn't raise".
-        # schedule_executions must never read a false "completed" for a scan
-        # that actually stopped early. A stop for backend shutdown is
-        # 'interrupted' (issue #68): resumable, and — unlike 'failed' — not
-        # counted against retry_max (0 here), so the restart below still
-        # resumes it.
-        assert execs[0]["status"] == "interrupted"
-        assert "shutdown" in execs[0]["error"]
-        assert execs[0]["run_ref"] == last_scan["id"]  # scan_id still recorded, for observability
-
-        # -- "Process B": brand new objects, same db file (simulates a real restart) --
-        staging_b = LinkedInStagingStorage(db_path=db_path)
-        staging_b.init_db()
-        recovered = staging_b.recover_stale_scans()
-        # Nothing left to recover: the cooperative shutdown already marked
-        # the scan 'interrupted' cleanly before the process would have exited --
-        # this is exactly what distinguishes a graceful stop from a true
-        # crash (recover_stale_scans is the safety net for the latter).
-        assert recovered == 0
-
-        event_b = threading.Event()  # fresh process — nothing pending
-        scanner_b = LinkedInScanner(
-            config=cfg, staging=staging_b, config_dir=str(tmp_path), shutdown_event=event_b
-        )
-
-        offsets_requested: list[int] = []
-
-        def resumed_scrape(**kwargs):
-            offset = kwargs["offset"]
-            offsets_requested.append(offset)
-            if offset == 1:
-                return _make_mock_df([_make_df_row("restart0002")])
-            return _make_mock_df([])  # exhausted
-
-        mock_jobspy_b = MagicMock()
-        mock_jobspy_b.scrape_jobs = resumed_scrape
-
-        # This is the payoff of the fix: because today's schedule_execution
-        # now correctly reads 'interrupted' (not 'completed'), a brand new
-        # SchedulerService's own startup tick -- not a manual "Scan Now" --
-        # is what resumes it, exactly as intended for an unattended restart.
-        svc_b = SchedulerService(
-            db_path=db_path, config_dir=str(tmp_path),
-            handlers={"linkedin": LinkedInHandler(scanner=scanner_b)},
-        )
-        with patch.dict("sys.modules", {"jobspy": mock_jobspy_b}):
-            svc_b.start()
-            time.sleep(0.8)
-        svc_b.stop()
-
-        assert 0 not in offsets_requested  # page 0 was NOT re-fetched
-        assert offsets_requested[0] == 1
-
-        rows = staging_b._get_conn().execute("SELECT linkedin_job_id FROM linkedin_staging").fetchall()
-        assert {r["linkedin_job_id"] for r in rows} == {"restart0001", "restart0002"}  # nothing lost, nothing duplicated
-
-        final = staging_b.get_last_scan()
-        assert final["status"] == "completed"
-        assert final["id"] == last_scan["id"]  # the same logical scan, reopened (issue #86)
-        assert len(staging_b.list_scan_runs()) == 1
-        assert staging_b.get_scan_checkpoint() is None  # cleared only on genuine full completion
-
-        execs_b = SchedulerStorage(db_path=db_path)
-        execs_b.init_db()
-        all_execs = execs_b.list_executions("linkedin_daily")
-        execs_b.close()
-        assert len(all_execs) == 2  # process A's interrupted attempt + process B's genuine completion
-        assert all_execs[0]["status"] == "completed"  # most recent first
-        # Both executions reference the one logical scan run.
-        assert {e["run_ref"] for e in all_execs} == {last_scan["id"]}
-        staging_b.close()
-
-    def test_normal_successful_scan_still_produces_completed_execution(self, tmp_path: Path) -> None:
-        """Regression guard for the fix itself: a scan that genuinely
-        completes (no shutdown, no internal failure) must still be recorded
-        as schedule_executions.status == 'completed', through the real
-        scanner -> handler -> scheduler chain, not just the _FakeHandler
-        used elsewhere in this file."""
-        from src.linkedin.scanner import LinkedInScanner
-        from src.linkedin.staging import LinkedInStagingStorage
-        from src.scheduler.service import LinkedInHandler, SchedulerService  # gitleaks:allow (import, not a secret)
-        from src.scheduler.storage import SchedulerStorage
-        from tests.test_linkedin_scanner import _make_mock_df
-
-        db_path = str(tmp_path / "success_test.db")
-        self._write_linkedin_schedule(tmp_path)
-        cfg = self._make_config()
-
-        staging = LinkedInStagingStorage(db_path=db_path)
-        staging.init_db()
-        scanner = LinkedInScanner(config=cfg, staging=staging, config_dir=str(tmp_path))
-
-        mock_jobspy = MagicMock()
-        mock_jobspy.scrape_jobs = lambda **kwargs: _make_mock_df([])  # exhausted immediately
-
-        svc = SchedulerService(
-            db_path=db_path, config_dir=str(tmp_path),
-            handlers={"linkedin": LinkedInHandler(scanner=scanner)},
-        )
-        with patch.dict("sys.modules", {"jobspy": mock_jobspy}):
-            svc.start()
-            time.sleep(0.8)
-        svc.stop()
-        staging.close()
-
-        check_staging = LinkedInStagingStorage(db_path=db_path)
-        check_staging.init_db()
-        assert check_staging.get_last_scan()["status"] == "completed"
-        assert check_staging.get_scan_checkpoint() is None
-        check_staging.close()
-
-        check_sched = SchedulerStorage(db_path=db_path)
-        check_sched.init_db()
-        execs = check_sched.list_executions("linkedin_daily")
-        check_sched.close()
-        assert len(execs) == 1
-        assert execs[0]["status"] == "completed"
-        assert execs[0]["run_ref"] is not None
-
-    def test_internally_failed_scan_produces_failed_execution_not_completed(self, tmp_path: Path) -> None:
-        """A scan that fails via an internally-caught exception -- NOT a
-        shutdown stop -- is the other half of the bug this fix closes:
-        dispatch() returns a scan_id without raising either way, so before
-        this fix schedule_executions read 'completed' for this case too.
-        Must now read 'failed', matching linkedin_scan_runs.status exactly
-        like the shutdown case does.
-
-        Uses a failure in the final completion write (e.g. a realistic
-        "database is locked" contention case, already anticipated by
-        _do_scan's own comments) rather than a per-query scrape error --
-        LinkedIn deliberately keeps going when one query fails (see
-        TestQueryErrorDoesNotBlockResume in test_linkedin_scanner.py), so a
-        scrape error alone does not reach _do_scan's outer except/failure
-        path at all.
-        """
-        from src.linkedin.scanner import LinkedInScanner
-        from src.linkedin.staging import LinkedInStagingStorage
-        from src.scheduler.service import LinkedInHandler, SchedulerService  # gitleaks:allow (import, not a secret)
-        from src.scheduler.storage import SchedulerStorage
-        from tests.test_linkedin_scanner import _make_mock_df
-
-        db_path = str(tmp_path / "internal_failure_test.db")
-        self._write_linkedin_schedule(tmp_path)
-        cfg = self._make_config()
-
-        staging = LinkedInStagingStorage(db_path=db_path)
-        staging.init_db()
-        scanner = LinkedInScanner(config=cfg, staging=staging, config_dir=str(tmp_path))
-
-        mock_jobspy = MagicMock()
-        mock_jobspy.scrape_jobs = lambda **kwargs: _make_mock_df([])  # exhausted immediately
-
-        svc = SchedulerService(
-            db_path=db_path, config_dir=str(tmp_path),
-            handlers={"linkedin": LinkedInHandler(scanner=scanner)},
-        )
-        with (
-            patch.dict("sys.modules", {"jobspy": mock_jobspy}),
-            patch.object(staging, "complete_scan_run", side_effect=RuntimeError("database is locked")),
-        ):
-            svc.start()
-            time.sleep(0.8)
-        svc.stop()
-        staging.close()
-
-        check_staging = LinkedInStagingStorage(db_path=db_path)
-        check_staging.init_db()
-        last_scan = check_staging.get_last_scan()
-        assert last_scan["status"] == "failed"
-        check_staging.close()
-
-        check_sched = SchedulerStorage(db_path=db_path)
-        check_sched.init_db()
-        execs = check_sched.list_executions("linkedin_daily")
-        check_sched.close()
-        assert len(execs) == 1
-        assert execs[0]["status"] == "failed"  # not falsely "completed"
-        assert execs[0]["run_ref"] == last_scan["id"]
-
-
-# ---------------------------------------------------------------------------
 # SchedulerService — manual trigger
 # ---------------------------------------------------------------------------
 
@@ -949,9 +675,9 @@ class TestManualTrigger:
     def _setup(self, tmp_db: str, tmp_path: Path):
         (tmp_path / "schedules.yaml").write_text(
             "schedules:\n"
-            "  - id: li_daily\n"
-            "    source_id: linkedin\n"
-            "    label: LinkedIn\n"
+            "  - id: hw_daily\n"
+            "    source_id: hellowork\n"
+            "    label: HelloWork\n"
             "    enabled: true\n"
             "    startup_policy: run_once_per_day\n"
             "    retry_max: 0\n"
@@ -970,7 +696,7 @@ class TestManualTrigger:
         conn.execute(
             """INSERT INTO schedule_executions
                (id, definition_id, trigger, status, attempt, started_at, finished_at)
-               VALUES (?, 'li_daily', 'startup', 'completed', 1, ?, ?)""",
+               VALUES (?, 'hw_daily', 'startup', 'completed', 1, ?, ?)""",
             (
                 exec_id,
                 (today_start + timedelta(minutes=30)).isoformat(),
@@ -981,7 +707,7 @@ class TestManualTrigger:
 
         from src.scheduler.service import SchedulerService
         svc = SchedulerService(
-            db_path=tmp_db, config_dir=str(tmp_path), handlers={"linkedin": handler}
+            db_path=tmp_db, config_dir=str(tmp_path), handlers={"hellowork": handler}
         )
         return svc, handler
 
@@ -995,7 +721,7 @@ class TestManualTrigger:
             assert len(handler.dispatch_calls) == 0
 
             # Manual trigger bypasses the startup policy
-            exec_id = svc.trigger_manual("li_daily")
+            exec_id = svc.trigger_manual("hw_daily")
             assert exec_id is not None
             time.sleep(0.5)
 
@@ -1009,8 +735,8 @@ class TestManualTrigger:
         svc, _ = self._setup(tmp_db, tmp_path)
         svc.start()
         try:
-            with pytest.raises(ValueError, match="li_daily_nonexistent"):
-                svc.trigger_manual("li_daily_nonexistent")
+            with pytest.raises(ValueError, match="hw_daily_nonexistent"):
+                svc.trigger_manual("hw_daily_nonexistent")
         finally:
             svc.stop()
 
@@ -1022,7 +748,7 @@ class TestManualTrigger:
         svc.start()
         try:
             with pytest.raises(RuntimeError, match="already running"):
-                svc.trigger_manual("li_daily")
+                svc.trigger_manual("hw_daily")
         finally:
             svc.stop()
 
@@ -1108,59 +834,6 @@ class TestTriggerValues:
 
 
 # ---------------------------------------------------------------------------
-# LinkedIn handler integration (not a live scan — handler protocol only)
-# ---------------------------------------------------------------------------
-
-class TestLinkedInHandler:
-    def test_is_running_delegates_to_scanner(self) -> None:
-        from src.scheduler.service import LinkedInHandler
-        mock_scanner = MagicMock()
-        mock_scanner.is_scanning.return_value = True
-        handler = LinkedInHandler(scanner=mock_scanner)
-        assert handler.is_running() is True
-        mock_scanner.is_scanning.return_value = False
-        assert handler.is_running() is False
-
-    def test_dispatch_calls_run_scan(self) -> None:
-        from src.scheduler.service import LinkedInHandler
-        mock_scanner = MagicMock()
-        mock_scanner.run_scan.return_value = "scan-001"
-        mock_scanner.last_scan_completed.return_value = True
-        handler = LinkedInHandler(scanner=mock_scanner)
-        result = handler.dispatch()
-        assert result.run_ref == "scan-001"
-        assert result.completed is True
-        mock_scanner.run_scan.assert_called_once()
-
-    def test_dispatch_not_completed_when_scanner_stopped_for_shutdown(self) -> None:
-        """The scanner returning a scan_id is not, by itself, proof of
-        completion -- LinkedInHandler must also consult last_scan_completed()
-        (set False by the scanner itself for a shutdown stop or an
-        internally-caught failure)."""
-        from src.scheduler.service import LinkedInHandler
-        mock_scanner = MagicMock()
-        mock_scanner.run_scan.return_value = "scan-002"
-        mock_scanner.last_scan_completed.return_value = False
-        handler = LinkedInHandler(scanner=mock_scanner)
-        result = handler.dispatch()
-        assert result.run_ref == "scan-002"  # still reported, for observability
-        assert result.completed is False
-
-    def test_dispatch_not_completed_when_run_scan_returns_none(self) -> None:
-        """run_scan() returning None (already scanning) must not be reported
-        as completed, regardless of what last_scan_completed() says (it
-        would reflect a *previous* run, not this dispatch attempt)."""
-        from src.scheduler.service import LinkedInHandler
-        mock_scanner = MagicMock()
-        mock_scanner.run_scan.return_value = None
-        mock_scanner.last_scan_completed.return_value = True
-        handler = LinkedInHandler(scanner=mock_scanner)
-        result = handler.dispatch()
-        assert result.run_ref is None
-        assert result.completed is False
-
-
-# ---------------------------------------------------------------------------
 # HelloWork handler integration (not a live scan — handler protocol only)
 # ---------------------------------------------------------------------------
 
@@ -1193,6 +866,19 @@ class TestHelloWorkHandler:
         handler = HelloWorkHandler(scanner=mock_scanner)
         result = handler.dispatch()
         assert result.run_ref == "scan-002"
+        assert result.completed is False
+
+    def test_dispatch_not_completed_when_run_scan_returns_none(self) -> None:
+        """run_scan() returning None (already scanning) must not be reported
+        as completed, regardless of what last_scan_completed() says (it
+        would reflect a *previous* run, not this dispatch attempt)."""
+        from src.scheduler.service import HelloWorkHandler
+        mock_scanner = MagicMock()
+        mock_scanner.run_scan.return_value = None
+        mock_scanner.last_scan_completed.return_value = True
+        handler = HelloWorkHandler(scanner=mock_scanner)
+        result = handler.dispatch()
+        assert result.run_ref is None
         assert result.completed is False
 
 
@@ -1233,9 +919,9 @@ class TestAutoPipelineTrigger:
     def _write_schedules(self, config_dir: Path) -> None:
         (config_dir / "schedules.yaml").write_text(
             "schedules:\n"
-            "  - id: li_daily\n"
-            "    source_id: linkedin\n"
-            "    label: LinkedIn\n"
+            "  - id: hw_daily\n"
+            "    source_id: hellowork\n"
+            "    label: HelloWork\n"
             "    enabled: true\n"
             "    startup_policy: run_once_per_day\n"
             "    retry_max: 0\n"
@@ -1253,7 +939,7 @@ class TestAutoPipelineTrigger:
         return SchedulerService(
             db_path=tmp_db,
             config_dir=str(config_dir),
-            handlers={"linkedin": handler},
+            handlers={"hellowork": handler},
             pipeline_runner=pipeline_runner,
         )
 
@@ -1282,14 +968,14 @@ class TestAutoPipelineTrigger:
             def is_running(self) -> bool:
                 return False
             def dispatch(self) -> str:
-                raise RuntimeError("LinkedIn returned 429")
+                raise RuntimeError("HelloWork returned 429")
 
         pipeline = _FakePipelineRunner()
         from src.scheduler.service import SchedulerService
         svc = SchedulerService(
             db_path=tmp_db,
             config_dir=str(tmp_path),
-            handlers={"linkedin": FailHandler()},
+            handlers={"hellowork": FailHandler()},
             pipeline_runner=pipeline,
         )
         svc.start()
@@ -1316,7 +1002,7 @@ class TestAutoPipelineTrigger:
         svc = SchedulerService(
             db_path=tmp_db,
             config_dir=str(tmp_path),
-            handlers={"linkedin": NoneHandler()},
+            handlers={"hellowork": NoneHandler()},
             pipeline_runner=pipeline,
         )
         svc.start()
@@ -1354,7 +1040,7 @@ class TestAutoPipelineTrigger:
         svc = SchedulerService(
             db_path=tmp_db,
             config_dir=str(tmp_path),
-            handlers={"linkedin": handler},
+            handlers={"hellowork": handler},
             pipeline_runner=None,  # not configured
         )
         svc.start()
@@ -1378,7 +1064,7 @@ class TestAutoPipelineTrigger:
         from src.scheduler.storage import SchedulerStorage
         storage = SchedulerStorage(db_path=tmp_db)
         storage.init_db()
-        execs = storage.list_executions("li_daily")
+        execs = storage.list_executions("hw_daily")
         storage.close()
 
         assert len(execs) >= 1
@@ -1388,3 +1074,35 @@ class TestAutoPipelineTrigger:
         # The pipeline run_id is separate — the scheduler records the scan ref, not pipeline ref.
         # Verify the pipeline was triggered separately.
         assert len(pipeline.start_calls) == 1
+
+
+# ---------------------------------------------------------------------------
+# A schedule an earlier release stored for the removed LinkedIn scanner
+# ---------------------------------------------------------------------------
+
+def test_a_stored_linkedin_schedule_is_kept_never_dispatched_and_not_listed(tmp_db: str, tmp_path: Path) -> None:
+    from src.scheduler.service import SchedulerService
+    from src.scheduler.storage import SchedulerStorage
+
+    storage = SchedulerStorage(tmp_db)
+    storage.init_db()
+    for sid, source in (("linkedin_daily", "linkedin"), ("hw_daily", "hellowork")):
+        storage.upsert_definition({"id": sid, "source_id": source, "label": source, "enabled": True,
+                                   "startup_policy": "run_once_per_day", "retry_max": 0,
+                                   "retry_delay_seconds": 300})
+    storage.close()
+    handler = _FakeHandler()
+    svc = SchedulerService(db_path=tmp_db, config_dir=str(tmp_path), handlers={"hellowork": handler},
+                           opted_in=lambda _s: True)
+    svc._tick(is_startup=True)
+    svc.join_dispatches(timeout=5)
+
+    assert len(handler.dispatch_calls) == 1                          # only HelloWork ran
+    listed = {row["id"] for row in svc.get_status()["schedules"]}
+    assert "linkedin_daily" not in listed and "hw_daily" in listed
+    storage = SchedulerStorage(tmp_db)
+    try:
+        assert storage.get_definition("linkedin_daily") is not None   # nothing deleted
+        assert storage.list_executions("linkedin_daily") == []        # never dispatched
+    finally:
+        storage.close()

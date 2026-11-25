@@ -117,7 +117,7 @@ def test_feedback_between_runs_flags_the_contradicting_decisions_without_changin
 
     def run():
         with patch("src.embeddings.embedding.EmbeddingService", _FakeEmbeddingService):
-            r = run_pipeline(db_path=str(db), config_dir=str(cfg), prefetched_linkedin_jobs=jobs)
+            r = run_pipeline(db_path=str(db), config_dir=str(cfg), prefetched_hellowork_jobs=jobs)
         assert r.status == "completed", r.error
         st = DecisionStorage(str(db))
         try:

@@ -21,8 +21,8 @@ describe('ListStatusNotice', () => {
   })
 
   it('names incomplete sources with their reason and counts carried offers', () => {
-    show({ ...base, incomplete_sources: { eures: 'suspect_empty', indeed: 'failed' }, carried_by_source: { eures: 40, indeed: 3 } })
-    expect(screen.getByTestId('list-status-incomplete')).toHaveTextContent('eures returned no offer, indeed failed')
+    show({ ...base, incomplete_sources: { bundesagentur: 'suspect_empty', indeed: 'failed' }, carried_by_source: { bundesagentur: 40, indeed: 3 } })
+    expect(screen.getByTestId('list-status-incomplete')).toHaveTextContent('bundesagentur returned no offer, indeed failed')
     expect(screen.getByTestId('list-status-carried')).toHaveTextContent('43 offers in the list come from earlier searches')
   })
 
@@ -32,8 +32,8 @@ describe('ListStatusNotice', () => {
   })
 
   it('counts offers hidden by a source that is off and links to Settings', () => {
-    show({ ...base, source_off: { indeed: 5, linkedin: 1 } })
-    expect(screen.getByTestId('list-status-off')).toHaveTextContent('6 offers are hidden because their source is off (indeed, linkedin)')
+    show({ ...base, source_off: { indeed: 5, workingnomads: 1 } })
+    expect(screen.getByTestId('list-status-off')).toHaveTextContent('6 offers are hidden because their source is off (indeed, workingnomads)')
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings')
   })
 

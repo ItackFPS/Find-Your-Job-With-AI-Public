@@ -1,4 +1,4 @@
-"""Pause/resume helpers shared by the LinkedIn and HelloWork scanners (issue #81).
+"""Pause/resume helpers for the background scanners (issue #81; today the HelloWork scanner).
 
 Both scanners already stop cooperatively at a checkpointed boundary when the
 backend shuts down (a shared ``threading.Event``). A user pause reuses exactly

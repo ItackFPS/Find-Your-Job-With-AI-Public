@@ -56,7 +56,7 @@ feedback, evaluation, lab) · [ADRs](docs/adr/README.md) · [Windows app](docs/w
 | Decision journal: an auditable record per job and run, accepted and rejected ([ADR 0008](docs/adr/0008-decision-journal.md)) | ✅ default-on |
 | Web dashboard (FastAPI + React): runs, jobs, explanations, review queue, stats, profile editor | ✅ |
 | Windows launcher: one entry point that starts, monitors and stops the app ([docs](docs/windows-app.md)) | ✅ new — Windows only |
-| LinkedIn / HelloWork background scanners with pause/resume | ✅ opt-in; daily once chosen, stop on a 429 and resume after a cooldown |
+| HelloWork background scanner with pause/resume | ✅ opt-in; daily once chosen, stop on a 429 and resume after a cooldown |
 | Background scheduler (recurring scans/runs) | ✅ config-gated |
 | Feedback journal, disagreement/abstention review queue ([ADR 0009](docs/adr/0009-feedback-journal.md), [0010](docs/adr/0010-disagreement-and-abstention.md)) | ✅ |
 | Local-LLM enrichment and LLM eligibility gate | ⚙️ backend only, **off**, no control in the 2.0 interface; setup comes in 2.1 ([ADR 0028](docs/adr/0028-release-2.0-before-occupation-layers.md)) |
@@ -114,26 +114,25 @@ collects the official and public sources, then filters and scores the offers. If
 was off at that time, it runs as soon as the app starts; after several days off, it runs once,
 not once per missed day. The time stays the same across the clock change. The time and an
 on/off switch for all background runs are in `data/settings.json`
-(`"background": {"enabled": true, "daily_time": "08:00"}`, also `GET/PUT /api/settings/background`). It waits while a LinkedIn or
+(`"background": {"enabled": true, "daily_time": "08:00"}`, also `GET/PUT /api/settings/background`). It waits while a
 HelloWork scan is running, and a finished scan starts it. A search you start yourself with
 **Run pipeline** counts as the day's search once it completes. Before you save a profile, nothing
 is collected on its own. To turn off only the daily search, set `startup_policy: disabled` on
 `pipeline_daily` and restart the backend; **Run pipeline** on the dashboard still works.
 
-#### Job scans (LinkedIn, HelloWork)
+#### Job scans (HelloWork)
 
-The shipped config has two background scanners, **off until you choose them**: on a fresh
+The shipped config has one background scanner, **off until you choose it**: on a fresh
 install, starting the backend collects nothing. A scan starts when you press **Scan now** on
-its dashboard card (and can be paused there): LinkedIn through `python-jobspy`, HelloWork by
-fetching its job pages (about 30 minutes, one request per job). Once you have run a source, or
-chosen it in `data/settings.json` (`"unofficial_sources": {"linkedin": true}`), it also scans
+its dashboard card (and can be paused there). HelloWork is read by
+fetching its job pages (about 30 minutes, one request per job). Once you have run it, or
+chosen it in `data/settings.json` (`"unofficial_sources": {"hellowork": true}`), it also scans
 once a day in the background. If the site answers "too many requests" (HTTP 429), the scan
 stops at once, waits (1 h, then 2 h, … up to 24 h) and resumes from where it stopped, slowly
-at first. They send search queries built from
+at first. It sends search queries built from
 your profile, so fill in the **Profile** page first — see
-[Privacy and network behaviour](#privacy-and-network-behaviour). The LinkedIn scanner
-needs the optional extra (`.venv\Scripts\python -m pip install -e ".[linkedin]"`);
-without it, its scan fails with an install message and everything else works.
+[Privacy and network behaviour](#privacy-and-network-behaviour). LinkedIn was removed
+(owner decision, 2026-11-24); stored LinkedIn offers stay in the database.
 
 To change this, edit these files, then restart the backend:
 
@@ -142,8 +141,7 @@ To change this, edit these files, then restart the backend:
 | A daily scan only for the sources you chose (shipped default) | `config/schedules.yaml`: `startup_policy: when_opted_in` |
 | A scan at every start, then once per UTC day, chosen or not | same entries: `startup_policy: run_once_per_day` |
 | Manual scans only | same entries: `startup_policy: disabled` |
-| Never scan a source in the background | `data/settings.json`: `"unofficial_sources": {"linkedin": false}` (or `"hellowork"`) |
-| LinkedIn off entirely (no automatic or manual scan) | `config/linkedin.yaml`: `enabled: false` |
+| Never scan HelloWork in the background | `data/settings.json`: `"unofficial_sources": {"hellowork": false}` |
 | HelloWork off entirely (no automatic or manual scan) | `config/sources.yaml`: delete the `- name: hellowork` entry (its `active: false` only keeps it out of pipeline runs; it does not stop the scanner) |
 
 The schedule settings are re-read from `config/schedules.yaml` at every start; the file
@@ -259,7 +257,7 @@ the internet):
 
 | Outbound connection | When | What is sent |
 |---|---|---|
-| Job sources — France Travail (its public occupation pages, robots.txt respected; the API when you have credentials), Indeed (its mobile app's API), EURES; LinkedIn (via `python-jobspy`) and HelloWork scanners | pipeline runs, scheduled scans | search queries built from your profile (keywords, locations); never your profile file, feedback or database |
+| Job sources — France Travail (its public occupation pages, robots.txt respected; the API when you have credentials), Indeed (its mobile app's API); the HelloWork scanner | pipeline runs, scheduled scans | search queries built from your profile (keywords, locations); never your profile file, feedback or database |
 | Hugging Face Hub | first use of the embedding model; each later model load checks for updates unless `HF_HUB_OFFLINE=1` | model file requests (Hub telemetry is turned off) |
 | `PHASE2_LLM_ENDPOINT` (default `http://localhost:1234`); `--llm-endpoint` of the evaluation/lab tools | only AI-enabled runs, or those tools when you pass the flag | job text and profile summary. It is whatever you configure — keep it local; the launcher warns if it is not (its `status` check sends only a `GET /v1/models`) |
 | ESCO API (European Commission) | only when you run `scripts/setup_esco.py` | skill search terms |
@@ -326,7 +324,7 @@ Profile page writes it for you.
 | `config/discovery.yaml` · `config/presets/*.yaml` | search vocabulary: profession-neutral terms; one preset per line of work (`it.yaml` ships) |
 | `config/filters.yaml` · `config/scoring.yaml` | hard filters; scoring weights and gates |
 | `config/semantic_config.yaml` · `config/personalization.yaml` | embedding model and blend weight; feedback adjustment bounds |
-| `config/linkedin.yaml` · `config/schedules.yaml` | LinkedIn scanner; scheduler definitions |
+| `config/schedules.yaml` | scheduler definitions |
 | `config/decisions.yaml` · `config/feedback.yaml` · `config/disagreement.yaml` · `config/retention.yaml` | decision journal, feedback, review-queue rules, history retention |
 
 `scoring.yaml`, `filters.yaml`, `semantic_config.yaml` and `personalization.yaml` feed
@@ -338,12 +336,12 @@ changes ([ADR 0011](docs/adr/0011-experiment-lab.md)).
 Nothing in `src/` assumes a profession. Each run builds its searches from the profile:
 
 - **Target domains and occupations** (Profile page: pick an occupation from the ESCO index or
-  type your own words) become the queries sent to France Travail, EURES and Indeed, and are
+  type your own words) become the queries sent to France Travail and Indeed, and are
   matched by name against France Travail's published occupation pages. Contract types add
   words such as "stage" or "alternance" (`config/discovery.yaml`).
 - **A preset** (`config/presets/<name>.yaml`) holds the vocabulary of one line of work: baseline
-  queries, per-source settings (Indeed and EURES queries,
-  France Travail occupation codes, LinkedIn queries, HelloWork domains), a scoring hint and the
+  queries, per-source settings (Indeed queries,
+  France Travail occupation codes, HelloWork domains), a scoring hint and the
   Stats page groupings. It applies when the profile's `target_domains` contains one of its
   `applies_to_domains`. `it.yaml` ships; to add your own line of work, copy it, change
   `name` and `applies_to_domains`, and keep only the sections you need.
@@ -441,8 +439,8 @@ issue for a security problem.
 - Single user, no login; never expose the backend to a network.
 - Windows is the supported desktop platform; the launcher and logon tasks are
   Windows-only.
-- Some collectors use unofficial endpoints or scraping (Indeed's mobile API, LinkedIn via
-  `python-jobspy`, HelloWork pages). Sites change, block automated access, or forbid it
+- Some collectors use unofficial endpoints or scraping (Indeed's mobile API,
+  HelloWork pages). Sites change, block automated access, or forbid it
   in their terms: check each site's terms before enabling a source.
 - APEC and Welcome to the Jungle were removed in 2.0: their bot protection (a CAPTCHA,
   a firewall) blocks automated requests, and the app never tries to get round it. Offers

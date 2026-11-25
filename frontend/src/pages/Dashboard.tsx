@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  countJobs, getDashboard, startRun, getLinkedInStatus, triggerLinkedInScan, listLinkedInScans,
-  pauseLinkedInScan, resumeLinkedInScan,
+  countJobs, getDashboard, startRun,
   getHelloWorkStatus, triggerHelloWorkScan, listHelloWorkScans,
   pauseHelloWorkScan, resumeHelloWorkScan,
-  type RunStats, type SourceStats, type ScanState, type LinkedInScanProgress, type HelloWorkScanProgress,
+  type RunStats, type SourceStats, type ScanState, type HelloWorkScanProgress,
 } from '../api/client'
 import { Link } from 'react-router-dom'
 import { Trans, useTranslation } from 'react-i18next'
@@ -15,23 +14,20 @@ import { useCollectionFrozen } from '../hooks/useCollectionFrozen'
 import { PIPELINE_STAGES, type PipelineStageDef } from '../config/pipelineStages'
 import { usePipelineEvents, stageLabel, type ConnectionState, type ActivityEntry } from '../hooks/usePipelineEvents'
 import {
-  formatDuration, formatDateTime, runWallSeconds, scannerControl, scannerProgressLabel, scannerWorkEstimate,
+  formatDuration, formatDateTime, runWallSeconds, scannerControl, scannerProgressLabel,
   startHoldEnded, type StartHold,
 } from '../utils'
 
 // ---------------------------------------------------------------------------
-// LinkedIn / HelloWork scanner status cards — surfaces the same status
-// already polled on the Pipeline page (getLinkedInStatus/getHelloWorkStatus),
-// shown here too since they run independently of the main pipeline run.
+// HelloWork scanner status card — surfaces the same status already polled on
+// the Pipeline page (getHelloWorkStatus), shown here too since it runs
+// independently of the main pipeline run.
 //
-// LinkedIn's percentage/ETA come from the backend's work-based estimate
-// (issue #86): page-weighted from the checkpoint and remaining pages ×
-// measured seconds per page, so a restart that resumes the checkpoint keeps
-// them. HelloWork exposes no progress fraction, so its percentage/ETA stay
-// an ESTIMATE from the average duration of its own past completed scans
-// against elapsed time since `started_at`, capped below 100% while running.
-// Both expose (issue #81) the persisted scan `state` (Pause/Resume control)
-// and the durable checkpoint `progress` (query/page, or metier pages done).
+// HelloWork exposes no progress fraction, so its percentage/ETA are an
+// ESTIMATE from the average duration of its own past completed scans against
+// elapsed time since `started_at`, capped below 100% while running. It exposes
+// (issue #81) the persisted scan `state` (Pause/Resume control) and the
+// durable checkpoint `progress` (metier pages done).
 // ---------------------------------------------------------------------------
 
 interface ScannerStatus {
@@ -39,7 +35,7 @@ interface ScannerStatus {
   is_scanning: boolean
   last_scan: { id: string; status: string; started_at: string; completed_at: string | null; jobs_found: number; jobs_new: number } | null
   state?: ScanState
-  progress?: LinkedInScanProgress | HelloWorkScanProgress | null
+  progress?: HelloWorkScanProgress | null
   resume_after?: string | null
 }
 
@@ -136,15 +132,7 @@ export function ScannerStatusCard({ name, queryKey, triggerFn, pauseFn, resumeFn
   // while "Starting…" is shown, last_scan is still the previous run, so the
   // bar stays indeterminate until the new scan is confirmed.
   let estimate: { pct: number; etaLabel: string } | null = null
-  const work = scannerWorkEstimate(status.progress)
-  if (status.is_scanning && work) {
-    // Backend work-based estimate (LinkedIn): continues from the checkpoint
-    // after a restart; no ETA is shown rather than a guess (issue #86).
-    const etaLabel = work.etaSeconds === null
-      ? control.state === 'pausing' ? t('dashboard.scanner.pausingNextPage') : t('dashboard.scanner.etaUnknown')
-      : work.etaSeconds > 5 ? t('dashboard.scanner.etaRemaining', { eta: formatEta(work.etaSeconds) }) : t('dashboard.scanner.finishing')
-    estimate = { pct: work.percent, etaLabel }
-  } else if (status.is_scanning && scan?.started_at && avgDurationSeconds) {
+  if (status.is_scanning && scan?.started_at && avgDurationSeconds) {
     const elapsed = (now - new Date(scan.started_at).getTime()) / 1000
     const pct = Math.max(1, Math.min(97, Math.round((elapsed / avgDurationSeconds) * 100)))
     const remaining = avgDurationSeconds - elapsed
@@ -201,7 +189,6 @@ export function ScannerStatusCard({ name, queryKey, triggerFn, pauseFn, resumeFn
                 ? t('dashboard.scanner.rateLimitedUntil', { time: formatDateTime(status.resume_after) })
                 : t('dashboard.scanner.rateLimited')
               : t('dashboard.scanner.interrupted')}
-          {work ? t('dashboard.scanner.percentDone', { percent: work.percent }) : ''}
           {progressLabel ? ` · ${progressLabel}` : ''}
         </div>
       ) : scan ? (
@@ -219,17 +206,13 @@ export function ScannerStatusCard({ name, queryKey, triggerFn, pauseFn, resumeFn
 
 function ScannerStatusRow() {
   const { t } = useTranslation()
-  const { data: liStatus } = useQuery({ queryKey: ['linkedin-status'], queryFn: getLinkedInStatus, refetchInterval: 5000 })
   const { data: hwStatus } = useQuery({ queryKey: ['hellowork-status'], queryFn: getHelloWorkStatus, refetchInterval: 5000 })
-  const { data: liScans } = useQuery({ queryKey: ['linkedin-scans'], queryFn: () => listLinkedInScans(20), enabled: liStatus?.enabled === true })
   const { data: hwScans } = useQuery({ queryKey: ['hellowork-scans'], queryFn: () => listHelloWorkScans(20), enabled: hwStatus?.enabled === true })
 
-  if ((liStatus && !liStatus.enabled) && (hwStatus && !hwStatus.enabled)) return null
-  if (!liStatus && !hwStatus) return null
+  if (!hwStatus || !hwStatus.enabled) return null
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
-      <ScannerStatusCard name={t('dashboard.scanner.linkedin')} queryKey="linkedin-status" triggerFn={triggerLinkedInScan} pauseFn={pauseLinkedInScan} resumeFn={resumeLinkedInScan} status={liStatus} avgDurationSeconds={averageDurationSeconds(liScans)} />
       <ScannerStatusCard name={t('dashboard.scanner.hellowork')} queryKey="hellowork-status" triggerFn={triggerHelloWorkScan} pauseFn={pauseHelloWorkScan} resumeFn={resumeHelloWorkScan} status={hwStatus} avgDurationSeconds={averageDurationSeconds(hwScans)} />
     </div>
   )

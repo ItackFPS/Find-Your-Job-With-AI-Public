@@ -163,7 +163,7 @@ def _run(cfg: Path, db: Path, jobs: list[Job]):
     from tests.test_decision_journal_orchestrator import _FakeEmbeddingService
 
     with patch("src.embeddings.embedding.EmbeddingService", _FakeEmbeddingService):
-        result = run_pipeline(db_path=str(db), config_dir=str(cfg), prefetched_linkedin_jobs=jobs)
+        result = run_pipeline(db_path=str(db), config_dir=str(cfg), prefetched_hellowork_jobs=jobs)
     assert result.status == "completed", result.error
     return result
 

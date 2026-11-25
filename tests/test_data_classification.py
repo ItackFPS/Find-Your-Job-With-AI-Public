@@ -39,7 +39,6 @@ def test_every_table_of_an_initialised_jobs_db_is_classified(tmp_path):
     from src.feedback.exposure import ExposureStorage
     from src.feedback.storage import FeedbackStorage
     from src.hellowork.staging import HelloWorkStagingStorage
-    from src.linkedin.staging import LinkedInStagingStorage
     from src.outcomes.storage import OutcomeEventStorage
     from src.personalization.storage import PersonalizationStorage
     from src.scheduler.storage import SchedulerStorage
@@ -49,7 +48,7 @@ def test_every_table_of_an_initialised_jobs_db_is_classified(tmp_path):
     db = str(tmp_path / "jobs.db")
     for cls in (Storage, RunStorage, FeedbackStorage, ExposureStorage, DecisionStorage, OutcomeEventStorage,
                 PersonalizationStorage, AIAnalysisStorage, SchedulerStorage,
-                LinkedInStagingStorage, HelloWorkStagingStorage):
+                HelloWorkStagingStorage):
         try:
             store = cls(db_path=db)
         except TypeError:

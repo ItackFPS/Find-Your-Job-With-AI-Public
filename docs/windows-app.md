@@ -18,7 +18,7 @@ Edge/Chrome window, then to your default browser.
 Windows notifications from the tray app cover only the categories you opted into, stored in
 `data\settings.json` (not in the profile) and changed through `PUT /api/settings/notifications`:
 `strong_matches` (on: a search found offers rated "strong" or better), `search_failed` (on: a
-search or a LinkedIn/HelloWork scan failed), `source_paused` (off: a scan paused or hit a rate
+search or a HelloWork scan failed), `source_paused` (off: a scan paused or hit a rate
 limit) and `saved_expiring` (off; not available until saved offers carry an expiry date).
 
 After a crash or a reboot, a scan resumes from its last checkpoint without duplicating offers,

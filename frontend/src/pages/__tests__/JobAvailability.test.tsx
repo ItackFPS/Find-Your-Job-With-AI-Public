@@ -20,7 +20,7 @@ vi.mock('axios', () => {
 })
 
 const base = {
-  id: 'j1', source: 'eures', title: 'Développeur', status: 'active', valid_through: null,
+  id: 'j1', source: 'bundesagentur', title: 'Développeur', status: 'active', valid_through: null,
   expired_at: null, expiry_reason: null,
 } as unknown as Job
 

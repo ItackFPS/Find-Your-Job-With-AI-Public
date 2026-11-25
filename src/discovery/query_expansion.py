@@ -129,7 +129,7 @@ class DiscoveryQueryExpander:
         """Return discovery queries for all supported source types.
 
         Returns a dict mapping source_type → list[query_string].
-        Expands for france_travail, indeed and eures (FR keywords).
+        Expands for france_travail and indeed (FR keywords).
 
         ``yield_history_by_source``, if given, maps source_type -> the
         per-query yield history for that source (see
@@ -147,10 +147,6 @@ class DiscoveryQueryExpander:
             "indeed": self.expand(
                 profile, source="indeed", language="fr",
                 yield_history=yield_history_by_source.get("indeed"),
-            ),
-            "eures": self.expand(
-                profile, source="eures", language="fr",
-                yield_history=yield_history_by_source.get("eures"),
             ),
         }
 
@@ -311,7 +307,7 @@ class DiscoveryQueryExpander:
         # Occupations the user picked (French label first: these are French sources).
         custom.extend(_occupation_terms(profile))
 
-        if source in ("france_travail", "apec", "indeed", "eures"):
+        if source in ("france_travail", "apec", "indeed"):
             fr_terms = load_neutral(self._config_dir).contract_terms.get("fr", {})
             extra.extend(custom)
             for contract in profile.contract_types:

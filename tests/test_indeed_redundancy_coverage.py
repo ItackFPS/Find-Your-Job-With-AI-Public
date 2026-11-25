@@ -4,9 +4,9 @@ I12's decision (see the phase report / commit for the full evaluation): NO
 new collector was added. France Travail (official Pôle Emploi API, active,
 exhaustive, unrestricted by keyword or seniority) already provides
 authoritative, ToS-clean, general-purpose FR coverage independent of
-Indeed, with EURES as a secondary/overlapping FR source. (APEC, once a
-second FR source, was removed in 2.0: its bot protection blocks every
-request, and its offers also reach EURES.)
+Indeed. (APEC, once a second FR source, was removed in 2.0: its bot
+protection blocks every request. EURES, a secondary source overlapping
+France Travail, was removed on 2026-11-24 by owner decision.)
 
 These tests exist to keep that finding TRUE over time — each one would fail
 if a future change quietly removed the exact property the redundancy
@@ -69,16 +69,6 @@ class TestRemovedSourcesStayRemoved:
         assert {"apec", "wttj"} <= REMOVED_SOURCE_TYPES.keys()
 
 
-class TestEuresOverlapsFranceTravailByDesign:
-    """EURES is documented as substantially overlapping France Travail for
-    French postings (deduplication handles it) — it must not be
-    double-counted as INDEPENDENT redundancy on top of France Travail."""
-
-    def test_eures_is_active(self) -> None:
-        sources = _load_sources()
-        assert sources["eures"]["active"] is True
-
-
 class TestIndeedRiskIsDocumentedNotSilentlyResolved:
     """I12 explicitly requires documenting Indeed's operational/legal
     limitation rather than pretending a technical change resolves it — this
@@ -107,16 +97,17 @@ class TestNoRedundantCollectorWasAdded:
         sources = _load_sources()
         source_types = {src["type"] for src in sources.values()}
         # The complete set of collector types this project ships, as of
-        # I12 — France Travail/EURES (redundancy sources) plus
+        # I12 — France Travail (the redundancy source) plus
         # every other already-existing type. Adding a name here later means
         # a new collector was introduced and this test should be updated
         # deliberately, not accidentally.
         # france_travail_web (2.0 plan F6.2): France Travail without credentials,
         # since its API no longer accepts new subscribers. apec and wttj were
-        # removed in 2.0 (plan F1.4): blocked by a CAPTCHA and a firewall.
+        # removed in 2.0 (plan F1.4): blocked by a CAPTCHA and a firewall. eures was
+        # removed on 2026-11-24 (owner decision).
         expected_types = {
             "france_travail", "france_travail_web", "bundesagentur",
-            "arbetsformedlingen", "eures", "hellowork",
+            "arbetsformedlingen", "hellowork",
             "indeed", 
         }
         assert source_types == expected_types

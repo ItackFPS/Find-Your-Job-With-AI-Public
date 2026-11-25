@@ -152,7 +152,7 @@ def _accepted(cfg: Path, db: Path, with_stats: bool = False):
     from src.pipeline.orchestrator import run_pipeline
 
     with patch("src.embeddings.embedding.EmbeddingService", _FakeEmbeddingService):
-        result = run_pipeline(db_path=str(db), config_dir=str(cfg), prefetched_linkedin_jobs=load_dataset(DS).build_jobs())
+        result = run_pipeline(db_path=str(db), config_dir=str(cfg), prefetched_hellowork_jobs=load_dataset(DS).build_jobs())
     assert result.status == "completed", result.error
     accepted = {r.job_title or "" for r in result.scored_jobs}
     if with_stats:   # to_dict() is what src/api/runner.py persists as pipeline_runs.stats_json
@@ -181,16 +181,6 @@ def test_the_pipeline_runs_the_approved_bundle_and_falls_back_when_it_goes_stale
 # Every consumer of strategy-controlled files describes the same strategy
 # ---------------------------------------------------------------------------
 
-def _scanner(cfg: Path, db: Path | None):
-    import src.pipeline.filter  # noqa: F401  (the scanner only filters once the pipeline module is loaded)
-    from src.linkedin.scanner import LinkedInConfig, LinkedInScanner
-    from src.linkedin.staging import LinkedInStagingStorage
-
-    staging = LinkedInStagingStorage(db_path=str(cfg.parent / "staging.db"))
-    return LinkedInScanner(LinkedInConfig(enabled=True), staging, config_dir=str(cfg),
-                           db_path=None if db is None else str(db))
-
-
 def test_strategy_of_run_reads_what_the_run_recorded(env):
     from src.decisions.active_strategy import strategy_of_run
 
@@ -212,18 +202,6 @@ def test_strategy_of_run_reads_what_the_run_recorded(env):
     assert strategy_of_run(forged, cfg).status == "invalid"
 
 
-def test_the_linkedin_prefilter_follows_the_active_strategy_and_falls_back(env):
-    cfg, db, store = env
-    assert "symfony" not in _scanner(cfg, db)._load_filters_config()["title_keywords"]["exclude"]
-    digest, path = create_bundle(cfg, EXCLUDE_SYMFONY, store)
-    _point(db, digest, path)
-    assert "symfony" in _scanner(cfg, db)._load_filters_config()["title_keywords"]["exclude"]
-    assert "symfony" not in _scanner(cfg, None)._load_filters_config()["title_keywords"]["exclude"]  # no db: config/
-    with open(cfg / "scoring.yaml", "a", encoding="utf-8") as f:
-        f.write("\nlab_test_marker: 1\n")       # stale → back to config/, exactly like the pipeline
-    assert "symfony" not in _scanner(cfg, db)._load_filters_config()["title_keywords"]["exclude"]
-
-
 def test_job_explanations_use_the_vocabulary_of_the_run_that_decided(env):
     from src.api.routes.jobs import _load_domain_keywords_safe
 
@@ -240,7 +218,7 @@ def test_job_explanations_use_the_vocabulary_of_the_run_that_decided(env):
 
 
 def test_pipeline_journal_prefilter_and_explanations_agree_on_the_strategy(env):
-    """One approved bundle, followed through every consumer: run stats, journal manifest, LinkedIn pre-filter,
+    """One approved bundle, followed through every consumer: run stats, journal manifest,
     explanation vocabulary and the Lab API all name the same bundle; after deactivation all name config/."""
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
@@ -264,7 +242,6 @@ def test_pipeline_journal_prefilter_and_explanations_agree_on_the_strategy(env):
     assert any(m.get("extra", {}).get("active_strategy", {}).get("bundle_hash") == digest for m in manifests)
     assert strategy_of_run(run["stats"]["active_strategy"], cfg).path("filters.yaml") == path / "filters.yaml"
     assert _load_domain_keywords_safe(cfg, run).get("lab_test_domain") == ["zzlabword"]   # explanations
-    assert "symfony" in _scanner(cfg, db)._load_filters_config()["title_keywords"]["exclude"]  # pre-filter
     app = FastAPI()
     app.include_router(lab_router)
     app.state.db_path, app.state.config_dir = str(db), str(cfg)
@@ -275,7 +252,6 @@ def test_pipeline_journal_prefilter_and_explanations_agree_on_the_strategy(env):
     deactivate(db, approved_by="a", reason="back to config")
     accepted, info, stats_dict = _accepted(cfg, db, with_stats=True)
     assert info["status"] == "deactivated" and any("Symfony" in t for t in accepted)
-    assert "symfony" not in _scanner(cfg, db)._load_filters_config()["title_keywords"]["exclude"]
     run = {"stats": json.loads(json.dumps(stats_dict))}
     assert "lab_test_domain" not in _load_domain_keywords_safe(cfg, run)
     assert client.get("/api/lab/active-strategy").json()["pipeline"]["status"] == "deactivated"

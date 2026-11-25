@@ -119,8 +119,8 @@ def intra_source_deduplicate(
     Uses source_job_id first, canonical_url as fallback, then content_hash.
     Jobs with neither identifier are kept unconditionally.
 
-    The content_hash tier collapses same-source location variants — e.g. LinkedIn
-    posts the same vacancy under different job IDs for each office location.  The
+    The content_hash tier collapses same-source location variants — e.g. a board
+    that posts the same vacancy under different job IDs for each office location.  The
     first occurrence is kept; later ones are treated as duplicates.
 
     ``progress_callback``, if given, is called ``(processed, total)`` after

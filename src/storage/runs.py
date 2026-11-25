@@ -101,7 +101,7 @@ class RunStorage:
             self._conn.row_factory = sqlite3.Row
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.execute("PRAGMA synchronous=NORMAL")
-            # See src/linkedin/staging.py for why this is needed: several
+            # busy_timeout is needed because several
             # modules open their own connection to the same jobs.db file.
             self._conn.execute("PRAGMA busy_timeout=5000")
         return self._conn
