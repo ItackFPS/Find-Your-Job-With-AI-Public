@@ -130,6 +130,7 @@ class _Source(BaseCollector):
         super().__init__(rate_limit_delay=0)
 
     def collect(self) -> CollectorResult:
+        self._before_request("https://example.test/search", check_robots=False)  # asked the source (#314)
         return CollectorResult(source_name="src", jobs=list(_Source.jobs), errors=list(_Source.errors))
 
 

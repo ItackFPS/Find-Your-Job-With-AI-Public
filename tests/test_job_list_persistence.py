@@ -26,6 +26,7 @@ class _Board(BaseCollector):
         self._name = str((config or {}).get("name", ""))
 
     def collect(self) -> CollectorResult:
+        self._before_request("https://example.test/search", check_robots=False)  # asked the source (#314)
         jobs, errors = _Board.plan.get(self._name, ([], []))
         return CollectorResult(source_name=self._name, jobs=list(jobs), errors=list(errors))
 

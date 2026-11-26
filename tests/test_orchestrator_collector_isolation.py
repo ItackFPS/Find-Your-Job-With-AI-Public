@@ -118,3 +118,59 @@ def test_collection_status(collected, errors, expected):
     from src.pipeline.orchestrator import collection_status
 
     assert collection_status(collected, errors) == expected
+
+
+class _SilentZero(BaseCollector):
+    """Returns nothing, says nothing and never sent a request (#314: bundesagentur without terms)."""
+
+    def __init__(self, config: dict | None = None) -> None:
+        super().__init__()
+
+    def collect(self) -> CollectorResult:
+        return CollectorResult(source_name="silent", jobs=[])
+
+
+class _GenuinelyEmpty(BaseCollector):
+    """Asked the source and got a well-formed empty answer."""
+
+    def __init__(self, config: dict | None = None) -> None:
+        super().__init__()
+
+    def collect(self) -> CollectorResult:
+        self._before_request("https://api.example.test/search", check_robots=False)
+        self._note_empty_result()
+        return CollectorResult(source_name="empty", jobs=[])
+
+
+class _NotCounting(_SilentZero):
+    counts_requests = False     # its own HTTP client, requests not counted (France Travail)
+
+
+class _SkippedWithReason(_SilentZero):
+    def collect(self) -> CollectorResult:
+        return CollectorResult(source_name="skip", jobs=[], metadata={"skipped_reason": "nothing to search"})
+
+
+def test_a_source_that_sent_no_request_and_said_nothing_fails(tmp_path, monkeypatch):
+    from src.collectors.registry import registry
+    from src.pipeline.orchestrator import run_pipeline
+
+    classes = {**_CLASSES, "silent": _SilentZero, "empty": _GenuinelyEmpty, "notcounting": _NotCounting,
+               "skip": _SkippedWithReason}
+    monkeypatch.setattr(registry, "get_collector_class", lambda src_type: classes[src_type])
+    config_dir = _config_dir(tmp_path, "silent")
+    with open(config_dir / "sources.yaml", "a", encoding="utf-8") as f:
+        for t in ("empty", "notcounting", "skip"):
+            f.write(f"  - {{name: {t}, type: {t}, active: true}}\n")
+
+    result = run_pipeline(db_path=str(tmp_path / "t.db"), config_dir=str(config_dir))
+
+    assert result.status == "completed", result.error
+    by = result.stats.by_source
+    assert {n: s["status"] for n, s in by.items()} == {
+        "broken": "failed", "healthy": "completed", "empty": "completed", "notcounting": "completed",
+        "skip": "skipped"}
+    assert by["broken"]["silent_zero"] == "no_request" and by["broken"]["errors"] == 1
+    assert by["broken"]["reason"].startswith("no_request: the source sent no request")
+    assert any(e.startswith("broken: no_request:") for e in result.stats.errors)
+    assert all("silent_zero" not in by[n] for n in ("healthy", "empty", "notcounting", "skip"))
