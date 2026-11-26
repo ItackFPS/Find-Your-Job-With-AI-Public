@@ -58,8 +58,10 @@ def test_missing_state_means_everything_is_frozen(tmp_path: Path) -> None:
     assert freeze.status(settings, cfg)["frozen"] is True
 
 
-def test_no_collector_is_validated_today() -> None:
-    assert freeze.VALIDATED_COLLECTORS == {}
+def test_only_collectors_with_a_validation_record_are_validated() -> None:
+    # #258: supervised runs of 2026-11-24; every other collector stays frozen.
+    assert set(freeze.VALIDATED_COLLECTORS) == {"france_travail", "indeed", "hellowork"}
+    assert all(ref.startswith("docs/collector-validation.md#") for ref in freeze.VALIDATED_COLLECTORS.values())
 
 
 def test_an_unvalidated_collector_cannot_be_reactivated(tmp_path: Path) -> None:
