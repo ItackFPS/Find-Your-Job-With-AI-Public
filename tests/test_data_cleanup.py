@@ -25,7 +25,7 @@ from src.storage.sqlite import Storage
 NOW = datetime(2026, 10, 30, 8, 0, tzinfo=UTC)
 
 
-def _seed(db: Path) -> None:
+def _seed(db: Path, now: datetime = NOW) -> None:
     Storage._initialized_paths.discard(str(db.resolve()))
     s = Storage(db_path=str(db))
     s.init_db()
@@ -33,10 +33,10 @@ def _seed(db: Path) -> None:
             for i in ("old", "recent", "liked", "applied", "outcome", "active")]
     for job in jobs:
         s.upsert_job(job)
-    s.record_provenance(jobs, NOW - timedelta(days=400))
+    s.record_provenance(jobs, now - timedelta(days=400))
     s.close()
     conn = sqlite3.connect(str(db))
-    old, recent = (NOW - timedelta(days=200)).isoformat(), (NOW - timedelta(days=10)).isoformat()
+    old, recent = (now - timedelta(days=200)).isoformat(), (now - timedelta(days=10)).isoformat()
     for job_id, when in (("old", old), ("recent", recent), ("liked", old), ("applied", old), ("outcome", old)):
         conn.execute("UPDATE jobs SET status = 'expired', expired_at = ?, expiry_reason = 'not_seen' WHERE id = ?",
                      (when, job_id))
@@ -117,7 +117,8 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     from src.api.app import app
 
     db = tmp_path / "jobs.db"
-    _seed(db)
+    # The API reads the real clock, so its offers are dated from now, not from the fixed NOW.
+    _seed(db, now=datetime.now(UTC))
     for key, value in {"db_path": str(db), "runner": _Runner(False), "scheduler": None,
                        "linkedin_scanner": None, "hellowork_scanner": None}.items():
         monkeypatch.setitem(app.state._state, key, value)
