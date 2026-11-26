@@ -23,8 +23,8 @@ ROOT = Path(__file__).resolve().parents[1]
 NOW = datetime(2026, 11, 14, 9, 0, tzinfo=UTC)
 
 SOURCES = """sources:
-  - name: eures
-    type: eures
+  - name: bundesagentur
+    type: bundesagentur
     active: true
     config: {}
   - name: france-travail
@@ -51,7 +51,7 @@ def _config(tmp: Path) -> Path:
 def test_missing_state_means_everything_is_frozen(tmp_path: Path) -> None:
     settings = tmp_path / "settings.json"
     cfg = _config(tmp_path)
-    for t in ("eures", "france_travail", "linkedin", "hellowork", "indeed"):
+    for t in ("bundesagentur", "france_travail", "hellowork", "indeed"):
         assert freeze.collector_allowed(settings, t) is False
         assert freeze.collector_allowed(None, t) is False
     assert freeze.pipeline_allowed(settings, cfg) is False
@@ -64,45 +64,45 @@ def test_no_collector_is_validated_today() -> None:
 
 def test_an_unvalidated_collector_cannot_be_reactivated(tmp_path: Path) -> None:
     with pytest.raises(freeze.CollectorNotValidated):
-        freeze.reactivate(tmp_path / "settings.json", "eures")
+        freeze.reactivate(tmp_path / "settings.json", "bundesagentur")
     assert not (tmp_path / "settings.json").exists()
 
 
 def test_a_validated_collector_comes_back_only_after_the_users_reactivation(tmp_path: Path, monkeypatch) -> None:
     settings = tmp_path / "settings.json"
     cfg = _config(tmp_path)
-    # An update ships eures as validated: still frozen, nobody turned it on.
-    monkeypatch.setitem(freeze.VALIDATED_COLLECTORS, "eures", "docs/validation/eures.md")
-    assert freeze.collector_allowed(settings, "eures") is False
+    # An update ships bundesagentur as validated: still frozen, nobody turned it on.
+    monkeypatch.setitem(freeze.VALIDATED_COLLECTORS, "bundesagentur", "docs/validation/bundesagentur.md")
+    assert freeze.collector_allowed(settings, "bundesagentur") is False
     assert freeze.pipeline_allowed(settings, cfg) is False
-    freeze.reactivate(settings, "eures", now=NOW)
-    assert freeze.collector_allowed(settings, "eures") is True
+    freeze.reactivate(settings, "bundesagentur", now=NOW)
+    assert freeze.collector_allowed(settings, "bundesagentur") is True
     assert freeze.collector_allowed(settings, "france_travail") is False
     assert freeze.pipeline_allowed(settings, cfg) is True
-    freeze.deactivate(settings, "eures")
-    assert freeze.collector_allowed(settings, "eures") is False
+    freeze.deactivate(settings, "bundesagentur")
+    assert freeze.collector_allowed(settings, "bundesagentur") is False
 
 
 def test_record_freeze_writes_once_and_never_clears_a_reactivation(tmp_path: Path, monkeypatch) -> None:
     settings = tmp_path / "settings.json"
     settings.write_text(json.dumps({"notifications": {"strong_matches": False}}), encoding="utf-8")
     assert freeze.record_freeze(settings, now=NOW) is True
-    monkeypatch.setitem(freeze.VALIDATED_COLLECTORS, "eures", "doc")
-    freeze.reactivate(settings, "eures", now=NOW)
+    monkeypatch.setitem(freeze.VALIDATED_COLLECTORS, "bundesagentur", "doc")
+    freeze.reactivate(settings, "bundesagentur", now=NOW)
     assert freeze.record_freeze(settings) is False           # e.g. the next start after an update
     data = json.loads(settings.read_text(encoding="utf-8"))
     assert data["collection_freeze"]["since"] == NOW.isoformat(timespec="seconds")
-    assert "eures" in data["collection_freeze"]["reactivated"]
+    assert "bundesagentur" in data["collection_freeze"]["reactivated"]
     assert data["notifications"] == {"strong_matches": False}  # other settings kept
 
 
 def test_unreadable_state_stays_frozen(tmp_path: Path, monkeypatch) -> None:
     settings = tmp_path / "settings.json"
     settings.write_text("{not json", encoding="utf-8")
-    monkeypatch.setitem(freeze.VALIDATED_COLLECTORS, "eures", "doc")
-    assert freeze.collector_allowed(settings, "eures") is False
-    settings.write_text(json.dumps({"collection_freeze": {"reactivated": {"eures": 1}}}), encoding="utf-8")
-    assert freeze.collector_allowed(settings, "eures") is False   # not a timestamp: not a reactivation
+    monkeypatch.setitem(freeze.VALIDATED_COLLECTORS, "bundesagentur", "doc")
+    assert freeze.collector_allowed(settings, "bundesagentur") is False
+    settings.write_text(json.dumps({"collection_freeze": {"reactivated": {"bundesagentur": 1}}}), encoding="utf-8")
+    assert freeze.collector_allowed(settings, "bundesagentur") is False   # not a timestamp: not a reactivation
 
 
 # -- preflight and pipeline --------------------------------------------------------------------------
@@ -115,7 +115,7 @@ def test_preflight_skips_frozen_sources_and_never_authenticates(tmp_path: Path) 
         result = preflight.run_preflight(str(cfg), settings_path=tmp_path / "settings.json")
     assert result.ready is True
     assert result.france_travail.status == "SKIPPED"
-    assert result.skip_reasons["eures"] == freeze.FROZEN_REASON
+    assert result.skip_reasons["bundesagentur"] == freeze.FROZEN_REASON
     assert result.skip_reasons["france_travail"] == freeze.FROZEN_REASON
 
 
@@ -132,7 +132,7 @@ def test_a_pipeline_run_never_builds_a_frozen_collector(tmp_path: Path) -> None:
          patch("src.collectors.registry.registry.get_collector_class", _refuse):
         result = run_pipeline(db_path=str(tmp_path / "jobs.db"), config_dir=str(cfg))
     assert result.status == "completed", result.error
-    for name in ("eures", "france-travail"):
+    for name in ("bundesagentur", "france-travail"):
         row = result.stats.by_source[name]
         assert row["status"] == "skipped" and row["reason"] == freeze.FROZEN_REASON
     assert result.stats.collected == 0
@@ -174,7 +174,7 @@ def _scheduler(tmp_path: Path, handlers: dict, frozen) -> SchedulerService:
 
 
 def test_the_scheduler_dispatches_nothing_frozen_and_records_no_execution(tmp_path: Path) -> None:
-    handlers = {PIPELINE_SOURCE_ID: _Handler(), "linkedin": _Handler(), "hellowork": _Handler()}
+    handlers = {PIPELINE_SOURCE_ID: _Handler(), "hellowork": _Handler()}
     svc = _scheduler(tmp_path, handlers, frozen=lambda _s: True)
     svc._tick(is_startup=True)
     svc.join_dispatches(timeout=5)
@@ -185,7 +185,7 @@ def test_the_scheduler_dispatches_nothing_frozen_and_records_no_execution(tmp_pa
     finally:
         storage.close()
     with pytest.raises(freeze.CollectionFrozen):
-        svc.trigger_manual("linkedin_daily")
+        svc.trigger_manual("hellowork_daily")
 
 
 def test_an_unreadable_freeze_state_keeps_the_scheduler_from_dispatching(tmp_path: Path) -> None:
@@ -207,15 +207,15 @@ def test_api_refuses_runs_and_scans_and_reports_the_freeze(isolated_app, tmp_pat
     with TestClient(isolated_app) as client:
         r = client.post("/api/pipeline/run")
         assert r.status_code == 409 and r.json()["detail"] == freeze.FROZEN_REASON
-        for path in ("/api/linkedin/scan", "/api/hellowork/scan", "/api/linkedin/resume", "/api/hellowork/resume"):
+        for path in ("/api/hellowork/scan", "/api/hellowork/resume"):
             r = client.post(path)
             assert r.status_code == 409, path
             assert r.json()["detail"] == freeze.FROZEN_REASON, path
         status = client.get("/api/collection/status").json()
         assert status["frozen"] is True and status["since"]
-        assert {c["type"] for c in status["collectors"]} >= {"eures", "france_travail", "linkedin", "hellowork"}
+        assert {c["type"] for c in status["collectors"]} >= {"bundesagentur", "france_travail", "hellowork"}
         assert all(not c["allowed"] for c in status["collectors"])
-        r = client.post("/api/collection/eures/reactivate")
+        r = client.post("/api/collection/bundesagentur/reactivate")
         assert r.status_code == 409
     stored = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
     assert stored["collection_freeze"]["since"]               # recorded at start

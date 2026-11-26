@@ -99,39 +99,6 @@ sources:
       # (discovery queries from src/discovery); a line of work with a preset
       # (config/presets/) gets that preset's queries. List queries here to override.
 
-  - name: eures
-    type: eures
-    domain: "eures.europa.eu"
-    careers_url: "https://europa.eu/eures/api/jv-searchengine/public/jv-search/search"
-    ats: null
-    board_identifier: null
-    active: true
-    # Free, unauthenticated. The same public POST API used by the EURES SPA.
-    # robots.txt (eures.europa.eu, verified 2026-08-27): no /api/ restrictions.
-    # Coverage: 2.8M+ jobs across 31 EU/EEA countries (France 469K, Germany 646K,
-    # Netherlands 257K, Belgium 237K, Sweden 132K, …).
-    # Many French results originate from France Travail; deduplication handles the overlap.
-    # Pagination: 1-indexed 'page' field in the POST body.
-    # Rate limit: 2s between requests (conservative, no documented limit).
-    #
-    # Query strategy (2026-08-28):
-    #   France-first approach — all queries include FR to maximise jobs that
-    #   pass the location filter (France preferred_country).  The former broad
-    #   EU "developer" query for 8 non-France countries was removed: EURES
-    #   summary responses have no remote-flag, so those jobs all arrive with
-    #   remote=False + a known non-France country and are rejected by the
-    #   location filter.  Replacing that query with additional FR-scoped IT
-    #   terms increases both collected volume and filter yield simultaneously.
-    config:
-      max_pages_per_query: 5       # 5 pages × 50 results = 250 max per query
-      results_per_page: 50        # API hard cap: >50 returns HTTP 400
-      rate_limit_delay: 2.0
-      timeout: 30
-      # queries: none by default. The collector searches what the profile asks for
-      # (discovery queries from src/discovery); a line of work with a preset
-      # (config/presets/) gets that preset's queries. List queries here to override.
-      default_location_codes: ["fr"]  # country codes for discovery queries
-
   - name: hellowork
     type: hellowork
     domain: "hellowork.com"
@@ -139,8 +106,8 @@ sources:
     ats: null
     board_identifier: null
     active: false
-    # DECOUPLED FROM THE MAIN PIPELINE RUN (2026-09-05), same pattern as
-    # LinkedIn: active is false here so the normal per-run collector loop
+    # DECOUPLED FROM THE MAIN PIPELINE RUN (2026-09-05):
+    # active is false here so the normal per-run collector loop
     # (src/pipeline/orchestrator.py's ThreadPoolExecutor over active_sources)
     # never invokes this synchronously -- a ~30 minute collection would
     # otherwise be added to every pipeline run (which otherwise takes only
@@ -150,8 +117,7 @@ sources:
     # (config/schedules.yaml: hellowork_daily), writing results into
     # src/hellowork/staging.py's HelloWorkStagingStorage. The next pipeline
     # run then snapshots whatever is waiting there in ~0s (src/api/runner.py)
-    # instead of waiting on a live scan -- see src/linkedin/staging.py for
-    # the original version of this pattern.
+    # instead of waiting on a live scan.
     #
     # No public API/RSS (robots.txt disallows /api/ and /rss/, verified
     # 2026-09-05). Discovery via role ("metier") listing pages (allowed by

@@ -1,8 +1,7 @@
 """Indeed job collector through python-jobspy (update plan F6.3).
 
 Indeed has no public API (the Publisher API ended). Every open tool reads the mobile
-GraphQL endpoint of Indeed's iOS app, and python-jobspy (MIT licence, already a
-dependency of the LinkedIn scanner) ships the client and the app key. Its maintainers
+GraphQL endpoint of Indeed's iOS app, and python-jobspy (MIT licence) ships the client and the app key. Its maintainers
 track key and schema changes, so this project handles no Indeed credential and the user
 configures nothing.
 
@@ -104,8 +103,7 @@ class _ErrorCollector(logging.Handler):
 
 @contextmanager
 def _jobspy_errors() -> Iterator[list[str]]:
-    """ERROR messages jobspy's Indeed scraper logs during the block (the same pattern as
-    src/linkedin/scanner.py::_jobspy_errors)."""
+    """ERROR messages jobspy's Indeed scraper logs during the block."""
     collector = _ErrorCollector()
     loggers = [logging.getLogger(name) for name in _JOBSPY_LOGGERS]
     for lg in loggers:

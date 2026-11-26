@@ -1,5 +1,5 @@
 # Runtime dependencies bundled by the Windows installer (packaging/windows/build.ps1).
-# The project's dependencies plus the [linkedin] extra, resolved once on CPython 3.12 x64
+# The project's dependencies plus the [indeed] extra, resolved once on CPython 3.12 x64
 # and pinned so a rebuild installs the same versions. Regenerate after changing
 # pyproject.toml: see docs/windows-installer.md, "Updating the pinned dependencies".
 # build.ps1 installs with --require-hashes; the hashes come from
