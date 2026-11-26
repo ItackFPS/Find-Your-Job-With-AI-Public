@@ -75,7 +75,6 @@ from src.scheduler.handlers import (  # noqa: F401  (re-exported: callers import
     PIPELINE_POLL_SECONDS,
     DispatchResult,
     HelloWorkHandler,
-    LinkedInHandler,
     PipelineHandler,
     SourceHandler,
     _flag,
@@ -92,6 +91,11 @@ POLL_INTERVAL = 60  # seconds between scheduler loop ticks
 MAX_RETRY_BACKOFF_SECONDS = 6 * 3600
 # The handler key of the main pipeline (PipelineHandler); every other handler is a scan.
 PIPELINE_SOURCE_ID = "pipeline"
+
+# Sources whose scanner was removed (LinkedIn, owner decision 2026-11-24). A schedule an earlier
+# release stored for one stays in the database (nothing is deleted); it has no handler, so it is
+# never dispatched, and it is left out of the status the interface lists.
+REMOVED_SCHEDULE_SOURCES: frozenset[str] = frozenset({"linkedin"})
 
 
 # ---------------------------------------------------------------------------
@@ -233,6 +237,8 @@ class SchedulerService:
             background_on = self._background_enabled()
             result = []
             for defn in defs:
+                if defn.source_id in REMOVED_SCHEDULE_SOURCES:
+                    continue
                 handler = self._handlers.get(defn.source_id)
                 last = storage.get_last_execution(defn.id)
                 # Daily in effect: what the user sees as "runs every day" (issue #82).
@@ -594,7 +600,7 @@ class SchedulerService:
         When pipeline_runner is configured, a genuinely completed dispatch
         (result.completed and run_ref is not None) automatically triggers a
         pipeline run.  This is generic — it applies to every registered
-        source handler, not just LinkedIn.
+        source handler, not just HelloWork.
         """
         # Any dispatch — scheduled, manual or resume — picks up an interrupted
         # checkpoint if one is present, so remember it as already dispatched:
@@ -692,7 +698,7 @@ class SchedulerService:
                 # through the full pipeline without manual intervention.  Only once
                 # every registered scan handler is idle — the pipeline does its own
                 # heavy writes to the same jobs.db file, and starting it while a
-                # sibling scan (e.g. LinkedIn) is still running caused sustained
+                # sibling scan (e.g. HelloWork) is still running caused sustained
                 # "database is locked" contention for the rest of that scan.  When
                 # a sibling is still busy, skip here: that sibling's own completion
                 # will re-run this same check and trigger the pipeline then.

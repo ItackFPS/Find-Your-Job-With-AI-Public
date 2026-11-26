@@ -8,7 +8,7 @@ import { ToastProvider } from '../../components'
 import Jobs from '../Jobs'
 
 const job = (id: string, title: string, flags: string[] = []) => ({
-  id, source: 'eures', title, company: 'ACME', location: 'Lyon', status: 'active', saved: false, hidden: false,
+  id, source: 'bundesagentur', title, company: 'ACME', location: 'Lyon', status: 'active', saved: false, hidden: false,
   score: flags.length ? {
     deterministic_score: 0.7, semantic_score: 0.5, final_score: 0.7, factors: {}, run_id: 'r', score_100: 70,
     tier: 'relevant', weak_penalty: 0.1,

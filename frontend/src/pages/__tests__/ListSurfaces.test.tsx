@@ -19,7 +19,7 @@ vi.mock('../../hooks/useVisibleExposure', () => ({
 }))
 
 const job = (id: string, title: string) => ({
-  id, source: 'eures', title, company: 'ACME', location: 'Lyon', status: 'active', score: null,
+  id, source: 'bundesagentur', title, company: 'ACME', location: 'Lyon', status: 'active', score: null,
   saved: false, hidden: false,
 })
 const posts: Array<{ url: string; body: Record<string, unknown> }> = []

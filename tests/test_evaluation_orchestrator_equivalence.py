@@ -51,7 +51,7 @@ def captured(tmp_path_factory):
     with patch.object(scoring, "score_jobs_with_breakdown", spy), \
             patch.object(scoring, "compute_esco_synonym_map", lambda skills, **k: {}):
         run_pipeline(db_path=str(tmp / "t.db"), config_dir=str(cfg),
-                     prefetched_linkedin_jobs=ds.build_jobs())
+                     prefetched_hellowork_jobs=ds.build_jobs())
     assert "scored" in out, "orchestrator never reached the scoring stage"
     return out["scored"]
 

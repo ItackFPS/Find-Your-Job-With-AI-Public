@@ -256,7 +256,6 @@ def run_pipeline(
     config_dir: str = "config",
     progress_callback: ProgressCallback | None = None,
     use_ai: bool = False,
-    prefetched_linkedin_jobs: "list[Any] | None" = None,
     prefetched_hellowork_jobs: "list[Any] | None" = None,
     run_id: str | None = None,
 ) -> PipelineResult:
@@ -554,7 +553,7 @@ def run_pipeline(
         # Run collectors in parallel. Each collector manages its own rate
         # limiting, so concurrent execution is safe. max_workers=6 keeps
         # total concurrency reasonable while letting independent sources
-        # (e.g. Lever companies and EURES) overlap their I/O wait.
+        # (e.g. Lever companies and France Travail) overlap their I/O wait.
         # Collection is network-bound and naturally completes one source at a
         # time (as_completed below), so its "item" is a source, not a job —
         # there is no way to know the total job count in advance (that's the
@@ -588,25 +587,8 @@ def run_pipeline(
 
         stats.errors.extend(settle_breakers(selection, stats.by_source, db_path))
 
-        # Inject pre-collected LinkedIn jobs from the staging snapshot.
-        # These arrive as proper Job objects, bypassing the collector executor,
-        # so the pipeline never waits for LinkedIn collection.
-        if prefetched_linkedin_jobs:
-            all_jobs.extend(prefetched_linkedin_jobs)
-            stats.by_source["linkedin"] = {
-                "collected": len(prefetched_linkedin_jobs),
-                "accepted": 0,
-                "errors": 0,
-                "from_staging": True,
-                "status": "completed",
-            }
-            logger.info(
-                "LinkedIn: injected %d pre-collected job(s) from staging snapshot.",
-                len(prefetched_linkedin_jobs),
-            )
-
-        # Inject pre-collected HelloWork jobs from the staging snapshot, same
-        # mechanism as LinkedIn above -- HelloWork's own ~30 minute collection
+        # Inject pre-collected HelloWork jobs from the staging snapshot. They arrive as
+        # Job objects, bypassing the collector executor -- HelloWork's own ~30 minute collection
         # runs on its own daily schedule (src/hellowork/scanner.py), never
         # inside this pipeline run.
         if prefetched_hellowork_jobs:
@@ -1074,7 +1056,7 @@ def run_pipeline(
                         continue  # only a clean collection advances the checkpoint
                     if source_stat.get("from_staging"):
                         # Real collection happens on that source's own separate
-                        # schedule (LinkedIn/HelloWork scanners), not in this
+                        # schedule (HelloWork scanner), not in this
                         # pipeline run — mirrors source_health.py's own
                         # from_staging exclusion.
                         continue
@@ -1644,9 +1626,9 @@ def _stage_reporter(
     return _report
 
 
-# LinkedIn and HelloWork reach a run only as their newly staged offers, not as a full
-# listing: a missing offer proves nothing, so they never count a miss (issue #86).
-EXPIRY_EXCLUDED_SOURCES = frozenset({"linkedin", "hellowork"})
+# HelloWork reaches a run only as its newly staged offers, not as a full listing: a
+# missing offer proves nothing, so it never counts a miss (issue #86).
+EXPIRY_EXCLUDED_SOURCES = frozenset({"hellowork"})
 DEFAULT_EXPIRE_AFTER_MISSED_RUNS = 3
 DEFAULT_EXPIRE_AFTER_DAYS_UNSEEN = 30
 

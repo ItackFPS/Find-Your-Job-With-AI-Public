@@ -389,9 +389,8 @@ class TestResumableCheckpointHooks:
 
 
 class TestGracefulShutdown:
-    """Regression coverage for shutdown_event, mirroring the LinkedIn scanner
-    solution (see TestGracefulShutdown in tests/test_linkedin_scanner.py):
-    same lifecycle semantics -- checked between units of work, never marks a
+    """Regression coverage for shutdown_event (first written for the since
+    removed LinkedIn scanner): lifecycle semantics -- checked between units of work, never marks a
     partially-fetched unit as done, never touches checkpoint save/load
     itself. Here the checkpointed unit is a metier slug, not a page, so a
     mid-slug stop cannot report partial credit for that slug (on_slug_done

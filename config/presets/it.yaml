@@ -169,37 +169,6 @@ discovery:
         location: France
       - keyword: alternance développeur
         location: France
-    eures:
-      queries:
-      - keyword: développeur logiciel
-        location_codes:
-        - fr
-      - keyword: ingénieur informatique
-        location_codes:
-        - fr
-      - keyword: développeur web
-        location_codes:
-        - fr
-      - keyword: cybersécurité
-        location_codes:
-        - fr
-      - keyword: data
-        location_codes:
-        - fr
-      - keyword: devops
-        location_codes:
-        - fr
-      - keyword: software engineer
-        location_codes:
-        - fr
-      - keyword: developer
-        location_codes:
-        - fr
-      - keyword: software engineer
-        location_codes:
-        - be
-        - lu
-        - ch
     france_travail_web:
       occupations:
         software_development:
@@ -276,44 +245,6 @@ discovery:
         cybersécurité:
         - s28m25
         - s6m3
-    linkedin:
-      queries:
-      - search_term: cloud engineer
-        location: France
-        results_wanted: 50
-      - search_term: devops engineer
-        location: France
-        results_wanted: 50
-      - search_term: backend developer
-        location: France
-        results_wanted: 50
-      - search_term: software engineer
-        location: France
-        results_wanted: 50
-      - search_term: cybersecurity engineer
-        location: France
-        results_wanted: 50
-      - search_term: network engineer
-        location: France
-        results_wanted: 50
-      - search_term: systems administrator
-        location: France
-        results_wanted: 50
-      - search_term: support informatique
-        location: France
-        results_wanted: 50
-      - search_term: automation engineer
-        location: France
-        results_wanted: 50
-      - search_term: développeur backend
-        location: France
-        results_wanted: 50
-      - search_term: ingénieur devops
-        location: France
-        results_wanted: 50
-      - search_term: ingénieur cybersécurité
-        location: France
-        results_wanted: 50
     hellowork:
       domains:
       - informatique

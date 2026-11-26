@@ -140,7 +140,6 @@ orchestrator loads collectors dynamically based on the `type` field in
 |---|---|---|
 | `france_travail` | `france_travail.py` | Active — OAuth2 REST API, bounded concurrency, exhaustive pagination |
 | `indeed` | `indeed.py` | Active — unofficial mobile GraphQL API, cursor-based pagination |
-| `eures` | `eures.py` | Active — public REST API |
 | `bundesagentur` | `bundesagentur.py` | Disabled — Germany-only, fails this project's location filter |
 | `arbetsformedlingen` | `arbetsformedlingen.py` | Disabled — Sweden-only, same reason |
 | `hellowork` | `hellowork.py` | Disabled in the registry — production HelloWork collection uses the separate scanner below |
@@ -149,14 +148,12 @@ orchestrator loads collectors dynamically based on the `type` field in
 | `smartrecruiters` | `smartrecruiters.py` | Registered, working, not configured |
 | `workingnomads` | `workingnomads.py` | Registered, working, not configured |
 | `remote` / `rss` | `remote.py` | Generic RSS/REST collector, registered under both type names, not currently configured |
-| — | `experimental/linkedin.py` | Quarantined — not in the registry, targets a nonexistent endpoint, cannot be enabled via config |
 
-Two sources are collected by fully independent scanner subsystems instead of through
+One source is collected by an independent scanner subsystem instead of through
 this registry:
 
 | Scanner | Module | Config | Notes |
 |---|---|---|---|
-| LinkedIn | `src/linkedin/scanner.py` | `config/linkedin.yaml` | Uses `python-jobspy` (lazy import, `linkedin` extra); own staging DB + checkpoint/resume |
 | HelloWork | `src/hellowork/scanner.py` | — | Own daily schedule, own staging DB |
 
 Both bridge back into the main pipeline's job set via a `StagedSourceAdapter`.
@@ -290,7 +287,7 @@ Both stages cache results keyed by job content hash + profile version
 - Seeds the bundled ESCO dataset if the ESCO database is empty.
 - Starts the generic background scheduler.
 - Exposes REST endpoints under `/api/` for jobs, pipeline control, profile, dashboard,
-  ESCO, departments, the LinkedIn/HelloWork scanners, and the scheduler.
+  ESCO, departments, the HelloWork scanner, and the scheduler.
 - Serves the built React frontend as a SPA from `frontend/dist/` in production, if
   present.
 - `GET /api/lab/*` (`src/api/routes/lab.py`, **Lab** page) shows evaluation run results
@@ -316,7 +313,7 @@ styling uses plain CSS custom properties, not a CSS framework.
 A single SQLite database, `data/jobs.db` (WAL mode, `synchronous=NORMAL`,
 `busy_timeout=5000ms`), holds jobs (+ FTS5 index), pipeline run history, per-run job
 scores, rejection records, source checkpoints, embedding caches, personalization data,
-notification history (kept, no longer written since the Discord/n8n removal), and the LinkedIn/HelloWork staging tables. `data/esco.db` holds
+notification history (kept, no longer written since the Discord/n8n removal), the HelloWork staging tables, and the LinkedIn staging tables left by the removed scanner (no longer written). `data/esco.db` holds
 the ESCO taxonomy separately. There is no versioned migration framework: schema
 evolution uses idempotent `ALTER TABLE ADD COLUMN` checks plus a small ledger of
 one-time named data migrations already applied. `src/storage/migrate.py` additionally
@@ -338,6 +335,5 @@ the local file (`src/config_files.py`).
 | `config/scoring.yaml` | Score weights and gate thresholds |
 | `config/semantic_config.yaml` | Embedding model, similarity weight/threshold, normalization anchors |
 | `config/personalization.yaml` | Feedback weights, feature weights, adjustment bounds |
-| `config/linkedin.yaml` | LinkedIn background scanner settings |
 | `config/schedules.yaml` | Background scheduler definitions |
 | `config/retention.yaml` | Pipeline-run history retention policy |

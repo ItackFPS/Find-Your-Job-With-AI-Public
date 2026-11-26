@@ -1,7 +1,7 @@
 """Scanner routes do not block the event loop (Phase B B10, P-012).
 
 A route declared ``async def`` runs on the event loop: a synchronous SQLite call inside it stops every
-other request until it returns. The LinkedIn and HelloWork routes call synchronous staging storage, so
+other request until it returns. The HelloWork routes call synchronous staging storage, so
 they are plain ``def`` routes, which FastAPI runs in its thread pool. This test serves them on a real
 loopback server with a staging read that takes 0.8 s, and checks that another request is answered
 meanwhile. No network beyond loopback; no database.
@@ -12,7 +12,6 @@ from __future__ import annotations
 import http.client
 import threading
 import time
-from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI
@@ -36,19 +35,15 @@ class _Scanner:
 
 
 def _app() -> FastAPI:
-    from src.api.routes import hellowork, linkedin
+    from src.api.routes import hellowork
 
     app = FastAPI()
-    app.include_router(linkedin.router)
     app.include_router(hellowork.router)
 
     @app.get("/ping")
     def ping() -> dict:
         return {"ok": True}
 
-    app.state.linkedin_config = SimpleNamespace(enabled=True)
-    app.state.linkedin_staging = _SlowStaging()
-    app.state.linkedin_scanner = None
     app.state.hellowork_staging = _SlowStaging()
     app.state.hellowork_scanner = _Scanner()
     return app
@@ -76,8 +71,7 @@ def _get(port: int, path: str) -> int:
     return conn.getresponse().status
 
 
-@pytest.mark.parametrize("path", ["/api/linkedin/status", "/api/linkedin/scans",
-                                  "/api/hellowork/status", "/api/hellowork/scans"])
+@pytest.mark.parametrize("path", ["/api/hellowork/status", "/api/hellowork/scans"])
 def test_a_slow_staging_read_does_not_hold_up_other_requests(port: int, path: str) -> None:
     slow = threading.Thread(target=_get, args=(port, path))
     slow.start()

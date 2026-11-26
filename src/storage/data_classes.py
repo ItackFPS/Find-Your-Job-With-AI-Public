@@ -64,7 +64,7 @@ JOBS_DB_TABLES: dict[str, DataClass] = {
     "job_provenance": "public",
     "strategy_versions": "public",
     "ai_analysis": "public",
-    "linkedin_staging": "public",
+    "linkedin_staging": "public",          # left by the removed LinkedIn scanner; no longer written
     "hellowork_staging": "public",
     # -- operational
     "pipeline_runs": "operational",
@@ -75,7 +75,7 @@ JOBS_DB_TABLES: dict[str, DataClass] = {
     "sources": "operational",
     "schedule_definitions": "operational",
     "schedule_executions": "operational",
-    "linkedin_scan_runs": "operational",
+    "linkedin_scan_runs": "operational",   # left by the removed LinkedIn scanner; no longer written
     "linkedin_scan_checkpoint": "operational",
     "hellowork_scan_runs": "operational",
     "hellowork_scan_checkpoint": "operational",

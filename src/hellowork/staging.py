@@ -1,8 +1,7 @@
 """Persistent HelloWork staging storage.
 
-Mirrors src/linkedin/staging.py's design (see that module's docstring for the
-full rationale) so that HelloWork's ~30-minute collection runs decoupled from
-the main pipeline run, the same way LinkedIn's does:
+HelloWork's ~30-minute collection runs decoupled from the main pipeline run:
+the scanner stages what it finds, and each pipeline run takes what is waiting.
 
   waiting      — discovered by the scanner, ready for the next pipeline run
   snapshotted  — locked into a specific pipeline run (snapshot_run_id is set)
@@ -17,7 +16,7 @@ State transitions:
   mark_remaining_as_processed:   snapshotted  -> processed     (job not stored)
   reset_snapshot(run_id)     :   snapshotted  -> waiting       (pipeline failure)
 
-Simpler than LinkedIn's staging in one respect: HelloWork's collector fetches
+HelloWork's collector fetches
 each job's full JobPosting JSON-LD in one pass (title/company/location/
 description all at once), so there is no "partial record, description
 fetched later" state to track -- a staged record is always complete.
@@ -25,7 +24,7 @@ Records are never deleted; re-discovery of an already-terminal (transferred/
 processed) job only refreshes last_seen_at, so a job is never reprocessed
 indefinitely once the pipeline has already decided its fate.
 
-Thread safety: identical to LinkedIn's -- the scanner holds its own
+Thread safety: the scanner holds its own
 _scan_lock while scanning (one writer at a time), PipelineRunner._lock
 prevents concurrent snapshot_waiting() calls, and SQLite WAL mode lets the
 scanner insert rows while the pipeline reads snapshotted rows.
@@ -60,8 +59,7 @@ logger = logging.getLogger(__name__)
 class HelloWorkStagingStorage:
     """SQLite storage for HelloWork staging records and scan run metadata."""
 
-    # See Storage._initialized_paths in src/storage/sqlite.py / the matching
-    # guard in src/linkedin/staging.py: a fresh instance is constructed and
+    # See Storage._initialized_paths in src/storage/sqlite.py: a fresh instance is constructed and
     # init_db()'d on every pipeline run (src/api/staged_sources.py), so this
     # avoids an extra write transaction against hellowork_staging on every
     # run once the schema already exists.
@@ -79,7 +77,7 @@ class HelloWorkStagingStorage:
             self._conn.row_factory = sqlite3.Row
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.execute("PRAGMA synchronous=NORMAL")
-            # See src/linkedin/staging.py for why this is needed: several
+            # busy_timeout is needed because several
             # modules open their own connection to the same jobs.db file.
             self._conn.execute("PRAGMA busy_timeout=5000")
         return self._conn
@@ -232,8 +230,7 @@ class HelloWorkStagingStorage:
     def snapshot_waiting(self, run_id: str) -> list[dict[str, Any]]:
         """Atomically lock all waiting jobs into a pipeline run snapshot.
 
-        Identical mechanism to LinkedInStagingStorage.snapshot_waiting: a
-        single atomic UPDATE, then a SELECT of the just-locked rows.
+        A single atomic UPDATE, then a SELECT of the just-locked rows.
         """
         conn = self._get_conn()
         conn.execute(

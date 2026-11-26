@@ -1,6 +1,6 @@
 """Regression tests for HelloWork job persistence across pipeline runs.
 
-Mirrors tests/test_linkedin_persistence.py: the runner must (1) snapshot
+The runner must (1) snapshot
 waiting HelloWork staging rows into the pipeline run, (2) re-inject
 previously stored active HelloWork jobs so they don't disappear from the
 API between scans, and (3) finalize the snapshot (transferred/processed on
@@ -172,6 +172,66 @@ def tmp_db(tmp_path: Path) -> str:
     s.init_db()
     s.close()
     return str(tmp_path / "test.db")
+
+
+# ---------------------------------------------------------------------------
+# Storage.get_active_jobs_by_source
+# ---------------------------------------------------------------------------
+
+
+class TestGetActiveJobsBySource:
+    """Storage.get_active_jobs_by_source (used by src/pipeline/carryover.py for every source)."""
+
+    @pytest.fixture
+    def storage(self, tmp_path: Path):
+        from src.storage.sqlite import Storage
+        s = Storage(db_path=str(tmp_path / "test.db"))
+        s.init_db()
+        yield s
+        s.close()
+
+    @pytest.fixture
+    def _conn(self, storage):
+        return storage._get_conn()
+
+    def test_returns_active_jobs(self, storage, _conn):
+        row = _make_job_row("id-1", "hw-111", status="active")
+        _insert_job(_conn, row)
+        jobs = storage.get_active_jobs_by_source("hellowork")
+        assert len(jobs) == 1
+        assert jobs[0].id == "id-1"
+
+    def test_excludes_inactive_jobs(self, storage, _conn):
+        _insert_job(_conn, _make_job_row("id-a", "hw-aaa", status="active"))
+        _insert_job(_conn, _make_job_row("id-b", "hw-bbb", status="inactive"))
+        jobs = storage.get_active_jobs_by_source("hellowork")
+        assert len(jobs) == 1
+        assert jobs[0].id == "id-a"
+
+    def test_exclude_ids_param(self, storage, _conn):
+        _insert_job(_conn, _make_job_row("id-1", "hw-111", status="active"))
+        _insert_job(_conn, _make_job_row("id-2", "hw-222", status="active"))
+        jobs = storage.get_active_jobs_by_source("hellowork", exclude_ids={"id-1"})
+        assert len(jobs) == 1
+        assert jobs[0].id == "id-2"
+
+    def test_filters_by_source(self, storage, _conn):
+        _insert_job(_conn, _make_job_row("id-hw", "hw-111", source="hellowork", status="active"))
+        ft_row = _make_job_row("id-ft", "ft-999", source="france-travail", status="active")
+        ft_row["source_job_id"] = "ft-999"
+        _insert_job(_conn, ft_row)
+        jobs = storage.get_active_jobs_by_source("hellowork")
+        assert len(jobs) == 1
+        assert jobs[0].source == "hellowork"
+
+    def test_empty_when_no_jobs(self, storage):
+        jobs = storage.get_active_jobs_by_source("hellowork")
+        assert jobs == []
+
+    def test_empty_exclude_ids_still_returns_all(self, storage, _conn):
+        _insert_job(_conn, _make_job_row("id-1", "hw-111", status="active"))
+        jobs = storage.get_active_jobs_by_source("hellowork", exclude_ids=set())
+        assert len(jobs) == 1
 
 
 # ---------------------------------------------------------------------------

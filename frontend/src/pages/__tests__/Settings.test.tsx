@@ -46,9 +46,9 @@ const scheduler: SchedulerStatus = {
       last_execution: { id: 'e1', trigger: 'startup', status: 'completed', started_at: '2026-10-30T07:00:00+00:00', finished_at: '2026-10-30T07:04:00+00:00', error: null },
     },
     {
-      id: 'linkedin_daily', source_id: 'linkedin', label: 'LinkedIn daily scan', enabled: true,
+      id: 'hellowork_daily', source_id: 'hellowork', label: 'HelloWork daily scan', enabled: true,
       startup_policy: 'when_opted_in', daily: false, due: false, next_run_at: null, is_running: false,
-      last_execution: { id: 'e2', trigger: 'manual', status: 'failed', started_at: '2026-10-29T10:00:00+00:00', finished_at: '2026-10-29T10:01:00+00:00', error: 'linkedin did not complete (run_ref=x)' },
+      last_execution: { id: 'e2', trigger: 'manual', status: 'failed', started_at: '2026-10-29T10:00:00+00:00', finished_at: '2026-10-29T10:01:00+00:00', error: 'hellowork did not complete (run_ref=x)' },
     },
   ],
 }
@@ -128,10 +128,10 @@ describe('Settings › Sources and background', () => {
     renderPage()
     const search = await screen.findByRole('listitem', { name: 'Daily search' })
     expect(within(search).getByText(/next run:/i)).toBeInTheDocument()
-    const linkedin = screen.getByRole('listitem', { name: 'LinkedIn scan' })
-    expect(within(linkedin).getByText(/turn the source on below/i)).toBeInTheDocument()
-    expect(within(linkedin).getByText(/it did not finish/i)).toBeInTheDocument()
-    expect(within(linkedin).queryByText(/run_ref/)).not.toBeInTheDocument()
+    const scan = screen.getByRole('listitem', { name: 'HelloWork scan' })
+    expect(within(scan).getByText(/turn the source on below/i)).toBeInTheDocument()
+    expect(within(scan).getByText(/it did not finish/i)).toBeInTheDocument()
+    expect(within(scan).queryByText(/run_ref/)).not.toBeInTheDocument()
 
     await userEvent.click(within(search).getByRole('button', { name: /run now/i }))
     expect(calls).toContainEqual({ method: 'POST', url: '/scheduler/run/pipeline_daily', body: undefined })
@@ -146,8 +146,8 @@ describe('Settings › Sources and background', () => {
     const search = await screen.findByRole('listitem', { name: 'Daily search' })
     expect(within(search).getByText(/background collection is off/i)).toBeInTheDocument()
     expect(within(search).queryByText(/saved your profile/i)).not.toBeInTheDocument()
-    const linkedin = screen.getByRole('listitem', { name: 'LinkedIn scan' })
-    expect(within(linkedin).queryByText(/turn the source on below/i)).not.toBeInTheDocument()
+    const scan = screen.getByRole('listitem', { name: 'HelloWork scan' })
+    expect(within(scan).queryByText(/turn the source on below/i)).not.toBeInTheDocument()
   })
 
   it('groups sources by kind with their latest result', async () => {

@@ -17,10 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from src.api.staged_sources import (
-    HelloWorkStagedSourceAdapter,
-    LinkedInStagedSourceAdapter,
-)
+from src.api.staged_sources import HelloWorkStagedSourceAdapter
 from src.ops import monitor as ops_monitor
 from src.pipeline.orchestrator import run_pipeline
 from src.storage.runs import RunStorage, load_retention_config
@@ -157,14 +154,11 @@ class PipelineRunner:
         rs.init_db()
 
         # -- Staged-source snapshots --------------------------------------------
-        # LinkedIn and HelloWork are both collected outside the normal
-        # BaseCollector.collect() path and staged separately (see
-        # src/api/staged_sources.py for why and the exact snapshot/finalize
-        # contract). Iterating over adapters here replaces what used to be two
-        # copy-pasted snapshot blocks — each adapter still owns its own
+        # HelloWork is collected outside the normal BaseCollector.collect() path
+        # and staged separately (see src/api/staged_sources.py for why and the
+        # exact snapshot/finalize contract). Each adapter owns its own
         # source-specific enablement check and staging schema.
         staged_adapters: list["StagedSourceAdapter"] = [
-            LinkedInStagedSourceAdapter(self._db_path, self._config_dir),
             HelloWorkStagedSourceAdapter(self._db_path, self._config_dir),
         ]
         prefetched_by_source: dict[str, list[Any]] = {
@@ -188,7 +182,6 @@ class PipelineRunner:
                 config_dir=self._config_dir,
                 progress_callback=progress_callback,
                 use_ai=use_ai,
-                prefetched_linkedin_jobs=prefetched_by_source.get("linkedin", []),
                 prefetched_hellowork_jobs=prefetched_by_source.get("hellowork", []),
                 run_id=run_id,          # one id for the run row and the decisions journaled for it
             )
