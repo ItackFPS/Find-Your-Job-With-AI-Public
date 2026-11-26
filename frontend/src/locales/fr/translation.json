@@ -91,9 +91,6 @@
     "resuming": "Reprise…",
     "scanNow": "Lancer la collecte",
     "progress": {
-      "query": "Requête {query} / {total}",
-      "page": " · page {page}",
-      "pages": " · ~{done} / {total} pages",
       "metierPages": "{count, plural, one {# page métier traitée} other {# pages métier traitées}}"
     }
   },
@@ -196,17 +193,13 @@
       "status": "Statut"
     },
     "scanner": {
-      "linkedin": "Collecte LinkedIn",
       "hellowork": "Collecte HelloWork",
       "searching": "Recherche en cours…",
-      "pausingNextPage": "Pause à la page suivante…",
-      "etaUnknown": "Temps restant : pas encore assez de données",
       "etaRemaining": "environ {eta} restantes (estimation)",
       "finishing": "Finalisation…",
       "slow": "Plus long que d’habitude…",
       "paused": "En pause",
       "interrupted": "Interrompu — reprendra au dernier point de sauvegarde",
-      "percentDone": " · ~{percent} % effectués",
       "foundNew": "{found, number} trouvées · {new, number} nouvelles",
       "lastAttempt": "Dernière tentative le {date}",
       "noScans": "Aucune collecte pour l’instant.",
@@ -1016,32 +1009,13 @@
     "collectorErrors": "Erreurs de collecte ({count, number})",
     "ranked": "{count, plural, one {# classée} other {# classées}}",
     "foundNew": "{found, number} trouvées, {new, number} nouvelles",
-    "queryTable": {
-      "query": "Requête",
-      "pages": "Pages",
-      "raw": "Brutes",
-      "unique": "Uniques",
-      "filtered": "Filtrées",
-      "known": "Connues",
-      "staged": "Ajoutées",
-      "endedBy": "Arrêt",
-      "failedRetried": "échec (réessayée à la prochaine collecte)"
-    },
     "scanStats": {
-      "raw": "Collectées (brut)",
-      "unique": "Uniques",
-      "filteredOut": "Filtrées",
-      "known": "Déjà connues",
-      "staged": "Ajoutées (nouvelles)",
-      "failedQueries": "Requêtes en échec",
-      "queries": "REQUÊTES",
       "jobsFound": "Offres trouvées",
       "newStaged": "Nouvelles (ajoutées)",
       "metierPages": "Pages métier interrogées",
       "collectorErrors": "Erreurs de collecte",
       "collectionTime": "Durée de collecte"
     },
-    "linkedinHistory": "HISTORIQUE DES COLLECTES LINKEDIN",
     "helloworkHistory": "HISTORIQUE DES COLLECTES HELLOWORK",
     "history": "HISTORIQUE",
     "noScans": "Aucune collecte pour l’instant.",
@@ -1330,7 +1304,6 @@
       "subtitle": "Ce qui s'exécute seul chaque jour, la dernière exécution et la prochaine.",
       "labels": {
         "pipeline_daily": "Recherche quotidienne",
-        "linkedin_daily": "Analyse LinkedIn",
         "hellowork_daily": "Analyse HelloWork"
       },
       "runningNow": "En cours",
@@ -1369,7 +1342,6 @@
       "notCollected": "Non collectée",
       "choose": "Collecter depuis {name}",
       "risk": {
-        "linkedin": "LinkedIn n'autorise pas les recherches automatisées : il peut bloquer l'application un temps, et les recherches utilisent les mots-clés de votre profil.",
         "indeed": "Indeed n'autorise pas les recherches automatisées : il peut bloquer l'application un temps, et les recherches utilisent les mots-clés de votre profil.",
         "hellowork": "HelloWork ne propose pas d'accès pour les applications : l'application lit ses offres lentement (environ 30 minutes) et le site peut la bloquer.",
         "default": "Ce site ne propose pas d'accès pour les applications : il peut bloquer l'application un temps."
@@ -1390,12 +1362,10 @@
       "names": {
         "france-travail": "France Travail (API officielle)",
         "france-travail-web": "France Travail (site web)",
-        "eures": "EURES",
         "workingnomads": "Working Nomads",
         "bundesagentur": "Bundesagentur für Arbeit",
         "arbetsformedlingen": "Arbetsförmedlingen",
         "indeed": "Indeed",
-        "linkedin": "LinkedIn",
         "hellowork": "HelloWork"
       }
     },

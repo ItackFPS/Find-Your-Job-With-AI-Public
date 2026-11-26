@@ -769,7 +769,7 @@ def _compute_factors(
     on top of losing their own weight share. The other three (location,
     skills, experience) are pure "matter of degree" factors with no gate.
     """
-    # Structured seniority data (e.g. LinkedIn's job_level field), passed to
+    # Structured seniority data (e.g. a board's job_level field), passed to
     # _score_seniority_match as a fallback only — an explicit signal in the
     # job title always takes precedence. See _score_seniority_match's
     # docstring for why (source-supplied level facets are coarser and less

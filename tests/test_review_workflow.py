@@ -23,7 +23,7 @@ def _run(cfg: Path, db: Path) -> str:
     from src.pipeline.orchestrator import run_pipeline
 
     with patch("src.embeddings.embedding.EmbeddingService", _FakeEmbeddingService):
-        result = run_pipeline(db_path=str(db), config_dir=str(cfg), prefetched_linkedin_jobs=load_dataset(DS).build_jobs())
+        result = run_pipeline(db_path=str(db), config_dir=str(cfg), prefetched_hellowork_jobs=load_dataset(DS).build_jobs())
     assert result.status == "completed", result.error
     time.sleep(1.1)        # decisions are stamped to the second: keep runs and answers strictly ordered
     return result.run_id

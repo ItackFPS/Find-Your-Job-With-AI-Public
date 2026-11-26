@@ -120,7 +120,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # The API reads the real clock, so its offers are dated from now, not from the fixed NOW.
     _seed(db, now=datetime.now(UTC))
     for key, value in {"db_path": str(db), "runner": _Runner(False), "scheduler": None,
-                       "linkedin_scanner": None, "hellowork_scanner": None}.items():
+                       "hellowork_scanner": None}.items():
         monkeypatch.setitem(app.state._state, key, value)
     return TestClient(app)
 
@@ -153,8 +153,6 @@ def test_the_cleanup_waits_for_a_running_search(client, monkeypatch: pytest.Monk
 @pytest.mark.parametrize("method,path", [
     ("post", "/api/pipeline/run"),
     ("post", "/api/scheduler/run/pipeline_daily"),
-    ("post", "/api/linkedin/scan"),
-    ("post", "/api/linkedin/resume"),
     ("post", "/api/hellowork/scan"),
     ("post", "/api/hellowork/resume"),
 ])

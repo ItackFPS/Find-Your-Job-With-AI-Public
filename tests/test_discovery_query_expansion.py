@@ -563,7 +563,7 @@ class TestExpandAll:
         assert "architecture microservices" in queries
 
     def test_llm_called_once_per_source(self) -> None:
-        # expand_all expands 3 sources (france_travail, indeed, eures),
+        # expand_all expands 2 sources (france_travail, indeed),
         # each of which calls the LLM endpoint once.
         expander = DiscoveryQueryExpander(
             llm_endpoint="http://localhost:1234",
@@ -574,7 +574,7 @@ class TestExpandAll:
         with patch("requests.post", return_value=resp) as mock_post:
             expander.expand_all(_FULL_PROFILE)
 
-        assert mock_post.call_count == 3
+        assert mock_post.call_count == 2
 
     # --- New sources added by Phase 2 ---
 
@@ -584,10 +584,11 @@ class TestExpandAll:
         result = expander.expand_all(_FULL_PROFILE)
         assert "apec" not in result
 
-    def test_expand_all_returns_all_three_keys(self) -> None:
+    def test_expand_all_returns_both_keys(self) -> None:
         expander = DiscoveryQueryExpander(llm_endpoint=None)
         result = expander.expand_all(_IT_PROFILE)
-        assert set(result.keys()) >= {"france_travail", "indeed", "eures"}
+        assert set(result.keys()) >= {"france_travail", "indeed"}
+        assert "eures" not in result          # EURES was removed (owner decision, 2026-11-24)
 
     def test_expand_all_no_duplicates_in_any_source(self) -> None:
         expander = DiscoveryQueryExpander(llm_endpoint=None, max_queries=20)
@@ -819,7 +820,7 @@ class TestProfessionNeutralDiscovery:
 
 
 # ---------------------------------------------------------------------------
-# Tests: occupations, Indeed/EURES queries, preset collector config
+# Tests: occupations, Indeed queries, preset collector config
 # ---------------------------------------------------------------------------
 
 def _occupation_profile() -> JobSearchProfile:
@@ -837,27 +838,25 @@ class TestOccupationsAndCollectorConfig:
         return DiscoveryQueryExpander(llm_endpoint=None, max_queries=20)
 
     def test_occupations_become_french_queries_without_parentheses(self) -> None:
-        for source in ("france_travail", "indeed", "eures"):
+        for source in ("france_travail", "indeed"):
             result = self._expander().expand(_occupation_profile(), source=source, language="fr")
             assert result == ["infirmier responsable des soins généraux", "Electrician"], source
 
-    def test_indeed_and_eures_are_expanded_for_a_non_it_profile(self) -> None:
+    def test_indeed_is_expanded_for_a_non_it_profile(self) -> None:
         result = self._expander().expand_all(_NURSE_PROFILE)
         assert result["indeed"] == ["infirmier"]
-        assert result["eures"] == ["infirmier"]
 
-    def test_it_preset_supplies_indeed_and_eures_config(self) -> None:
+    def test_it_preset_supplies_indeed_config(self) -> None:
         expander = self._expander()
         indeed = expander.collector_config(_IT_PROFILE, "indeed")
         assert len(indeed["queries"]) == 23
         assert {"keyword": "devops engineer", "location": "France"} in indeed["queries"]
-        eures = expander.collector_config(_IT_PROFILE, "eures")
-        assert {"keyword": "software engineer", "location_codes": ["be", "lu", "ch"]} in eures["queries"]
+        assert expander.collector_config(_IT_PROFILE, "eures") == {}      # EURES was removed
         assert "web_development" in expander.collector_config(
             _IT_PROFILE, "france_travail_web")["occupations"]
 
     def test_no_preset_means_no_collector_config(self) -> None:
-        for source in ("indeed", "eures", "france_travail_web"):
+        for source in ("indeed", "france_travail_web"):
             assert self._expander().collector_config(_NURSE_PROFILE, source) == {}
 
     def test_collector_config_of_several_presets_is_merged(self, tmp_path) -> None:

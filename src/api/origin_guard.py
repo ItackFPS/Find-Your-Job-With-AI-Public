@@ -17,7 +17,7 @@ one) is not a browser request and is let through.
 
 OriginGuardMiddleware (issue #12) — CORS stops a foreign web page from
 *reading* responses, but a browser still *sends* "simple" requests — e.g. a
-body-less ``POST /api/linkedin/scan`` to 127.0.0.1 — so any site the user
+body-less ``POST /api/hellowork/scan`` to 127.0.0.1 — so any site the user
 visits could trigger scans or pipeline runs. This middleware refuses write
 methods under ``/api`` whose ``Origin`` header names another site. Comparing
 Origin with the request's own Host is only sound because the Host guard has

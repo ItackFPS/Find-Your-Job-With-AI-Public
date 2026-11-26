@@ -124,7 +124,6 @@ class. A shared retry/backoff/rate-limit layer lives in `src/collectors/base.py`
 |---|---|---|---|---|
 | France Travail | `france_travail` | Official REST API (OAuth2) | `FRANCE_TRAVAIL_CLIENT_ID`/`SECRET` | **Active** — exhaustive pagination, bounded concurrency (`max_workers`, default 4) |
 | Indeed | `indeed` | Unofficial (Indeed's mobile API, read through python-jobspy) | none; opt-in: `unofficial_sources.indeed` in `data/settings.json` (an older `INDEED_API_KEY` counts as opted in) | **Active when chosen** — jobspy pages each query |
-| EURES | `eures` | Public REST API | None | **Active** |
 | Bundesagentur für Arbeit | `bundesagentur` | REST API | None | Disabled — Germany-only; every result fails this project's location filter |
 | Arbetsförmedlingen | `arbetsformedlingen` | REST API | None | Disabled — Sweden-only, same reason |
 | HelloWork | `hellowork` | HTML + JSON-LD scraping | None | Disabled in the main registry — production HelloWork collection happens through the separate scanner below |
@@ -136,24 +135,23 @@ are tested, and work — they simply require a per-company board identifier that
 been configured yet. Add a source entry with the relevant `board_identifier` to enable
 one.
 
-### Quarantined (non-functional, kept for reference only)
+### Removed sources
 
-`src/collectors/experimental/` holds collector code that doesn't work and is explicitly
-excluded from the registry — currently a LinkedIn collector class that targets a
-nonexistent public endpoint. It cannot be enabled via configuration.
+EURES, LinkedIn (its scanner and the old quarantined collector class) and Jooble are not part of the
+application (owner decision, 2026-11-24). A `sources.yaml` entry with `type: eures` is skipped with a
+"removed" reason; offers stored from these sources stay in the database.
 
 ### Background scanners (outside the main collector registry)
 
-Two sources run as independent, decoupled subsystems rather than as part of the
-`config/sources.yaml`-driven collection stage — each has its own config file, staging
-database, and checkpoint/resume logic:
+One source runs as an independent, decoupled subsystem rather than as part of the
+`config/sources.yaml`-driven collection stage, with its own staging tables and
+checkpoint/resume logic:
 
 | Scanner | Config | Notes |
 |---|---|---|
-| **LinkedIn** (`src/linkedin/scanner.py`) | `config/linkedin.yaml` | Uses `python-jobspy` (the `linkedin` optional dependency); lazily imported with a clear install error if missing; enabled in the shipped `config/linkedin.yaml`; unofficial, opt-in: daily once chosen (`linkedin_daily` ships with `startup_policy: when_opted_in`); the first 429 stops the scan, which resumes from its checkpoint after a cooldown of 1 h doubling to 24 h, paced slower at first (F6.4). Wired into the API via `src/api/routes/linkedin.py` (`/api/linkedin/status`, `/scan`, `/pause`, `/resume`, `/scans`), not through `CollectorRegistry`. A scan can be paused and resumed from its last checkpoint (issue #81) |
-| **HelloWork** (`src/hellowork/scanner.py`) | — | Runs on its own daily schedule once chosen (`when_opted_in`), decoupled from the main pipeline; stops on the first 429 and resumes after a cooldown, like LinkedIn. Wired into the API via `src/api/routes/hellowork.py` (`/api/hellowork/status`, `/scan`, `/pause`, `/resume`, `/scans`); pausable/resumable like LinkedIn |
+| **HelloWork** (`src/hellowork/scanner.py`) | — | Runs on its own daily schedule once chosen (`when_opted_in`), decoupled from the main pipeline; stops on the first 429 and resumes after a cooldown of 1 h doubling to 24 h. Wired into the API via `src/api/routes/hellowork.py` (`/api/hellowork/status`, `/scan`, `/pause`, `/resume`, `/scans`); a scan can be paused and resumed from its last checkpoint |
 
-Both scanners write to their own staging tables; a `StagedSourceAdapter` bridges their
+The scanner writes to its own staging tables; a `StagedSourceAdapter` bridges its
 output back into the main pipeline as a regular source.
 
 ### Enabling a source
@@ -194,10 +192,10 @@ not undo. Expired offers are kept, hidden from `GET /api/jobs` unless `include_e
 
 Absence counts only after a complete collection (`sources_counting_misses`): the collector
 says it read every result of every query or board (`CollectorResult.listing_complete`: France
-Travail API with every query exhausted, EURES with every query ending before its page cap,
+Travail API with every query exhausted,
 Greenhouse, Lever, SmartRecruiters), with no error, no request cap, at least one offer and no
 yield anomaly. Sources that read a first page or the newest results (France Travail web shows
-20 offers per page, the one-page APIs, the feeds) and LinkedIn/HelloWork never count a miss;
+20 offers per page, the one-page APIs, the feeds) and HelloWork never count a miss;
 their offers expire by end date or user report only. Every offer collected counts as seen,
 including one that failed validation or was merged as a duplicate. Known gap: an offer found
 by a query or board the user later removed is still counted missing by a complete source.
@@ -263,7 +261,7 @@ grouped by route module in `src/api/routes/`:
 - **dashboard** — `GET /api/dashboard`
 - **esco** — `GET /api/esco/skills`, `GET /api/esco/occupations`, `GET /api/esco/status`
 - **departments** — `GET /api/departments`, `GET /api/departments/all`
-- **linkedin** / **hellowork** — `GET .../status`, `POST .../scan`, `GET .../scans`
+- **hellowork** — `GET .../status`, `POST .../scan`, `GET .../scans`
 - **scheduler** — `GET /api/scheduler/status`, `GET /api/scheduler/executions`, `POST /api/scheduler/run/{id}`
 - **feedback** — `GET /api/jobs/feedback/vocabulary`, `GET`/`POST /api/jobs/{id}/feedback`
 - **decisions** — `GET /api/jobs/{id}/decision`, `GET /api/decisions/review-queue`, `GET /api/decisions/{id}`,
@@ -304,7 +302,7 @@ A single SQLite database, **`data/jobs.db`**, in WAL mode (`synchronous=NORMAL`,
 `busy_timeout=5000ms`), holds nearly all application state: jobs (with an FTS5
 full-text index), pipeline run history, per-run job scores, rejection records, source
 checkpoints, embedding caches, personalization data, notification history (kept, no longer written), and the
-LinkedIn/HelloWork staging tables. A separate **`data/esco.db`** holds the ESCO skill
+HelloWork staging tables (and the LinkedIn ones left by the removed scanner). A separate **`data/esco.db`** holds the ESCO skill
 taxonomy. Both are created automatically on first run under `data/`, which is not
 tracked in git.
 

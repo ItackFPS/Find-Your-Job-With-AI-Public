@@ -1,12 +1,10 @@
 """Focused tests for the StagedSourceAdapter lifecycle (src/api/staged_sources.py).
 
 Uses fake staging stores (not real SQLite) to isolate the adapter's own
-snapshot/finalize/enablement logic from the actual LinkedInStagingStorage /
-HelloWorkStagingStorage implementations, which already have their own
-extensive test coverage (tests/test_linkedin_staging.py,
-tests/test_hellowork_staging.py) and integration coverage through
-PipelineRunner (tests/test_linkedin_persistence.py,
-tests/test_hellowork_persistence.py).
+snapshot/finalize/enablement logic from the actual HelloWorkStagingStorage
+implementation, which already has its own test coverage
+(tests/test_hellowork_staging.py) and integration coverage through
+PipelineRunner (tests/test_hellowork_persistence.py).
 """
 
 from __future__ import annotations
@@ -18,19 +16,18 @@ from typing import Any
 
 from src.api.staged_sources import (
     HelloWorkStagedSourceAdapter,
-    LinkedInStagedSourceAdapter,
     StagedSourceAdapter,
 )
 from src.models.job import Job
 
 
 def _chosen(tmp_path: Path) -> Path:
-    """A settings file where the user turned LinkedIn and HelloWork on (src/source_enablement.py:
+    """A settings file where the user turned HelloWork on (src/source_enablement.py:
     a staged source is on only when its config provides it AND the user chose it)."""
     import json
 
     path = tmp_path / "settings.json"
-    path.write_text(json.dumps({"unofficial_sources": {"linkedin": True, "hellowork": True}}), encoding="utf-8")
+    path.write_text(json.dumps({"unofficial_sources": {"hellowork": True}}), encoding="utf-8")
     return path
 
 
@@ -108,11 +105,6 @@ def _fake_row_to_job(row: dict[str, Any]) -> Job:
 # ---------------------------------------------------------------------------
 
 class TestProtocolConformance:
-    def test_linkedin_adapter_satisfies_protocol(self, tmp_path: Path):
-        adapter = LinkedInStagedSourceAdapter(db_path="x", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
-        assert isinstance(adapter, StagedSourceAdapter)
-        assert adapter.name == "linkedin"
-
     def test_hellowork_adapter_satisfies_protocol(self, tmp_path: Path):
         adapter = HelloWorkStagedSourceAdapter(db_path="x", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
         assert isinstance(adapter, StagedSourceAdapter)
@@ -120,157 +112,7 @@ class TestProtocolConformance:
 
 
 # ---------------------------------------------------------------------------
-# LinkedIn adapter
-# ---------------------------------------------------------------------------
-
-class TestLinkedInStagedSourceAdapter:
-    def _enable_linkedin(self, tmp_path: Path, enabled: bool = True) -> None:
-        (tmp_path / "linkedin.yaml").write_text(f"enabled: {str(enabled).lower()}\n", encoding="utf-8")
-
-    def _patch_stores(self, monkeypatch, fake_staging: FakeStaging, fake_job_store: FakeJobStore) -> None:
-        monkeypatch.setattr(
-            "src.linkedin.staging.LinkedInStagingStorage", lambda db_path: fake_staging
-        )
-        monkeypatch.setattr("src.linkedin.staging.staging_row_to_job", _fake_row_to_job)
-        monkeypatch.setattr("src.storage.sqlite.Storage", lambda db_path: fake_job_store)
-
-    def test_disabled_when_config_file_missing(self, tmp_path: Path, monkeypatch):
-        """No linkedin.yaml at all -> disabled, no staging store touched."""
-        fake_staging = FakeStaging("x")
-        fake_job_store = FakeJobStore("x")
-        self._patch_stores(monkeypatch, fake_staging, fake_job_store)
-
-        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
-        jobs = adapter.snapshot_for_run("run-1")
-
-        assert jobs == []
-        assert fake_staging.init_db_called is False
-        assert fake_staging.snapshot_calls == []
-
-    def test_disabled_when_enabled_false(self, tmp_path: Path, monkeypatch):
-        self._enable_linkedin(tmp_path, enabled=False)
-        fake_staging = FakeStaging("x")
-        fake_job_store = FakeJobStore("x")
-        self._patch_stores(monkeypatch, fake_staging, fake_job_store)
-
-        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
-        jobs = adapter.snapshot_for_run("run-1")
-
-        assert jobs == []
-        assert fake_staging.snapshot_calls == []
-
-    def test_enabled_snapshots_waiting_rows_only(self, tmp_path: Path, monkeypatch):
-        """Issue #253: the snapshot holds the newly staged rows only. Stored active offers are
-        carried by the pipeline (src/pipeline/carryover.py), so the adapter no longer reads them."""
-        self._enable_linkedin(tmp_path, enabled=True)
-        fake_staging = FakeStaging("x")
-        fake_staging.snapshot_rows = [_staging_row("new-1"), _staging_row("new-2")]
-        fake_job_store = FakeJobStore("x")
-        fake_job_store.active_jobs = [_job("existing-1")]
-        self._patch_stores(monkeypatch, fake_staging, fake_job_store)
-
-        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
-        jobs = adapter.snapshot_for_run("run-1")
-
-        ids = {j.id for j in jobs}
-        assert ids == {"new-1", "new-2"}
-        assert fake_staging.init_db_called is True
-        assert fake_staging.snapshot_calls == ["run-1"]
-        assert fake_job_store.calls == []
-
-    def test_the_run_carries_stored_offers_except_the_snapshot(self, tmp_path: Path):
-        """The carry-over the pipeline adds after the snapshot excludes the ids it already holds."""
-        from src.pipeline.carryover import load_carryover
-
-        self._enable_linkedin(tmp_path, enabled=True)
-        store = FakeJobStore("x")
-        store.active_jobs = [_job("dup-1"), _job("existing-1")]
-        jobs, _ = load_carryover(store, tmp_path, _chosen(tmp_path), exclude_ids={"dup-1"})  # type: ignore[arg-type]
-
-        assert ("linkedin", {"dup-1"}) in store.calls
-        assert "dup-1" not in {j.id for j in jobs}
-
-    def test_finalize_noop_when_no_snapshot_was_taken(self, tmp_path: Path, monkeypatch):
-        """Disabled (or nothing waiting) -> finalize must not touch anything,
-        even if called with succeeded=True."""
-        fake_staging = FakeStaging("x")
-        fake_job_store = FakeJobStore("x")
-        self._patch_stores(monkeypatch, fake_staging, fake_job_store)
-
-        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
-        adapter.snapshot_for_run("run-1")  # no linkedin.yaml -> disabled
-        adapter.finalize("run-1", {"x"}, succeeded=True)
-
-        assert fake_staging.transferred_calls == []
-        assert fake_staging.reset_calls == []
-
-    def test_finalize_on_success_marks_transferred_and_processed(self, tmp_path: Path, monkeypatch):
-        self._enable_linkedin(tmp_path, enabled=True)
-        fake_staging = FakeStaging("x")
-        fake_staging.snapshot_rows = [_staging_row("j1")]
-        fake_job_store = FakeJobStore("x")
-        self._patch_stores(monkeypatch, fake_staging, fake_job_store)
-
-        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
-        adapter.snapshot_for_run("run-1")
-        adapter.finalize("run-1", {"j1"}, succeeded=True)
-
-        assert fake_staging.transferred_calls == [("run-1", {"j1"})]
-        assert fake_staging.processed_calls == ["run-1"]
-        assert fake_staging.reset_calls == []
-
-    def test_finalize_on_failure_resets_snapshot(self, tmp_path: Path, monkeypatch):
-        self._enable_linkedin(tmp_path, enabled=True)
-        fake_staging = FakeStaging("x")
-        fake_staging.snapshot_rows = [_staging_row("j1")]
-        fake_job_store = FakeJobStore("x")
-        self._patch_stores(monkeypatch, fake_staging, fake_job_store)
-
-        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
-        adapter.snapshot_for_run("run-1")
-        adapter.finalize("run-1", set(), succeeded=False)
-
-        assert fake_staging.reset_calls == ["run-1"]
-        assert fake_staging.transferred_calls == []
-
-    def test_close_closes_the_staging_store(self, tmp_path: Path, monkeypatch):
-        self._enable_linkedin(tmp_path, enabled=True)
-        fake_staging = FakeStaging("x")
-        fake_job_store = FakeJobStore("x")
-        self._patch_stores(monkeypatch, fake_staging, fake_job_store)
-
-        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
-        adapter.snapshot_for_run("run-1")
-        adapter.close()
-
-        assert fake_staging.closed is True
-
-    def test_close_is_a_noop_when_never_snapshotted(self, tmp_path: Path):
-        """No exception when close() is called without ever calling snapshot_for_run."""
-        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
-        adapter.close()  # must not raise
-
-    def test_snapshot_failure_fails_open(self, tmp_path: Path, monkeypatch):
-        """Any exception during snapshotting must be swallowed — the run
-        continues with an empty job list for this source, never propagating."""
-        self._enable_linkedin(tmp_path, enabled=True)
-
-        def _boom(db_path):
-            raise RuntimeError("db locked")
-
-        monkeypatch.setattr("src.linkedin.staging.LinkedInStagingStorage", _boom)
-
-        adapter = LinkedInStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
-        jobs = adapter.snapshot_for_run("run-1")
-
-        assert jobs == []
-        adapter.close()  # must not raise either
-
-
-# ---------------------------------------------------------------------------
-# HelloWork adapter — mirrors the LinkedIn suite above, differing only in
-# its source-specific enablement check (sources.yaml registry lookup
-# instead of a dedicated linkedin.yaml enabled flag).
+# HelloWork adapter — its enablement check is a sources.yaml registry lookup.
 # ---------------------------------------------------------------------------
 
 class FakeSourceRegistry:
@@ -376,3 +218,35 @@ class TestHelloWorkStagedSourceAdapter:
 
         assert fake_staging.transferred_calls == []
         assert fake_staging.reset_calls == []
+
+    def test_close_closes_the_staging_store(self, tmp_path: Path, monkeypatch):
+        self._write_sources_yaml(tmp_path)
+        fake_staging = FakeStaging("x")
+        fake_staging.snapshot_rows = [_staging_row("hw-1")]
+        self._patch_stores(monkeypatch, fake_staging, FakeJobStore("x"), active=True)
+
+        adapter = HelloWorkStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
+        adapter.snapshot_for_run("run-1")
+        adapter.close()
+
+        assert fake_staging.closed is True
+
+    def test_close_is_a_noop_when_never_snapshotted(self, tmp_path: Path):
+        """No exception when close() is called without ever calling snapshot_for_run."""
+        adapter = HelloWorkStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
+        adapter.close()  # must not raise
+
+    def test_snapshot_failure_fails_open(self, tmp_path: Path, monkeypatch):
+        """Any exception during snapshotting is swallowed: the run continues with no job from
+        this source, never propagating."""
+        self._write_sources_yaml(tmp_path)
+        self._patch_stores(monkeypatch, FakeStaging("x"), FakeJobStore("x"), active=True)
+
+        def _boom(db_path):
+            raise RuntimeError("db locked")
+
+        monkeypatch.setattr("src.hellowork.staging.HelloWorkStagingStorage", _boom)
+
+        adapter = HelloWorkStagedSourceAdapter(db_path="db", config_dir=str(tmp_path), settings_path=_chosen(tmp_path))
+        assert adapter.snapshot_for_run("run-1") == []
+        adapter.close()  # must not raise either

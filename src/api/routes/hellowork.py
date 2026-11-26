@@ -6,7 +6,7 @@ POST /api/hellowork/pause   — pause the running scan at its next checkpoint
 POST /api/hellowork/resume  — resume a paused/interrupted scan from its checkpoint
 GET  /api/hellowork/scans   — scan run history
 
-Mirrors src/api/routes/linkedin.py. "Enabled" here means a 'hellowork' entry
+"Enabled" here means a 'hellowork' entry
 exists in config/sources.yaml (regardless of its `active` flag, which only
 gates the normal synchronous per-run collector loop — see
 config/sources.yaml's hellowork entry and src/hellowork/scanner.py).

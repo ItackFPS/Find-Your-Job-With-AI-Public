@@ -40,6 +40,6 @@ def test_forwarded_headers_do_not_make_a_rebinding_host_local(path):
 
 def test_forwarded_headers_do_not_make_a_foreign_origin_allowed():
     resp = _client("127.0.0.1:8000").post(
-        "/api/linkedin/scan", headers={**_FORGED, "Origin": "http://attacker.example"},
+        "/api/hellowork/scan", headers={**_FORGED, "Origin": "http://attacker.example"},
     )
     assert resp.status_code == 403

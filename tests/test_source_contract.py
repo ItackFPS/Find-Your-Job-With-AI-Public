@@ -237,7 +237,6 @@ _FEED_URL = "https://jobs.example.org/feed.rss"
 PUBLIC_PAGE_CONFIGS: dict[str, dict[str, Any]] = {
     "france_travail_web": {"occupations": _FT_OCCUPATIONS, "target_domains": ["web_development"], "departments": ["83"]},
     "hellowork": {"metier_slugs": ["developpeur"]},
-    "eures": {"queries": [{"keyword": "python", "location_codes": ["fr"]}], "max_pages_per_query": 1},
     "remote": {"type": "rss", "careers_url": _FEED_URL},
     "rss": {"type": "rss", "careers_url": _FEED_URL},
     "workingnomads": {},
@@ -380,7 +379,6 @@ def test_a_listing_that_genuinely_lists_no_offer_is_not_flagged(monkeypatch) -> 
 
 
 @pytest.mark.parametrize("name,body", [
-    ("eures", json.dumps({"numberRecords": 0, "jvs": [], "facets": {"pad": "x" * 5000}})),
     ("workingnomads", "[]" + " " * 5000),
 ])
 def test_well_formed_empty_answers_are_not_parser_changes(name: str, body: str, monkeypatch) -> None:  # noqa: ANN001
@@ -454,7 +452,7 @@ def test_robots_refusal_is_not_counted_as_a_request(monkeypatch) -> None:  # noq
     assert collector.health()["requests"] == 0 and collector.health()["robots_refused"] == 1
 
 
-# -- robots.txt Crawl-delay (audit D12: EURES asks for 10 s) --------------------------------------
+# -- robots.txt Crawl-delay (audit D12: europa.eu asks for 10 s) -----------------------------------
 
 EUROPA_ROBOTS = "User-agent: bingbot\nDisallow: /x/\n\nUser-agent: *\t# any\nDisallow: /cgi-bin/\nCrawl-delay: 10\n"
 

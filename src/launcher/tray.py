@@ -6,7 +6,7 @@ event — but the launcher runs in a worker thread while a tray icon owns the ma
 thread. So:
 
 * closing the dashboard window closes only the window process (src/launcher/window.py):
-  the backend, its scheduler and any LinkedIn/HelloWork scan keep running;
+  the backend, its scheduler and any HelloWork scan keep running;
 * the tray menu opens (or focuses) the window, pauses and resumes the scans, toggles
   "Start with Windows", opens the logs, and **Quit** stops everything the app started
   (scans stop at their next checkpoint);
@@ -40,7 +40,7 @@ HINT_MARKER = ".tray-hint-shown"
 # The default categories, used when the backend cannot be asked: one source of truth (src/app_settings.py,
 # standard library only, like the launcher).
 DEFAULT_CATEGORIES = dict(NOTIFICATION_DEFAULTS)
-SOURCES = {"linkedin": "LinkedIn", "hellowork": "HelloWork"}
+SOURCES = {"hellowork": "HelloWork"}
 RATE_LIMIT_MARKERS = ("429", "rate limit", "rate-limit", "rate_limit", "too many requests")
 
 
@@ -49,8 +49,8 @@ class RunWatcher:
     the user opted into (``GET /api/settings/notifications``; update plan F2.4):
 
     * ``strong_matches``: a search finished with offers in a "strong" tier or better;
-    * ``search_failed``: a search, or a LinkedIn/HelloWork scan, failed;
-    * ``source_paused``: a LinkedIn/HelloWork scan paused, or stopped on a rate limit (state
+    * ``search_failed``: a search, or a HelloWork scan, failed;
+    * ``source_paused``: a HelloWork scan paused, or stopped on a rate limit (state
       ``rate_limited``, F6.4, or an older failed run that names one);
     * ``saved_expiring``: TODO(F6.6), no saved-offer expiry data yet.
 
