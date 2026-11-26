@@ -4,7 +4,12 @@
       "ft_api_restricted": "Not required. The France Travail API is restricted and has no access set up here; the France Travail website and the other sources still run.",
       "indeed_off": "Indeed is off. It is an unofficial source (Indeed has no public API), so it only runs if you choose it, in Settings › Sources; the other sources still run.",
       "frozen": "Collection is paused while each source is checked (temporary). Your stored offers, saved offers and applications are kept. A source comes back only after it passes its checks and you turn it on.",
-      "removed": "This source was removed from the application; it is skipped, and offers it found stay saved."
+      "removed": "This source was removed from the application; it is skipped, and offers it found stay saved.",
+      "ft_auth_invalid_client": "France Travail refused the API credentials (invalid_client): check the client ID and secret on francetravail.io. France Travail is skipped for this run; the other sources still run.",
+      "ft_auth_invalid_scope": "France Travail refused the API subscription (invalid_scope): the application may have lost access to the job offers API. France Travail is skipped for this run; the other sources still run.",
+      "ft_outage": "France Travail's login service is unavailable (maintenance or server error). France Travail is skipped for this run and tried again at the next one; the other sources still run.",
+      "ft_network": "France Travail could not be reached (network error). France Travail is skipped for this run and tried again at the next one; the other sources still run.",
+      "ft_auth_failed": "France Travail authentication failed. France Travail is skipped for this run; the other sources still run."
     }
   },
   "common": {

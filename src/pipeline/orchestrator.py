@@ -330,8 +330,9 @@ def run_pipeline(
         # =================================================================
         # PREFLIGHT (mandatory, runs once before any collection)
         # France Travail is a collection source: an active source that
-        # cannot authenticate blocks the run (status FAILED). The check is
-        # skipped entirely when the source is inactive in sources.yaml.
+        # cannot authenticate is skipped for this run with its failure class
+        # (status DEGRADED, #303); the other sources still collect. The check
+        # is skipped entirely when the source is inactive in sources.yaml.
         # =================================================================
         _t_preflight = time.perf_counter()
         # The user's choice of unofficial sources lives next to the database (data/settings.json).

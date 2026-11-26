@@ -1906,3 +1906,150 @@ class TestFranceTravailSaturation:
             result = collector.collect()
 
         assert len(result.jobs) <= 5
+
+
+# ---------------------------------------------------------------------------
+# Tests: token renewal on 401 and token failure classes (#303)
+# ---------------------------------------------------------------------------
+
+
+def _token(value: str) -> MagicMock:
+    return _mock_httpx_response({"access_token": value, "expires_in": 1499})
+
+
+def _bearer(call: Any) -> str:
+    return call.kwargs["headers"]["Authorization"]
+
+
+class TestFranceTravailTokenRenewal:
+    def _collector(self, **cfg: Any) -> FranceTravailCollector:
+        return FranceTravailCollector(config={
+            "client_id": "id", "client_secret": "secret", "keywords": "infirmier", **cfg})
+
+    def test_401_gets_a_new_token_and_retries_once(self) -> None:
+        collector = self._collector()
+        jobs = _mock_httpx_response(_SAMPLE_JOB_RESPONSE)
+
+        with (
+            patch.object(httpx.Client, "post", side_effect=[_token("old"), _token("new")]) as post,
+            patch.object(httpx.Client, "get",
+                         side_effect=[_mock_httpx_error_response(401), jobs]) as get,
+        ):
+            result = collector.collect()
+
+        assert post.call_count == 2
+        assert [_bearer(c) for c in get.call_args_list] == ["Bearer old", "Bearer new"]
+        assert result.errors == []
+        assert len(result.jobs) == len(_SAMPLE_JOB_RESPONSE["resultats"])
+
+    def test_second_401_after_renewal_is_reported_not_looped(self) -> None:
+        collector = self._collector()
+
+        with (
+            patch.object(httpx.Client, "post", side_effect=[_token("old"), _token("new")]) as post,
+            patch.object(httpx.Client, "get", return_value=_mock_httpx_error_response(401)) as get,
+        ):
+            result = collector.collect()
+
+        assert post.call_count == 2
+        assert get.call_count == 2
+        assert result.jobs == []
+        assert len(result.errors) == 1 and "401" in result.errors[0]
+        assert result.listing_complete is False
+
+    def test_failed_renewal_names_the_failure_class(self) -> None:
+        collector = self._collector()
+        refused = httpx.Response(400, request=httpx.Request("POST", "https://x"),
+                                 text='{"error":"invalid_client"}')
+
+        with (
+            patch.object(httpx.Client, "post", side_effect=[_token("old"), refused]),
+            patch.object(httpx.Client, "get", return_value=_mock_httpx_error_response(401)),
+        ):
+            result = collector.collect()
+
+        assert result.jobs == []
+        assert len(result.errors) == 1
+        assert "ft_auth_invalid_client" in result.errors[0]
+        assert "secret" not in result.errors[0]
+
+    def test_concurrent_workers_share_one_renewal(self) -> None:
+        """Four query workers all holding the expired token: one new token request, not four."""
+        import threading
+
+        collector = self._collector(discovery_queries=["a", "b", "c", "d"], max_workers=4)
+        lock = threading.Lock()
+        seen_new: set[str] = set()
+
+        def fake_get(*_args: Any, **kwargs: Any) -> MagicMock:
+            bearer = kwargs["headers"]["Authorization"]
+            if bearer == "Bearer old":
+                return _mock_httpx_error_response(401)
+            with lock:
+                seen_new.add(kwargs["params"]["motsCles"])
+            return _mock_httpx_response({"resultats": []})
+
+        with (
+            patch.object(httpx.Client, "post", side_effect=[_token("old"), _token("new")]) as post,
+            patch.object(httpx.Client, "get", side_effect=fake_get),
+        ):
+            result = collector.collect()
+
+        assert post.call_count == 2
+        assert seen_new == {"a", "b", "c", "d"}
+        assert result.errors == []
+
+    def test_token_failure_in_collect_is_recorded_with_its_class(self) -> None:
+        collector = self._collector()
+        redirect = httpx.Response(302, request=httpx.Request("POST", "https://x"),
+                                  headers={"Location": "https://maintenance.example/"})
+
+        with patch.object(httpx.Client, "post", return_value=redirect):
+            result = collector.collect()
+
+        assert result.jobs == []
+        assert result.metadata["auth_failure"] == "ft_outage"
+        assert "ft_outage" in result.errors[0]
+
+
+class TestClassifyTokenFailure:
+    @staticmethod
+    def _resp(status: int, text: str = "", content_type: str = "application/json") -> httpx.Response:
+        return httpx.Response(status, request=httpx.Request("POST", "https://x"), text=text,
+                              headers={"content-type": content_type})
+
+    @pytest.mark.parametrize(("status", "text", "expected"), [
+        (400, '{"error":"invalid_client","error_description":"Client authentication failed"}',
+         "ft_auth_invalid_client"),
+        (401, '{"error":"invalid_client"}', "ft_auth_invalid_client"),
+        (400, '{"error":"invalid_scope","error_description":"Invalid scope"}', "ft_auth_invalid_scope"),
+        (302, "", "ft_outage"),
+        (503, "Service Unavailable", "ft_outage"),
+        (500, '{"error":"invalid_client"}', "ft_outage"),
+        (429, "", "ft_outage"),
+        (403, "<html><body>Maintenance</body></html>", "ft_outage"),
+        (400, '{"error":"invalid_request"}', "ft_auth_failed"),
+    ])
+    def test_classes(self, status: int, text: str, expected: str) -> None:
+        from src.collectors.france_travail import classify_token_failure
+
+        assert classify_token_failure(self._resp(status, text)) == expected
+
+    def test_network_error_is_its_own_class(self) -> None:
+        from src.collectors.france_travail import FranceTravailAuthError
+
+        collector = FranceTravailCollector(config={"client_id": "id", "client_secret": "secret"})
+        with patch.object(httpx.Client, "post", side_effect=httpx.ConnectError("no route")):
+            with httpx.Client() as client, pytest.raises(FranceTravailAuthError) as caught:
+                collector._fetch_token(client)
+        assert caught.value.reason_key == "ft_network"
+
+    def test_html_body_with_200_is_an_outage(self) -> None:
+        from src.collectors.france_travail import FranceTravailAuthError
+
+        collector = FranceTravailCollector(config={"client_id": "id", "client_secret": "secret"})
+        page = self._resp(200, "<html>maintenance</html>", "text/html")
+        with patch.object(httpx.Client, "post", return_value=page):
+            with httpx.Client() as client, pytest.raises(FranceTravailAuthError) as caught:
+                collector._fetch_token(client)
+        assert caught.value.reason_key == "ft_outage"

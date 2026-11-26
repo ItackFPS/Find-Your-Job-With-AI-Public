@@ -4,12 +4,11 @@ Covers:
   - France Travail: credentials found/missing, auth success/failure,
     expired-token refresh (reuses the collector's own OAuth logic),
     secrets never logged.
-  - Overall status: France Travail is a collection source and blocks the
-    run (FAILED) when its credentials fail to authenticate; with no
-    credentials set at all it is skipped for the run (DEGRADED).
-  - Pipeline wiring: preflight runs before collection, aborts the run only
-    on a FAILED (France Travail) status, continues on DEGRADED (an
-    unconfigured France Travail that is then not collected from), runs
+  - Overall status: France Travail credentials that fail to authenticate skip
+    France Travail for the run with the failure class (DEGRADED, #303); with no
+    credentials set at all it is skipped for the run (DEGRADED) too.
+  - Pipeline wiring: preflight runs before collection, continues on DEGRADED
+    (France Travail not collected from, the other sources still run), runs
     exactly once, and does not change existing behavior when the check is
     healthy or skipped.
 """
@@ -151,43 +150,86 @@ class TestFranceTravailPreflight:
 # ---------------------------------------------------------------------------
 
 class TestPipelinePreflightWiring:
-    def test_preflight_failure_aborts_before_collection(self, tmp_path, monkeypatch):
+    def test_france_travail_auth_failure_skips_it_and_other_sources_still_run(self, tmp_path, monkeypatch):
+        """Rejected France Travail credentials no longer abort the run (#303): France Travail is
+        skipped, never collected from, with the failure class named; France Travail web still collects."""
+        from src.collectors.base import CollectorResult
         from src.pipeline.orchestrator import run_pipeline
 
         monkeypatch.setenv("FRANCE_TRAVAIL_CLIENT_ID", "id-123")
         monkeypatch.setenv("FRANCE_TRAVAIL_CLIENT_SECRET", SECRET)
         config_dir = tmp_path / "config"
-        _write_sources_yaml(config_dir)  # active france_travail, rejected credentials
+        config_dir.mkdir()
+        (config_dir / "sources.yaml").write_text(
+            "sources:\n"
+            "  - {name: france_travail, type: france_travail, active: true, config: {}}\n"
+            "  - {name: france_travail_web, type: france_travail_web, active: true, config: {}}\n",
+            encoding="utf-8",
+        )
 
+        mock_embed = MagicMock()
+        mock_embed.embed.return_value = [0.1] * 384
+        mock_embed.compute_semantic_score.return_value = 0.5
+        mock_embed.compute_job_semantic_score.return_value = 0.5
+        web_result = CollectorResult(source_name="france_travail_web", jobs=[], errors=[], duration_seconds=0.1)
         with patch(
             "src.collectors.france_travail.FranceTravailCollector.collect"
-        ) as mock_collect, patch.object(
+        ) as ft_collect, patch(
+            "src.collectors.france_travail_web.FranceTravailWebCollector.collect", return_value=web_result
+        ) as web_collect, patch.object(
             httpx.Client, "post", side_effect=_http_error_response(401)
-        ):
+        ), patch("src.embeddings.embedding.EmbeddingService", return_value=mock_embed):
             result = run_pipeline(db_path=str(tmp_path / "test.db"), config_dir=str(config_dir))
 
-        mock_collect.assert_not_called()
-        assert result.status == "failed"
-        assert "Preflight failed" in (result.error or "")
-        assert result.stats.collected == 0
-        assert result.stats.preflight.get("ready") is False
-        assert result.stats.preflight.get("status") == "FAILED"
+        ft_collect.assert_not_called()
+        web_collect.assert_called_once()
+        assert result.status == "completed", result.error
+        assert result.stats.preflight["status"] == "DEGRADED"
+        assert result.stats.preflight["ready"] is True
+        assert result.stats.preflight["france_travail"]["reason_key"] == "ft_auth_invalid_client"
+        skipped = result.stats.by_source["france_travail"]
+        assert skipped["status"] == "skipped"
+        assert skipped["reason_key"] == "ft_auth_invalid_client"
+        assert "invalid_client" in skipped["reason"]
+        # A failed login is a run error (unlike an unconfigured API), never a silent gap.
+        assert any("France Travail skipped" in e for e in result.stats.errors)
+        assert SECRET not in "; ".join(result.stats.errors)
 
-    def test_france_travail_not_silently_skipped_when_credentials_are_rejected(self, tmp_path, monkeypatch):
-        """Configured credentials that fail to authenticate fail the run fast
-        rather than producing a scan silently missing that source."""
-        from src.pipeline.orchestrator import run_pipeline
+    def test_france_travail_outage_is_retried_then_skipped(self, tmp_path, monkeypatch):
+        """A maintenance redirect from the login service is retried, then skipped as an outage."""
+        import src.pipeline.preflight as preflight_mod
 
         monkeypatch.setenv("FRANCE_TRAVAIL_CLIENT_ID", "id-123")
         monkeypatch.setenv("FRANCE_TRAVAIL_CLIENT_SECRET", SECRET)
-        config_dir = tmp_path / "config"
-        _write_sources_yaml(config_dir)
+        _write_sources_yaml(tmp_path)
+        sleeps: list[float] = []
+        monkeypatch.setattr(preflight_mod.time, "sleep", sleeps.append)
+        redirect = httpx.Response(302, request=httpx.Request("POST", "https://x"),
+                                  headers={"Location": "https://maintenance.example/"}, text="")
 
-        with patch.object(httpx.Client, "post", side_effect=_http_error_response(401)):
-            result = run_pipeline(db_path=str(tmp_path / "test.db"), config_dir=str(config_dir))
+        with patch.object(httpx.Client, "post", return_value=redirect) as mock_post:
+            result = run_preflight(str(tmp_path))
 
-        assert result.status == "failed"
-        assert "France Travail" in (result.error or "")
+        assert mock_post.call_count == 1 + len(preflight_mod._TRANSIENT_RETRY_DELAYS)
+        assert sleeps == list(preflight_mod._TRANSIENT_RETRY_DELAYS)
+        assert (result.status, result.ready) == ("DEGRADED", True)
+        assert result.france_travail.reason_key == "ft_outage"
+        assert result.skip_reasons["france_travail"] == preflight_mod.FT_AUTH_SKIP_REASONS["ft_outage"]
+
+    def test_france_travail_outage_recovering_on_retry_is_ready(self, tmp_path, monkeypatch):
+        import src.pipeline.preflight as preflight_mod
+
+        monkeypatch.setenv("FRANCE_TRAVAIL_CLIENT_ID", "id-123")
+        monkeypatch.setenv("FRANCE_TRAVAIL_CLIENT_SECRET", SECRET)
+        _write_sources_yaml(tmp_path)
+        monkeypatch.setattr(preflight_mod.time, "sleep", lambda _s: None)
+        outage = httpx.Response(503, request=httpx.Request("POST", "https://x"), text="down")
+
+        with patch.object(httpx.Client, "post", side_effect=[outage, _token_response()]):
+            result = run_preflight(str(tmp_path))
+
+        assert (result.status, result.ready) == ("READY", True)
+        assert result.skipped_source_types == []
 
     def test_unconfigured_france_travail_is_skipped_visibly_and_run_continues(self, tmp_path, monkeypatch):
         """A fresh install has no France Travail credentials: the run goes on
@@ -359,7 +401,7 @@ class TestOverallPreflightStatus:
         assert result.ready is True
         assert result.france_travail.status == "READY"
 
-    def test_france_travail_failure_is_failed(self, tmp_path, monkeypatch):
+    def test_france_travail_failure_is_degraded_and_skipped(self, tmp_path, monkeypatch):
         monkeypatch.setenv("FRANCE_TRAVAIL_CLIENT_ID", "id-123")
         monkeypatch.setenv("FRANCE_TRAVAIL_CLIENT_SECRET", SECRET)
         _write_sources_yaml(tmp_path)
@@ -367,10 +409,15 @@ class TestOverallPreflightStatus:
         with patch.object(httpx.Client, "post", side_effect=_http_error_response(401)):
             result = run_preflight(str(tmp_path))
 
-        assert result.status == "FAILED"
-        assert result.ready is False
+        assert result.status == "DEGRADED"
+        assert result.ready is True
+        assert result.errors == []
         assert result.france_travail.status == "AUTH_FAILED"
-        assert result.skipped_source_types == []
+        assert result.skipped_source_types == ["france_travail"]
+        assert any("invalid_client" in e for e in result.degraded_errors)
+        report = "\n".join(result.report_lines)
+        assert "Pipeline aborted." not in report
+        assert "skipped for this run" in report
 
     def test_unconfigured_france_travail_is_degraded_not_failed(self, tmp_path, monkeypatch):
         monkeypatch.delenv("FRANCE_TRAVAIL_CLIENT_ID", raising=False)
