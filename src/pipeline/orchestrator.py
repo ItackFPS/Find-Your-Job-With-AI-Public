@@ -515,6 +515,15 @@ def run_pipeline(
                 merged_cfg.setdefault("departments", ft_departments(distance_cfg) if distance_cfg else [
                     p.value for p in early_profile.geography.location_preferences
                     if p.type == "department" and p.status != "excluded"])
+            if src_type == "france_travail" and early_profile is not None:
+                # A saturated API query is also read per département of the search area (#310):
+                # the same départements as France Travail web.
+                from src.pipeline.location_distance import distance_config, ft_departments
+
+                ft_area = distance_config(early_profile)
+                merged_cfg.setdefault("departments", ft_departments(ft_area) if ft_area else [
+                    p.value for p in early_profile.geography.location_preferences
+                    if p.type == "department" and p.status != "excluded"])
             # Registered collectors all take ``config=``; the abstract
             # BaseCollector.__init__ that type[BaseCollector] exposes does not.
             collector_factory = cast("Callable[..., BaseCollector]", collector_class)

@@ -2053,3 +2053,49 @@ class TestClassifyTokenFailure:
             with httpx.Client() as client, pytest.raises(FranceTravailAuthError) as caught:
                 collector._fetch_token(client)
         assert caught.value.reason_key == "ft_outage"
+
+
+class TestFranceTravailDepartmentPartitions:
+    """#310: a saturated query is also read once per département of the search area."""
+
+    def test_saturated_query_is_read_per_department(self) -> None:
+        collector = FranceTravailCollector(config={
+            "client_id": "id", "client_secret": "secret", "discovery_queries": ["infirmier"],
+            "rate_limit_rps": 0.0, "max_workers": 1, "departments": ["63", "03"]}, _page_size=150)
+        national = _make_pages_up_to_limit(page_size=150, total=15570)
+
+        def fake_get(*_a: Any, **kw: Any) -> MagicMock:
+            params = kw["params"]
+            if "departement" not in params:
+                return national.pop(0)
+            code = params["departement"]
+            batch = _make_jobs(3, f"D{code}-") + _make_jobs(1, "SAT0000")    # one already seen
+            return _mock_httpx_response({"resultats": batch},
+                                        headers={"Content-Range": f"offres 0-3/{4}"})
+
+        with (
+            patch.object(httpx.Client, "post", return_value=_mock_httpx_response(_SAMPLE_TOKEN_RESPONSE)),
+            patch.object(httpx.Client, "get", side_effect=fake_get) as get,
+        ):
+            result = collector.collect()
+
+        dept_calls = [c.kwargs["params"] for c in get.call_args_list if "departement" in c.kwargs["params"]]
+        assert [(p["motsCles"], p["departement"]) for p in dept_calls] == [("infirmier", "63"), ("infirmier", "03")]
+        status = result.metadata["per_query_status"]
+        assert status["infirmier"]["partitions_generated"] == 2
+        assert status["infirmier [dép. 63]"]["type"] == "partition"
+        assert status["infirmier [dép. 63]"]["jobs"] == 3                    # duplicate removed
+        assert len(result.jobs) == 3000 + 6
+
+    def test_no_department_partition_without_saturation_or_area(self) -> None:
+        collector = FranceTravailCollector(config={
+            "client_id": "id", "client_secret": "secret", "discovery_queries": ["infirmier"],
+            "rate_limit_rps": 0.0, "max_workers": 1, "departments": ["63"]})
+        small = _mock_httpx_response({"resultats": _make_jobs(2, "S")},
+                                     headers={"Content-Range": "offres 0-1/2"})
+        with (
+            patch.object(httpx.Client, "post", return_value=_mock_httpx_response(_SAMPLE_TOKEN_RESPONSE)),
+            patch.object(httpx.Client, "get", return_value=small) as get,
+        ):
+            collector.collect()
+        assert all("departement" not in c.kwargs["params"] for c in get.call_args_list)

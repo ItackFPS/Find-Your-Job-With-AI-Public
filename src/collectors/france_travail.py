@@ -238,6 +238,15 @@ class FranceTravailCollector(BaseCollector):
         self.max_partitions_per_query: int = int(
             config.get("max_partitions_per_query", 12)
         )
+        # departments: the profile's search area (orchestrator). A saturated query is also
+        # read once per département, each well under the 3,000-offer window (2026-11-24:
+        # "infirmier" 15,570 in France, 140 in the 63, 671 in the 75), so the user's own area
+        # is read completely.
+        self.departments: list[str] = [
+            str(d).strip() for d in (config.get("departments") or []) if str(d).strip()]
+        # Search parameters of a partition work key ("<query> [dép. 63]") that is not a
+        # plain motsCles query.
+        self._work_params: dict[str, dict[str, str]] = {}
         # max_workers: concurrency for independent queries (1 = sequential).
         self._max_workers: int = int(config.get("max_workers", 4))
 
@@ -467,7 +476,15 @@ class FranceTravailCollector(BaseCollector):
         partition_work: list[tuple[str, bool, str | None]] = []
         for query, _is_partition, _parent in discovery_work:
             result = phase1_raw[query]
-            if result["saturated"] and not _is_partition and self.partition_vocabulary:
+            if not result["saturated"] or _is_partition:
+                continue
+            for code in self.departments:
+                key = f"{query} [dép. {code}]"
+                if key.lower() not in queued_keys:
+                    queued_keys.add(key.lower())
+                    self._work_params[key] = {"motsCles": query, "departement": code}
+                    partition_work.append((key, True, query))
+            if self.partition_vocabulary:
                 partition_qs = self._generate_partition_queries(query, queued_keys)
                 for pq in partition_qs:
                     queued_keys.add(pq.lower().strip())
@@ -581,7 +598,7 @@ class FranceTravailCollector(BaseCollector):
             }
 
             # Log saturation + partition info for discovery queries.
-            if query_saturated and not is_partition and self.partition_vocabulary:
+            if query_saturated and not is_partition and partitions_generated:
                 logger.info(
                     "France Travail [%s]: saturated (api_total=%s) — "
                     "queued %d partition queries",
@@ -700,7 +717,7 @@ class FranceTravailCollector(BaseCollector):
             params={
                 "sort": 1,
                 "range": f"{start}-{end}",
-                "motsCles": query,
+                **self._work_params.get(query, {"motsCles": query}),
             },
             headers={
                 "Authorization": f"Bearer {token}",
