@@ -1,7 +1,7 @@
 """Tests for HelloWorkStagingStorage, job_to_staging_record, and staging_row_to_job.
 
 All tests use isolated temporary databases — the real data/jobs.db is never
-touched. Mirrors tests/test_linkedin_staging.py's conventions.
+touched.
 """
 
 from __future__ import annotations
@@ -211,8 +211,7 @@ class TestStartupRecovery:
         assert row["status"] == "waiting"
 
     def test_interrupted_scan_preserves_already_staged_jobs(self, staging) -> None:
-        """End-to-end checkpoint-recovery regression, mirroring
-        tests/test_linkedin_staging.py's equivalent: a process interruption
+        """End-to-end checkpoint-recovery regression: a process interruption
         mid-scan must not lose jobs already staged — recover_stale_scans()
         only marks the run row failed, it never touches 'waiting' rows.
         """
@@ -233,9 +232,8 @@ class TestStartupRecovery:
 
 
 # ---------------------------------------------------------------------------
-# init_db() migration guard — see the matching test in
-# tests/test_linkedin_staging.py for the full rationale (a fresh instance is
-# constructed and init_db()'d on every pipeline run).
+# init_db() migration guard: a fresh instance is constructed and init_db()'d
+# on every pipeline run, so init_db() must not rewrite existing rows.
 # ---------------------------------------------------------------------------
 
 class TestInitDbMigrationGuard:

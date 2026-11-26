@@ -37,7 +37,7 @@ minute or two; later starts take seconds. The first time, a notification explain
 the app keeps running in the notification area.
 
 **Closing the dashboard window does not stop the app**: the backend, its schedules and any
-LinkedIn or HelloWork scan keep running. Reopen the dashboard from the icon (double-click,
+HelloWork scan keep running. Reopen the dashboard from the icon (double-click,
 or right-click › **Open**). Right-click the icon for **Start with Windows** (off by
 default; it starts the app in the notification area when you sign in), **Open logs
 folder** and **Quit**. A notification says when a job search finishes. If the backend
@@ -50,7 +50,7 @@ Then:
 
 1. **Profile** page: your target roles, skills, locations, languages. It is saved to
    `config\profile.local.yaml`.
-2. **Sources.** These work without any account: the France Travail website and EURES. HelloWork, LinkedIn and Indeed are unofficial: they run only if
+2. **Sources.** These work without any account: the France Travail website. HelloWork and Indeed are unofficial: they run only if
    you choose them. A run's **Sources** table shows each source as *completed*, *partial*,
    *failed* or *skipped*, with the reason for a skip.
 
@@ -68,7 +68,7 @@ see the README's [Local AI](../README.md#local-ai) section to opt in to a local 
 ## Stop, restart
 
 - **Stop:** right-click the notification-area icon › **Quit**, or use **Stop Find Your
-  Job With AI** in the Start Menu. Closing the dashboard window does not stop it. A running LinkedIn or HelloWork scan stops at its next
+  Job With AI** in the Start Menu. Closing the dashboard window does not stop it. A running HelloWork scan stops at its next
   checkpoint and can be resumed from its card later. A pipeline run still in progress is
   abandoned: the next start marks it *failed* (stale), and you run it again. SQLite keeps
   everything already written.
@@ -179,7 +179,7 @@ without the setup program.
 ### Updating the pinned dependencies
 
 `packaging\windows\requirements.txt` pins the runtime set (the project's dependencies
-plus the `linkedin` extra). After changing `pyproject.toml`, regenerate it in a fresh
+plus the `indeed` extra). After changing `pyproject.toml`, regenerate it in a fresh
 virtual environment of CPython 3.12 x64 (install the dependencies with
 `--only-binary=:all:`, then `pip freeze`, dropping pip and wheel), keep the header, run
 `python packaging\windows\hash_requirements.py` to add each pinned file's SHA-256 from PyPI

@@ -91,9 +91,6 @@
     "resuming": "Resuming…",
     "scanNow": "Scan now",
     "progress": {
-      "query": "Query {query} / {total}",
-      "page": " · page {page}",
-      "pages": " · ~{done} / {total} pages",
       "metierPages": "{count, plural, one {# metier page done} other {# metier pages done}}"
     }
   },
@@ -196,17 +193,13 @@
       "status": "Status"
     },
     "scanner": {
-      "linkedin": "LinkedIn scan",
       "hellowork": "HelloWork scan",
       "searching": "Searching queries…",
-      "pausingNextPage": "Pausing at the next page…",
-      "etaUnknown": "Time remaining: not enough data yet",
       "etaRemaining": "~{eta} remaining (estimated)",
       "finishing": "Finishing up…",
       "slow": "Taking longer than usual…",
       "paused": "Paused",
       "interrupted": "Interrupted — resumes from checkpoint",
-      "percentDone": " · ~{percent}% done",
       "foundNew": "{found, number} found · {new, number} new",
       "lastAttempt": "Last attempt {date}",
       "noScans": "No scans yet.",
@@ -1016,32 +1009,13 @@
     "collectorErrors": "Collector errors ({count, number})",
     "ranked": "{count, number} ranked",
     "foundNew": "{found, number} found, {new, number} new",
-    "queryTable": {
-      "query": "Query",
-      "pages": "Pages",
-      "raw": "Raw",
-      "unique": "Unique",
-      "filtered": "Filtered",
-      "known": "Known",
-      "staged": "Staged",
-      "endedBy": "Ended by",
-      "failedRetried": "failed (retried next scan)"
-    },
     "scanStats": {
-      "raw": "Raw collected",
-      "unique": "Unique",
-      "filteredOut": "Filtered out",
-      "known": "Already known",
-      "staged": "Staged (new)",
-      "failedQueries": "Failed queries",
-      "queries": "QUERIES",
       "jobsFound": "Jobs found",
       "newStaged": "New (staged)",
       "metierPages": "Metier pages queried",
       "collectorErrors": "Collector errors",
       "collectionTime": "Collection time"
     },
-    "linkedinHistory": "LINKEDIN SCAN HISTORY",
     "helloworkHistory": "HELLOWORK SCAN HISTORY",
     "history": "HISTORY",
     "noScans": "No scans yet.",
@@ -1330,7 +1304,6 @@
       "subtitle": "What runs on its own each day, when it last ran and when it runs next.",
       "labels": {
         "pipeline_daily": "Daily search",
-        "linkedin_daily": "LinkedIn scan",
         "hellowork_daily": "HelloWork scan"
       },
       "runningNow": "Running now",
@@ -1369,7 +1342,6 @@
       "notCollected": "Not collected",
       "choose": "Collect from {name}",
       "risk": {
-        "linkedin": "LinkedIn does not allow automated searches: it may block the app for a while, and the searches use your profile's keywords.",
         "indeed": "Indeed does not allow automated searches: it may block the app for a while, and the searches use your profile's keywords.",
         "hellowork": "HelloWork has no access for apps: the app reads its job pages slowly (about 30 minutes) and the site may block it.",
         "default": "This site does not offer access for apps: it may block the app for a while."
@@ -1390,12 +1362,10 @@
       "names": {
         "france-travail": "France Travail (official API)",
         "france-travail-web": "France Travail (website)",
-        "eures": "EURES",
         "workingnomads": "Working Nomads",
         "bundesagentur": "Bundesagentur für Arbeit",
         "arbetsformedlingen": "Arbetsförmedlingen",
         "indeed": "Indeed",
-        "linkedin": "LinkedIn",
         "hellowork": "HelloWork"
       }
     },

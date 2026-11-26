@@ -172,7 +172,7 @@ def test_build_ships_what_the_self_check_reads():
 
 def test_runtime_requirements_pin_every_declared_dependency():
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
-    declared = project["dependencies"] + project["optional-dependencies"]["linkedin"]
+    declared = project["dependencies"] + project["optional-dependencies"]["indeed"]
 
     def norm(name: str) -> str:
         return re.sub(r"[-_.]+", "-", name).lower()

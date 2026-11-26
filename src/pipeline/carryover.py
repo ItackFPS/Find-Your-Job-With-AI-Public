@@ -1,7 +1,7 @@
 """Carry-forward of stored offers into every run (issue #253, owner decision 2026-11-16).
 
 The main list shows the offers scored in the latest visible run. Before this module a run scored
-only what it collected, plus the stored offers LinkedIn and HelloWork re-injected; a source that
+only what it collected, plus the stored offers the staged sources re-injected; a source that
 returned nothing, failed or was skipped took its still-active offers out of the list without notice
 (B11 finding 4: 797 -> 273). Now every run also scores the stored ``active`` offers of every source
 that is on (:func:`src.source_enablement.enabled_sources`) that it did not collect: the "carried"

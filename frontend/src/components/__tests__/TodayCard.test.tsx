@@ -46,14 +46,14 @@ describe('TodayCard', () => {
   })
 
   it('points at a failed source', async () => {
-    const stats = { ...dashboard.latest_run!.stats, by_source: { eures: { collected: 0, accepted: 0, errors: 1, status: 'failed' } } }
+    const stats = { ...dashboard.latest_run!.stats, by_source: { bundesagentur: { collected: 0, accepted: 0, errors: 1, status: 'failed' } } }
     show({ ...dashboard, latest_run: { ...dashboard.latest_run!, stats } })
     expect(await screen.findByRole('link', { name: /1 source/ })).toHaveAttribute('href', '/settings')
   })
 
   it('names a lost connection instead of counting failed sources', async () => {
     const down = { collected: 0, accepted: 0, errors: 1, status: 'failed', network_outage: true }
-    const stats = { ...dashboard.latest_run!.stats, by_source: { eures: down, indeed: down } }
+    const stats = { ...dashboard.latest_run!.stats, by_source: { bundesagentur: down, indeed: down } }
     show({ ...dashboard, latest_run: { ...dashboard.latest_run!, stats } })
     expect(await screen.findByText(/internet connection/)).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /2 sources/ })).not.toBeInTheDocument()
@@ -61,11 +61,11 @@ describe('TodayCard', () => {
 
   it('names the sources that failed (OQ-3)', async () => {
     const stats = { ...dashboard.latest_run!.stats, outcome: 'partial' as const, by_source: {
-      eures: { collected: 0, accepted: 0, errors: 1, status: 'failed' },
+      bundesagentur: { collected: 0, accepted: 0, errors: 1, status: 'failed' },
       hellowork: { collected: 3, accepted: 1, errors: 1, status: 'partial' },
       indeed: { collected: 4, accepted: 2, errors: 0, status: 'completed' } } }
     show({ ...dashboard, latest_run: { ...dashboard.latest_run!, stats } })
-    expect(await screen.findByTestId('failed-sources')).toHaveTextContent('eures, hellowork')
+    expect(await screen.findByTestId('failed-sources')).toHaveTextContent('bundesagentur, hellowork')
   })
 
   it.each([
@@ -92,17 +92,17 @@ describe('TodayCard', () => {
 
   it('names a source that came back empty after returning offers (issue #253)', async () => {
     const stats = { ...dashboard.latest_run!.stats, outcome: 'partial' as const, carried: 42,
-      incomplete_sources: { indeed: 'suspect_empty' as const, eures: 'suspect_empty' as const } }
+      incomplete_sources: { indeed: 'suspect_empty' as const, bundesagentur: 'suspect_empty' as const } }
     show({ ...dashboard, latest_run: { ...dashboard.latest_run!, stats } })
-    expect(await screen.findByTestId('suspect-sources')).toHaveTextContent('2 sources returned no offer although they found some before (eures, indeed)')
+    expect(await screen.findByTestId('suspect-sources')).toHaveTextContent('2 sources returned no offer although they found some before (bundesagentur, indeed)')
     // what entered the run is not what the list holds: the Jobs notice counts carried offers
     expect(screen.queryByTestId('carried')).not.toBeInTheDocument()
   })
 
   it('words a single suspect source in the singular', async () => {
-    const stats = { ...dashboard.latest_run!.stats, outcome: 'partial' as const, incomplete_sources: { eures: 'suspect_empty' as const } }
+    const stats = { ...dashboard.latest_run!.stats, outcome: 'partial' as const, incomplete_sources: { bundesagentur: 'suspect_empty' as const } }
     show({ ...dashboard, latest_run: { ...dashboard.latest_run!, stats } })
-    expect(await screen.findByTestId('suspect-sources')).toHaveTextContent('One source returned no offer although it found some before (eures); its offers stay in the list.')
+    expect(await screen.findByTestId('suspect-sources')).toHaveTextContent('One source returned no offer although it found some before (bundesagentur); its offers stay in the list.')
   })
 
   it('says so before any search', async () => {

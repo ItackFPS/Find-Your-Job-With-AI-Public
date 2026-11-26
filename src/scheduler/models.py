@@ -9,8 +9,8 @@ from dataclasses import dataclass
 class ScheduleDefinition:
     """What should be scheduled for a given source."""
 
-    id: str                     # e.g. "linkedin_daily"
-    source_id: str              # matches handler registry key, e.g. "linkedin"
+    id: str                     # e.g. "hellowork_daily"
+    source_id: str              # matches handler registry key, e.g. "hellowork"
     label: str                  # human-readable
     enabled: bool
     startup_policy: str         # "run_once_per_day" | "when_opted_in" | "disabled"

@@ -4,13 +4,11 @@ export interface SourceBadge {
 }
 
 // Explicit badges for the sources actually seen in the DB (see config/sources.yaml
-// plus the LinkedIn/HelloWork staging scanners). Anything else falls back to a
+// plus the HelloWork staging scanner). Anything else falls back to a
 // derived label/color below rather than going unstyled.
 const EXACT: Record<string, SourceBadge> = {
   'france-travail': { label: 'FT', color: '#5b6280' },
-  linkedin: { label: 'L', color: '#0a66c2' },
   indeed: { label: 'I', color: '#1e2a3a' },
-  eures: { label: 'E', color: '#003399' },
   apec: { label: 'A', color: '#7c6ef5' },
   hellowork: { label: 'H', color: '#f4726b' },
   himalayas: { label: 'Hi', color: '#6366f1' },

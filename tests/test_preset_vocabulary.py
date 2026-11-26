@@ -102,41 +102,6 @@ def test_stats_without_a_profile_are_neutral(stats_storages) -> None:
     assert stats.title_categories == []
 
 
-def _linkedin_config(tmp_path: Path, linkedin_yaml: str, profile_yaml: str | None):
-    from src.linkedin.scanner import LinkedInConfig
-
-    (tmp_path / "linkedin.yaml").write_text(linkedin_yaml, encoding="utf-8")
-    if profile_yaml is not None:
-        (tmp_path / "profile.yaml").write_text(profile_yaml, encoding="utf-8")
-    return LinkedInConfig.load(str(tmp_path))
-
-
-def test_linkedin_without_queries_uses_the_it_preset_for_an_it_profile(tmp_path: Path) -> None:
-    config = _linkedin_config(tmp_path, "enabled: true\n", "target_domains: [devops]\n")
-    assert "devops engineer" in [q.search_term for q in config.queries]
-    assert all(q.location == "France" for q in config.queries)
-
-
-def test_linkedin_without_queries_searches_the_profile_itself_for_other_work(tmp_path: Path) -> None:
-    config = _linkedin_config(
-        tmp_path, "enabled: true\n",
-        "target_domains: [infirmier]\n"
-        "target_occupations:\n  - {label: electrician, keyword: electrician, label_fr: électricien}\n",
-    )
-    assert [q.search_term for q in config.queries] == ["infirmier", "électricien"]
-
-
-def test_linkedin_listed_queries_win_over_the_profile(tmp_path: Path) -> None:
-    config = _linkedin_config(
-        tmp_path, "enabled: true\nqueries:\n  - {search_term: mine, location: Lyon}\n",
-        "target_domains: [devops]\n")
-    assert [(q.search_term, q.location) for q in config.queries] == [("mine", "Lyon")]
-
-
-def test_linkedin_without_a_profile_searches_nothing(tmp_path: Path) -> None:
-    assert _linkedin_config(tmp_path, "enabled: true\n", None).queries == []
-
-
 def test_apply_preset_collector_config_never_overrides_the_sources_own_keys() -> None:
     from src.discovery.query_expansion import apply_preset_collector_config
 

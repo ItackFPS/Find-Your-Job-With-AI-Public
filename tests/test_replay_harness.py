@@ -22,7 +22,7 @@ DS_JOBS = ROOT / "tests" / "fixtures" / "evaluation" / "datasets" / "synthetic-a
 
 SOURCES_YAML = """sources:
   - name: replay-src
-    type: eures
+    type: arbetsformedlingen
     active: true
     config: {}
   - name: france-travail

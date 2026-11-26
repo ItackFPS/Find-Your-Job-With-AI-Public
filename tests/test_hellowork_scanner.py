@@ -1,7 +1,7 @@
 """Tests for HelloWorkScanner.
 
 The underlying HelloWorkCollector.collect() is mocked throughout — no real
-network access. Mirrors tests/test_linkedin_scanner.py's conventions.
+network access.
 """
 
 from __future__ import annotations
@@ -111,7 +111,7 @@ class TestHelloWorkScannerBasic:
 
 
 class TestHelloWorkScannerCrashSafety:
-    """Regression coverage mirroring TestLinkedInScannerCrashSafety.
+    """Regression coverage for scanner crash safety (first shared with the removed LinkedIn scanner).
 
     A transient "database is locked" on create_scan_run() (the first DB
     write _do_scan() makes) used to propagate straight out of the background
@@ -161,8 +161,8 @@ class TestHelloWorkScannerCrashSafety:
     ) -> None:
         """A transient per-row staging failure (e.g. a lock timeout while the
         pipeline holds the writer) must be skipped, not let it kill the rest
-        of the scan — mirrors LinkedIn's existing per-row error handling in
-        src/linkedin/scanner.py::_run_query.
+        of the scan (the per-row error handling the removed LinkedIn scanner
+        also had).
         """
         import sqlite3
 
@@ -502,8 +502,7 @@ class TestHelloWorkSlugLevelCheckpointIsSafe:
 class TestGracefulShutdown:
     """Regression coverage for the backend-shutdown cooperation added after
     the incident where a `uvicorn --reload` restart abruptly killed the
-    in-flight LinkedIn scan thread (see tests/test_linkedin_scanner.py's
-    TestGracefulShutdown for the original). HelloWorkScanner gets the exact
+    in-flight scan thread of the (since removed) LinkedIn scanner. HelloWorkScanner gets the
     same lifecycle semantics via the same shutdown_event mechanism: checked
     between slugs (and, inside HelloWorkCollector, between job-detail
     requests within a slug — see tests/test_hellowork_collector.py's
@@ -759,26 +758,6 @@ class TestManualPause:
             self._run(changed, _slug_walker(["a", "b"], seen))
         assert seen == ["a", "b"]  # "a" re-collected under the new per-slug cap
         assert any("different configuration" in r.getMessage() for r in caplog.records)
-
-    def test_pausing_hellowork_does_not_pause_linkedin(self, staging, tmp_path) -> None:
-        from src.linkedin.scanner import LinkedInConfig, LinkedInScanner
-        from src.linkedin.staging import LinkedInStagingStorage
-
-        li_staging = LinkedInStagingStorage(db_path=str(staging._db_path))
-        li_staging.init_db()
-        shared = threading.Event()  # the backend's shared shutdown event
-        li = LinkedInScanner(
-            config=LinkedInConfig(enabled=True), staging=li_staging,
-            config_dir=str(tmp_path), shutdown_event=shared,
-        )
-        hw = self._make_scanner(staging, shutdown_event=shared)
-        self._run(hw, _slug_walker(["a", "b"], [], lambda s: hw.request_pause()))
-
-        assert hw.scan_state() == "paused"
-        assert li.scan_state() == "idle"
-        assert li_staging.get_scan_checkpoint() is None
-        assert shared.is_set() is False
-        li_staging.close()
 
 
 # ---------------------------------------------------------------------------

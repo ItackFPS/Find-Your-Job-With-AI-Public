@@ -16,7 +16,6 @@ import json
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -26,8 +25,8 @@ SOURCES_YAML = """sources:
   - name: france-travail-web
     type: france_travail_web
     active: true
-  - name: eures
-    type: eures
+  - name: workingnomads
+    type: workingnomads
     active: true
   - name: arbetsformedlingen
     type: arbetsformedlingen
@@ -50,9 +49,8 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     config_dir = tmp_path / "config"
     config_dir.mkdir()
     (config_dir / "sources.yaml").write_text(SOURCES_YAML, encoding="utf-8")
-    (config_dir / "linkedin.yaml").write_text("enabled: true\n", encoding="utf-8")
-    # LinkedIn: an observed choice (plan rule I1), as the backend stores it at start.
-    (tmp_path / "settings.json").write_text(json.dumps({"unofficial_sources": {"linkedin": True}}),
+    # HelloWork: an observed choice (plan rule I1), as the backend stores it at start.
+    (tmp_path / "settings.json").write_text(json.dumps({"unofficial_sources": {"hellowork": True}}),
                                             encoding="utf-8")
     db_path = str(tmp_path / "jobs.db")
 
@@ -63,12 +61,12 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     rs.complete_run(run_id, {"by_source": {
         "france-travail-web": {"collected": 40, "accepted": 12, "errors": 0, "status": "completed",
                                "access_class": "public_page"},
-        "eures": {"collected": 0, "accepted": 0, "errors": 1, "status": "failed",
+        "workingnomads": {"collected": 0, "accepted": 0, "errors": 1, "status": "failed",
                      "reason": "The site did not answer"},
     }})
     rs.close()
     state = circuit_breaker.BreakerState(
-        source="eures", consecutive_failures=3, trips=1,
+        source="workingnomads", consecutive_failures=3, trips=1,
         paused_until=datetime.now(UTC) + timedelta(hours=2),
         last_failure_reason="timeout", last_failure_at=datetime.now(UTC),
     )
@@ -78,7 +76,6 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         "db_path": db_path,
         "config_dir": str(config_dir),
         "settings_path": str(tmp_path / "settings.json"),
-        "linkedin_config": SimpleNamespace(enabled=True),
         "hellowork_scanner": object(),
     }.items():
         monkeypatch.setitem(app.state._state, key, value)
@@ -93,13 +90,13 @@ def _rows(client: TestClient) -> dict[str, dict]:
 
 def test_overview_lists_each_source_with_its_kind_and_state(client: TestClient) -> None:
     rows = _rows(client)
-    assert set(rows) == {"france-travail-web", "eures", "indeed", "hellowork", "linkedin"}
+    assert set(rows) == {"france-travail-web", "workingnomads", "indeed", "hellowork"}
 
     ftw = rows["france-travail-web"]
     assert (ftw["access_class"], ftw["collected"], ftw["choice"]) == ("public_page", True, None)
     assert ftw["last_run"]["accepted"] == 12 and ftw["last_run"]["status"] == "completed"
 
-    official = rows["eures"]
+    official = rows["workingnomads"]
     assert official["access_class"] == "public_page"
     assert official["last_run"]["reason"] == "The site did not answer"
     assert official["breaker"]["paused"] is True
@@ -107,9 +104,9 @@ def test_overview_lists_each_source_with_its_kind_and_state(client: TestClient) 
     assert rows["indeed"]["access_class"] == "unofficial"
     assert rows["indeed"]["choice"] == {"enabled": False, "chosen_at": None}
     assert rows["indeed"]["collected"] is False
-    # LinkedIn: the stored choice (an observed one counts, plan rule I1); collected by the single rule.
-    assert rows["linkedin"]["choice"]["enabled"] is True
-    assert rows["linkedin"]["collected"] is True
+    # HelloWork: the stored choice (an observed one counts, plan rule I1); collected by the single rule.
+    assert rows["hellowork"]["choice"]["enabled"] is True
+    assert rows["hellowork"]["collected"] is True
     assert rows["hellowork"]["available"] is True
 
 
@@ -124,9 +121,9 @@ def test_a_choice_is_recorded_with_its_date(client: TestClient, tmp_path: Path) 
     assert row["choice"] == {"enabled": True, "chosen_at": chosen_at}
     assert row["collected"] is True
     stored = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
-    assert stored["unofficial_sources"] == {"indeed": True, "linkedin": True}
+    assert stored["unofficial_sources"] == {"indeed": True, "hellowork": True}
 
-    assert client.put("/api/sources/eures/choice", json={"enabled": True}).status_code == 404
+    assert client.put("/api/sources/workingnomads/choice", json={"enabled": True}).status_code == 404
     assert client.put("/api/sources/indeed/choice", json={"enabled": "yes"}).status_code == 422
 
 

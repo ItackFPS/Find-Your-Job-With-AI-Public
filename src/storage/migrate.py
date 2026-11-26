@@ -92,7 +92,7 @@ def deduplicate_jobs_db(
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
-    # See src/linkedin/staging.py for why this is needed: several modules
+    # busy_timeout is needed because several modules
     # open their own connection to the same jobs.db file.
     conn.execute("PRAGMA busy_timeout=5000")
 

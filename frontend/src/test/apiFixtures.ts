@@ -3,7 +3,7 @@
 import type {
   ActiveStrategy, Dashboard, DecisionRecord, EvalRunSummary, FeedbackEvent, FeedbackVocabulary, FrenchDepartment,
   HelloWorkScanRun, HelloWorkStatus, Job, JobExplanation, JobStats, LabExperiment, LabMemoryItem,
-  LinkedInScanRun, LinkedInStatus, PipelineRun, Profile, ReviewQueuePage, RunStats, SelfCheckResponse, SkillGraph,
+  PipelineRun, Profile, ReviewQueuePage, RunStats, SelfCheckResponse, SkillGraph,
   CountriesResponse, QualityHealth, QualityJob, QualitySummary,
 } from '../api/client'
 
@@ -19,7 +19,7 @@ export const runStats: RunStats = {
     bundesagentur: { collected: 300, accepted: 120, errors: 0, status: 'completed', reason: null },
     arbetsformedlingen: { collected: 200, accepted: 90, errors: 2, status: 'partial', reason: 'HTTP 429 on page 3' },
     'france-travail': { collected: 0, accepted: 0, errors: 0, status: 'skipped', reason: 'No credentials set' },
-    eures: { collected: 740, accepted: 430, errors: 0, status: 'completed', reason: null },
+    indeed: { collected: 740, accepted: 430, errors: 0, status: 'completed', reason: null },
   },
   by_country: { France: 800, Germany: 120, Spain: 90 },
   by_work_mode: { remote: 300, hybrid: 200, onsite: 510 },
@@ -37,7 +37,7 @@ export const dashboard: Dashboard = {
 }
 
 export const job: Job = {
-  id: 'job-1', source: 'eures', title: 'Développeur Python', company: 'Acme', location: 'Toulon, France',
+  id: 'job-1', source: 'indeed', title: 'Développeur Python', company: 'Acme', location: 'Toulon, France',
   department: '83', countries: ['France'], remote: false, work_mode: 'hybrid', employment_type: 'CDI',
   salary_min: 42000, salary_max: 52000, salary_currency: 'EUR', published_at: '2026-10-18T00:00:00+00:00',
   discovered_at: NOW, skills: ['Python', 'SQL', 'Docker'], canonical_url: 'https://example.com/job/1',
@@ -52,7 +52,7 @@ export const job: Job = {
 
 export const jobs: Job[] = [
   job,
-  { ...job, id: 'job-2', source: 'linkedin', title: 'Data Engineer', company: 'Globex', department: null,
+  { ...job, id: 'job-2', source: 'hellowork', title: 'Data Engineer', company: 'Globex', department: null,
     countries: ['Germany'], remote: true, work_mode: 'remote', location: 'Berlin',
     score: { ...job.score!, score_100: 66, tier: 'strong' } },
 ]
@@ -78,7 +78,7 @@ export const decision: DecisionRecord = {
   conflicts: [], stage_trace: [{ stage: 'hard_filter', result: 'passed', detail: null }],
   exposure: { rank: 3, tier: 'excellent', final_score: 0.76 },
   summary: { supporting: 1, against: 0, unknown: 1, conflicts: 0, headline: 'Good match' },
-  job: { title: 'Développeur Python', company: 'Acme', source: 'eures', location: 'Toulon' },
+  job: { title: 'Développeur Python', company: 'Acme', source: 'indeed', location: 'Toulon' },
 }
 
 export const feedbackVocabulary: FeedbackVocabulary = {
@@ -196,17 +196,6 @@ export const qualityJobs: { active_id: string | null; jobs: QualityJob[] } = {
   ],
 }
 
-// `satisfies` rather than a type annotation: the annotated form trips a gitleaks rule
-// (see .gitleaksignore).
-export const linkedInScan = {
-  id: 'li-1', started_at: EARLIER, completed_at: NOW, status: 'completed', jobs_found: 40, jobs_new: 12, error: null,
-  stats: null,
-} satisfies LinkedInScanRun
-
-export const linkedInStatus = {
-  enabled: true, waiting: 3, last_scan: linkedInScan, is_scanning: false, state: 'idle', progress: null,
-} satisfies LinkedInStatus
-
 export const helloWorkScan: HelloWorkScanRun = {
   id: 'hw-1', started_at: EARLIER, completed_at: NOW, status: 'completed', jobs_found: 30, jobs_new: 5, error: null,
   stats: { collector_errors: 0, collection_duration_seconds: 1700, metier_slugs_queried: 120 },
@@ -252,8 +241,6 @@ export function resolveFixture(path: string): unknown {
     [/^\/quality\/ft-coverage$/, { status: 'no_api_offers', window_days: 7, days_with_both: 0, api_offers: 0, web_offers: 12, found_by_web: 0, share: null, ci95: null }],
     [/^\/quality\/calibration$/, { datasets: [], exports_found: [], reasons: ['location', 'other'], max_session: 30 }],
     [/^\/quality\/jobs\/[^/]+$/, qualityJobs.jobs[1]],
-    [/^\/linkedin\/status$/, linkedInStatus],
-    [/^\/linkedin\/scans$/, [linkedInScan]],
     [/^\/hellowork\/status$/, helloWorkStatus],
     [/^\/hellowork\/scans$/, [helloWorkScan]],
   ]

@@ -1,7 +1,7 @@
 """Is this source on? One answer for every consumer (Phase B B4-A, finding P-001; owner decision D1).
 
 Before this module each consumer asked its own question: the Settings switch read the user's choice
-in ``data/settings.json``, the LinkedIn adapter read ``config/linkedin.yaml``, the HelloWork adapter
+in ``data/settings.json``, the HelloWork adapter
 only checked that ``config/sources.yaml`` named the source, and the scheduler read the choice alone.
 Turning HelloWork off in Settings therefore stopped the scans but its stored offers were still
 re-injected, scored and listed in every run.
@@ -11,7 +11,7 @@ The rule, for every source:
 * an official source is on when ``sources.yaml`` lists it as ``active``;
 * a user-switchable source (:data:`src.app_settings.UNOFFICIAL_CHOICE_SOURCES`) is on when its
   configuration provides it AND the user chose it (``src.app_settings.unofficial_source_enabled``):
-  LinkedIn through ``linkedin.yaml`` ``enabled`` (default off), HelloWork through its ``sources.yaml``
+  HelloWork through its ``sources.yaml``
   entry (kept ``active: false`` on purpose, because its own scanner collects it outside the pipeline),
   Indeed through its ``sources.yaml`` entry being ``active``.
 
@@ -22,10 +22,10 @@ the source back on brings the stored offers back.
 
 Issue #253 (owner decisions 2026-11-16) extends this to every source and supersedes two earlier
 clauses: every run carries forward the stored active offers of every source that is on
-(:func:`enabled_sources`, ``src/pipeline/carryover.py``), not only LinkedIn's and HelloWork's, so a
+(:func:`enabled_sources`, ``src/pipeline/carryover.py``), not only the staged sources', so a
 source that returns nothing no longer empties its part of the list (this replaces OQ-3's "replace
-the list"); and an offer not collected for ``expire_after_days_unseen`` days expires, LinkedIn and
-HelloWork included (this replaces D1's "no age-based expiry for staged sources"). A source that is
+the list"); and an offer not collected for ``expire_after_days_unseen`` days expires, HelloWork
+included (this replaces D1's "no age-based expiry for staged sources"). A source that is
 off for any reason (inactive in ``sources.yaml``, a removed type, the user's switch) has its stored
 offers hidden by the same rule (:func:`disabled_sources`).
 
@@ -61,24 +61,8 @@ def _sources_yaml_entry(config_dir: str | Path, source: str) -> dict | None:
     return entry if isinstance(entry, dict) else None
 
 
-def _linkedin_configured(config_dir: str | Path) -> bool:
-    import yaml
-
-    path = Path(config_dir) / "linkedin.yaml"
-    if not path.exists():
-        return False
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except (OSError, ValueError, yaml.YAMLError) as exc:
-        logger.warning("Source enablement: could not read %s: %s", path, exc)
-        return False
-    return isinstance(data, dict) and bool(data.get("enabled", False))
-
-
 def source_configured(source: str, config_dir: str | Path) -> bool:
     """Whether the configuration provides ``source`` (its part of the rule, without the user's choice)."""
-    if source == "linkedin":
-        return _linkedin_configured(config_dir)
     entry = _sources_yaml_entry(config_dir, source)
     if entry is None:
         return False
@@ -154,7 +138,7 @@ def switched_off_sources(config_dir: str | Path, settings_path: str | Path | Non
     """The user-switchable sources that are off now: their stored offers are hidden (D1).
 
     Stored offers carry the source's name (``jobs.source``), which for these sources is the same
-    string as the switch (``linkedin``, ``hellowork``, ``indeed``). The list itself hides the offers
+    string as the switch (``hellowork``, ``indeed``). The list itself hides the offers
     of every source outside :func:`enabled_sources` (issue #253)."""
     from src.app_settings import UNOFFICIAL_CHOICE_SOURCES
 

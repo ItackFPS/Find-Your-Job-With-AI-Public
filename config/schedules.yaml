@@ -4,9 +4,9 @@
 # The scheduler reads this file on startup and upserts definitions into SQLite.
 #
 # Shipped default: both scans run daily ONLY for a source you chose (startup_policy:
-# when_opted_in, plan rule I1). LinkedIn and HelloWork are unofficial sources: off on a
+# when_opted_in, plan rule I1). HelloWork is an unofficial source: off on a
 # fresh install, so a first start never sends queries built from the example profile.
-# You choose a source in data/settings.json ("unofficial_sources": {"linkedin": true});
+# You choose a source in data/settings.json ("unofficial_sources": {"hellowork": true});
 # an install that already ran a scan of a source counts as having chosen it. "Scan now"
 # on the dashboard always works.
 #
@@ -48,19 +48,11 @@ schedules:
     retry_max: 1                       # one automatic retry after a failure
     retry_delay_seconds: 1800
 
-  - id: linkedin_daily
-    source_id: linkedin
-    label: "LinkedIn daily scan"
-    enabled: true
-    startup_policy: when_opted_in      # daily once LinkedIn is chosen; manual before
-    retry_max: 0                       # no automatic retry on failure
-    retry_delay_seconds: 300
-
   - id: hellowork_daily
     source_id: hellowork
     label: "HelloWork daily scan"
     enabled: true
-    # Runs decoupled from the main pipeline run, same as LinkedIn above --
+    # Runs decoupled from the main pipeline run --
     # ~30 minutes for the full metier taxonomy (see src/hellowork/scanner.py
     # and src/collectors/hellowork.py). The scheduler auto-triggers a
     # pipeline run after this completes, which snapshots the staged jobs

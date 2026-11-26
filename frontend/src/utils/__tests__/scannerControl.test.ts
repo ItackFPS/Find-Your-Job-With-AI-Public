@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  scannerControl, scannerProgressLabel, scannerState, scannerWorkEstimate, startHoldEnded, START_HOLD_SAFETY_MS,
+  scannerControl, scannerProgressLabel, scannerState, startHoldEnded, START_HOLD_SAFETY_MS,
 } from '../scannerControl'
 
 describe('startHoldEnded', () => {
@@ -63,20 +63,6 @@ describe('scannerControl', () => {
 })
 
 describe('scannerProgressLabel', () => {
-  it('describes LinkedIn progress as query and page', () => {
-    expect(scannerProgressLabel({
-      queries_completed: 3, queries_total: 12, current_query: 'data engineer',
-      current_page: 6, updated_at: null,
-    })).toBe('Query 4 / 12 · page 7')
-  })
-
-  it('omits the page between queries', () => {
-    expect(scannerProgressLabel({
-      queries_completed: 12, queries_total: 12, current_query: null,
-      current_page: 0, updated_at: null,
-    })).toBe('Query 12 / 12')
-  })
-
   it('describes HelloWork progress as a count, never a percentage', () => {
     expect(scannerProgressLabel({ slugs_completed: 1, updated_at: null })).toBe('1 metier page done')
     expect(scannerProgressLabel({ slugs_completed: 42, updated_at: null })).toBe('42 metier pages done')
@@ -85,28 +71,5 @@ describe('scannerProgressLabel', () => {
   it('returns null without a checkpoint', () => {
     expect(scannerProgressLabel(null)).toBeNull()
     expect(scannerProgressLabel(undefined)).toBeNull()
-  })
-})
-
-describe('scanner work estimate (issue #86)', () => {
-  const linkedIn = {
-    queries_completed: 6, queries_total: 12, current_query: 'devops', current_page: 6,
-    updated_at: null, percent: 55, pages_done_est: 66, pages_total_est: 120,
-    current_query_pages_est: 10, estimated: true, eta_seconds: 4_320, eta_basis: 'live' as const,
-  }
-
-  it('appends the estimated page totals to the LinkedIn label', () => {
-    expect(scannerProgressLabel(linkedIn)).toBe('Query 7 / 12 · page 7 · ~66 / 120 pages')
-  })
-
-  it('exposes the backend percent and ETA for LinkedIn', () => {
-    expect(scannerWorkEstimate(linkedIn)).toEqual({ percent: 55, etaSeconds: 4_320 })
-    expect(scannerWorkEstimate({ ...linkedIn, eta_seconds: null })).toEqual({ percent: 55, etaSeconds: null })
-  })
-
-  it('has no work estimate for HelloWork or an older backend', () => {
-    expect(scannerWorkEstimate({ slugs_completed: 3, updated_at: null })).toBeNull()
-    expect(scannerWorkEstimate({ ...linkedIn, percent: undefined })).toBeNull()
-    expect(scannerWorkEstimate(null)).toBeNull()
   })
 })

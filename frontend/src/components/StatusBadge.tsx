@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 
 // Colors for the run/scan statuses actually produced by the backend
-// (PipelineRun.status / LinkedInScanRun.status / HelloWorkScanRun.status —
+// (PipelineRun.status / HelloWorkScanRun.status —
 // see src/api/schemas.py). Not a general-purpose status enum: unknown
 // strings fall back to the muted color rather than inventing a new state.
 const STATUS_COLORS: Record<string, string> = {

@@ -25,8 +25,8 @@ const pausedStatus = {
 function card(status: typeof pausedStatus | Record<string, unknown>, resumeFn: () => Promise<unknown>): ReactElement {
   return (
     <ScannerStatusCard
-      name="LinkedIn scan"
-      queryKey="linkedin-status"
+      name="HelloWork scan"
+      queryKey="hellowork-status"
       triggerFn={vi.fn()}
       pauseFn={vi.fn()}
       resumeFn={resumeFn}
@@ -80,7 +80,7 @@ describe('ScannerStatusCard — Starting… hold timing', () => {
     const wrap = (s: Record<string, unknown>) => (
       <QueryClientProvider client={client}>
         <ScannerStatusCard
-          name="LinkedIn scan" queryKey="linkedin-status" triggerFn={vi.fn()} pauseFn={vi.fn()}
+          name="HelloWork scan" queryKey="hellowork-status" triggerFn={vi.fn()} pauseFn={vi.fn()}
           resumeFn={resumeFn} status={s as never} avgDurationSeconds={avgDurationSeconds}
         />
       </QueryClientProvider>
@@ -126,9 +126,8 @@ describe('ScannerStatusCard — Starting… hold timing', () => {
   })
 })
 
-// Issue #86: LinkedIn's bar and ETA come from the backend's checkpoint-based
-// estimate, so a resume (new started_at a few seconds ago) keeps them.
-describe('ScannerStatusCard — work-based LinkedIn progress', () => {
+// HelloWork's bar and ETA are a time-based estimate from its past scans.
+describe('ScannerStatusCard — time-based progress', () => {
   const resumedJustNow = {
     ...pausedStatus,
     is_scanning: true,
@@ -138,55 +137,19 @@ describe('ScannerStatusCard — work-based LinkedIn progress', () => {
       started_at: new Date(Date.now() - 10_000).toISOString(),
     },
   }
-  const progress = {
-    queries_completed: 6, queries_total: 12, current_query: 'devops', current_page: 6,
-    updated_at: null, percent: 55, pages_done_est: 66, pages_total_est: 120,
-    current_query_pages_est: 10, estimated: true, eta_seconds: 4_320, eta_basis: 'checkpoint',
-  }
-
   function renderCard(status: Record<string, unknown>, avgDurationSeconds: number | null = 9_000) {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
         <ScannerStatusCard
-          name="LinkedIn scan" queryKey="linkedin-status" triggerFn={vi.fn()} pauseFn={vi.fn()}
+          name="HelloWork scan" queryKey="hellowork-status" triggerFn={vi.fn()} pauseFn={vi.fn()}
           resumeFn={vi.fn()} status={status as never} avgDurationSeconds={avgDurationSeconds}
         />
       </QueryClientProvider>,
     )
   }
 
-  it('shows the backend percentage after a resume instead of dropping to ~1%', () => {
-    renderCard({ ...resumedJustNow, progress })
-    expect(screen.getByText('~55%')).toBeInTheDocument()
-    expect(screen.queryByText('~1%')).toBeNull()
-  })
-
-  it('shows the ETA for the remaining work, not the full average duration', () => {
-    renderCard({ ...resumedJustNow, progress })
-    expect(screen.getByText('~1h 12m remaining (estimated)')).toBeInTheDocument()
-    expect(screen.queryByText(/2h 30m/)).toBeNull()  // the old avg − elapsed estimate
-  })
-
-  it('says so when there is not enough data for an ETA', () => {
-    renderCard({ ...resumedJustNow, progress: { ...progress, eta_seconds: null, eta_basis: null } })
-    expect(screen.getByText('~55%')).toBeInTheDocument()
-    expect(screen.getByText('Time remaining: not enough data yet')).toBeInTheDocument()
-    expect(screen.queryByText(/remaining \(estimated\)/)).toBeNull()
-  })
-
-  it('shows an interrupted scan with its real progress and no counting ETA', () => {
-    renderCard({
-      ...pausedStatus, state: 'interrupted',
-      last_scan: { ...pausedStatus.last_scan, status: 'interrupted' },
-      progress: { ...progress, eta_seconds: null, eta_basis: null },
-    })
-    expect(screen.getByText(/Interrupted — resumes from checkpoint · ~55% done · Query 7 \/ 12/)).toBeInTheDocument()
-    expect(screen.queryByText(/remaining/)).toBeNull()
-    expect(screen.getByRole('button', { name: 'Resume' })).toBeEnabled()
-  })
-
-  it('keeps the time-based estimate for a source without a work estimate (HelloWork)', () => {
+  it('estimates from the average duration of past scans', () => {
     renderCard({
       ...resumedJustNow,
       last_scan: { ...resumedJustNow.last_scan, started_at: new Date(Date.now() - 60_000).toISOString() },

@@ -40,11 +40,10 @@ jobs:
 
       - name: Install dependencies
         run: pip install -e ".[dev]" "mypy==2.3.0"
-        # Excludes the optional "linkedin" extra (python-jobspy), which keeps
-        # this install small. Tests that need it (pandas-backed LinkedIn
-        # record-building) skip themselves here when pandas isn't installed
-        # (tests/test_quality_fixes.py, tests/test_linkedin_description_workmode.py)
-        # and run in the Dependency audit workflow, which installs the extra.
+        # Excludes the optional "indeed" extra (python-jobspy), which keeps
+        # this install small. Tests that need it skip themselves here when it
+        # isn't installed and run in the Dependency audit workflow, which
+        # installs the extra.
 
       - name: Run deterministic test suite
         run: pytest -m "not network"
