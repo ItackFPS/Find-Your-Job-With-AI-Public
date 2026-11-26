@@ -9,10 +9,9 @@ contract-compliant implementations — just not configured with a
 board/company identifier yet. The fifth, "linkedin", targeted a LinkedIn
 endpoint that doesn't exist and violated the collector base contract by
 constructing Job instances directly — genuinely broken, unlike the other
-four, and unrelated to the project's real LinkedIn integration
-(src.linkedin.scanner.LinkedInScanner). It has been moved to
-src/collectors/experimental/ and removed from the registry; the other four
-are untouched.
+four. It was first quarantined in src/collectors/experimental/, then deleted
+with the rest of the LinkedIn integration (owner decision, 2026-11-24); the
+other four are untouched.
 """
 
 from __future__ import annotations
@@ -31,24 +30,6 @@ class TestDeadCollectorQuarantine:
         assert "linkedin" not in reg.list_collectors()
         with pytest.raises(KeyError):
             reg.get_collector_class("linkedin")
-
-    def test_experimental_linkedin_module_still_importable(self) -> None:
-        """Quarantined, not deleted — the code is preserved for reference."""
-        from src.collectors.experimental.linkedin import LinkedInCollector
-
-        assert LinkedInCollector is not None
-
-    def test_experimental_linkedin_collector_never_runs_via_pipeline(self) -> None:
-        """Even if instantiated directly (bypassing the registry entirely,
-        which no pipeline code path does), it must still honor the base
-        collector contract of never raising out of collect()."""
-        from src.collectors.experimental.linkedin import LinkedInCollector
-
-        collector = LinkedInCollector()
-        result = collector.collect()
-        assert result.source_name == "linkedin"
-        assert isinstance(result.jobs, list)
-        assert isinstance(result.errors, list)
 
 
 class TestDormantButWorkingCollectorsUnaffected:

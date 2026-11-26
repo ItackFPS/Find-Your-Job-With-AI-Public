@@ -12,8 +12,8 @@ from src.collectors.base import BaseCollector
 
 logger = logging.getLogger(__name__)
 
-# Source types that shipped in 1.x and were removed in 2.0. A config written
-# for 1.x may still list them; the pipeline skips such a source with this
+# Source types that shipped earlier and were removed. A config written for an
+# earlier release may still list them; the pipeline skips such a source with this
 # reason instead of reporting it as failed. Offers they collected stay stored.
 _REMOVE_HINT = "it is skipped, and offers it found stay saved"
 REMOVED_SOURCE_TYPES: dict[str, str] = {
@@ -21,6 +21,7 @@ REMOVED_SOURCE_TYPES: dict[str, str] = {
     f"request); {_REMOVE_HINT}",
     "wttj": "Welcome to the Jungle was removed in 2.0 (its firewall blocks "
     f"every request); {_REMOVE_HINT}",
+    "eures": f"EURES was removed (owner decision, 2026-11-24); {_REMOVE_HINT}",
 }
 
 
@@ -35,7 +36,6 @@ class CollectorRegistry:
         """Register built-in collector implementations."""
         from src.collectors.arbetsformedlingen import ArbetsformedlingenCollector
         from src.collectors.bundesagentur import BundesagenturCollector
-        from src.collectors.eures import EURESCollector
         from src.collectors.france_travail import FranceTravailCollector
         from src.collectors.france_travail_web import FranceTravailWebCollector
         from src.collectors.greenhouse import GreenhouseCollector
@@ -49,9 +49,9 @@ class CollectorRegistry:
         # working, verified collectors kept registered even though no
         # config/sources.yaml entry currently references any of them —
         # they're dormant/experimental (a source config just hasn't been
-        # written yet), not broken. See src/collectors/experimental/ for
-        # code that IS broken and was deliberately removed from this
-        # registry instead (Phase NOW / I4 audit, 2026-09-13).
+        # written yet), not broken. The one broken collector (an old
+        # LinkedIn endpoint) was taken out of this registry in the Phase NOW
+        # / I4 audit (2026-09-13) and deleted on 2026-11-24.
         self._collectors["greenhouse"] = GreenhouseCollector
         self._collectors["lever"] = LeverCollector
         self._collectors["remote"] = RemoteCollector
@@ -65,8 +65,6 @@ class CollectorRegistry:
         self._collectors["bundesagentur"] = BundesagenturCollector
         self._collectors["arbetsformedlingen"] = ArbetsformedlingenCollector
         self._collectors["smartrecruiters"] = SmartRecruitersCollector
-        # EURES: httpx-based (no browser needed; uses the public POST search API).
-        self._collectors["eures"] = EURESCollector
         # Indeed: httpx-based GraphQL API (no browser needed).
         from src.collectors.indeed import IndeedCollector
         self._collectors["indeed"] = IndeedCollector

@@ -66,7 +66,7 @@ def _run(tmp: Path, decisions_yaml: str | None, extra: dict[str, str] | None = N
     db = tmp / "jobs.db"
     with patch("src.embeddings.embedding.EmbeddingService", _FakeEmbeddingService):
         result = run_pipeline(db_path=str(db), config_dir=str(cfg),
-                              prefetched_linkedin_jobs=load_dataset(DS).build_jobs())
+                              prefetched_hellowork_jobs=load_dataset(DS).build_jobs())
     assert result.status == "completed", result.error
     return result, db, cfg
 
@@ -77,7 +77,7 @@ def _pipeline(db: Path, cfg: Path):
 
     with patch("src.embeddings.embedding.EmbeddingService", _FakeEmbeddingService):
         result = run_pipeline(db_path=str(db), config_dir=str(cfg), run_id="run",
-                              prefetched_linkedin_jobs=load_dataset(DS).build_jobs())
+                              prefetched_hellowork_jobs=load_dataset(DS).build_jobs())
     assert result.status == "completed", result.error
     return result
 
@@ -206,7 +206,7 @@ def test_snapshots_are_content_addressed_across_runs(on, tmp_path):
     result, db, cfg = on
     n_snap = sqlite3.connect(db).execute("SELECT COUNT(*) FROM job_snapshots").fetchone()[0]
     with patch("src.embeddings.embedding.EmbeddingService", _FakeEmbeddingService):
-        r2 = run_pipeline(db_path=str(db), config_dir=str(cfg), prefetched_linkedin_jobs=load_dataset(DS).build_jobs())
+        r2 = run_pipeline(db_path=str(db), config_dir=str(cfg), prefetched_hellowork_jobs=load_dataset(DS).build_jobs())
     assert r2.status == "completed" and r2.run_id != result.run_id
     conn = sqlite3.connect(db)
     assert conn.execute("SELECT COUNT(*) FROM job_snapshots").fetchone()[0] == n_snap
@@ -547,7 +547,7 @@ def test_a_caller_supplied_run_id_keys_the_journal(tmp_path):
     db = tmp_path / "jobs.db"
     with patch("src.embeddings.embedding.EmbeddingService", _FakeEmbeddingService):
         result = run_pipeline(db_path=str(db), config_dir=str(cfg), run_id="api-run-1",
-                              prefetched_linkedin_jobs=load_dataset(DS).build_jobs())
+                              prefetched_hellowork_jobs=load_dataset(DS).build_jobs())
     assert result.status == "completed" and result.run_id == "api-run-1"
     st = DecisionStorage(str(db))
     try:

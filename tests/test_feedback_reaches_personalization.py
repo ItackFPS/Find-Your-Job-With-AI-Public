@@ -30,7 +30,7 @@ def _pipeline(db: Path, cfg: Path):
 
     with patch("src.embeddings.embedding.EmbeddingService", _FakeEmbeddingService):
         result = run_pipeline(db_path=str(db), config_dir=str(cfg),
-                              prefetched_linkedin_jobs=load_dataset(DS).build_jobs())
+                              prefetched_hellowork_jobs=load_dataset(DS).build_jobs())
     assert result.status == "completed", result.error
     return result
 

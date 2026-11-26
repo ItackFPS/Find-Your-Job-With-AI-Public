@@ -1,8 +1,7 @@
 """HelloWork background scanner.
 
 Runs the (slow, ~30 minute) HelloWorkCollector synchronously and persists
-results to HelloWorkStagingStorage, mirroring src/linkedin/scanner.py's
-LinkedInScanner so the main pipeline run never waits on a live HelloWork
+results to HelloWorkStagingStorage so the main pipeline run never waits on a live HelloWork
 collection -- see src/collectors/hellowork.py's module docstring for why
 that collection is inherently slow (one HTTP request per job, no bulk
 endpoint exists).
@@ -73,9 +72,7 @@ class HelloWorkScanner:
         # (uvicorn --reload restart, or a real stop) can let an in-flight
         # scan finish its current unit of work cleanly and exit at a
         # checkpointed boundary, instead of being abandoned mid-request when
-        # the process dies. Mirrors LinkedInScanner's _shutdown_event
-        # exactly — see src/linkedin/scanner.py for the same pattern. Does
-        # not change checkpoint save/load semantics at all.
+        # the process dies. Does not change checkpoint save/load semantics at all.
         self._shutdown_event = shutdown_event if shutdown_event is not None else threading.Event()
         # User pause (issue #81): private to this scanner, honoured at exactly
         # the same checkpointed boundaries as a shutdown. Cleared whenever a
@@ -334,7 +331,7 @@ class HelloWorkScanner:
                     try:
                         is_new = self.staging.insert_job(record)
                     except Exception as exc:  # noqa: BLE001
-                        # Mirrors src/linkedin/scanner.py's per-row handling: a
+                        # Per-row handling: a
                         # transient write conflict (e.g. "database is locked"
                         # from a concurrent pipeline/API writer) must not abort
                         # the whole scan and lose every job still queued behind

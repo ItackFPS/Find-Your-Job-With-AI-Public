@@ -33,13 +33,13 @@ def _stored(tmp: Path, *jobs: Job) -> Storage:
 
 
 def test_a_new_id_with_stored_content_takes_the_stored_id(tmp_path: Path) -> None:
-    st = _stored(tmp_path, _job("stored", "eures", "h1"), _job("other", "eures", "h2"))
+    st = _stored(tmp_path, _job("stored", "arbetsformedlingen", "h1"), _job("other", "arbetsformedlingen", "h2"))
     try:
         before = st._get_conn().execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
-        variant = _job("new-id", "eures", "h1")
+        variant = _job("new-id", "arbetsformedlingen", "h1")
         same_hash_other_source = _job("x", "hellowork", "h1")
-        known = _job("other", "eures", "h2")
-        fresh = _job("fresh", "eures", "h9")
+        known = _job("other", "arbetsformedlingen", "h2")
+        fresh = _job("fresh", "arbetsformedlingen", "h9")
         aliases = st.align_stored_ids([variant, same_hash_other_source, known, fresh])
         assert aliases == {"new-id": "stored"}
         assert variant.id == "stored"
@@ -52,7 +52,7 @@ def test_a_new_id_with_stored_content_takes_the_stored_id(tmp_path: Path) -> Non
 def test_the_oldest_stored_row_wins(tmp_path: Path) -> None:
     from datetime import UTC, datetime
 
-    old, new = _job("b-old", "eures", "h1"), _job("a-new", "eures", "h1")
+    old, new = _job("b-old", "arbetsformedlingen", "h1"), _job("a-new", "arbetsformedlingen", "h1")
     old.first_seen_at = datetime(2026, 1, 1, tzinfo=UTC)
     new.first_seen_at = datetime(2026, 6, 1, tzinfo=UTC)
     st = Storage(db_path=str(tmp_path / "jobs.db"))
@@ -61,7 +61,7 @@ def test_the_oldest_stored_row_wins(tmp_path: Path) -> None:
         st.upsert_jobs_batch([old])
         # a second row with the same content can exist from before the fix: insert it directly
         st.upsert_job(new)
-        variant = _job("c", "eures", "h1")
+        variant = _job("c", "arbetsformedlingen", "h1")
         st.align_stored_ids([variant])
         assert variant.id == "b-old"
     finally:
@@ -71,8 +71,8 @@ def test_the_oldest_stored_row_wins(tmp_path: Path) -> None:
 # -- end to end ----------------------------------------------------------------------------------------
 
 SOURCES = """sources:
-  - name: eures
-    type: eures
+  - name: arbetsformedlingen
+    type: arbetsformedlingen
     active: true
     config: {}
 """
@@ -104,7 +104,7 @@ def _collector(payloads: list[dict]) -> type[BaseCollector]:
             super().__init__()
 
         def collect(self) -> CollectorResult:
-            return CollectorResult(source_name="eures", jobs=[dict(p) for p in payloads])
+            return CollectorResult(source_name="arbetsformedlingen", jobs=[dict(p) for p in payloads])
 
     return Fake
 

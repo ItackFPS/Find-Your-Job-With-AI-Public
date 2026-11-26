@@ -101,7 +101,7 @@ function Assert-NoScan([string]$When, [switch]$ProfileSaved) {
         $raw = (Invoke-WebRequest -Uri "$Base/api/pipeline/runs" -UseBasicParsing -TimeoutSec 10).Content.Trim()
         Check ($raw -eq "[]") "$When : no pipeline run was started (runs: $($raw.Substring(0, [Math]::Min(80, $raw.Length))))"
     }
-    foreach ($source in "linkedin", "hellowork") {
+    foreach ($source in @("hellowork")) {
         $s = Get-Json "/api/$source/status"
         Check ($null -ne $s -and -not $s.is_scanning -and $null -eq $s.last_scan) "$When : no $source scan started (state $($s.state))"
     }

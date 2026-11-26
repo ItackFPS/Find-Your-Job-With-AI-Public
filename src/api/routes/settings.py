@@ -183,7 +183,7 @@ def _busy(request: Request) -> str | None:
     runner = getattr(state, "runner", None)
     if runner is not None and runner.is_running():
         return "search_running"
-    for name in ("linkedin_scanner", "hellowork_scanner"):
+    for name in ("hellowork_scanner",):
         scanner = getattr(state, name, None)
         if scanner is not None and scanner.is_scanning():
             return "scan_running"

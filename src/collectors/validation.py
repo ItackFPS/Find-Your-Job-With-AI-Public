@@ -73,10 +73,8 @@ _YIELD_LIVE = "newly discovered useful offers per request and per second (src/pi
 
 FT = "tests/test_france_travail.py::test_"
 FTW = "tests/test_france_travail_web_collector.py::test_"
-EU = "tests/test_eures_collector.py::test_"
 IN = "tests/test_indeed_collector.py::test_"
 HW = "tests/test_hellowork_collector.py::test_"
-LI = "tests/test_linkedin_scanner.py::test_"
 SC = "tests/test_source_contract.py::test_"
 X2 = "tests/test_second_expansion_collectors.py::test_"
 JS = "tests/test_collector_json_safety.py::test_"
@@ -139,31 +137,6 @@ COLLECTORS: dict[str, CollectorValidation] = {
                                             SC + "france_travail_web_keeps_its_strict_fail_closed_reading",
                                             SC + "no_public_page_collector_requests_a_url_robots_txt_disallows")),
     }, note="Public pages, robots.txt read strictly (fail closed)."),
-    "eures": CollectorValidation("eures", True, {
-        "coverage": Criterion(
-            evidence=(EU + "discovery_queries_run_against_the_default_location_codes",
-                      EU + "explicit_queries_and_discovery_queries_are_both_run",
-                      EU + "no_default_queries_assume_a_profession"),
-            supervised=(_YIELD_LIVE,),
-            open=("Low yield in the audited run: 1,995 collected, 99 accepted (run 5f38fef7, P-004); the query "
-                  "plan must be revisited before reactivation (no budget change now, D7).",)),
-        "reliability": Criterion(evidence=(EU + "result_contract", EU + "malformed_response_missing_jvs_key")),
-        "latency": Criterion(evidence=(SC + "requests_to_a_site_wait_its_crawl_delay", SC + "a_huge_crawl_delay_is_capped"),
-                             supervised=(_LATENCY_LIVE + "; the audited collection stage took 457-464 s with its "
-                                         "10 s crawl delay",)),
-        "deduplication": Criterion(evidence=(EU + "duplicate_ids_skipped", EU + "cross_query_deduplication")),
-        "pagination": Criterion(evidence=(EU + "pagination_stops_when_fewer_than_page_size",
-                                          EU + "max_pages_per_query_caps_requests",
-                                          EU + "page_cap_with_every_counted_offer_fetched_is_complete",
-                                          EU + "per_query_status_reports_why_each_query_stopped")),
-        "error_handling": Criterion(evidence=(EU + "network_error_recorded_continues_next_query",
-                                              EU + "http_500_retried_then_error",
-                                              EU + "http_307_sorry_page_retried_then_error", *_ISOLATION)),
-        "source_enablement": _ENABLEMENT,
-        "access_rules": Criterion(evidence=(SC + "crawl_delay_is_read_from_the_group_that_applies",
-                                            SC + "request_cap_refuses_further_requests_and_is_reported",
-                                            SC + "robots_refusal_is_not_counted_as_a_request")),
-    }, note="Public search API of the European job portal; robots.txt Crawl-delay 10 s honoured."),
     "indeed": CollectorValidation("indeed", True, {
         "coverage": Criterion(
             evidence=(IN + "collect_passes_the_query_to_jobspy_and_dedups_across_queries",),
@@ -209,25 +182,6 @@ COLLECTORS: dict[str, CollectorValidation] = {
         "access_rules": Criterion(evidence=(SC + "every_public_page_collector_is_covered_here",
                                             SC + "no_public_page_collector_requests_a_url_robots_txt_disallows")),
     }, note="Public pages; staged source (scanned outside the pipeline)."),
-    "linkedin": CollectorValidation("linkedin", True, {
-        "coverage": Criterion(evidence=(LI + "unique_jobs_in_each_query_all_staged", LI + "stats_query_stopped_by_exhaustion"),
-                              supervised=(_YIELD_LIVE,)),
-        "reliability": Criterion(evidence=(LI + "blocked_empty_page_is_a_failure_not_exhaustion",
-                                           LI + "incomplete_job_is_rediscovered_and_completed")),
-        "latency": Criterion(supervised=(_LATENCY_LIVE,)),
-        "deduplication": Criterion(evidence=(LI + "dedup_within_scan_query", LI + "rescan_does_not_duplicate",
-                                             LI + "cross_query_dups_counted_in_stats")),
-        "pagination": Criterion(evidence=(LI + "fetches_multiple_pages_when_new_jobs_found",
-                                          LI + "pagination_stops_on_empty_results", LI + "safety_limit_max_pages")),
-        "error_handling": Criterion(evidence=(LI + "scan_query_failure_is_non_fatal",
-                                              LI + "query_failure_does_not_abort_remaining_queries",
-                                              LI + "run_scan_fails_gracefully_when_jobspy_missing")),
-        "source_enablement": _ENABLEMENT,
-        "access_rules": Criterion(
-            evidence=(LI + "disabled_by_default",),
-            open=("Reads the site through a scraping library; whether its access rules allow this is not "
-                  "assessed: the owner must accept or reject it explicitly.",)),
-    }, note="Staged source read through the jobspy library; off by default."),
     "bundesagentur": CollectorValidation("bundesagentur", True, {
         "coverage": Criterion(evidence=(X2 + "successful_collection",), supervised=(_YIELD_LIVE,)),
         "reliability": Criterion(evidence=(X2 + "normalize_fields_missing_optional",

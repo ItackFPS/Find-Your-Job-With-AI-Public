@@ -1,11 +1,11 @@
 name: Dependency audit
 
 # Python side of the dependency checks (the frontend job runs npm audit).
-# Installs what a user installs - the package with its optional "linkedin"
+# Installs what a user installs - the package with its optional "indeed"
 # extra, which the Tests workflow leaves out - then:
 #   1. pip-audit: fails on any known advisory in the installed packages;
 #   2. the tests that only run with python-jobspy/pandas installed, so the
-#      LinkedIn scanner is checked against the jobspy version users get.
+#      Indeed collector is checked against the jobspy version users get.
 # Runs on every pull request, on main, and weekly: advisories are published
 # without any commit here.
 #
@@ -13,9 +13,9 @@ name: Dependency audit
 #      Windows installer bundles.
 #
 # Reproduce locally:
-#   pip install -e ".[dev,linkedin]" "pip-audit==2.10.1"
+#   pip install -e ".[dev,indeed]" "pip-audit==2.10.1"
 #   pip-audit --skip-editable
-#   pytest -m "not network" tests/test_quality_fixes.py tests/test_linkedin_description_workmode.py tests/test_linkedin_scanner.py
+#   pytest -m "not network" tests/test_indeed_collector.py
 on:
   push:
     branches: [main]
@@ -45,8 +45,8 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
-      - name: Install the package with the linkedin extra
-        run: pip install -e ".[dev,linkedin]" "pip-audit==2.10.1"
+      - name: Install the package with the indeed extra
+        run: pip install -e ".[dev,indeed]" "pip-audit==2.10.1"
 
       - name: Installed python-jobspy and markdownify
         run: pip show python-jobspy markdownify | grep -E "^(Name|Version)"
@@ -61,10 +61,8 @@ jobs:
           pip-audit --progress-spinner off --no-deps --disable-pip
           -r packaging/windows/requirements.txt
 
-      - name: LinkedIn tests that need python-jobspy / pandas
+      - name: Tests that need python-jobspy / pandas
         if: ${{ !cancelled() }}
         run: >-
           pytest -m "not network"
-          tests/test_quality_fixes.py
-          tests/test_linkedin_description_workmode.py
-          tests/test_linkedin_scanner.py
+          tests/test_indeed_collector.py

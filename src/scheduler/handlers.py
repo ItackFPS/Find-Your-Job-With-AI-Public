@@ -2,7 +2,7 @@
 
 ``SchedulerService`` (service.py) talks to every source through the ``SourceHandler`` protocol
 (``is_running`` / ``dispatch``) and reads the outcome as a ``DispatchResult``. The handlers here
-wrap the LinkedIn and HelloWork scanners and the main pipeline (``PipelineRunner``, issue #76).
+wrap the HelloWork scanner and the main pipeline (``PipelineRunner``, issue #76).
 """
 
 from __future__ import annotations
@@ -95,37 +95,6 @@ class SourceHandler(Protocol):
     def dispatch(self) -> DispatchResult:
         """Perform one run synchronously. Returns its outcome (run reference + whether it genuinely completed)."""
         ...
-
-
-# ---------------------------------------------------------------------------
-# LinkedIn handler (wraps existing LinkedInScanner)
-# ---------------------------------------------------------------------------
-
-class LinkedInHandler:
-    """Adapts LinkedInScanner to the SourceHandler interface."""
-
-    def __init__(self, scanner: Any) -> None:
-        self._scanner = scanner
-
-    def is_running(self) -> bool:
-        running: bool = self._scanner.is_scanning()
-        return running
-
-    def is_paused(self) -> bool:
-        return _flag(self._scanner, "is_paused")
-
-    def interrupted_checkpoint_id(self) -> str | None:
-        return _marker(self._scanner, "interrupted_checkpoint_id")
-
-    def rate_limited_until(self) -> str | None:
-        return _marker(self._scanner, "rate_limited_until")
-
-    def request_pause(self) -> bool:
-        """Ask a running scan to stop at its next checkpoint (False when none runs)."""
-        return bool(self._scanner.request_pause())
-
-    def dispatch(self) -> DispatchResult:
-        return _scanner_dispatch(self._scanner)
 
 
 # ---------------------------------------------------------------------------

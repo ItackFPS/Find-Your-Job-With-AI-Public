@@ -45,15 +45,14 @@ offline evidence yet; **open** = open item.
 |---|---|---|---|---|---|---|---|---|
 | france_travail | **open** | ok | ok + S | ok | ok | ok | ok | ok + S |
 | france_travail_web | **open** | ok | ok + S | ok | ok | ok | ok | ok |
-| eures | **open** | ok | ok + S | ok | ok | ok | ok | ok |
 | indeed | **open** | ok | ok + S | ok | ok | ok | ok | **open** |
 | hellowork | **open** | ok | ok + S | ok | ok | ok | ok | ok |
-| linkedin | ok + S | ok | none | ok | ok | ok | ok | **open** |
 | bundesagentur | ok + S | ok | none | ok | **open** | ok | ok | **open** |
 | arbetsformedlingen | ok + S | ok | none | ok | **open** | ok | ok | ok |
 
 Not configured (frozen, validation not started): greenhouse, lever, smartrecruiters, workingnomads, remote,
-rss. RemoteOK, Jobicy and We Work Remotely are removed (owner decision D10).
+rss. RemoteOK, Jobicy and We Work Remotely are removed (owner decision D10). EURES and LinkedIn are removed
+(owner decision, 2026-11-24).
 
 ### Open items
 
@@ -61,15 +60,11 @@ rss. RemoteOK, Jobicy and We Work Remotely are removed (owner decision D10).
   ceiling and is incomplete (B4-D). A narrower query plan is needed.
 - **france_travail_web, coverage**: the preset occupation codes are broad. On the 363 replayed offers, 62 pass
   the filter and 1 is useful (B8-A replay). The occupation boost (B5-E) was not shipped for that reason.
-- **eures, coverage**: low yield in the audited run, 1,995 collected and 99 accepted (run `5f38fef7`, P-004).
-  The query plan must be revisited; no request budget is introduced now (D7).
 - **indeed, coverage**: listing completeness cannot be known; the answer gives no total (B4-D).
 - **indeed, access rules**: read through a scraping library. Its terms-of-use risk is documented, not
   resolved; the owner must accept or reject it.
 - **hellowork, coverage**: each listing page exposes 20 offers and robots.txt forbids query-string paging;
   breadth comes only from the number of occupation pages read.
-- **linkedin, access rules**: read through a scraping library; whether its access rules allow this is not
-  assessed. The owner must accept or reject it.
 - **bundesagentur, pagination** and **arbetsformedlingen, pagination**: one bounded page per search term; no
   test of what lies beyond it.
 - **bundesagentur, access rules**: the API key is documented by a third-party project; the source is opt-in.

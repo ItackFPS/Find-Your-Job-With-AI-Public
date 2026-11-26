@@ -165,7 +165,7 @@ Run the smallest relevant set while working; CI runs the full backend suite.
 | `src/api/` | `pytest tests/test_api_*.py` |
 | `src/evaluation/` | `pytest tests/test_evaluation_*.py` |
 | `src/storage/` | `pytest tests/test_storage.py tests/test_run_*.py tests/test_source_checkpoints.py` |
-| `src/linkedin/`, `src/hellowork/` | `pytest tests/test_linkedin_*.py tests/test_hellowork_*.py` |
+| `src/hellowork/` | `pytest tests/test_hellowork_*.py` |
 | Shared models / orchestrator | full suite: `pytest -m "not network"` (~8 min) |
 | `frontend/` | `cd frontend && npm run lint && npm run build && npm test` |
 
