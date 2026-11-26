@@ -515,6 +515,15 @@ def run_pipeline(
                 merged_cfg.setdefault("departments", ft_departments(distance_cfg) if distance_cfg else [
                     p.value for p in early_profile.geography.location_preferences
                     if p.type == "department" and p.status != "excluded"])
+            if src_type == "indeed" and early_profile is not None:
+                # The local partition of a nationwide Indeed search (#305): the profile's home,
+                # its maximum distance as radius. Without a home the collector's city list is used.
+                from src.pipeline.location_distance import distance_config
+
+                distance_cfg = distance_config(early_profile)
+                if distance_cfg and distance_cfg["home"].get("name"):
+                    merged_cfg.setdefault("local_area", {"name": distance_cfg["home"]["name"],
+                                                         "radius_km": distance_cfg["max_distance_km"]})
             if src_type == "france_travail" and early_profile is not None:
                 # A saturated API query is also read per département of the search area (#310):
                 # the same départements as France Travail web.

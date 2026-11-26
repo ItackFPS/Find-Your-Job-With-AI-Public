@@ -15,6 +15,18 @@ Query strategy:
   policy paces the *queries*, and the page budget is counted from ``results_wanted``
   before each call.
 
+Partitions (#305): Indeed's answer to a France-wide keyword search is a truncated subset,
+cut well below jobspy's ~1,000 cap (2026-11-24: "commercial" 627 France-wide, 1,596 with
+partitions; "infirmier" 588 -> 1,074), so the row count cannot tell a complete answer from a
+cut one. Each nationwide search (location = ``default_location``) is therefore followed by:
+  1. one search per job type (``partition_job_types``), same keyword, France-wide;
+  2. a local partition, unless step 1 brought fewer than ``partition_min_gain`` new offers
+     per offer of the base search and the base search stayed under its cap: the profile's
+     home with its maximum distance as radius (``local_area``, injected by the orchestrator),
+     else each city of ``partition_cities`` (radius ``city_radius_miles``).
+  Offers are united by Indeed job key. The first answer with HTTP 403 or 429 stops every
+  remaining search of the run (no retry, no proxy): Indeed asked to slow down.
+
 Mapping: ids and canonical URLs stay the ones the former GraphQL client produced
 (``fr.indeed.com/viewjob?jk=<key>``), so offers stored before the switch deduplicate.
 jobspy reports "fully remote" but not "hybrid", and gives a city rather than a postal
@@ -43,6 +55,17 @@ logger = logging.getLogger(__name__)
 _JOBS_PER_PAGE = 100            # jobspy's Indeed page size (jobspy/indeed/constant.py)
 _COUNTRY = "france"
 _API_ORIGIN = "https://apis.indeed.com/graphql"
+
+# Partition defaults (#305). Job types are jobspy's JobType values that Indeed's API filters on.
+_DEFAULT_PARTITION_JOB_TYPES: tuple[str, ...] = ("fulltime", "parttime", "internship", "contract")
+# The twelve largest French cities, used when the profile has no home.
+_DEFAULT_PARTITION_CITIES: tuple[str, ...] = (
+    "Paris", "Lyon", "Marseille", "Toulouse", "Lille", "Bordeaux", "Nantes", "Strasbourg",
+    "Rennes", "Montpellier", "Nice", "Clermont-Ferrand",
+)
+_KM_PER_MILE = 1.609344
+# Indeed answered "slow down": stop the run's remaining searches.
+_BLOCKED_STATUSES = frozenset({403, 429})
 
 # jobspy job types -> canonical pipeline values (the former attribute map's outputs).
 _JOB_TYPE_MAP: dict[str, str] = {
@@ -114,11 +137,19 @@ class IndeedCollector(BaseCollector):
         discovery_queries   Keyword strings injected by the orchestrator; each is run
                             against default_location.
         default_location    Location for discovery_queries (default: "France").
-        max_pages_per_query Pages of 100 per query (default: 5).
+        max_pages_per_query Pages of 100 per query (default: 10).
         max_jobs_per_query  Hard cap per query (default: max_pages_per_query x 100).
         date_filter_hours   Only jobs posted in the last N hours (default: 720 = 30 days).
         rate_limit_delay    Seconds from the end of one query to the start of the next
                             (floor: rate_policy.min_delay_seconds).
+        partition           Split nationwide searches (default: true; see the module doc).
+        partition_job_types jobspy job types searched after a nationwide search.
+        partition_min_gain  New offers per base offer the job-type split must bring for the
+                            local split to run (default: 0.05).
+        local_area          {"name": <place>, "radius_km": <km>}: the profile's home and maximum
+                            distance (orchestrator). Replaces partition_cities when set.
+        partition_cities    Cities searched when there is no local_area (default: 12 largest).
+        city_radius_miles   Radius of a partition_cities search (default: 25).
 
     jobspy uses its own request timeout and retries; this collector sets neither.
     """
@@ -127,7 +158,8 @@ class IndeedCollector(BaseCollector):
     access_class = "unofficial"
     # jobspy fetches a query's pages back to back; queries are spaced by the delay, and
     # every page a query returned counts against the per-run cap.
-    rate_policy = RatePolicy(min_delay_seconds=2.0, max_requests_per_run=500)
+    # 2,000 pages: partitions add up to ~17 searches per nationwide keyword, most of one page.
+    rate_policy = RatePolicy(min_delay_seconds=2.0, max_requests_per_run=2000)
 
     def fixture(self) -> RecordedFixture:
         return RecordedFixture("indeed_jobspy.json", self._load_fixture("indeed_jobspy.json"), parse_jobspy_rows)
@@ -142,10 +174,20 @@ class IndeedCollector(BaseCollector):
         self.queries: list[dict[str, str]] = list(cfg.get("queries") or [])
         self.discovery_queries: list[str] = list(cfg.get("discovery_queries") or [])
         self.default_location: str = str(cfg.get("default_location", "France"))
-        self.max_pages_per_query: int = max(1, int(cfg.get("max_pages_per_query", 5)))
+        self.max_pages_per_query: int = max(1, int(cfg.get("max_pages_per_query", 10)))
         cap = self.max_pages_per_query * _JOBS_PER_PAGE
         self.max_jobs_per_query: int = min(int(cfg["max_jobs_per_query"]), cap) if cfg.get("max_jobs_per_query") else cap
         self.date_filter_hours: int | None = int(cfg["date_filter_hours"]) if cfg.get("date_filter_hours") else None
+        self.partition: bool = bool(cfg.get("partition", True))
+        self.partition_job_types: list[str] = [
+            str(t) for t in (cfg.get("partition_job_types") or _DEFAULT_PARTITION_JOB_TYPES)]
+        self.partition_min_gain: float = float(cfg.get("partition_min_gain", 0.05))
+        area = cfg.get("local_area")
+        self.local_area: dict[str, Any] | None = (
+            dict(area) if isinstance(area, dict) and str(area.get("name") or "").strip() else None)
+        self.partition_cities: list[str] = [
+            str(c) for c in (cfg.get("partition_cities") or _DEFAULT_PARTITION_CITIES)]
+        self.city_radius_miles: int = max(1, int(cfg.get("city_radius_miles", 25)))
         self._scrape = scrape
 
     def collect(self) -> CollectorResult:
@@ -174,25 +216,67 @@ class IndeedCollector(BaseCollector):
             return CollectorResult(source_name="indeed", jobs=[], duration_seconds=0.0,
                                    errors=["indeed: python-jobspy is not installed"])
 
-        for keyword, location in effective:
-            try:
-                rows, error = self._collect_query(scrape, keyword, location)
-            except RequestBudgetExceeded as exc:
-                errors.append(f"indeed: {exc}")
-                break
-            if error:
-                errors.append(f"indeed [{keyword} @ {location}]: {error}")
+        searches: list[dict[str, Any]] = []
+        blocked = False
+
+        def run(keyword: str, location: str, job_type: str | None = None,
+                distance: int | None = None) -> tuple[int, int]:
+            """One search; returns (rows, new offers). Sets ``blocked`` on a 403/429."""
+            nonlocal blocked
+            rows, error = self._collect_query(scrape, keyword, location, job_type=job_type, distance=distance)
+            new = 0
             for raw in rows:
                 key = raw.get("source_job_id")
                 if key and key not in seen:
                     seen.add(key)
                     all_jobs.append(raw)
+                    new += 1
+            label = f"{keyword} @ {location}" + (f" [{job_type}]" if job_type else "")
+            searches.append({"keyword": keyword, "location": location, "job_type": job_type,
+                             "distance_miles": distance, "rows": len(rows), "new": new, "error": error})
+            if error:
+                errors.append(f"indeed [{label}]: {error}")
+                m = _STATUS.search(error)
+                if m and int(m.group(1)) in _BLOCKED_STATUSES:
+                    blocked = True
+            return len(rows), new
+
+        try:
+            for keyword, location in effective:
+                if blocked:
+                    break
+                base_rows, base_new = run(keyword, location)
+                if not self.partition or location != self.default_location or blocked:
+                    continue
+                type_new = 0
+                for job_type in self.partition_job_types:
+                    if blocked:
+                        break
+                    type_new += run(keyword, location, job_type=job_type)[1]
+                capped = base_rows >= self.max_jobs_per_query
+                if blocked or (not capped and type_new < self.partition_min_gain * max(base_new, 1)):
+                    continue
+                if self.local_area is not None:
+                    radius_km = float(self.local_area.get("radius_km") or 40)
+                    run(keyword, str(self.local_area["name"]),
+                        distance=max(5, math.ceil(radius_km / _KM_PER_MILE)))
+                else:
+                    for city in self.partition_cities:
+                        if blocked:
+                            break
+                        run(keyword, city, distance=self.city_radius_miles)
+        except RequestBudgetExceeded as exc:
+            errors.append(f"indeed: {exc}")
+        if blocked:
+            errors.append("indeed: Indeed answered 403/429; the remaining searches of this run were not made")
 
         duration = time.time() - start_time
         self._log_collection("indeed", len(all_jobs), errors, duration)
-        return CollectorResult(source_name="indeed", jobs=all_jobs, errors=errors, duration_seconds=duration)
+        return CollectorResult(source_name="indeed", jobs=all_jobs, errors=errors, duration_seconds=duration,
+                               metadata={"searches": searches, "blocked": blocked})
 
-    def _collect_query(self, scrape: ScrapeFn, keyword: str, location: str) -> tuple[list[dict[str, Any]], str | None]:
+    def _collect_query(self, scrape: ScrapeFn, keyword: str, location: str, *, job_type: str | None = None,
+                       distance: int | None = None) -> tuple[list[dict[str, Any]], str | None]:
         """One jobspy search. Returns ``(raw jobs, error or None)``; never raises except
         ``RequestBudgetExceeded`` (the run's page budget is spent).
 
@@ -201,12 +285,17 @@ class IndeedCollector(BaseCollector):
         previous query, since a query's pages can take several seconds."""
         self._before_request(_API_ORIGIN, check_robots=False)
         self._enforce_rate_limit()
+        extra: dict[str, Any] = {}
+        if job_type:
+            extra["job_type"] = job_type
+        if distance is not None:
+            extra["distance"] = distance
         with _jobspy_errors() as logged:
             try:
                 df = scrape(
                     site_name=["indeed"], search_term=keyword, location=location, country_indeed=_COUNTRY,
                     results_wanted=self.max_jobs_per_query, hours_old=self.date_filter_hours,
-                    description_format="html", verbose=0,
+                    description_format="html", verbose=0, **extra,
                 )
             except Exception as exc:  # noqa: BLE001 — one failed query must not stop the others
                 df = None
