@@ -116,9 +116,7 @@ def sources_overview(request: Request) -> dict[str, Any]:
     entries: dict[str, dict[str, Any]] = {}
     for src in SourceRegistry(config_path=str(Path(state.config_dir) / "sources.yaml")).all_sources:
         entries[src["name"]] = {"type": src.get("type"), "configured": bool(src.get("active", True))}
-    # LinkedIn and HelloWork are collected by their own scanners (src/api/staged_sources.py).
-    linkedin_config = getattr(state, "linkedin_config", None)
-    entries["linkedin"] = {"type": "linkedin", "configured": bool(getattr(linkedin_config, "enabled", False))}
+    # HelloWork is collected by its own scanner (src/api/staged_sources.py).
     if "hellowork" in entries:
         entries["hellowork"]["configured"] = getattr(state, "hellowork_scanner", None) is not None
 

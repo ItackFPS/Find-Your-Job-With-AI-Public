@@ -423,7 +423,7 @@ export function DecisionPanel({ decision }: { decision: DecisionRecord }) {
 }
 
 // Where the offer was seen (issue #86): every source that listed it, linked when its
-// address is known, so a duplicate across France Travail and EURES shows once.
+// address is known, so a duplicate across France Travail and Indeed shows once.
 export function SeenOn({ job }: { job: Job }) {
   const { t } = useTranslation()
   const sightings = job.provenance?.length ? job.provenance : [{ source: job.source, url: null }]

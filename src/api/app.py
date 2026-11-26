@@ -67,7 +67,6 @@ from src.api.routes import (
     hellowork,
     jobs,
     lab,
-    linkedin,
     pipeline,
     privacy,
     profile,
@@ -82,11 +81,8 @@ from src.api.runner import PipelineRunner
 from src.hellowork.scanner import HelloWorkScanner
 from src.launcher.core import DEV_SERVER_ENV, INSTANCE_TOKEN_ENV, SUPERVISED_ENV
 from src.hellowork.staging import HelloWorkStagingStorage
-from src.linkedin.scanner import LinkedInConfig, LinkedInScanner
-from src.linkedin.staging import LinkedInStagingStorage
 from src.scheduler.service import (
     HelloWorkHandler,
-    LinkedInHandler,
     PIPELINE_SOURCE_ID,
     PipelineHandler,
     SchedulerService,
@@ -155,43 +151,21 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
     rs.close()
     logger.info("Database initialised at %s", db_path)
 
-    # -- LinkedIn staging init (always runs so recovery is always safe) ------
-    li_staging = LinkedInStagingStorage(db_path=db_path)
-    li_staging.init_db()
-    li_staging.recover_stale_scans()
-    # Reset after pipeline recovery: any job snapshotted by a now-failed
-    # pipeline run must be returned to 'waiting'.
-    li_staging.reset_stale_snapshots()
-    application.state.linkedin_staging = li_staging
-
-    # -- LinkedIn config and scanner (only when enabled) ---------------------
-    li_config = LinkedInConfig.load(config_dir)
-    application.state.linkedin_config = li_config
-    application.state.linkedin_scanner = None
-
-    # Shared by every scanner so a single shutdown signal stops all of them
-    # cooperatively -- see LinkedInScanner's docstring on _shutdown_event.
+    # Shared by the HelloWork scanner and the pipeline handler so a single shutdown signal
+    # stops them cooperatively -- see HelloWorkScanner's _shutdown_event.
     scanner_shutdown_event = threading.Event()
-
-    li_scanner: LinkedInScanner | None = None
-    if li_config.enabled:
-        li_scanner = LinkedInScanner(
-            config=li_config, staging=li_staging, config_dir=config_dir,
-            shutdown_event=scanner_shutdown_event, db_path=db_path,
-        )
-        application.state.linkedin_scanner = li_scanner
-    else:
-        logger.debug("LinkedIn scanner disabled (set enabled: true in config/linkedin.yaml).")
 
     # -- HelloWork staging init (always runs so recovery is always safe) -----
     hw_staging = HelloWorkStagingStorage(db_path=db_path)
     hw_staging.init_db()
     hw_staging.recover_stale_scans()
+    # Reset after pipeline recovery: any job snapshotted by a now-failed
+    # pipeline run must be returned to 'waiting'.
     hw_staging.reset_stale_snapshots()
     application.state.hellowork_staging = hw_staging
 
-    # -- HelloWork scanner (runs decoupled from the main pipeline, like
-    # LinkedIn -- see src/collectors/hellowork.py for why its collection is
+    # -- HelloWork scanner (runs decoupled from the main pipeline -- see
+    # src/collectors/hellowork.py for why its collection is
     # slow: ~30 minutes for the full metier taxonomy, one request per job).
     # Reads the same 'hellowork' entry's config sub-dict from sources.yaml
     # that the collector itself accepts; that entry is set active: false so
@@ -242,8 +216,6 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
 
     # -- Generic scheduler (always starts; dispatches per config/schedules.yaml) --
     handlers: dict[str, SourceHandler] = {}
-    if li_scanner is not None:
-        handlers["linkedin"] = LinkedInHandler(scanner=li_scanner)
     if hw_scanner is not None:
         handlers["hellowork"] = HelloWorkHandler(scanner=hw_scanner)
     # The main pipeline runs daily too (pipeline_daily, issue #76): it collects the
@@ -251,7 +223,7 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
     handlers[PIPELINE_SOURCE_ID] = PipelineHandler(
         runner=application.state.runner, db_path=db_path, shutdown_event=scanner_shutdown_event,
     )
-    # LinkedIn/HelloWork scan daily only once chosen (plan rule I1, F6.4): the stored choice.
+    # HelloWork scans daily only once chosen (plan rule I1, F6.4): the stored choice.
     # An install that scanned them before 2.0 has that observed choice stored once, now; a
     # scan started by hand later never turns daily scans on.
     from src.app_settings import background_settings, record_observed_choices
@@ -260,7 +232,7 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
     try:
         observed = record_observed_choices(Path(application.state.settings_path), {
             name: staging is not None and bool(staging.list_scan_runs(limit=1))
-            for name, staging in (("linkedin", li_staging), ("hellowork", hw_staging))})
+            for name, staging in (("hellowork", hw_staging),)})
         if observed:
             logger.info("Unofficial sources already scanned by this install, kept as chosen: %s",
                         ", ".join(observed))
@@ -350,7 +322,6 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
         # call finishing, which is already what the scanner was doing.
         scanner_shutdown_event.set()
         scheduler.stop()
-        li_staging.close()
         hw_staging.close()
         if stop_signal_event is not None:
             stop_signal_event.close()
@@ -513,7 +484,6 @@ app.include_router(dashboard.router)
 app.include_router(esco.router)
 app.include_router(departments.router)
 app.include_router(geo.router)
-app.include_router(linkedin.router)
 app.include_router(hellowork.router)
 app.include_router(scheduler_routes.router)
 app.include_router(settings_routes.router)

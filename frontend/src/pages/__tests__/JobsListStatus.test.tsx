@@ -8,7 +8,7 @@ import { ToastProvider } from '../../components'
 import Jobs from '../Jobs'
 
 const job = (id: string, extra: Record<string, unknown> = {}) => ({
-  id, source: 'eures', title: `Offre ${id}`, company: 'ACME', location: 'Lyon', status: 'active', score: null,
+  id, source: 'bundesagentur', title: `Offre ${id}`, company: 'ACME', location: 'Lyon', status: 'active', score: null,
   saved: false, hidden: false, ...extra,
 })
 let listed: unknown[] = []
@@ -23,8 +23,8 @@ vi.mock('axios', () => {
       if (url === '/jobs/list-status') {
         return Promise.resolve({ data: {
           visible_run_id: 'r1', visible_run_completed_at: null, latest_run_id: 'r1', latest_run_status: 'completed',
-          latest_run_outcome: 'partial', previous_list_kept: false, incomplete_sources: { eures: 'suspect_empty' },
-          carried_by_source: { eures: 12 }, listed: 50, hidden_by_user: 0, outside_criteria: 0,
+          latest_run_outcome: 'partial', previous_list_kept: false, incomplete_sources: { bundesagentur: 'suspect_empty' },
+          carried_by_source: { bundesagentur: 12 }, listed: 50, hidden_by_user: 0, outside_criteria: 0,
           source_off: {}, expired: {},
         } })
       }
@@ -52,7 +52,7 @@ describe('Jobs page list status (issue #253)', () => {
     listed = [job('a')]
     count = 1
     renderJobs()
-    expect(await screen.findByTestId('list-status-incomplete')).toHaveTextContent('eures returned no offer')
+    expect(await screen.findByTestId('list-status-incomplete')).toHaveTextContent('bundesagentur returned no offer')
     expect(screen.getByTestId('list-status-carried')).toHaveTextContent('12 offers in the list come from earlier searches')
   })
 

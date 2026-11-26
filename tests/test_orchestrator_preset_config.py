@@ -23,7 +23,7 @@ class _Recorder(BaseCollector):
 
     def collect(self) -> CollectorResult:
         _SEEN["config"] = self._config
-        return CollectorResult(source_name="eures", jobs=[])
+        return CollectorResult(source_name="indeed", jobs=[])
 
 
 def _run(tmp_path: Path, monkeypatch, profile_yaml: str, source_config: str = "") -> dict[str, Any]:
@@ -31,13 +31,14 @@ def _run(tmp_path: Path, monkeypatch, profile_yaml: str, source_config: str = ""
     from src.pipeline.orchestrator import run_pipeline
 
     _SEEN.clear()
+    monkeypatch.setenv("INDEED_API_KEY", "x")      # the legacy key counts as choosing Indeed
     monkeypatch.setattr(registry, "get_collector_class", lambda src_type: _Recorder)
     config_dir = tmp_path / "config"
     config_dir.mkdir()
     (config_dir / "profile.yaml").write_text(profile_yaml, encoding="utf-8")
     (config_dir / "filters.yaml").write_text("{}\n", encoding="utf-8")
     (config_dir / "sources.yaml").write_text(
-        "sources:\n  - {name: eures, type: eures, active: true" + source_config + "}\n",
+        "sources:\n  - {name: indeed, type: indeed, active: true" + source_config + "}\n",
         encoding="utf-8",
     )
     result = run_pipeline(db_path=str(tmp_path / "t.db"), config_dir=str(config_dir))
@@ -47,15 +48,15 @@ def _run(tmp_path: Path, monkeypatch, profile_yaml: str, source_config: str = ""
 
 def test_it_profile_gets_the_preset_queries(tmp_path, monkeypatch) -> None:
     config = _run(tmp_path, monkeypatch, "target_domains: [software_development]\n")
-    assert {"keyword": "software engineer", "location_codes": ["be", "lu", "ch"]} in config["queries"]
+    assert {"keyword": "devops engineer", "location": "France"} in config["queries"]
 
 
 def test_the_source_config_wins_over_the_preset(tmp_path, monkeypatch) -> None:
     config = _run(
         tmp_path, monkeypatch, "target_domains: [software_development]\n",
-        ", config: {queries: [{keyword: mine, location_codes: [fr]}]}",
+        ", config: {queries: [{keyword: mine, location: Lyon}]}",
     )
-    assert config["queries"] == [{"keyword": "mine", "location_codes": ["fr"]}]
+    assert config["queries"] == [{"keyword": "mine", "location": "Lyon"}]
 
 
 def test_a_nurse_gets_her_own_queries_and_no_it_config(tmp_path, monkeypatch) -> None:

@@ -218,7 +218,7 @@ export const updateJobApplicationStatus = (id: string, status: string | null) =>
   api.patch<Job>(`/jobs/${id}/application-status`, { application_status: status }).then(r => r.data)
 
 // ---- Scan pause / resume (issue #81) ---------------------------------------
-// Shared by the LinkedIn and HelloWork scanners. `state` comes from the
+// Used by the HelloWork scanner. `state` comes from the
 // backend's persisted checkpoint: 'paused' survives restarts until resumed,
 // 'interrupted' (shutdown/crash) is resumed automatically by the scheduler.
 
