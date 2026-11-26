@@ -16,8 +16,8 @@ that source, the skip named in the report and the run's errors. Credentials
 that are present but fail to authenticate do not block the run either (#303): an
 outage or a network error is retried briefly, then France Travail is skipped for
 this run with the failure class named (refused credentials, lost subscription,
-outage, network), the run goes ahead DEGRADED and the other sources (EURES, which
-carries France Travail's own offers, included) still collect. Indeed is an
+outage, network), the run goes ahead DEGRADED and the other sources (France Travail web
+included) still collect. Indeed is an
 unofficial source, off unless the user chose it (``src.app_settings``, plan rule
 I1): when it is off it is skipped with that reason, which is the intended default
 and does not mark the run degraded.
