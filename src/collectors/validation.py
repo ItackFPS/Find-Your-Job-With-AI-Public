@@ -103,10 +103,9 @@ COLLECTORS: dict[str, CollectorValidation] = {
         "source_enablement": _ENABLEMENT,
         "access_rules": Criterion(
             evidence=(FT + "missing_credentials_makes_no_http_call", FT + "bearer_token_sent_in_authorization_header",
+                      FT + "token_and_search_requests_are_counted",
                       "tests/test_collection_freeze.py::test_preflight_skips_frozen_sources_and_never_authenticates"),
-            supervised=("API access granted to this installation (restricted API; no access is set up here)",),
-            open=("Requests go through its own HTTP client and are not counted (counts_requests = False, B8-A): "
-                  "no request yield until they are.",)),
+            supervised=("API access granted to this installation (restricted API; no access is set up here)",)),
     }, note="Documented API with credentials."),
     "france_travail_web": CollectorValidation("france_travail_web", True, {
         "coverage": Criterion(

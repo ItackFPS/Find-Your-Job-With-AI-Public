@@ -84,9 +84,14 @@ sources:
     #
     # Pagination: jobspy fetches up to max_pages_per_query pages of 100 per query,
     # back to back, with its own timeout; queries are spaced by rate_limit_delay (floor
-    # 2 s, from the end of one query), and every page counts against the 500-request cap.
+    # 2 s, from the end of one query), and every page counts against the 2,000-request cap.
+    #
+    # Partitions (#305): Indeed cuts a France-wide answer well below 1,000 offers, so each
+    # nationwide search is followed by one search per job type, then a local one (your home
+    # and maximum distance, or the 12 largest cities) unless the job types found almost
+    # nothing new. partition: false turns it off. The first 403/429 stops the run's searches.
     config:
-      max_pages_per_query: 5      # 5 pages × 100 jobs = 500 max per keyword
+      max_pages_per_query: 10     # 10 pages × 100 jobs = 1,000 max per search (jobspy's ceiling)
       rate_limit_delay: 2.0       # seconds between queries (jobspy pages a query itself)
       date_filter_hours: 720      # jobs posted in the last 30 days (set null to disable)
       default_location: "France"  # used when discovery_queries are injected by orchestrator
@@ -168,6 +173,9 @@ sources:
       # domains: HelloWork's own domain slugs (e.g. "informatique", "sante"). None by
       # default: a line of work with a preset (config/presets/) gets that preset's domains;
       # otherwise list the HelloWork domains to read here.
-      max_jobs_per_slug: 3
+      # regions: HelloWork region slugs (e.g. "bretagne"). Each metier is also read on its
+      # region page (20 other offers, robots-allowed, #307). Set from your home and maximum
+      # distance when the profile has a home; list them here to override.
+      max_jobs_per_slug: 3          # per listing page (the metier page and each region page)
       rate_limit_delay: 1.0
       timeout: 20

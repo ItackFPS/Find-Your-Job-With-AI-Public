@@ -74,7 +74,7 @@ def test_collect_passes_the_query_to_jobspy_and_dedups_across_queries():
 
     c = IndeedCollector({"queries": [{"keyword": "python", "location": "Lyon"}],
                          "discovery_queries": ["data engineer"], "max_pages_per_query": 2,
-                         "date_filter_hours": 720}, scrape=scrape)
+                         "date_filter_hours": 720, "partition": False}, scrape=scrape)
     result = c.collect()
     assert [j["source_job_id"] for j in result.jobs] == ["a", "b"] and not result.errors
     assert calls[0]["site_name"] == ["indeed"] and calls[0]["description_format"] == "html"
@@ -85,14 +85,31 @@ def test_collect_passes_the_query_to_jobspy_and_dedups_across_queries():
 
 
 def test_jobspy_error_is_reported_and_the_next_query_still_runs():
-    frames = iter([FakeFrame([], error="response status code 403 (blocked: use a proxy)"),
-                   FakeFrame([_row("c")])])
-    c = IndeedCollector({"queries": [{"keyword": "a"}, {"keyword": "b"}]}, scrape=lambda **kw: next(frames))
+    frames = iter([FakeFrame([], error="response status code 500"), FakeFrame([_row("c")])])
+    c = IndeedCollector({"queries": [{"keyword": "a"}, {"keyword": "b"}], "partition": False},
+                        scrape=lambda **kw: next(frames))
     result = c.collect()
     assert [j["source_job_id"] for j in result.jobs] == ["c"]
-    assert result.errors == ["indeed [a @ France]: response status code 403 (blocked: use a proxy)"]
+    assert result.errors == ["indeed [a @ France]: response status code 500"]
     health = c.health()
-    assert health["network_errors"] == 0 and health["responses"] == 2   # Indeed answered (403), then 200
+    assert health["network_errors"] == 0 and health["responses"] == 2   # Indeed answered (500), then 200
+
+
+def test_a_403_stops_every_remaining_search_of_the_run():
+    """#305: Indeed asked to slow down; no further search, said in the errors (never retried)."""
+    calls = []
+
+    def scrape(**kw):
+        calls.append(kw)
+        return FakeFrame([], error="response status code 403 (blocked: use a proxy)")
+
+    c = IndeedCollector({"queries": [{"keyword": "a"}, {"keyword": "b"}]}, scrape=scrape)
+    result = c.collect()
+    assert len(calls) == 1
+    assert result.errors == ["indeed [a @ France]: response status code 403 (blocked: use a proxy)",
+                             "indeed: Indeed answered 403/429; the remaining searches of this run were not made"]
+    assert result.metadata["blocked"] is True
+    assert c.health()["network_errors"] == 0 and c.health()["responses"] == 1
 
 
 def test_an_exception_in_jobspy_never_stops_the_run():
@@ -115,10 +132,11 @@ def test_pages_returned_count_against_the_run_budget():
         calls.append(kw)
         return FakeFrame([_row(f"{len(calls)}-{i}") for i in range(250)])   # 3 pages
 
-    c = IndeedCollector({"queries": [{"keyword": f"q{i}"} for i in range(400)]}, scrape=scrape)
+    c = IndeedCollector({"queries": [{"keyword": f"q{i}"} for i in range(800)], "partition": False},
+                        scrape=scrape)
     result = c.collect()
-    assert len(calls) == 167                                    # 166 x 3 pages = 498, then 1 + 2 > 500
-    assert result.errors and "request cap of 500" in result.errors[-1]
+    assert len(calls) == 667                                    # 666 x 3 pages = 1998, then 1 + 2 > 2000
+    assert result.errors and "request cap of 2000" in result.errors[-1]
     assert c.health()["request_cap_reached"] is True
 
 
@@ -148,7 +166,8 @@ def test_jobspy_13_errors_are_read_from_its_log():
 
     c = _collector(scrape)
     result = c.collect()
-    assert result.errors == ["indeed [python @ Lyon]: Indeed response status code 429"]
+    assert result.errors == ["indeed [python @ Lyon]: Indeed response status code 429",
+                             "indeed: Indeed answered 403/429; the remaining searches of this run were not made"]
     assert c.health()["last_status"] is None and c.health()["responses"] == 1 and c.health()["empty_results"] == 0
 
 
@@ -156,11 +175,83 @@ def test_queries_are_spaced_by_the_rate_limit(monkeypatch):
     waits = []
     monkeypatch.setattr(BaseCollector, "_sleep", staticmethod(waits.append))
     monkeypatch.setattr(BaseCollector, "_clock", staticmethod(lambda: 100.0))
-    c = IndeedCollector({"queries": [{"keyword": "a"}, {"keyword": "b"}], "rate_limit_delay": 0.1},
-                        scrape=lambda **kw: FakeFrame([]))
+    c = IndeedCollector({"queries": [{"keyword": "a"}, {"keyword": "b"}], "rate_limit_delay": 0.1,
+                         "partition": False}, scrape=lambda **kw: FakeFrame([]))
     assert c.rate_limit_delay == 2.0                             # the policy floor
     c.collect()
     assert waits == [2.0]                                        # measured from the end of query a
+
+
+# --- partitions (#305) -------------------------------------------------------------------
+
+def _recording_scrape(answers):
+    """A fake jobspy: ``answers(kw) -> list of row keys``; records every call."""
+    calls = []
+
+    def scrape(**kw):
+        calls.append(kw)
+        return FakeFrame([_row(k) for k in answers(kw)])
+
+    return scrape, calls
+
+
+def test_a_nationwide_search_is_split_by_job_type_then_by_city():
+    def answers(kw):
+        if kw.get("job_type"):
+            return [f"{kw['job_type']}-1", "base-1"]                 # one new offer per job type
+        if kw["location"] != "France":
+            return [f"{kw['location']}-1"]
+        return ["base-1", "base-2"]
+
+    scrape, calls = _recording_scrape(answers)
+    c = IndeedCollector({"discovery_queries": ["commercial"], "partition_cities": ["Lyon", "Lille"]},
+                        scrape=scrape)
+    result = c.collect()
+    assert [(k["location"], k.get("job_type"), k.get("distance")) for k in calls] == [
+        ("France", None, None),
+        ("France", "fulltime", None), ("France", "parttime", None),
+        ("France", "internship", None), ("France", "contract", None),
+        ("Lyon", None, 25), ("Lille", None, 25)]
+    assert len(result.jobs) == 2 + 4 + 2 and not result.errors
+    assert [s["new"] for s in result.metadata["searches"]] == [2, 1, 1, 1, 1, 1, 1]
+
+
+def test_the_profile_home_replaces_the_city_list():
+    scrape, calls = _recording_scrape(
+        lambda kw: [f"{kw['location']}-{kw.get('job_type')}", "x"])
+    c = IndeedCollector({"discovery_queries": ["infirmier"],
+                         "local_area": {"name": "Clermont-Ferrand", "radius_km": 50}}, scrape=scrape)
+    c.collect()
+    assert calls[-1]["location"] == "Clermont-Ferrand" and calls[-1]["distance"] == 32   # 50 km
+    assert len(calls) == 1 + 4 + 1
+
+
+def test_no_local_split_when_job_types_bring_almost_nothing_new():
+    """A complete-looking answer (développeur, 2026-11-24: cities added 5 of 344) stops at the job types."""
+    base = [f"b{i}" for i in range(100)]
+    scrape, calls = _recording_scrape(lambda kw: base if not kw.get("job_type") else base[:10])
+    c = IndeedCollector({"discovery_queries": ["développeur"]}, scrape=scrape)
+    c.collect()
+    assert len(calls) == 1 + 4                                     # no city search
+
+
+def test_a_base_search_at_its_cap_is_always_split_locally():
+    scrape, calls = _recording_scrape(lambda kw: [f"k{i}" for i in range(100)])
+    c = IndeedCollector({"discovery_queries": ["vendeur"], "max_pages_per_query": 1,
+                         "partition_cities": ["Nantes"]}, scrape=scrape)
+    c.collect()
+    assert [k["location"] for k in calls][-1] == "Nantes"
+
+
+def test_searches_with_their_own_location_are_not_split():
+    scrape, calls = _recording_scrape(lambda kw: ["a"])
+    _collector(scrape).collect()                                   # python @ Lyon
+    assert len(calls) == 1
+
+
+def test_default_cap_is_ten_pages():
+    c = IndeedCollector({"discovery_queries": ["x"]}, scrape=lambda **kw: FakeFrame([]))
+    assert c.max_jobs_per_query == 1000
 
 
 def test_no_queries_is_an_error_without_calling_jobspy():

@@ -58,6 +58,50 @@ _RETRY_BACKOFF_BASE: float = 1.0  # seconds; doubles on each successive retry
 # config.keywords; no profession is assumed.
 _DEFAULT_SEARCH_KEYWORDS = ""
 
+# Why a token request failed (#303). Each class tells the user something different:
+#   ft_auth_invalid_client  the client ID / secret were refused (changed or revoked)
+#   ft_auth_invalid_scope   the application lost its subscription to the API
+#   ft_outage               the login service answered a redirect (maintenance page),
+#                           a server error, HTML or a non-JSON body
+#   ft_network              the login service could not be reached
+#   ft_auth_failed          any other refusal
+FT_AUTH_FAILURE_CLASSES: tuple[str, ...] = (
+    "ft_auth_invalid_client", "ft_auth_invalid_scope", "ft_outage", "ft_network", "ft_auth_failed",
+)
+# Classes worth retrying shortly: the credentials themselves were not refused.
+FT_TRANSIENT_AUTH_FAILURES: frozenset[str] = frozenset({"ft_outage", "ft_network"})
+
+
+class FranceTravailAuthError(RuntimeError):
+    """A failed OAuth2 token request, with the failure class (``reason_key``)."""
+
+    def __init__(self, reason_key: str, message: str) -> None:
+        super().__init__(message)
+        self.reason_key = reason_key
+
+
+def classify_token_failure(response: httpx.Response) -> str:
+    """The failure class of a non-successful token response.
+
+    Redirects stay visible because httpx does not follow them by default: France Travail's
+    maintenance page arrives as a 302 (mission-apprentissage/labonnealternance#5981).
+    """
+    status = int(response.status_code)
+    if 300 <= status < 400 or status >= 500:
+        return "ft_outage"
+    try:
+        body = (response.text or "")[:2000]
+    except Exception:  # noqa: BLE001 — an unreadable body classifies as "other"
+        body = ""
+    lowered = body.lower()
+    if "invalid_client" in lowered:
+        return "ft_auth_invalid_client"
+    if "invalid_scope" in lowered:
+        return "ft_auth_invalid_scope"
+    if status == 429 or lowered.lstrip().startswith("<"):
+        return "ft_outage"
+    return "ft_auth_failed"
+
 
 class _RateLimiter:
     """Enforces a minimum interval between calls to stay within the API rate limit.
@@ -130,8 +174,8 @@ class FranceTravailCollector(BaseCollector):
     Set to 1 to disable concurrency entirely (sequential, deterministic order).
     """
 
-    # Its httpx.Client requests do not pass BaseCollector._before_request (B8-A).
-    counts_requests = False
+    # Its httpx.Client requests are counted through BaseCollector._before_request and
+    # _observe_response (B8-A): the token request and each search page count once.
 
     # official: France Travail's documented Offres d'emploi API (francetravail.io), with the
     # user's own OAuth2 credentials. Its own client-side rate limiter paces requests.
@@ -177,6 +221,8 @@ class FranceTravailCollector(BaseCollector):
         self._page_size: int = _page_size or _PAGE_SIZE
         self._token: str | None = None
         self._token_expires_at: float = 0.0
+        # Query workers share one token; renewing it after a 401 happens once (#303).
+        self._token_lock = threading.Lock()
 
         rate_limit_rps: float = float(config.get("rate_limit_rps", 8.0))
         self._rate_limiter = _RateLimiter(rate_limit_rps)
@@ -192,6 +238,15 @@ class FranceTravailCollector(BaseCollector):
         self.max_partitions_per_query: int = int(
             config.get("max_partitions_per_query", 12)
         )
+        # departments: the profile's search area (orchestrator). A saturated query is also
+        # read once per département, each well under the 3,000-offer window (2026-11-24:
+        # "infirmier" 15,570 in France, 140 in the 63, 671 in the 75), so the user's own area
+        # is read completely.
+        self.departments: list[str] = [
+            str(d).strip() for d in (config.get("departments") or []) if str(d).strip()]
+        # Search parameters of a partition work key ("<query> [dép. 63]") that is not a
+        # plain motsCles query.
+        self._work_params: dict[str, dict[str, str]] = {}
         # max_workers: concurrency for independent queries (1 = sequential).
         self._max_workers: int = int(config.get("max_workers", 4))
 
@@ -261,6 +316,9 @@ class FranceTravailCollector(BaseCollector):
                     errors.append(f"Skipping non-dict entry: {type(raw)}")
                     continue
                 jobs.append(self._normalize_fields(raw))
+        except FranceTravailAuthError as exc:
+            metadata["auth_failure"] = exc.reason_key
+            errors.append(f"Collection failed: {exc}")
         except (httpx.HTTPError, RuntimeError) as exc:
             errors.append(f"Collection failed: {exc}")
 
@@ -279,14 +337,35 @@ class FranceTravailCollector(BaseCollector):
 
     def _get_or_refresh_token(self, client: httpx.Client) -> str:
         """Return a valid bearer token, refreshing if it has expired."""
-        if self._token and time.time() < self._token_expires_at - 60:
+        with self._token_lock:
+            if self._token and time.time() < self._token_expires_at - 60:
+                return self._token
+            self._token, expires_in = self._fetch_token(client)
+            self._token_expires_at = time.time() + expires_in
             return self._token
-        self._token, expires_in = self._fetch_token(client)
-        self._token_expires_at = time.time() + expires_in
-        return self._token
+
+    def _renew_token(self, client: httpx.Client, rejected: str) -> str:
+        """A token to replace *rejected*, which the search API answered with 401.
+
+        Client-credentials tokens have no refresh token: a new one is requested. When another
+        worker already replaced the rejected token, its replacement is returned instead of
+        asking again. Raises FranceTravailAuthError when the new request fails.
+        """
+        with self._token_lock:
+            if self._token and self._token != rejected and time.time() < self._token_expires_at - 60:
+                return self._token
+            self._token = None
+            self._token, expires_in = self._fetch_token(client)
+            self._token_expires_at = time.time() + expires_in
+            return self._token
 
     def _fetch_token(self, client: httpx.Client) -> tuple[str, int]:
-        """Fetch a new OAuth2 access token via the client-credentials flow."""
+        """Fetch a new OAuth2 access token via the client-credentials flow.
+
+        Raises FranceTravailAuthError (a RuntimeError) whose ``reason_key`` is one of
+        FT_AUTH_FAILURE_CLASSES. The message never contains the credentials.
+        """
+        self._before_request(_TOKEN_URL, check_robots=False)
         try:
             response = client.post(
                 _TOKEN_URL,
@@ -300,28 +379,38 @@ class FranceTravailCollector(BaseCollector):
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
                 timeout=self.timeout,
             )
+            self._observe_response(response, parsed=False)
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            raise RuntimeError(
+            reason = classify_token_failure(exc.response)
+            raise FranceTravailAuthError(
+                reason,
                 f"France Travail OAuth2 token request failed "
-                f"(HTTP {exc.response.status_code}): {exc.response.text[:300]}"
+                f"(HTTP {exc.response.status_code}, {reason}): {exc.response.text[:300]}",
             ) from exc
         except httpx.RequestError as exc:
-            raise RuntimeError(
-                f"France Travail OAuth2 token request failed: {exc}"
+            self._note_network_error()
+            raise FranceTravailAuthError(
+                "ft_network", f"France Travail OAuth2 token request failed (network): {exc}"
             ) from exc
 
         try:
             data = response.json()
-        except json.JSONDecodeError as exc:
-            raise RuntimeError(
-                f"France Travail OAuth2 token response was not valid JSON: {exc}"
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise FranceTravailAuthError(
+                "ft_outage", f"France Travail OAuth2 token response was not valid JSON: {exc}"
             ) from exc
+        if not isinstance(data, dict):
+            raise FranceTravailAuthError(
+                "ft_outage", "France Travail OAuth2 token response was not a JSON object"
+            )
         token: str = data.get("access_token", "")
         expires_in: int = int(data.get("expires_in", 1440))
         if not token:
-            raise RuntimeError(
-                f"France Travail OAuth2 response missing 'access_token': {data}"
+            raise FranceTravailAuthError(
+                "ft_auth_failed",
+                "France Travail OAuth2 response missing 'access_token' "
+                f"(keys: {sorted(data)})",
             )
         return token, expires_in
 
@@ -390,7 +479,15 @@ class FranceTravailCollector(BaseCollector):
         partition_work: list[tuple[str, bool, str | None]] = []
         for query, _is_partition, _parent in discovery_work:
             result = phase1_raw[query]
-            if result["saturated"] and not _is_partition and self.partition_vocabulary:
+            if not result["saturated"] or _is_partition:
+                continue
+            for code in self.departments:
+                key = f"{query} [dép. {code}]"
+                if key.lower() not in queued_keys:
+                    queued_keys.add(key.lower())
+                    self._work_params[key] = {"motsCles": query, "departement": code}
+                    partition_work.append((key, True, query))
+            if self.partition_vocabulary:
                 partition_qs = self._generate_partition_queries(query, queued_keys)
                 for pq in partition_qs:
                     queued_keys.add(pq.lower().strip())
@@ -504,7 +601,7 @@ class FranceTravailCollector(BaseCollector):
             }
 
             # Log saturation + partition info for discovery queries.
-            if query_saturated and not is_partition and self.partition_vocabulary:
+            if query_saturated and not is_partition and partitions_generated:
                 logger.info(
                     "France Travail [%s]: saturated (api_total=%s) — "
                     "queued %d partition queries",
@@ -613,6 +710,32 @@ class FranceTravailCollector(BaseCollector):
                 partitions.append(candidate)
         return partitions
 
+    def _get_search_page(
+        self, client: httpx.Client, token: str, query: str, start: int, end: int
+    ) -> httpx.Response:
+        """One rate-limited, counted search request for the range start-end."""
+        self._rate_limiter.wait()
+        self._before_request(_SEARCH_URL, check_robots=False)
+        try:
+            response = client.get(
+                _SEARCH_URL,
+                params={
+                    "sort": 1,
+                    "range": f"{start}-{end}",
+                    **self._work_params.get(query, {"motsCles": query}),
+                },
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json",
+                },
+                timeout=self.timeout,
+            )
+        except httpx.RequestError:
+            self._note_network_error()
+            raise
+        self._observe_response(response)
+        return response
+
     def _search_jobs_for_query(
         self,
         token: str,
@@ -671,6 +794,8 @@ class FranceTravailCollector(BaseCollector):
             # Per-page retry loop for transient failures.
             page_error: str | None = None
             response: httpx.Response | None = None
+            # One token renewal per page: a 401 means the token expired or was revoked (#303).
+            token_renewed = False
             for attempt in range(_MAX_RETRY_ATTEMPTS + 1):
                 if attempt > 0:
                     retry_after: float | None = None
@@ -693,21 +818,24 @@ class FranceTravailCollector(BaseCollector):
                     )
                     time.sleep(delay)
 
-                self._rate_limiter.wait()
                 try:
-                    response = client.get(
-                        _SEARCH_URL,
-                        params={
-                            "sort": 1,
-                            "range": f"{start}-{end}",
-                            "motsCles": query,
-                        },
-                        headers={
-                            "Authorization": f"Bearer {token}",
-                            "Accept": "application/json",
-                        },
-                        timeout=self.timeout,
-                    )
+                    response = self._get_search_page(client, token, query, start, end)
+                    if response.status_code == 401 and not token_renewed:
+                        token_renewed = True
+                        try:
+                            token = self._renew_token(client, token)
+                        except FranceTravailAuthError as exc:
+                            page_error = (
+                                f"France Travail search API answered HTTP 401 and a new token "
+                                f"could not be obtained ({exc.reason_key}): {exc}"
+                            )
+                            logger.warning("France Travail [%s]: %s", query, page_error)
+                            break
+                        logger.info(
+                            "France Travail [%s]: HTTP 401 on range %d-%d — new token obtained, "
+                            "retrying once", query, start, end,
+                        )
+                        response = self._get_search_page(client, token, query, start, end)
                 except httpx.RequestError as exc:
                     page_error = f"France Travail search request failed: {exc}"
                     logger.warning(

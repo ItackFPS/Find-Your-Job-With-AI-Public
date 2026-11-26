@@ -57,9 +57,10 @@ dev = [
     "tzdata; sys_platform == 'win32'",
 ]
 indeed = [
-    # python-jobspy reads Indeed (src/collectors/indeed.py). >=1.3.0: older releases pin markdownify<0.14 (PYSEC-2026-1604, unbounded memory on
+    # python-jobspy reads Indeed (src/collectors/indeed.py). >=1.5.0: errors in DataFrame.attrs and the
+    # "jobspy.indeed" logger, read by the Indeed collector (#305). Releases before 1.3.0 pin markdownify<0.14 (PYSEC-2026-1604, unbounded memory on
     # crafted heading tags in posting HTML) and name the description option differently.
-    "python-jobspy>=1.3.0",
+    "python-jobspy>=1.5.0",
 ]
 
 [tool.setuptools.packages.find]
