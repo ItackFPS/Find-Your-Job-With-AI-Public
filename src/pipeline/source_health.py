@@ -17,7 +17,7 @@ not configurable yet):
     by_source dict — i.e. it actually ran this time. An intentionally
     disabled source (active: false in sources.yaml) never appears there at
     all, so it is never flagged: nothing to special-case.
-  - `from_staging` sources (LinkedIn/HelloWork — see orchestrator.py) are
+  - `from_staging` sources (HelloWork — see orchestrator.py) are
     always skipped. Their "collected" count reflects whatever a separate,
     independently-scheduled scan happened to have staged by the time this
     pipeline run started, which can legitimately be zero on many runs — an

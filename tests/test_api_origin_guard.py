@@ -105,7 +105,7 @@ def test_real_app_blocks_foreign_origin_scan_trigger() -> None:
     # No `with`: the app lifespan (scheduler, workers, real data/ DB) must not
     # start — the guard answers before any route or app.state is touched.
     real = TestClient(app, base_url="http://127.0.0.1:8000")
-    for path in ("/api/linkedin/scan", "/api/hellowork/scan", "/api/pipeline/run"):
+    for path in ("/api/hellowork/scan", "/api/pipeline/run"):
         r = real.post(path, headers={"Origin": "https://evil.example"})
         assert r.status_code == 403, path
 

@@ -70,7 +70,7 @@ def _seed(s: Storage) -> None:
     jobs = [
         _job("seen"),
         _job("gone"),                                   # listed by a fully collected source
-        _job("partial", source="eures"),                # its source did not complete
+        _job("partial", source="bundesagentur"),        # its source did not complete
         _job("ended", valid_through=NOW - timedelta(days=1)),
         _job("future", valid_through=NOW + timedelta(days=5)),
     ]
@@ -90,7 +90,7 @@ def test_offers_expire_after_missed_runs_or_their_end_date(tmp_path: Path) -> No
     assert _status(s, "gone") == ("expired", "not_seen")
     assert out["expired_not_seen"] == 1
     assert _status(s, "seen") == ("active", None)
-    assert _status(s, "partial") == ("active", None)        # eures never completed
+    assert _status(s, "partial") == ("active", None)        # bundesagentur never completed
     assert _status(s, "ended") == ("expired", "valid_through")
     assert _status(s, "future") == ("active", None)
     expired = s.get_job_by_id("gone")
@@ -179,7 +179,7 @@ def test_expire_after_missed_runs_config(tmp_path: Path) -> None:
     assert expire_after_missed_runs(tmp_path) == 1
     (tmp_path / "retention.yaml").write_text("expire_after_missed_runs: soon\n", encoding="utf-8")
     assert expire_after_missed_runs(tmp_path) == 3
-    assert {"linkedin", "hellowork"} <= EXPIRY_EXCLUDED_SOURCES
+    assert {"hellowork"} <= EXPIRY_EXCLUDED_SOURCES
     assert expire_after_missed_runs("config") == 3          # the shipped value
 
 
@@ -247,7 +247,7 @@ def test_a_source_counts_misses_only_after_a_complete_collection(row: dict, coun
 def test_staged_sources_never_count_misses() -> None:
     from src.pipeline.orchestrator import sources_counting_misses
 
-    assert sources_counting_misses({"linkedin": dict(_COMPLETE), "hellowork": dict(_COMPLETE)}) == set()
+    assert sources_counting_misses({"hellowork": dict(_COMPLETE)}) == set()
 
 
 def _pipeline_config(tmp: Path) -> Path:

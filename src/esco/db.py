@@ -271,7 +271,7 @@ class EscoDb:
         conn = sqlite3.connect(str(self._db_path))
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
-        # See src/linkedin/staging.py for why this is needed: several
+        # busy_timeout is needed because several
         # modules open their own connection to the same jobs.db file.
         conn.execute("PRAGMA busy_timeout=5000")
         return conn

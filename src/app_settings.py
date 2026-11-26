@@ -6,9 +6,9 @@ notification categories the user opted into; the tray app reads them through
 ``GET /api/settings/notifications`` before each Windows notification.
 
 It also holds the user's choice for each *unofficial* source (``unofficial_sources``, plan rule
-I1, F6.3/F6.4: Indeed, LinkedIn, HelloWork): off on a fresh install, chosen in Settings ›
+I1, F6.3/F6.4: Indeed, HelloWork): off on a fresh install, chosen in Settings ›
 Sources. An install that set Indeed up the old way (``INDEED_API_KEY``) counts as having chosen
-it; one that ran LinkedIn/HelloWork scans before 2.0 has that observed choice stored once, at
+it; one that ran HelloWork scans before 2.0 has that observed choice stored once, at
 its first 2.0 start (``record_observed_choices``), so a scan started by hand later is never
 taken for a choice.
 
@@ -22,8 +22,8 @@ Categories (default on: the two a user would not want to miss):
 category           default  fires when
 =================  =======  ==========================================================================
 strong_matches     on       a search finishes with offers in a "strong" tier or better
-search_failed      on       a search (pipeline run) or a LinkedIn/HelloWork scan fails
-source_paused      off      a LinkedIn/HelloWork scan pauses, or stops on a rate limit
+search_failed      on       a search (pipeline run) or a HelloWork scan fails
+source_paused      off      a HelloWork scan pauses, or stops on a rate limit
 saved_expiring     off      an offer you saved expires tomorrow — not available yet: offers carry no
                             saved flag or expiry date. TODO(F6.6): fire it once saved offers and their
                             closing dates are stored.
@@ -104,7 +104,7 @@ UNOFFICIAL_LEGACY_ENV: dict[str, str] = {"indeed": "INDEED_API_KEY"}
 
 
 # The unofficial sources the user turns on or off in Settings › Sources (F6.5, issue #82).
-UNOFFICIAL_CHOICE_SOURCES: tuple[str, ...] = ("linkedin", "hellowork", "indeed")
+UNOFFICIAL_CHOICE_SOURCES: tuple[str, ...] = ("hellowork", "indeed")
 
 
 def set_unofficial_source(path: Path, source: str, enabled: bool, now: datetime | None = None) -> dict[str, Any]:

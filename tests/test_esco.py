@@ -343,12 +343,12 @@ class TestEscoApiEndpoints:
 
         # `with TestClient(app)` runs the REAL app lifespan (startup +
         # shutdown), which otherwise touches real data/jobs.db, real
-        # data/esco.db, and — if config/linkedin.yaml or config/sources.yaml
+        # data/esco.db, and — if config/sources.yaml
         # have a source enabled — starts a real scheduler that can dispatch
-        # a live LinkedIn/HelloWork scan against the real websites. Isolating
+        # a live HelloWork scan against the real websites. Isolating
         # db_path/config_dir/esco_db_path (all read from app.state by
         # _lifespan) keeps every part of startup local: empty config_dir
-        # means LinkedInConfig.load()/SourceRegistry find no config file and
+        # means SourceRegistry finds no config file and
         # gracefully report everything disabled. Confirmed by forensic audit
         # (live HTTP calls + orphaned data/esco.db-wal/-shm files observed
         # from a full test-suite run before this fix).

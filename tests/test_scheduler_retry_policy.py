@@ -36,7 +36,6 @@ from src.scheduler.service import (
     MAX_RETRY_BACKOFF_SECONDS,
     DispatchResult,
     HelloWorkHandler,
-    LinkedInHandler,
     SchedulerService,
 )
 from src.scheduler.storage import SchedulerStorage
@@ -290,7 +289,7 @@ def test_manual_trigger_bypasses_the_retry_budget(tmp_path):
     assert _statuses(db) == [("failed", 1), ("completed", 2)]
 
 
-@pytest.mark.parametrize("handler_cls", [LinkedInHandler, HelloWorkHandler])
+@pytest.mark.parametrize("handler_cls", [HelloWorkHandler])
 @pytest.mark.parametrize("shutdown", [True, False])
 def test_handlers_report_a_shutdown_stop_as_interrupted(handler_cls, shutdown):
     class _Scanner:

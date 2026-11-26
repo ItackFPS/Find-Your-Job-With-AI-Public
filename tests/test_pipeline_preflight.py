@@ -152,7 +152,7 @@ class TestFranceTravailPreflight:
 class TestPipelinePreflightWiring:
     def test_france_travail_auth_failure_skips_it_and_other_sources_still_run(self, tmp_path, monkeypatch):
         """Rejected France Travail credentials no longer abort the run (#303): France Travail is
-        skipped, never collected from, with the failure class named; EURES still collects."""
+        skipped, never collected from, with the failure class named; France Travail web still collects."""
         from src.collectors.base import CollectorResult
         from src.pipeline.orchestrator import run_pipeline
 
@@ -163,7 +163,7 @@ class TestPipelinePreflightWiring:
         (config_dir / "sources.yaml").write_text(
             "sources:\n"
             "  - {name: france_travail, type: france_travail, active: true, config: {}}\n"
-            "  - {name: eures, type: eures, active: true, config: {}}\n",
+            "  - {name: france_travail_web, type: france_travail_web, active: true, config: {}}\n",
             encoding="utf-8",
         )
 
@@ -171,18 +171,18 @@ class TestPipelinePreflightWiring:
         mock_embed.embed.return_value = [0.1] * 384
         mock_embed.compute_semantic_score.return_value = 0.5
         mock_embed.compute_job_semantic_score.return_value = 0.5
-        eures_result = CollectorResult(source_name="eures", jobs=[], errors=[], duration_seconds=0.1)
+        web_result = CollectorResult(source_name="france_travail_web", jobs=[], errors=[], duration_seconds=0.1)
         with patch(
             "src.collectors.france_travail.FranceTravailCollector.collect"
         ) as ft_collect, patch(
-            "src.collectors.eures.EURESCollector.collect", return_value=eures_result
-        ) as eures_collect, patch.object(
+            "src.collectors.france_travail_web.FranceTravailWebCollector.collect", return_value=web_result
+        ) as web_collect, patch.object(
             httpx.Client, "post", side_effect=_http_error_response(401)
         ), patch("src.embeddings.embedding.EmbeddingService", return_value=mock_embed):
             result = run_pipeline(db_path=str(tmp_path / "test.db"), config_dir=str(config_dir))
 
         ft_collect.assert_not_called()
-        eures_collect.assert_called_once()
+        web_collect.assert_called_once()
         assert result.status == "completed", result.error
         assert result.stats.preflight["status"] == "DEGRADED"
         assert result.stats.preflight["ready"] is True

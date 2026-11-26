@@ -45,7 +45,7 @@ function LastRun({ s }: { s: ScheduleStatus }) {
 }
 
 /**
- * Each daily run (the search, LinkedIn, HelloWork): last run, next run, Run now.
+ * Each daily run (the search, HelloWork): last run, next run, Run now.
  * Standalone, so the first-run wizard (P3) can reuse it.
  */
 export function DailyRunsCard() {

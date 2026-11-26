@@ -27,8 +27,6 @@ const EMPTY: Record<string, unknown> = {
   '/lab/memory': { items: [] },
   '/quality/health': { self_check: null, evaluation: null },
   '/quality/jobs': { active_id: null, jobs: [] },
-  '/linkedin/status': { ...fixtures.linkedInStatus, last_scan: null },
-  '/linkedin/scans': [],
   '/hellowork/status': { ...fixtures.helloWorkStatus, last_scan: null },
   '/hellowork/scans': [],
 }
@@ -65,8 +63,8 @@ class FakeEventSource {
 // names, and technical tokens shown verbatim.
 const DATA_WORDS = new Set((JSON.stringify(fixtures).match(/[A-Za-z]{2,}/g) ?? []).map(w => w.toLowerCase()))
 const ALLOWED = new Set([
-  'find', 'your', 'job', 'with', 'ai', 'linkedin', 'hellowork', 'esco', 'france', 'travail', 'indeed',
-  'we', 'work', 'remotely', 'eures', 'aa', 'ms', 'pts', 'vs', 'xa',
+  'find', 'your', 'job', 'with', 'ai', 'hellowork', 'esco', 'france', 'travail', 'indeed',
+  'we', 'work', 'remotely', 'aa', 'ms', 'pts', 'vs', 'xa',
 ].map(w => w.toLowerCase()))
 
 function isExempt(el: Element | null): boolean {

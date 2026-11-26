@@ -17,7 +17,7 @@ vi.mock('axios', () => {
             { type: 'viewed', signal_class: 'behavior', count: 5, counted: 5, last_at: null },
           ],
           event_surfaces: { review: 1, job_detail: 1 },
-          exposures: { total: 3, by_surface: { jobs: 2, review: 1 }, by_source: { eures: 3 }, oldest_at: null,
+          exposures: { total: 3, by_surface: { jobs: 2, review: 1 }, by_source: { bundesagentur: 3 }, oldest_at: null,
                        compact_after_days: 30, keep_days: 180 },
           repeated_views: 'counted once per offer',
         },

@@ -14,8 +14,9 @@ MOVED = [
 ]
 
 
-def test_the_three_scan_and_pipeline_handlers_moved() -> None:
-    assert sum(n != "SourceHandler" and n.endswith("Handler") for n in MOVED) == 3
+def test_the_scan_and_pipeline_handlers_moved() -> None:
+    # HelloWork and the pipeline (the LinkedIn handler was removed, owner decision 2026-11-24).
+    assert sum(n != "SourceHandler" and n.endswith("Handler") for n in MOVED) == 2
 
 
 @pytest.mark.parametrize("name", MOVED)

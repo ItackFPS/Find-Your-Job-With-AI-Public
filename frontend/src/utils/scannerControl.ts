@@ -1,4 +1,4 @@
-import type { HelloWorkScanProgress, LinkedInScanProgress, ScanState } from '../api/client'
+import type { HelloWorkScanProgress, ScanState } from '../api/client'
 import i18n from '../i18n'
 
 // Which control a scanner card shows, derived from the backend's persisted
@@ -74,28 +74,10 @@ export function startHoldEnded(
   return now - hold.since > START_HOLD_SAFETY_MS
 }
 
-// Real checkpoint progress only — no invented percentages. LinkedIn's page
-// totals are the backend's estimate (issue #86), hence the "~".
+// Real checkpoint progress only — no invented percentages.
 export function scannerProgressLabel(
-  progress: LinkedInScanProgress | HelloWorkScanProgress | null | undefined,
+  progress: HelloWorkScanProgress | null | undefined,
 ): string | null {
   if (!progress) return null
-  if ('queries_total' in progress) {
-    const query = Math.min(progress.queries_completed + 1, progress.queries_total)
-    const page = progress.current_query ? i18n.t('scanner.progress.page', { page: progress.current_page + 1 }) : ''
-    const pages = progress.pages_total_est
-      ? i18n.t('scanner.progress.pages', { done: progress.pages_done_est ?? 0, total: progress.pages_total_est })
-      : ''
-    return i18n.t('scanner.progress.query', { query, total: progress.queries_total }) + page + pages
-  }
   return i18n.t('scanner.progress.metierPages', { count: progress.slugs_completed })
-}
-
-// The backend's work-based estimate (LinkedIn, issue #86), or null for a
-// source without one (HelloWork), which keeps its time-based estimate.
-export function scannerWorkEstimate(
-  progress: LinkedInScanProgress | HelloWorkScanProgress | null | undefined,
-): { percent: number; etaSeconds: number | null } | null {
-  if (!progress || !('percent' in progress) || typeof progress.percent !== 'number') return null
-  return { percent: progress.percent, etaSeconds: progress.eta_seconds ?? null }
 }

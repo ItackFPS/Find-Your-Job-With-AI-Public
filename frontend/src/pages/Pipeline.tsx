@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getRun, listRuns, getLinkedInStatus, listLinkedInScans, getHelloWorkStatus, listHelloWorkScans, type PipelineRun, type RunStats, type LinkedInScanRun, type LinkedInScanStats, type HelloWorkScanRun, type HelloWorkScanStats } from '../api/client'
+import { getRun, listRuns, getHelloWorkStatus, listHelloWorkScans, type PipelineRun, type RunStats, type HelloWorkScanRun, type HelloWorkScanStats } from '../api/client'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
@@ -299,162 +299,6 @@ function RunHistoryRow({ run, selected, onToggle }: { run: PipelineRun; selected
   )
 }
 
-type QueryRow = LinkedInScanStats['queries'][number]
-
-const queryColumns = (t: TFunction): DataTableColumn<QueryRow>[] => [
-  { key: 'search_term', header: t('pipeline.queryTable.query'), render: r => <span style={{ fontFamily: 'monospace', fontSize: '0.76rem', display: 'inline-block', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.search_term}>{r.search_term}</span> },
-  { key: 'pages_fetched', header: t('pipeline.queryTable.pages'), align: 'right', render: r => r.pages_fetched },
-  { key: 'jobs_raw', header: t('pipeline.queryTable.raw'), align: 'right', render: r => r.jobs_raw },
-  { key: 'jobs_unique', header: t('pipeline.queryTable.unique'), align: 'right', render: r => r.jobs_unique },
-  { key: 'jobs_filtered_out', header: t('pipeline.queryTable.filtered'), align: 'right', render: r => r.jobs_filtered_out },
-  { key: 'jobs_already_known', header: t('pipeline.queryTable.known'), align: 'right', render: r => r.jobs_already_known },
-  { key: 'jobs_staged', header: t('pipeline.queryTable.staged'), align: 'right', render: r => (
-    <span style={{ fontWeight: r.jobs_staged > 0 ? 'var(--font-weight-semibold)' : 'var(--font-weight-normal)', color: r.jobs_staged > 0 ? 'var(--color-success)' : 'inherit' }}>{r.jobs_staged}</span>
-  ) },
-  { key: 'stopped_by', header: t('pipeline.queryTable.endedBy'), render: r => (
-    <span style={{ color: r.stopped_by === 'error' ? 'var(--color-error)' : 'inherit' }}>{r.stopped_by === 'error' ? t('pipeline.queryTable.failedRetried') : (r.stopped_by ?? '–').replace('_', ' ')}</span>
-  ) },
-]
-
-function ScanStatsPanel({ stats }: { stats: LinkedInScanStats }) {
-  const { t, i18n } = useTranslation()
-  return (
-    <div style={{ marginTop: 'var(--space-4)' }}>
-      <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', marginBottom: 'var(--space-4)' }}>
-        {[
-          { label: t('pipeline.scanStats.raw'), value: stats.total_raw },
-          { label: t('pipeline.scanStats.unique'), value: stats.total_unique },
-          { label: t('pipeline.scanStats.filteredOut'), value: stats.total_filtered_out },
-          { label: t('pipeline.scanStats.known'), value: stats.total_already_known },
-          { label: t('pipeline.scanStats.staged'), value: stats.total_staged },
-          // A failed query (rate limited, blocked, network error) is retried by the next scan.
-          { label: t('pipeline.scanStats.failedQueries'), value: stats.queries_failed ?? 0, alert: (stats.queries_failed ?? 0) > 0 },
-        ].map(({ label, value, alert }) => (
-          <div key={label}>
-            <div style={{ fontSize: '0.73rem', color: 'var(--color-muted)', marginBottom: '0.1rem' }}>{label}</div>
-            <div style={{ fontWeight: 'var(--font-weight-bold)', fontSize: '1rem', color: alert ? 'var(--color-error)' : 'inherit' }}>{value.toLocaleString(i18n.language)}</div>
-          </div>
-        ))}
-      </div>
-      {stats.queries.length > 0 && (
-        <div>
-          <div style={{ fontSize: '0.78rem', fontWeight: 'var(--font-weight-semibold)', color: 'var(--color-muted)', letterSpacing: '0.06em', marginBottom: 'var(--space-2)' }}>{t('pipeline.scanStats.queries')}</div>
-          <DataTable columns={queryColumns(t)} rows={stats.queries} rowKey={r => r.search_term} />
-        </div>
-      )}
-    </div>
-  )
-}
-
-function ScanDetailPanel({ scan }: { scan: LinkedInScanRun }) {
-  const { t } = useTranslation()
-  const started = formatDateTime(scan.started_at)
-  const ended = scan.completed_at ? formatDateTime(scan.completed_at) : null
-  const dur = formatElapsedBetween(scan.started_at, scan.completed_at)
-
-  return (
-    <Card elevated style={{ padding: '1rem 1.25rem', margin: '0.25rem 0 0.5rem' }}>
-      <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)', marginBottom: 'var(--space-3)', display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
-        <span>{t('pipeline.started', { date: started })}</span>
-        {ended && <span>{t('pipeline.ended', { date: ended })}</span>}
-        {scan.completed_at && <span>{t('pipeline.duration', { duration: dur })}</span>}
-      </div>
-      {scan.status === 'completed' && !scan.stats && (
-        <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--color-muted)', marginBottom: '0.15rem' }}>{t('pipeline.scanStats.jobsFound')}</div>
-            <div style={{ fontWeight: 'var(--font-weight-bold)', fontSize: '1.1rem' }}>{scan.jobs_found}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--color-muted)', marginBottom: '0.15rem' }}>{t('pipeline.scanStats.newStaged')}</div>
-            <div style={{ fontWeight: 'var(--font-weight-bold)', fontSize: '1.1rem', color: scan.jobs_new > 0 ? 'var(--color-success)' : 'inherit' }}>{scan.jobs_new}</div>
-          </div>
-        </div>
-      )}
-      {scan.stats && <ScanStatsPanel stats={scan.stats} />}
-      {scan.status === 'interrupted' && scan.error && (
-        <div style={{ marginTop: 'var(--space-3)', fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>
-          {scan.error}
-        </div>
-      )}
-      {scan.status === 'failed' && scan.error && (
-        <div style={{ marginTop: scan.stats ? 'var(--space-3)' : 0, padding: '0.6rem 0.75rem', background: 'var(--color-surface)', borderRadius: 'var(--radius-sm)', border: '1px solid color-mix(in srgb, var(--color-error) 27%, transparent)', color: 'var(--color-error)', fontSize: '0.8rem', fontFamily: 'monospace' }}>
-          {scan.error}
-        </div>
-      )}
-    </Card>
-  )
-}
-
-function ScanHistoryRow({ scan, selected, onToggle }: { scan: LinkedInScanRun; selected: boolean; onToggle: () => void }) {
-  const { t } = useTranslation()
-  return (
-    <HistoryRow
-      started={formatDateTime(scan.started_at)}
-      id={scan.id}
-      status={scan.status}
-      selected={selected}
-      onToggle={onToggle}
-      right={
-        scan.status === 'completed'
-          ? <>
-              <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>{formatElapsedBetween(scan.started_at, scan.completed_at)}</span>
-              <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>{t('pipeline.foundNew', { found: scan.jobs_found, new: scan.jobs_new })}</span>
-            </>
-          : <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>{formatElapsedBetween(scan.started_at, scan.completed_at)}</span>
-      }
-      detail={<ScanDetailPanel scan={scan} />}
-    />
-  )
-}
-
-function LinkedInScanHistory() {
-  const { t } = useTranslation()
-  const [selectedScanId, setSelectedScanId] = useState<string | null>(null)
-
-  const { data: status } = useQuery({
-    queryKey: ['linkedin-status'],
-    queryFn: getLinkedInStatus,
-  })
-
-  const { data: scans, isLoading } = useQuery({
-    queryKey: ['linkedin-scans'],
-    queryFn: () => listLinkedInScans(20),
-    enabled: status?.enabled === true,
-    refetchInterval: (q) => {
-      const d = q.state.data
-      if (d?.some(s => s.status === 'running')) return 3000
-      return false
-    },
-  })
-
-  if (!status?.enabled) return null
-
-  return (
-    <>
-      <h2 style={{ fontSize: '1rem', fontWeight: 'var(--font-weight-semibold)', margin: '1.5rem 0 0.5rem', color: 'var(--color-muted)' }}>
-        {t('pipeline.linkedinHistory')}
-      </h2>
-      {isLoading ? (
-        <LoadingState compact />
-      ) : !scans || scans.length === 0 ? (
-        <EmptyState message={t('pipeline.noScans')} />
-      ) : (
-        <Card style={{ padding: '0 1.25rem' }}>
-          {scans.map(s => (
-            <ScanHistoryRow
-              key={s.id}
-              scan={s}
-              selected={selectedScanId === s.id}
-              onToggle={() => setSelectedScanId(prev => prev === s.id ? null : s.id)}
-            />
-          ))}
-        </Card>
-      )}
-    </>
-  )
-}
-
 function HelloWorkScanStatsPanel({ stats }: { stats: HelloWorkScanStats }) {
   const { t } = useTranslation()
   return (
@@ -639,7 +483,6 @@ export default function Pipeline() {
         </Card>
       )}
 
-      <LinkedInScanHistory />
       <HelloWorkScanHistory />
     </div>
   )

@@ -98,15 +98,14 @@ class _Backend:
 
     def __init__(self, **paths: list) -> None:
         self.paths = {"runs": [(200, b"[]")], "strong": [(200, b"[]")], "settings": [None],
-                      "linkedin": [None], "hellowork": [None]}
+                      "hellowork": [None]}
         self.paths.update(paths)
         self.urls: list[str] = []
 
     def __call__(self, url: str):  # noqa: ANN204
         self.urls.append(url)
         key = ("runs" if "/pipeline/runs" in url else "strong" if "min_tier=strong" in url else
-               "settings" if "/settings/notifications" in url else
-               "linkedin" if "/linkedin/" in url else "hellowork")
+               "settings" if "/settings/notifications" in url else "hellowork")
         answers = self.paths[key]
         return answers.pop(0) if len(answers) > 1 else answers[0]
 
@@ -168,24 +167,22 @@ def _status(state: str, scan: dict | None = None) -> tuple[int, bytes]:
 
 def test_source_pauses_rate_limits_and_failures_follow_their_categories() -> None:
     on = _settings(strong_matches=True, search_failed=True, source_paused=True)
-    backend = _Backend(settings=[on], linkedin=[
+    backend = _Backend(settings=[on], hellowork=[
         _status("running"),
         _status("paused"),                                                     # the user paused it
-        _status("idle", {"id": "s2", "status": "failed", "error": "HTTP 429 Too Many Requests"}),
-    ], hellowork=[
-        _status("idle", {"id": "h1", "status": "completed"}),
-        _status("idle", {"id": "h2", "status": "failed", "error": "page format changed"}),
+        _status("idle", {"id": "h2", "status": "failed", "error": "HTTP 429 Too Many Requests"}),
+        _status("idle", {"id": "h3", "status": "failed", "error": "page format changed"}),
     ])
     watcher = RunWatcher("http://127.0.0.1:1", fetch=backend)
     assert watcher.poll() == []                                                # state recorded only
-    assert watcher.poll() == ["LinkedIn search paused. Resume it from the app.",
-                              "The HelloWork search failed. Open the app to see why."]
-    assert watcher.poll() == ["LinkedIn paused: rate-limited. It is tried again later."]
+    assert watcher.poll() == ["HelloWork search paused. Resume it from the app."]
+    assert watcher.poll() == ["HelloWork paused: rate-limited. It is tried again later."]
+    assert watcher.poll() == ["The HelloWork search failed. Open the app to see why."]
     assert watcher.poll() == []
 
 
 def test_source_paused_is_off_by_default() -> None:
-    backend = _Backend(linkedin=[_status("running"), _status("paused")])      # settings unreachable
+    backend = _Backend(hellowork=[_status("running"), _status("paused")])     # settings unreachable
     watcher = RunWatcher("http://127.0.0.1:1", fetch=backend)
     assert watcher.poll() == [] and watcher.poll() == []
 
@@ -469,9 +466,9 @@ def test_no_stop_event_without_the_launcher(monkeypatch) -> None:
 
 def test_a_scan_stopped_on_a_rate_limit_is_announced_once() -> None:
     on = _settings(strong_matches=True, search_failed=True, source_paused=True)
-    backend = _Backend(settings=[on], linkedin=[_status("running"), _status("rate_limited"),
-                                                _status("rate_limited")])
+    backend = _Backend(settings=[on], hellowork=[_status("running"), _status("rate_limited"),
+                                                 _status("rate_limited")])
     watcher = RunWatcher("http://127.0.0.1:1", fetch=backend)
     assert watcher.poll() == []
-    assert watcher.poll() == ["LinkedIn paused: rate-limited. It resumes on its own later."]
+    assert watcher.poll() == ["HelloWork paused: rate-limited. It resumes on its own later."]
     assert watcher.poll() == []

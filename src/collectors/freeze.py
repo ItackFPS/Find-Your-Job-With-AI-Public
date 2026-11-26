@@ -2,7 +2,7 @@
 
 Every external job collector stays off until it has passed its own validation and the user has
 explicitly turned it back on. While a collector is frozen nothing contacts its source: no pipeline
-collection, no preflight authentication, no LinkedIn / HelloWork scan, scheduled or manual. Stored
+collection, no preflight authentication, no HelloWork scan, scheduled or manual. Stored
 offers, saved offers and the application tracker are untouched; collector code and configuration stay
 in place for offline tests and replays.
 
@@ -37,8 +37,8 @@ logger = logging.getLogger(__name__)
 # Source type -> where its passed validation is recorded. Empty: no collector is validated yet.
 VALIDATED_COLLECTORS: dict[str, str] = {}
 
-# The staged sources scanned outside the pipeline (src/linkedin, src/hellowork).
-STAGED_SOURCE_TYPES: tuple[str, ...] = ("linkedin", "hellowork")
+# The staged sources scanned outside the pipeline (src/hellowork).
+STAGED_SOURCE_TYPES: tuple[str, ...] = ("hellowork",)
 
 # Tests that exercise collection with mocked collectors switch enforcement off (tests/conftest.py);
 # the product never changes it.
