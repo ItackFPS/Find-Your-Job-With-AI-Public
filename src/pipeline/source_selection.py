@@ -49,10 +49,13 @@ def reason_key(reason: str) -> str | None:
     """A stable key for a fixed skip reason, so the interface can say it in the user's language
     (Phase B B11: the English text reached the French UI). ``None`` for any other text."""
     from src.collectors import freeze
-    from src.pipeline.preflight import _FT_API_RESTRICTED, _INDEED_OFF
+    from src.pipeline.preflight import _FT_API_RESTRICTED, _INDEED_OFF, FT_AUTH_SKIP_REASONS
 
     if reason in REMOVED_SOURCE_TYPES.values():
         return "removed"
+    for failure_class, text in FT_AUTH_SKIP_REASONS.items():
+        if reason == text:
+            return failure_class
     return {_FT_API_RESTRICTED: "ft_api_restricted", _INDEED_OFF: "indeed_off",
             freeze.FROZEN_REASON: "frozen"}.get(reason)
 

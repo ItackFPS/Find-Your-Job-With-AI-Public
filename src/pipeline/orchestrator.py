@@ -330,8 +330,9 @@ def run_pipeline(
         # =================================================================
         # PREFLIGHT (mandatory, runs once before any collection)
         # France Travail is a collection source: an active source that
-        # cannot authenticate blocks the run (status FAILED). The check is
-        # skipped entirely when the source is inactive in sources.yaml.
+        # cannot authenticate is skipped for this run with its failure class
+        # (status DEGRADED, #303); the other sources still collect. The check
+        # is skipped entirely when the source is inactive in sources.yaml.
         # =================================================================
         _t_preflight = time.perf_counter()
         # The user's choice of unofficial sources lives next to the database (data/settings.json).
@@ -523,6 +524,15 @@ def run_pipeline(
                 if distance_cfg and distance_cfg["home"].get("name"):
                     merged_cfg.setdefault("local_area", {"name": distance_cfg["home"]["name"],
                                                          "radius_km": distance_cfg["max_distance_km"]})
+            if src_type == "france_travail" and early_profile is not None:
+                # A saturated API query is also read per département of the search area (#310):
+                # the same départements as France Travail web.
+                from src.pipeline.location_distance import distance_config, ft_departments
+
+                ft_area = distance_config(early_profile)
+                merged_cfg.setdefault("departments", ft_departments(ft_area) if ft_area else [
+                    p.value for p in early_profile.geography.location_preferences
+                    if p.type == "department" and p.status != "excluded"])
             # Registered collectors all take ``config=``; the abstract
             # BaseCollector.__init__ that type[BaseCollector] exposes does not.
             collector_factory = cast("Callable[..., BaseCollector]", collector_class)

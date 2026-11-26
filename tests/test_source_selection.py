@@ -103,3 +103,21 @@ def test_fixed_skip_reasons_carry_a_key_for_the_interface():
     assert reason_key(freeze.FROZEN_REASON) == "frozen"
     assert reason_key(REMOVED_SOURCE_TYPES["wttj"]) == "removed"
     assert reason_key("HTTP 403 from the site") is None
+
+
+def test_france_travail_login_failure_reasons_carry_a_translated_key():
+    """#303: each France Travail login failure class has a key, and both locales say it."""
+    import json
+    from pathlib import Path
+
+    from src.collectors.france_travail import FT_AUTH_FAILURE_CLASSES
+    from src.pipeline.preflight import FT_AUTH_SKIP_REASONS
+    from src.pipeline.source_selection import reason_key
+
+    assert set(FT_AUTH_SKIP_REASONS) == set(FT_AUTH_FAILURE_CLASSES)
+    locales = Path(__file__).resolve().parents[1] / "frontend" / "src" / "locales"
+    for failure_class, text in FT_AUTH_SKIP_REASONS.items():
+        assert reason_key(text) == failure_class
+        for lang in ("en", "fr"):
+            strings = json.loads((locales / lang / "translation.json").read_text(encoding="utf-8"))
+            assert strings["sourceStatus"]["reason"][failure_class]
