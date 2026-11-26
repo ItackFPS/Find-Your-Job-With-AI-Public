@@ -36,17 +36,18 @@ Evidence kinds:
 3. A code change adds the collector to `VALIDATED_COLLECTORS` with a reference to that record.
 4. The user turns it back on in the application. An update never does it.
 
-## State on 2026-11-15 (offline only)
+## State on 2026-11-24
 
-`ok` = offline evidence present; `ok + S` = offline evidence present, supervised check pending; `none` = no
-offline evidence yet; **open** = open item.
+`ok` = offline evidence present; `ok + S` = offline evidence present, supervised check pending; `ok + R` =
+offline evidence and supervised check recorded (see the validation record below); `none` = no offline evidence
+yet; **open** = open item.
 
 | Collector | coverage | reliability | latency | deduplication | pagination | error handling | enablement | access rules |
 |---|---|---|---|---|---|---|---|---|
-| france_travail | **open** | ok | ok + S | ok | ok | ok | ok | ok + S |
+| france_travail | ok + R | ok | ok + R | ok | ok | ok | ok | ok + R |
 | france_travail_web | **open** | ok | ok + S | ok | ok | ok | ok | ok |
-| indeed | **open** | ok | ok + S | ok | ok | ok | ok | **open** |
-| hellowork | **open** | ok | ok + S | ok | ok | ok | ok | ok |
+| indeed | ok + R | ok | ok + R | ok | ok | ok | ok | ok + R |
+| hellowork | ok + R | ok | ok + R | ok | ok | ok | ok | ok |
 | bundesagentur | ok + S | ok | none | ok | **open** | ok | ok | **open** |
 | arbetsformedlingen | ok + S | ok | none | ok | **open** | ok | ok | ok |
 
@@ -56,26 +57,51 @@ rss. RemoteOK, Jobicy and We Work Remotely are removed (owner decision D10). EUR
 
 ### Open items
 
-- **france_travail, coverage**: a saturated query (for example "informatique") reaches the API's result
-  ceiling and is incomplete (B4-D). A narrower query plan is needed.
 - **france_travail_web, coverage**: the preset occupation codes are broad. On the 363 replayed offers, 62 pass
   the filter and 1 is useful (B8-A replay). The occupation boost (B5-E) was not shipped for that reason.
-- **indeed, coverage**: listing completeness cannot be known; the answer gives no total (B4-D).
-- **indeed, access rules**: read through a scraping library. Its terms-of-use risk is documented, not
-  resolved; the owner must accept or reject it.
-- **hellowork, coverage**: each listing page exposes 20 offers and robots.txt forbids query-string paging;
-  breadth comes only from the number of occupation pages read.
 - **bundesagentur, pagination** and **arbetsformedlingen, pagination**: one bounded page per search term; no
   test of what lies beyond it.
 - **bundesagentur, access rules**: the API key is documented by a third-party project; the source is opt-in.
 
-### Supervised checks (not done; collection is frozen)
+### Supervised checks
 
-For every configured collector: newly discovered useful offers per request and per second
-(`src/pipeline/counts.py`), and collection seconds per run (`by_source.seconds`) within a range agreed for that
-source. For France Travail (API): access granted to the installation.
+Done for france_travail, indeed and hellowork (validation record below). Still not done for the
+others: newly discovered useful offers per request and per second (`src/pipeline/counts.py`), and collection
+seconds per run (`by_source.seconds`) within a range agreed for that source.
+
+## Validation record 2026-11-24
+
+Owner-authorised supervised runs (collector mission, 2026-11-24) on an isolated installation (separate
+checkout and data directory, a test profile: nurse, home Clermont-Ferrand, 60 km), with the collector PRs
+#304, #306, #308, #311, #315 and #316 merged locally (and #309 and #313, both closed since). The owner
+reactivated the collectors in that installation; this change does not reactivate anything. EURES was part of
+these runs and has been removed since (owner decision, 2026-11-24, #318); its rows are kept as a record only.
+
+Run `726e9c1a` (all four sources, outcome `successful`, 248 s, 0 errors; 7,692 collected, 1,069 removed as
+duplicates, 5,101 kept):
+
+| Source | Requests | Seconds | Collected | Accepted | New useful | Useful per request | Useful per second |
+|---|---|---|---|---|---|---|---|
+| france_travail | 63 | 12.1 | 5,580 | 3,487 | 3,068 | 48.7 | 254.6 |
+| eures (removed since) | 5 | 42.5 | 250 | 81 | 81 | 16.2 | 1.9 |
+| indeed | 27 | 40.3 | 1,853 | 1,526 | 86 | 3.2 | 2.1 |
+| hellowork (scan) | 12 pages (3 listings + 9 offers, scan log) | 11.9 | 9 | 7 | 0 | 0 | 0 |
+
+HelloWork reads at most `max_jobs_per_slug` (3) offers per listing page: 9 of the 60 listed offers. Its
+yield is bounded by that setting, not by the source (#322).
+
+Run `0758e848` (failure injection: a wrong France Travail secret): the preflight is DEGRADED with
+`ft_auth_invalid_client`, France Travail is skipped with that reason and its 3,486 stored offers are kept,
+EURES reads deeper (500 collected, 10 requests), Indeed 1,879 collected, 0 errors, outcome `successful`. The
+secret appears nowhere in the log. That the outcome stays `successful` with France Travail skipped is a
+reporting gap (#321).
+
+Accepted by the owner: Indeed's terms-of-use risk (opt-in source; its switch states the risk; the first 403
+or 429 stops the run's searches). France Travail API access is granted to the installation (the owner's own
+credentials).
 
 ## Limits
 
-- Every "ok" above is offline evidence. Live behaviour is unverified for every collector.
+- Every "ok" without "+ R" is offline evidence only. Live behaviour is recorded for the collectors of
+  the validation record, on one profile and one day; it is unverified for the others.
 - The table is a snapshot; the module is the source of truth.

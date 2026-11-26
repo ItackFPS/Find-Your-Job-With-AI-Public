@@ -12,8 +12,9 @@ collector by collector, and what currently backs each one:
 
 The eight criteria are the ones D7 names. A collector can be added to
 ``src.collectors.freeze.VALIDATED_COLLECTORS`` only when every criterion has evidence, no open item
-remains, and its supervised checks are recorded; the user then still has to turn it back on. Today
-no collector meets that (no supervised run is authorised), so ``VALIDATED_COLLECTORS`` stays empty.
+remains, and its supervised checks are recorded; the user then still has to turn it back on. On
+2026-11-24 France Travail, Indeed and HelloWork met it (supervised runs recorded in
+docs/collector-validation.md); every other collector stays frozen.
 
 ``python -m src.collectors.validation`` prints the table.
 """
@@ -83,10 +84,11 @@ COLLECTORS: dict[str, CollectorValidation] = {
     "france_travail": CollectorValidation("france_travail", True, {
         "coverage": Criterion(
             evidence=(FT + "multiple_queries_each_run_to_exhaustion", FT + "discovery_queries_override_search_keywords",
-                      FT + "no_default_search_term_assumes_a_profession"),
-            supervised=(_YIELD_LIVE,),
-            open=("A saturated query (e.g. 'informatique') hits the API's result ceiling and is incomplete "
-                  "(Phase B B4-D); a narrower query plan is needed.",)),
+                      FT + "no_default_search_term_assumes_a_profession",
+                      # A saturated query is re-read per département of the profile area (#310).
+                      FT + "saturated_query_is_read_per_department",
+                      "tests/test_orchestrator_preset_config.py::test_france_travail_gets_the_search_area_departments"),
+            supervised=(_YIELD_LIVE,)),
         "reliability": Criterion(evidence=(FT + "malformed_api_response_missing_resultats_captured",
                                            FT + "all_jobs_pass_validation", FT + "job_fields_are_populated")),
         "latency": Criterion(evidence=(FT + "429_with_retry_after_header",), supervised=(_LATENCY_LIVE,)),
@@ -139,9 +141,11 @@ COLLECTORS: dict[str, CollectorValidation] = {
     }, note="Public pages, robots.txt read strictly (fail closed)."),
     "indeed": CollectorValidation("indeed", True, {
         "coverage": Criterion(
-            evidence=(IN + "collect_passes_the_query_to_jobspy_and_dedups_across_queries",),
-            supervised=(_YIELD_LIVE,),
-            open=("Listing completeness cannot be known: the answer gives no total (Phase B B4-D).",)),
+            evidence=(IN + "collect_passes_the_query_to_jobspy_and_dedups_across_queries",
+                      # No total is given; a nationwide search is split by job type and place (#305).
+                      IN + "a_nationwide_search_is_split_by_job_type_then_by_city",
+                      IN + "a_base_search_at_its_cap_is_always_split_locally"),
+            supervised=(_YIELD_LIVE,)),
         "reliability": Criterion(evidence=(IN + "parser_canary_reads_the_fixture", IN + "fixture_rows_map_with_stable_ids_and_urls",
                                            IN + "proxy_failure_is_no_answer_and_unreadable_rows_raise_the_canary")),
         "latency": Criterion(evidence=(IN + "queries_are_spaced_by_the_rate_limit",), supervised=(_LATENCY_LIVE,)),
@@ -153,18 +157,20 @@ COLLECTORS: dict[str, CollectorValidation] = {
                                               IN + "empty_answer_is_a_genuine_empty_result", *_ISOLATION)),
         "source_enablement": _ENABLEMENT,
         "access_rules": Criterion(
-            evidence=(IN + "pages_returned_count_against_the_run_budget",
+            evidence=(IN + "pages_returned_count_against_the_run_budget", IN + "a_403_stops_every_remaining_search_of_the_run",
                       "tests/test_indeed_redundancy_coverage.py::test_indeed_collector_documents_tos_risk"),
-            open=("Reads the site through a scraping library; its terms-of-use risk is documented, not "
-                  "resolved: the owner must accept or reject it explicitly.",)),
+            # Terms-of-use risk accepted by the owner on 2026-11-24 (collector mission): opt-in source, its
+            # switch states the risk, the first 403/429 stops the run's searches.
+            supervised=("owner acceptance of the terms-of-use risk, recorded in docs/collector-validation.md",)),
     }, note="Read through the jobspy library."),
     "hellowork": CollectorValidation("hellowork", True, {
         "coverage": Criterion(
-            evidence=(HW + "domain_expands_to_metier_slugs", HW + "full_collection_using_domains"),
-            supervised=(_YIELD_LIVE,),
-            open=("Each listing page exposes 20 offers and robots.txt forbids query-string paging: breadth "
-                  "comes only from the number of occupation pages read (collector docstring, verified "
-                  "live 2026-09-05).",)),
+            evidence=(HW + "domain_expands_to_metier_slugs", HW + "full_collection_using_domains",
+                      # Breadth comes from occupation pages and their robots-allowed region facet pages (#307).
+                      HW + "region_facet_pages_are_read_after_the_metier_page",
+                      HW + "regions_for_departments_maps_insee_regions_to_hellowork_slugs",
+                      HW + "listed_offers_none_readable_is_an_error_not_a_silent_zero"),
+            supervised=(_YIELD_LIVE,)),
         "reliability": Criterion(evidence=(HW + "entity_encoded_jsonld_pages_are_collected",
                                            HW + "listing_pages_it_cannot_read_are_reported_not_silent",
                                            SC + "recorded_fixture_still_parses_to_at_least_one_job")),

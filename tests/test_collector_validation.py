@@ -48,9 +48,9 @@ def test_each_evidence_reference_names_an_existing_test(ref: str) -> None:
 
 
 def test_no_collector_is_validated_while_it_has_open_items_or_unrecorded_supervised_checks() -> None:
-    # Validation needs every supervised check recorded; none is authorised under the freeze (D7, OQ-2).
-    assert VALIDATED_COLLECTORS == {}
-    for source_type in VALIDATED_COLLECTORS:   # the rule the list must keep once it is filled
+    # Validation needs every criterion backed and no open item (D7); supervised runs of 2026-11-24 (#258).
+    assert set(VALIDATED_COLLECTORS) == {"france_travail", "indeed", "hellowork"}
+    for source_type in VALIDATED_COLLECTORS:
         assert COLLECTORS[source_type].ready_for_supervised_check()
 
 
